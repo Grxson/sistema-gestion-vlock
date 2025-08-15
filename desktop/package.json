@@ -7,7 +7,7 @@
     "start": "npm run build && electron .",
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
-    "dev:electron": "wait-on http://localhost:3000 && cross-env ELECTRON_DISABLE_SECURITY_WARNINGS=true electron .",
+    "dev:electron": "wait-on http://localhost:3000 && cross-env NODE_ENV=development ELECTRON_DISABLE_SECURITY_WARNINGS=true electron .",
     "build": "vite build"
   },
   "keywords": [],
