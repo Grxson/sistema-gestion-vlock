@@ -1,0 +1,21 @@
+export default (sequelize, DataTypes) => {
+  const CategoriaHerramienta = sequelize.define('categorias_herramienta', {
+    id_categoria_herr: { 
+        type: DataTypes.INTEGER, 
+        primaryKey: true, 
+        autoIncrement: true 
+    },
+    nombre: { 
+        type: DataTypes.STRING(60), 
+        allowNull: false, 
+        unique: true 
+    },
+    descripcion: { 
+        type: DataTypes.STRING(255) 
+    }
+  });
+  CategoriaHerramienta.associate = models => {
+    CategoriaHerramienta.hasMany(models.Herramienta, { foreignKey: 'id_categoria_herr' });
+  };
+  return CategoriaHerramienta;
+};
