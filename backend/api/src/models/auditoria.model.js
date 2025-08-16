@@ -1,42 +1,43 @@
 export default (sequelize, DataTypes) => {
   const Auditoria = sequelize.define('auditoria', {
-    id_auditoria: { 
-        type: DataTypes.INTEGER, 
-        primaryKey: true, 
-        autoIncrement: true
-     },
-    id_usuario: { 
-        type: DataTypes.INTEGER, 
-        allowNull: false 
+    id_auditoria: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
     },
-    accion: { 
-        type: DataTypes.ENUM('LOGIN','INSERT','UPDATE','DELETE'), 
-        allowNull: false 
+    id_usuario: {
+      type: DataTypes.INTEGER,
+      allowNull: false
     },
-    tabla: { 
-        type: DataTypes.STRING(60), 
-        allowNull: false 
+    accion: {
+      type: DataTypes.ENUM('LOGIN', 'INSERT', 'UPDATE', 'DELETE'),
+      allowNull: false
     },
-    id_registro: { 
-        type: DataTypes.INTEGER 
+    tabla: {
+      type: DataTypes.STRING(50),
+      allowNull: false
     },
-    fecha_hora: { 
-        type: DataTypes.DATE, 
-        allowNull: false, 
-        defaultValue: DataTypes.NOW 
+    id_registro: {
+      type: DataTypes.INTEGER
     },
-    ip: { 
-        type: DataTypes.STRING(45) 
+    fecha_hora: {
+      type: DataTypes.DATE,
+      allowNull: false
     },
-    datos_antes: { 
-        type: DataTypes.JSON 
+    ip: {
+      type: DataTypes.STRING(45)
     },
-    datos_despues: { 
-        type: DataTypes.JSON 
+    datos_antes: {
+      type: DataTypes.JSON
+    },
+    datos_despues: {
+      type: DataTypes.JSON
     }
   });
+
   Auditoria.associate = models => {
     Auditoria.belongsTo(models.Usuario, { foreignKey: 'id_usuario' });
   };
+
   return Auditoria;
 };

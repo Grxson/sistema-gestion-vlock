@@ -1,6 +1,6 @@
 export default (sequelize, DataTypes) => {
-  const Rol = sequelize.define('roles', {
-    id_rol: {
+  const Oficio = sequelize.define('oficios', {
+    id_oficio: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true
@@ -15,11 +15,9 @@ export default (sequelize, DataTypes) => {
     }
   });
 
-  Rol.associate = models => {
-    Rol.hasMany(models.Usuario, { foreignKey: 'id_rol' });
-    Rol.hasMany(models.AccionPermiso, { foreignKey: 'id_rol' });
+  Oficio.associate = models => {
+    Oficio.hasMany(models.Empleado, { foreignKey: 'id_oficio' });
   };
 
-
-  return Rol;
+  return Oficio;
 };

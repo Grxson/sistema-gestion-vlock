@@ -1,31 +1,32 @@
 export default (sequelize, DataTypes) => {
   const Ingreso = sequelize.define('ingresos', {
-    id_ingreso: { 
-        type: DataTypes.INTEGER, 
-        primaryKey: true, 
-        autoIncrement: true 
+    id_ingreso: {
+      type: DataTypes.INTEGER,
+      primaryKey: true,
+      autoIncrement: true
     },
-    id_proyecto: { 
-        type: DataTypes.INTEGER
-     },
-    fecha: { 
-        type: DataTypes.DATE, 
-        allowNull: false
+    id_proyecto: {
+      type: DataTypes.INTEGER
     },
-    monto: { 
-        type: 
-        DataTypes.DECIMAL(12,2), 
-        allowNull: false
+    fecha: {
+      type: DataTypes.DATEONLY,
+      allowNull: false
     },
-    descripcion: { 
-        type: DataTypes.STRING(255) 
+    monto: {
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: false
     },
-    fuente: { 
-        type: DataTypes.STRING(120) 
+    descripcion: {
+      type: DataTypes.TEXT
+    },
+    fuente: {
+      type: DataTypes.STRING(100)
     }
   });
+
   Ingreso.associate = models => {
     Ingreso.belongsTo(models.Proyecto, { foreignKey: 'id_proyecto' });
   };
+
   return Ingreso;
 };
