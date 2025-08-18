@@ -1,4 +1,6 @@
-export default (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
   const AdjuntoRelacion = sequelize.define('adjuntos_relaciones', {
     id_relacion: {
       type: DataTypes.INTEGER,
@@ -23,7 +25,12 @@ export default (sequelize, DataTypes) => {
   });
 
   AdjuntoRelacion.associate = models => {
-    AdjuntoRelacion.belongsTo(models.Adjunto, { foreignKey: 'id_adjunto' });
+    if (models.Adjunto) {
+      AdjuntoRelacion.belongsTo(models.Adjunto, {
+        foreignKey: 'id_adjunto',
+        as: 'archivoAdjunto'  // Cambio de nombre del alias para evitar duplicados
+      });
+    }
   };
 
   return AdjuntoRelacion;

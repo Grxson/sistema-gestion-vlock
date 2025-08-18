@@ -1,4 +1,6 @@
-export default (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
   const Rol = sequelize.define('roles', {
     id_rol: {
       type: DataTypes.INTEGER,
@@ -13,13 +15,29 @@ export default (sequelize, DataTypes) => {
     descripcion: {
       type: DataTypes.TEXT
     }
+  }, {
+    // Opciones del modelo
+    timestamps: true, // Crear created_at y updated_at
+    createdAt: 'fecha_creacion',
+    updatedAt: 'fecha_actualizacion'
   });
 
   Rol.associate = models => {
-    Rol.hasMany(models.Usuario, { foreignKey: 'id_rol' });
-    Rol.hasMany(models.AccionPermiso, { foreignKey: 'id_rol' });
-  };
+    // Verificamos si los modelos existen antes de establecer asociaciones
+    if (models.Usuarios) {
+      Rol.hasMany(models.Usuarios, {
+        foreignKey: 'id_rol',
+        as: 'usuarios'
+      });
+    }
 
+    if (models.Permisos_rol) {
+      Rol.hasMany(models.Permisos_rol, {
+        foreignKey: 'id_rol',
+        as: 'permisos'
+      });
+    }
+  };
 
   return Rol;
 };

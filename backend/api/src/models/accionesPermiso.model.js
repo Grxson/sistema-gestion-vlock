@@ -1,32 +1,41 @@
-export default (sequelize, DataTypes) => {
-  const AccionPermiso = sequelize.define('acciones_permiso', {
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
+  const AccionesPermiso = sequelize.define('acciones_permiso', {
     id_accion: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true
     },
-    id_rol: {
-      type: DataTypes.INTEGER,
-      allowNull: false
+    nombre: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      unique: true
     },
-    id_permiso: {
-      type: DataTypes.INTEGER,
-      allowNull: false
+    codigo: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      unique: true
     },
-    accion: {
-      type: DataTypes.ENUM('ver', 'crear', 'editar', 'eliminar'),
-      allowNull: false
+    descripcion: {
+      type: DataTypes.TEXT
     },
-    permitido: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false
+    modulo: {
+      type: DataTypes.STRING(30),
+      allowNull: false
     }
+  }, {
+    timestamps: true,
+    createdAt: 'fecha_creacion',
+    updatedAt: 'fecha_actualizacion'
   });
 
-  AccionPermiso.associate = models => {
-    AccionPermiso.belongsTo(models.Rol, { foreignKey: 'id_rol' });
-    AccionPermiso.belongsTo(models.Permiso, { foreignKey: 'id_permiso' });
+  AccionesPermiso.associate = models => {
+    AccionesPermiso.hasMany(models.PermisosRol, {
+      foreignKey: 'id_accion',
+      as: 'permisos'
+    });
   };
 
-  return AccionPermiso;
+  return AccionesPermiso;
 };

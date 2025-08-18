@@ -1,4 +1,6 @@
-export default (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
   const Auditoria = sequelize.define('auditoria', {
     id_auditoria: {
       type: DataTypes.INTEGER,
@@ -10,15 +12,15 @@ export default (sequelize, DataTypes) => {
       allowNull: false
     },
     accion: {
-      type: DataTypes.ENUM('LOGIN', 'INSERT', 'UPDATE', 'DELETE'),
+      type: DataTypes.ENUM('LOGIN', 'LOGOUT', 'CREATE', 'READ', 'UPDATE', 'DELETE'),
       allowNull: false
     },
     tabla: {
       type: DataTypes.STRING(50),
       allowNull: false
     },
-    id_registro: {
-      type: DataTypes.INTEGER
+    descripcion: {
+      type: DataTypes.STRING(255)
     },
     fecha_hora: {
       type: DataTypes.DATE,
@@ -27,16 +29,23 @@ export default (sequelize, DataTypes) => {
     ip: {
       type: DataTypes.STRING(45)
     },
-    datos_antes: {
+    datos_antiguos: {
       type: DataTypes.JSON
     },
-    datos_despues: {
+    datos_nuevos: {
       type: DataTypes.JSON
     }
+  }, {
+    timestamps: false
   });
 
   Auditoria.associate = models => {
-    Auditoria.belongsTo(models.Usuario, { foreignKey: 'id_usuario' });
+    if (models.Usuarios) {
+      Auditoria.belongsTo(models.Usuarios, {
+        foreignKey: 'id_usuario',
+        as: 'usuario'
+      });
+    }
   };
 
   return Auditoria;

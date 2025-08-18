@@ -1,4 +1,6 @@
-export default (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
   const Adjunto = sequelize.define('adjuntos', {
     id_adjunto: {
       type: DataTypes.INTEGER,
@@ -18,7 +20,7 @@ export default (sequelize, DataTypes) => {
       allowNull: false
     },
     peso_mb: {
-      type: DataTypes.DECIMAL(5,2)
+      type: DataTypes.DECIMAL(5, 2)
     },
     checksum: {
       type: DataTypes.STRING(100)
@@ -34,8 +36,12 @@ export default (sequelize, DataTypes) => {
   });
 
   Adjunto.associate = models => {
-    Adjunto.belongsTo(models.Usuario, { foreignKey: 'id_usuario' });
-    Adjunto.hasMany(models.AdjuntoRelacion, { foreignKey: 'id_adjunto' });
+    if (models.Usuario) {
+      Adjunto.belongsTo(models.Usuario, { foreignKey: 'id_usuario' });
+    }
+    if (models.AdjuntoRelaciones) {
+      Adjunto.hasMany(models.AdjuntoRelaciones, { foreignKey: 'id_adjunto' });
+    }
   };
 
   return Adjunto;

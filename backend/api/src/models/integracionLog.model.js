@@ -1,4 +1,6 @@
-export default (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
   const IntegracionLog = sequelize.define('integraciones_log', {
     id_log: {
       type: DataTypes.INTEGER,

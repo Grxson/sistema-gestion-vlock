@@ -1,4 +1,6 @@
-export default (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
   const EstadoCuenta = sequelize.define('estados_cuenta', {
     id_estado: {
       type: DataTypes.INTEGER,

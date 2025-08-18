@@ -1,4 +1,6 @@
-export default (sequelize, DataTypes) => {
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
   const Herramienta = sequelize.define('herramientas', {
     id_herramienta: {
       type: DataTypes.INTEGER,
