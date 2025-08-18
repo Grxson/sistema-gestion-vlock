@@ -26,7 +26,12 @@ module.exports = (sequelize) => {
     },
     responsable: {
       type: DataTypes.STRING(100)
+    },
+    ubicacion: {
+      type: DataTypes.STRING(200)
     }
+  }, {
+    timestamps: false
   });
 
   Proyecto.associate = models => {
@@ -35,6 +40,7 @@ module.exports = (sequelize) => {
     Proyecto.hasMany(models.Ingreso, { foreignKey: 'id_proyecto' });
     Proyecto.hasMany(models.EstadoCuenta, { foreignKey: 'id_proyecto' });
     Proyecto.hasMany(models.MovimientoHerramienta, { foreignKey: 'id_proyecto' });
+    Proyecto.hasMany(models.Nomina_empleado, { foreignKey: 'id_proyecto' });
   };
 
   return Proyecto;

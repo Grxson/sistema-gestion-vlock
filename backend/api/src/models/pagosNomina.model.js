@@ -29,7 +29,7 @@ module.exports = (sequelize) => {
   });
 
   PagoNomina.associate = models => {
-    PagoNomina.belongsTo(models.NominaEmpleado, { foreignKey: 'id_nomina' });
+    PagoNomina.belongsTo(models.Nomina_empleado, { foreignKey: 'id_nomina', as: 'nomina' });
   };
 
   return PagoNomina;

@@ -15,10 +15,12 @@ module.exports = (sequelize) => {
     descripcion: {
       type: DataTypes.TEXT
     }
+  }, {
+    timestamps: false // Desactivamos createdAt y updatedAt
   });
 
   Oficio.associate = models => {
-    Oficio.hasMany(models.Empleado, { foreignKey: 'id_oficio' });
+    Oficio.hasMany(models.Empleados, { foreignKey: 'id_oficio', as: 'empleados' });
   };
 
   return Oficio;

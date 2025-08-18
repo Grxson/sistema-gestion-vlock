@@ -8,7 +8,7 @@ module.exports = (sequelize) => {
       autoIncrement: true
     },
     tipo_contrato: {
-      type: DataTypes.ENUM('Fijo', 'Temporal', 'Honorarios'),
+      type: DataTypes.ENUM('Fijo', 'Temporal', 'Honorarios', 'Por_Proyecto'),
       allowNull: false
     },
     salario_diario: {
@@ -22,10 +22,12 @@ module.exports = (sequelize) => {
     fecha_fin: {
       type: DataTypes.DATEONLY
     }
+  }, {
+    timestamps: false // Desactivamos createdAt y updatedAt
   });
 
   Contrato.associate = models => {
-    Contrato.hasMany(models.Empleado, { foreignKey: 'id_contrato' });
+    Contrato.hasMany(models.Empleados, { foreignKey: 'id_contrato', as: 'empleados' });
   };
 
   return Contrato;

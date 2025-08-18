@@ -15,6 +15,10 @@ module.exports = (sequelize) => {
       type: DataTypes.INTEGER,
       allowNull: false
     },
+    id_proyecto: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
     dias_laborados: {
       type: DataTypes.INTEGER,
       allowNull: false
@@ -37,18 +41,21 @@ module.exports = (sequelize) => {
       allowNull: false
     },
     estado: {
-      type: DataTypes.ENUM('Pendiente', 'Pagado'),
+      type: DataTypes.ENUM('Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'),
       defaultValue: 'Pendiente'
     },
     recibo_pdf: {
       type: DataTypes.STRING(255)
     }
+  }, {
+    timestamps: true
   });
 
   NominaEmpleado.associate = models => {
-    NominaEmpleado.belongsTo(models.Empleado, { foreignKey: 'id_empleado' });
-    NominaEmpleado.belongsTo(models.SemanaNomina, { foreignKey: 'id_semana' });
-    NominaEmpleado.hasMany(models.PagoNomina, { foreignKey: 'id_nomina' });
+    NominaEmpleado.belongsTo(models.Empleados, { foreignKey: 'id_empleado', as: 'empleado' });
+    NominaEmpleado.belongsTo(models.Semanas_nomina, { foreignKey: 'id_semana', as: 'semana' });
+    NominaEmpleado.hasMany(models.Pagos_nomina, { foreignKey: 'id_nomina', as: 'pagos_nominas' });
+    NominaEmpleado.belongsTo(models.Proyectos, { foreignKey: 'id_proyecto', as: 'proyecto' });
   };
 
   return NominaEmpleado;

@@ -2,6 +2,7 @@ const sequelize = require('../config/db');
 const { Op } = require('sequelize');
 const bcrypt = require('bcrypt');
 const models = require('../models');
+const initNominaData = require('./nomina_seed');
 
 // Obtener referencias a los modelos usando los nombres actualizados
 const Usuario = models.Usuarios;
@@ -268,6 +269,10 @@ const initDB = async () => {
         });
 
         console.log('✅ Usuario administrador creado o verificado');
+        
+        // Inicializar datos del módulo de nómina
+        await initNominaData();
+        
         console.log('🚀 Inicialización completada');
 
         return true;

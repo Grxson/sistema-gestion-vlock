@@ -46,12 +46,14 @@ module.exports = (sequelize) => {
     fecha_baja: {
       type: DataTypes.DATEONLY
     }
+  }, {
+    timestamps: false // Desactivamos createdAt y updatedAt
   });
 
   Empleado.associate = models => {
-    Empleado.belongsTo(models.Contrato, { foreignKey: 'id_contrato' });
-    Empleado.belongsTo(models.Oficio, { foreignKey: 'id_oficio' });
-    Empleado.hasMany(models.NominaEmpleado, { foreignKey: 'id_empleado' });
+    Empleado.belongsTo(models.Contratos, { foreignKey: 'id_contrato', as: 'contrato' });
+    Empleado.belongsTo(models.Oficios, { foreignKey: 'id_oficio', as: 'oficio' });
+    Empleado.hasMany(models.NominaEmpleados, { foreignKey: 'id_empleado' });
   };
 
   return Empleado;
