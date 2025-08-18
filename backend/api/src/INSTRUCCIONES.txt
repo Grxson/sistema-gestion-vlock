@@ -1,0 +1,114 @@
+====================================================================
+SISTEMA DE GESTIÓN VLOCK - GUÍA DE INICIO RÁPIDO
+====================================================================
+
+# INICIALIZACIÓN DEL SERVIDOR Y DATOS INICIALES
+
+## Requisitos previos
+- Node.js 
+- Base de datos configurada
+- Variables de entorno configuradas en archivo .env
+
+## Configuración inicial
+
+1. Asegúrate de tener un archivo .env en la raíz del proyecto con las siguientes variables:
+   ```
+   DB_HOST=localhost
+   DB_USER=tu_usuario
+   DB_PASS=tu_contraseña
+   DB_NAME=nombre_de_la_bd
+   DB_PORT=3306
+   JWT_SECRET=tu_clave_secreta_para_jwt
+   ```
+
+2. Instala las dependencias:
+   ```
+   npm install
+   ```
+
+## Iniciando el servidor
+
+El servidor se puede iniciar de diferentes formas:
+
+1. **Modo desarrollo** (con nodemon para recarga automática):
+   ```
+   npm run dev
+   ```
+
+2. **Modo producción**:
+   ```
+   npm start
+   ```
+
+## Acerca de los seeders
+
+Los seeders se ejecutan automáticamente cada vez que inicia el servidor. El archivo principal de seeders (`seeders/init.js`) realiza las siguientes acciones:
+
+1. Crea los roles básicos del sistema (ADMINISTRADOR, EMPLEADO, CLIENTE, etc.)
+2. Crea las acciones de permisos disponibles (CREAR, LEER, ACTUALIZAR, ELIMINAR, etc.)
+3. Asigna los permisos correspondientes a cada rol
+4. Crea un usuario administrador inicial (si no existe)
+
+## Ejecución manual de seeders
+
+Aunque los seeders se ejecutan automáticamente al iniciar el servidor, puedes ejecutarlos manualmente de las siguientes formas:
+
+1. **Ejecutar seeders directamente desde Node.js**:
+   ```
+   node src/seeders/init.js
+   ```
+
+2. **Forzar la ejecución de seeders aunque ya se hayan ejecutado antes**:
+   - Modifica temporalmente la variable `force` al principio del archivo `seeders/init.js`:
+   ```javascript
+   const force = true; // Cambiar a true para forzar la ejecución
+   ```
+   - Luego ejecuta el servidor normalmente con `npm run dev`
+
+3. **Ejecutar seeders específicos**:
+   - Puedes importar y ejecutar funciones específicas del archivo `init.js`
+   - Por ejemplo, para solo crear el usuario administrador:
+   ```javascript
+   const { createAdminUser } = require('./seeders/init');
+   createAdminUser().then(() => console.log('Admin user created!'));
+   ```
+
+### Flujo de inicialización de seeders
+
+Cuando el servidor arranca:
+1. Se establecen las conexiones con la base de datos
+2. Se cargan y registran todos los modelos
+3. Se establecen las asociaciones entre modelos
+4. Se verifica si los seeders ya se ejecutaron anteriormente
+5. Si no se ejecutaron o se fuerza la ejecución, se crean los datos iniciales
+
+### Personalizando los seeders
+
+Puedes modificar el archivo `seeders/init.js` para:
+- Cambiar los roles predeterminados
+- Ajustar los permisos asignados a cada rol
+- Modificar el usuario administrador inicial
+- Añadir más datos iniciales al sistema
+
+## Solución de problemas comunes
+
+1. **Error de conexión a la base de datos**:
+   - Verifica que las credenciales en el archivo .env sean correctas
+   - Confirma que la base de datos exista y esté accesible
+   - Revisa que el servicio de base de datos esté en ejecución
+
+2. **Errores de modelo**:
+   - Los errores "not a subclass of Sequelize.Model" generalmente indican problemas con las asociaciones
+   - Revisa que los nombres de los modelos en las asociaciones coincidan con los registrados
+
+3. **Seeders no se ejecutan**:
+   - Verifica los logs para asegurarte de que el proceso de inicialización llega hasta el punto de ejecución de seeders
+   - Si necesitas forzar la ejecución, puedes modificar la variable `force` en init.js
+   - Comprueba que las tablas existan en la base de datos (los seeders requieren que la estructura de tablas esté creada)
+   - Si estás trabajando con una base de datos nueva, asegúrate de que Sequelize esté configurado con `{sync: {force: true}}` en `config/db.js` para crear las tablas automáticamente
+
+====================================================================
+
+Documentación generada para Sistema de Gestión VLOCK
+Fecha: Agosto 2025
+====================================================================
