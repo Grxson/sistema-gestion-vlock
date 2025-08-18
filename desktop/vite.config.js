@@ -10,5 +10,8 @@ export default defineConfig({
     outDir: '../../build',
     emptyOutDir: true
   },
-  plugins: [react()]
+  plugins: [react()],
+  css: {
+    postcss: './postcss.config.js'
+  }
 });
