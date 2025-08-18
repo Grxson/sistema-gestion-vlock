@@ -54,8 +54,15 @@ Los seeders se ejecutan automáticamente cada vez que inicia el servidor. El arc
 Aunque los seeders se ejecutan automáticamente al iniciar el servidor, puedes ejecutarlos manualmente de las siguientes formas:
 
 1. **Ejecutar seeders directamente desde Node.js**:
+   
+   Desde la carpeta raíz del proyecto (api):
    ```
    node src/seeders/init.js
+   ```
+   
+   O si ya estás dentro de la carpeta src:
+   ```
+   node seeders/init.js
    ```
 
 2. **Forzar la ejecución de seeders aunque ya se hayan ejecutado antes**:
@@ -103,9 +110,13 @@ Puedes modificar el archivo `seeders/init.js` para:
 
 3. **Seeders no se ejecutan**:
    - Verifica los logs para asegurarte de que el proceso de inicialización llega hasta el punto de ejecución de seeders
-   - Si necesitas forzar la ejecución, puedes modificar la variable `force` en init.js
    - Comprueba que las tablas existan en la base de datos (los seeders requieren que la estructura de tablas esté creada)
-   - Si estás trabajando con una base de datos nueva, asegúrate de que Sequelize esté configurado con `{sync: {force: true}}` en `config/db.js` para crear las tablas automáticamente
+   - Para una primera instalación:
+     * Es recomendable ejecutar primero el script SQL `database-setup.sql` para crear la estructura de tablas
+     * Luego ejecutar el seeder `node seeders/init.js` para poblar datos iniciales
+   - Si encuentras errores de clave foránea al intentar recrear las tablas:
+     * Utiliza `{sync: {force: false}}` en lugar de `force: true` en el seeder
+     * O ejecuta el script SQL con `SET FOREIGN_KEY_CHECKS = 0;` al inicio y `SET FOREIGN_KEY_CHECKS = 1;` al final
 
 ====================================================================
 

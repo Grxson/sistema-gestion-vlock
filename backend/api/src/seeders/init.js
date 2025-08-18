@@ -16,7 +16,18 @@ const initDB = async () => {
     try {
         console.log('🌱 Inicializando base de datos con datos iniciales...');
 
+        // Verificar conexión a la base de datos
+        try {
+            await sequelize.authenticate();
+            console.log('✅ Conexión a la BD exitosa');
+        } catch (error) {
+            console.error('❌ Error al conectar con la base de datos:', error.message);
+            return;
+        }
+
         // Sincronizar modelos con la base de datos (crear tablas)
+        // Para una nueva instalación es mejor usar { force: false } para evitar problemas con claves foráneas
+        // Si necesitas recrear las tablas, usa alternativamente el script SQL
         await sequelize.sync({ force: false });
 
         // Crear roles básicos
@@ -267,3 +278,21 @@ const initDB = async () => {
 };
 
 module.exports = { initDB };
+
+// Ejecutar directamente si se llama desde la línea de comandos
+if (require.main === module) {
+    (async () => {
+        try {
+            const result = await initDB();
+            if (result) {
+                console.log('✅ Seeder ejecutado exitosamente');
+            } else {
+                console.log('❌ Error al ejecutar el seeder');
+            }
+            process.exit(0);
+        } catch (error) {
+            console.error('❌ Error fatal en el seeder:', error);
+            process.exit(1);
+        }
+    })();
+}
