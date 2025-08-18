@@ -211,9 +211,47 @@ const changePassword = async (req, res) => {
     }
 };
 
+/**
+ * Controlador para cerrar sesión
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const logout = async (req, res) => {
+    try {
+        // En una API REST con JWT, el cierre de sesión es responsabilidad del cliente
+        // ya que el servidor no mantiene estado de la sesión
+        // Sin embargo, registramos el evento para auditoría
+        
+        const id_usuario = req.usuario?.id_usuario;
+        
+        if (id_usuario && models.Auditoria) {
+            // Registrar evento de cierre de sesión en auditoría
+            await models.Auditoria.create({
+                id_usuario,
+                accion: 'LOGOUT',
+                tabla: 'usuarios',  // Tabla relacionada con la acción
+                descripcion: 'Cierre de sesión exitoso',
+                fecha_hora: new Date(),  // Campo requerido para la fecha y hora
+                ip: req.ip || req.connection.remoteAddress // Opcional: registrar IP del cliente
+            });
+        }
+        
+        res.status(200).json({
+            message: 'Sesión cerrada exitosamente'
+        });
+    } catch (error) {
+        console.error('Error al cerrar sesión:', error);
+        res.status(500).json({
+            message: 'Error al cerrar sesión',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     register,
     login,
     verifyAuth,
-    changePassword
+    changePassword,
+    logout
 };
