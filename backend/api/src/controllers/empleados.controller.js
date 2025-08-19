@@ -185,10 +185,10 @@ const updateEmpleado = async (req, res) => {
             telefono_emergencia: telefono_emergencia !== undefined ? telefono_emergencia : empleado.telefono_emergencia,
             banco: banco !== undefined ? banco : empleado.banco,
             cuenta_bancaria: cuenta_bancaria !== undefined ? cuenta_bancaria : empleado.cuenta_bancaria,
-            id_contrato: id_contrato !== undefined ? id_contrato : empleado.id_contrato,
-            id_oficio: id_oficio !== undefined ? id_oficio : empleado.id_oficio,
+            id_contrato: id_contrato === '' ? null : (id_contrato !== undefined ? id_contrato : empleado.id_contrato),
+            id_oficio: id_oficio === '' ? null : (id_oficio !== undefined ? id_oficio : empleado.id_oficio),
             fecha_alta: fecha_alta || empleado.fecha_alta,
-            fecha_baja: fecha_baja !== undefined ? fecha_baja : empleado.fecha_baja
+            fecha_baja: fecha_baja === '' ? null : (fecha_baja !== undefined ? fecha_baja : empleado.fecha_baja)
         });
 
         res.status(200).json({

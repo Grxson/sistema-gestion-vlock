@@ -78,10 +78,21 @@ export default function Empleados() {
     e.preventDefault();
     
     try {
+      // Preparar los datos para enviar al servidor
+      const dataToSend = {
+        ...formData,
+        // Convertir id_contrato a null si está vacío
+        id_contrato: formData.id_contrato === '' ? null : formData.id_contrato,
+        // Convertir id_oficio a null si está vacío
+        id_oficio: formData.id_oficio === '' ? null : formData.id_oficio,
+        // Convertir fecha_baja a null si está vacío
+        fecha_baja: formData.fecha_baja === '' ? null : formData.fecha_baja
+      };
+
       if (editingEmpleado) {
-        await apiService.updateEmpleado(editingEmpleado.id_empleado, formData);
+        await apiService.updateEmpleado(editingEmpleado.id_empleado, dataToSend);
       } else {
-        await apiService.createEmpleado(formData);
+        await apiService.createEmpleado(dataToSend);
       }
 
       fetchEmpleados();
@@ -90,13 +101,16 @@ export default function Empleados() {
       setFormData({
         nombre: '',
         apellido: '',
-        cedula: '',
+        nss: '',
         telefono: '',
-        email: '',
-        puesto: '',
-        salario: '',
-        fecha_contratacion: '',
-        estado: 'activo'
+        contacto_emergencia: '',
+        telefono_emergencia: '',
+        banco: '',
+        cuenta_bancaria: '',
+        id_contrato: '',
+        id_oficio: '',
+        fecha_alta: new Date().toISOString().split('T')[0],
+        fecha_baja: ''
       });
     } catch (error) {
       console.error('Error saving empleado:', error);
