@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Empleados from './components/Empleados';
 import Nomina from './components/Nomina';
+import Usuarios from './components/Usuarios';
 
 function MainApp() {
   const [currentPath, setCurrentPath] = useState(() => {
@@ -77,6 +78,8 @@ function MainApp() {
             </div>
           </div>
         );
+      case '/usuarios':
+        return <Usuarios />;
       default:
         return <Dashboard />;
     }

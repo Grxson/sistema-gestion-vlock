@@ -13,7 +13,8 @@ import {
   ArrowRightOnRectangleIcon,
   SunIcon,
   MoonIcon,
-  Bars3Icon
+  Bars3Icon,
+  UserIcon
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Oficios', href: '/oficios', icon: BuildingOfficeIcon, current: false },
   { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false },
   { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false },
+  { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false },
   { name: 'Configuración', href: '/configuracion', icon: CogIcon, current: false },
 ];
 

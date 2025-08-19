@@ -173,6 +173,36 @@ class ApiService {
     return this.post('/oficios', oficioData);
   }
 
+  // Métodos para usuarios
+  async getUsuarios() {
+    return this.get('/usuarios');
+  }
+
+  async getUsuarioById(id) {
+    return this.get(`/usuarios/${id}`);
+  }
+
+  async createUsuario(userData) {
+    return this.post('/usuarios', userData);
+  }
+
+  async updateUsuario(id, userData) {
+    return this.put(`/usuarios/${id}`, userData);
+  }
+
+  async resetPassword(id, passwordData) {
+    return this.post(`/usuarios/${id}/reset-password`, passwordData);
+  }
+
+  async deleteUsuario(id) {
+    return this.delete(`/usuarios/${id}`);
+  }
+  
+  // Métodos para roles
+  async getRoles() {
+    return this.get('/roles');
+  }
+
   // Utilidades
   isAuthenticated() {
     const token = this.getToken();
