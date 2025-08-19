@@ -84,7 +84,13 @@ class ApiService {
 
   // Métodos de autenticación
   async login(credentials) {
-    const response = await this.post('/auth/login', credentials, { auth: false });
+    // Adaptar el formato de credenciales si viene 'usuario' en lugar de 'email'
+    const adaptedCredentials = { 
+      email: credentials.usuario || credentials.email,
+      password: credentials.password
+    };
+    
+    const response = await this.post('/auth/login', adaptedCredentials, { auth: false });
     
     if (response.token) {
       localStorage.setItem('token', response.token);
@@ -142,6 +148,11 @@ class ApiService {
   // Métodos para contratos
   async getContratos() {
     return this.get('/contratos');
+  }
+  
+  // Métodos para oficios
+  async getOficios() {
+    return this.get('/oficios');
   }
 
   async createContrato(contratoData) {
