@@ -1,12 +1,17 @@
 import React, { useState } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Empleados from './components/Empleados';
 import Nomina from './components/Nomina';
 import Usuarios from './components/Usuarios';
+import Roles from './components/Roles';
+
+// Importar componente AccessDenied
+import AccessDenied from './components/AccessDenied';
 
 function MainApp() {
   const [currentPath, setCurrentPath] = useState(() => {
@@ -14,6 +19,7 @@ function MainApp() {
     return localStorage.getItem('currentPath') || '/';
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const { hasModuleAccess, loading: permissionsLoading } = usePermissions();
 
   const handleNavigate = (path) => {
     setCurrentPath(path);
@@ -24,11 +30,54 @@ function MainApp() {
   const toggleSidebar = () => {
     setSidebarCollapsed(!sidebarCollapsed);
   };
+  
+  // Función para obtener el módulo basado en la ruta actual
+  const getModuleFromPath = (path) => {
+    // Eliminar la barra inicial para obtener el nombre del módulo
+    return path.substring(1) || 'dashboard';
+  };
 
   const renderContent = () => {
+    // Mostrar un indicador de carga mientras se cargan los permisos
+    if (permissionsLoading) {
+      return (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600 dark:text-gray-400">Cargando permisos...</p>
+          </div>
+        </div>
+      );
+    }
+
+    // El dashboard siempre está disponible
+    if (currentPath === '/') {
+      return <Dashboard />;
+    }
+    
+    // Obtener el módulo de la ruta actual
+    const currentModule = getModuleFromPath(currentPath);
+    
+    // Verificar si el usuario tiene acceso al módulo
+    if (!hasModuleAccess(currentModule)) {
+      // Mostrar componente de acceso denegado con el nombre del módulo
+      const moduleNames = {
+        empleados: 'Empleados',
+        nomina: 'Nómina',
+        contratos: 'Contratos',
+        oficios: 'Oficios',
+        auditoria: 'Auditoría',
+        reportes: 'Reportes',
+        usuarios: 'Usuarios',
+        roles: 'Roles',
+        config: 'Configuración'
+      };
+      
+      return <AccessDenied moduleName={moduleNames[currentModule]} />;
+    }
+    
+    // Si tiene acceso, mostrar el componente correspondiente
     switch (currentPath) {
-      case '/':
-        return <Dashboard />;
       case '/empleados':
         return <Empleados />;
       case '/nomina':
@@ -80,6 +129,8 @@ function MainApp() {
         );
       case '/usuarios':
         return <Usuarios />;
+      case '/roles':
+        return <Roles />;
       default:
         return <Dashboard />;
     }
@@ -129,9 +180,11 @@ function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <ProtectedRoute>
-          <MainApp />
-        </ProtectedRoute>
+        <PermissionsProvider>
+          <ProtectedRoute>
+            <MainApp />
+          </ProtectedRoute>
+        </PermissionsProvider>
       </AuthProvider>
     </ThemeProvider>
   );

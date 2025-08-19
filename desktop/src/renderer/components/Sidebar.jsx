@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import {
   HomeIcon,
   UserGroupIcon,
@@ -14,19 +15,22 @@ import {
   SunIcon,
   MoonIcon,
   Bars3Icon,
-  UserIcon
+  UserIcon,
+  ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: HomeIcon, current: true },
-  { name: 'Empleados', href: '/empleados', icon: UserGroupIcon, current: false },
-  { name: 'Nómina', href: '/nomina', icon: CurrencyDollarIcon, current: false },
-  { name: 'Contratos', href: '/contratos', icon: DocumentTextIcon, current: false },
-  { name: 'Oficios', href: '/oficios', icon: BuildingOfficeIcon, current: false },
-  { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false },
-  { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false },
-  { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false },
-  { name: 'Configuración', href: '/configuracion', icon: CogIcon, current: false },
+// Definición de los elementos de navegación con sus respectivos códigos de permiso
+const navigationItems = [
+  { name: 'Dashboard', href: '/', icon: HomeIcon, current: true, permissionModule: 'dashboard' },
+  { name: 'Empleados', href: '/empleados', icon: UserGroupIcon, current: false, permissionModule: 'empleados' },
+  { name: 'Nómina', href: '/nomina', icon: CurrencyDollarIcon, current: false, permissionModule: 'nomina' },
+  { name: 'Contratos', href: '/contratos', icon: DocumentTextIcon, current: false, permissionModule: 'contratos' },
+  { name: 'Oficios', href: '/oficios', icon: BuildingOfficeIcon, current: false, permissionModule: 'oficios' },
+  { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false, permissionModule: 'auditoria' },
+  { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false, permissionModule: 'reportes' },
+  { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false, permissionModule: 'usuarios' },
+  { name: 'Roles', href: '/roles', icon: ShieldCheckIcon, current: false, permissionModule: 'roles' },
+  { name: 'Configuración', href: '/configuracion', icon: CogIcon, current: false, permissionModule: 'config' },
 ];
 
 function classNames(...classes) {
@@ -36,6 +40,16 @@ function classNames(...classes) {
 export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle }) {
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
+  const { hasModuleAccess, loading: permissionsLoading } = usePermissions();
+
+  // Filtrar los elementos de navegación según los permisos del usuario
+  const navigation = navigationItems.filter(item => {
+    // El dashboard siempre es visible para todos los usuarios autenticados
+    if (item.href === '/') return true;
+    
+    // Verificar si el usuario tiene acceso al módulo
+    return hasModuleAccess(item.permissionModule);
+  });
 
   const handleLogout = () => {
     if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {

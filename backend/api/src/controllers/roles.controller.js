@@ -3,6 +3,9 @@ const Rol = models.Roles;
 const PermisosRol = models.Permisos_rol;
 const AccionesPermiso = models.Acciones_permiso;
 
+// Registro de modelos disponibles para depuración
+console.log("Modelos disponibles:", Object.keys(models));
+
 /**
  * Obtener todos los roles
  * @param {Object} req - Objeto de solicitud
@@ -250,10 +253,15 @@ const asignarPermisosRol = async (req, res) => {
         // Crear nuevos permisos
         const permisosCreados = await Promise.all(
             permisos.map(async (permiso) => {
+                // Asegurarse de que permitido sea un booleano y no use el operador ||
+                const esPermitido = permiso.permitido === true || permiso.permitido === 'true';
+                
+                console.log(`Creando permiso para acción ${permiso.id_accion} con permitido=${esPermitido}`);
+                
                 return await PermisosRol.create({
                     id_rol,
                     id_accion: permiso.id_accion,
-                    permitido: permiso.permitido || true
+                    permitido: esPermitido
                 });
             })
         );
@@ -343,6 +351,61 @@ const verificarPermiso = async (req, res) => {
     }
 };
 
+/**
+ * Obtener permisos de un rol específico
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getPermisosRol = async (req, res) => {
+    try {
+        const { id_rol } = req.params;
+
+        // Verificar que el rol existe
+        const rol = await Rol.findByPk(id_rol);
+        if (!rol) {
+            return res.status(404).json({
+                message: 'Rol no encontrado'
+            });
+        }
+
+        // Obtener los permisos del rol
+        const permisos = await PermisosRol.findAll({
+            where: { id_rol },
+            include: [{
+                model: AccionesPermiso,
+                as: 'accion'
+            }]
+        });
+
+        console.log(`Permisos encontrados para rol ${id_rol}:`, permisos.map(p => ({
+            id_accion: p.id_accion,
+            permitido: p.permitido
+        })));
+
+        // Formatear la respuesta
+        const permisosFormateados = permisos.map(permiso => ({
+            id_permiso: permiso.id_permiso,
+            id_accion: permiso.id_accion,
+            permitido: permiso.permitido === true, // Asegurar que sea booleano
+            nombre: permiso.accion.nombre,
+            codigo: permiso.accion.codigo,
+            descripcion: permiso.accion.descripcion,
+            modulo: permiso.accion.modulo
+        }));
+
+        res.status(200).json({
+            message: 'Permisos obtenidos exitosamente',
+            permisos: permisosFormateados
+        });
+    } catch (error) {
+        console.error('Error al obtener permisos:', error);
+        res.status(500).json({
+            message: 'Error al obtener permisos',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllRoles,
     getRolById,
@@ -351,5 +414,6 @@ module.exports = {
     deleteRol,
     asignarPermisosRol,
     getAccionesPermiso,
-    verificarPermiso
+    verificarPermiso,
+    getPermisosRol
 };

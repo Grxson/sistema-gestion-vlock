@@ -202,6 +202,35 @@ class ApiService {
   async getRoles() {
     return this.get('/roles');
   }
+  
+  async getRolById(id) {
+    return this.get(`/roles/${id}`);
+  }
+  
+  async createRol(rolData) {
+    return this.post('/roles', rolData);
+  }
+  
+  async updateRol(id, rolData) {
+    return this.put(`/roles/${id}`, rolData);
+  }
+  
+  async deleteRol(id) {
+    return this.delete(`/roles/${id}`);
+  }
+  
+  // Métodos para permisos
+  async getPermisosRol(idRol) {
+    return this.get(`/roles/${idRol}/permisos`);
+  }
+  
+  async updatePermisosRol(idRol, permisos) {
+    return this.put(`/roles/${idRol}/permisos`, { permisos });
+  }
+  
+  async getAccionesPermiso() {
+    return this.get('/roles/acciones-permiso/all');
+  }
 
   // Utilidades
   isAuthenticated() {

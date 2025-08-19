@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
+import PermissionGuard from './PermissionGuard';
+import { usePermissions } from '../contexts/PermissionsContext';
 import {
   PlusIcon,
   PencilIcon,
@@ -10,7 +12,8 @@ import {
   IdentificationIcon,
   BanknotesIcon,
   CalendarIcon,
-  BuildingOfficeIcon
+  BuildingOfficeIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 export default function Empleados() {
@@ -74,49 +77,56 @@ export default function Empleados() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+    // Hook para verificar permisos
+    const { hasPermission } = usePermissions();
     
-    try {
-      // Preparar los datos para enviar al servidor
-      const dataToSend = {
-        ...formData,
-        // Convertir id_contrato a null si está vacío
-        id_contrato: formData.id_contrato === '' ? null : formData.id_contrato,
-        // Convertir id_oficio a null si está vacío
-        id_oficio: formData.id_oficio === '' ? null : formData.id_oficio,
-        // Convertir fecha_baja a null si está vacío
-        fecha_baja: formData.fecha_baja === '' ? null : formData.fecha_baja
-      };
-
-      if (editingEmpleado) {
-        await apiService.updateEmpleado(editingEmpleado.id_empleado, dataToSend);
-      } else {
-        await apiService.createEmpleado(dataToSend);
+    const handleSubmit = async (e) => {
+      e.preventDefault();
+      
+      if (!validateForm()) {
+        return;
       }
 
-      fetchEmpleados();
-      setShowModal(false);
-      setEditingEmpleado(null);
-      setFormData({
-        nombre: '',
-        apellido: '',
-        nss: '',
-        telefono: '',
-        contacto_emergencia: '',
-        telefono_emergencia: '',
-        banco: '',
-        cuenta_bancaria: '',
-        id_contrato: '',
-        id_oficio: '',
-        fecha_alta: new Date().toISOString().split('T')[0],
-        fecha_baja: ''
-      });
-    } catch (error) {
-      console.error('Error saving empleado:', error);
-      alert('Error al guardar empleado: ' + error.message);
-    }
-  };
+      try {
+        // Verificar permisos según la operación
+        const canCreate = hasPermission('empleados.crear');
+        const canEdit = hasPermission('empleados.editar');
+        
+        if (editingEmpleado && !canEdit) {
+          alert('No tienes permiso para editar empleados');
+          return;
+        }
+        
+        if (!editingEmpleado && !canCreate) {
+          alert('No tienes permiso para crear empleados');
+          return;
+        }
+        
+        // Preparar datos para enviar al servidor
+        const dataToSend = { ...formData };
+        
+        // Convertir campos vacíos a null para el backend
+        Object.keys(dataToSend).forEach(key => {
+          if (dataToSend[key] === '') {
+            dataToSend[key] = null;
+          }
+        });
+        
+        if (editingEmpleado) {
+          await apiService.updateEmpleado(editingEmpleado.id_empleado, dataToSend);
+        } else {
+          await apiService.createEmpleado(dataToSend);
+        }
+        
+        // Reiniciar el formulario y recargar la lista de empleados
+        resetForm();
+        loadEmpleados();
+        toast.success(editingEmpleado ? 'Empleado actualizado con éxito' : 'Empleado creado con éxito');
+      } catch (error) {
+        console.error('Error al guardar empleado:', error);
+        toast.error('Error al guardar el empleado');
+      }
+    };
 
   const handleViewProfile = (empleado) => {
     setSelectedEmpleado(empleado);
@@ -180,13 +190,27 @@ export default function Empleados() {
             Gestiona la información de los empleados
           </p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 hover:shadow-md"
+        <PermissionGuard 
+          permissionCode="empleados.crear" 
+          fallback={
+            <button 
+              disabled
+              className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-gray-400 cursor-not-allowed"
+              title="No tienes permiso para crear empleados"
+            >
+              <ExclamationTriangleIcon className="h-4 w-4 mr-2" />
+              Acceso restringido
+            </button>
+          }
         >
-          <PlusIcon className="h-4 w-4 mr-2" />
-          Nuevo Empleado
-        </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 hover:shadow-md"
+          >
+            <PlusIcon className="h-4 w-4 mr-2" />
+            Nuevo Empleado
+          </button>
+        </PermissionGuard>
       </div>
 
       {/* Search */}
@@ -248,20 +272,49 @@ export default function Empleados() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                         </svg>
                       </button>
-                      <button
-                        onClick={() => handleEdit(empleado)}
-                        className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300 p-1"
-                        title="Editar"
+                      <PermissionGuard 
+                        permissionCode="empleados.editar" 
+                        hideCompletely={false}
+                        fallback={
+                          <button 
+                            disabled
+                            className="text-gray-400 cursor-not-allowed p-1"
+                            title="No tienes permiso para editar empleados"
+                          >
+                            <PencilIcon className="h-4 w-4" />
+                          </button>
+                        }
                       >
-                        <PencilIcon className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(empleado.id_empleado)}
-                        className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1"
-                        title="Eliminar"
+                        <button
+                          onClick={() => handleEdit(empleado)}
+                          className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300 p-1"
+                          title="Editar"
+                        >
+                          <PencilIcon className="h-4 w-4" />
+                        </button>
+                      </PermissionGuard>
+                      
+                      <PermissionGuard 
+                        permissionCode="empleados.eliminar" 
+                        hideCompletely={false}
+                        fallback={
+                          <button 
+                            disabled
+                            className="text-gray-400 cursor-not-allowed p-1"
+                            title="No tienes permiso para eliminar empleados"
+                          >
+                            <TrashIcon className="h-4 w-4" />
+                          </button>
+                        }
                       >
-                        <TrashIcon className="h-4 w-4" />
-                      </button>
+                        <button
+                          onClick={() => handleDelete(empleado.id_empleado)}
+                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1"
+                          title="Eliminar"
+                        >
+                          <TrashIcon className="h-4 w-4" />
+                        </button>
+                      </PermissionGuard>
                     </div>
                   </div>
                 </div>

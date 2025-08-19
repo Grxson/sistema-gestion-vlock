@@ -21,11 +21,14 @@ router.put('/:id', verifyRole([1]), rolesController.updateRol);
 // Eliminar rol - Solo administradores
 router.delete('/:id', verifyRole([1]), rolesController.deleteRol);
 
-// Asignar permisos a rol - Solo administradores
-router.post('/:id_rol/permisos', verifyRole([1]), rolesController.asignarPermisosRol);
+// Obtener permisos de un rol específico - Solo administradores
+router.get('/:id_rol/permisos', verifyRole([1]), rolesController.getPermisosRol);
 
-// Obtener acciones/permisos disponibles - Solo administradores
-router.get('/acciones/all', verifyRole([1]), rolesController.getAccionesPermiso);
+// Actualizar permisos de un rol - Solo administradores
+router.put('/:id_rol/permisos', verifyRole([1]), rolesController.asignarPermisosRol);
+
+// Obtener todas las acciones disponibles - Solo administradores
+router.get('/acciones-permiso/all', verifyRole([1]), rolesController.getAccionesPermiso);
 
 // Verificar permiso específico - Autenticados
 router.post('/verificar-permiso', rolesController.verificarPermiso);
