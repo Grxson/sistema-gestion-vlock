@@ -165,8 +165,8 @@ const updateOficio = async (req, res) => {
         if (nombre && nombre.trim().toLowerCase() !== oficio.nombre.toLowerCase()) {
             const oficioExistente = await Oficio.findOne({
                 where: {
-                    id_oficio: { [models.sequelize.Op.ne]: id },
-                    [models.sequelize.Op.where]: models.sequelize.where(
+                    id_oficio: { [Op.ne]: id },
+                    [Op.where]: models.sequelize.where(
                         models.sequelize.fn('LOWER', models.sequelize.col('nombre')),
                         nombre.toLowerCase().trim()
                     )
@@ -309,7 +309,7 @@ const getOficiosStats = async (req, res) => {
             group: ['oficios.id_oficio'],
             having: models.sequelize.where(
                 models.sequelize.fn('COUNT', models.sequelize.col('empleados.id_empleado')), 
-                { [models.sequelize.Op.gt]: 0 }
+                { [Op.gt]: 0 }
             )
         });
 

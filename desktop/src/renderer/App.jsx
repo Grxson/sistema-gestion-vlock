@@ -7,6 +7,8 @@ import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Empleados from './components/Empleados';
 import Nomina from './components/Nomina';
+import Contratos from './components/Contratos';
+import Oficios from './components/Oficios';
 import Usuarios from './components/Usuarios';
 import Roles from './components/Roles';
 import DiagnosticPage from './pages/DiagnosticPage';
@@ -84,23 +86,9 @@ function MainApp() {
       case '/nomina':
         return <Nomina />;
       case '/contratos':
-        return (
-          <div className="text-center py-20">
-            <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl p-10 max-w-md mx-auto">
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">Módulo de Contratos</h2>
-              <p className="text-gray-600 dark:text-gray-400">En desarrollo...</p>
-            </div>
-          </div>
-        );
+        return <Contratos />;
       case '/oficios':
-        return (
-          <div className="text-center py-20">
-            <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl p-10 max-w-md mx-auto">
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">Módulo de Oficios</h2>
-              <p className="text-gray-600 dark:text-gray-400">En desarrollo...</p>
-            </div>
-          </div>
-        );
+        return <Oficios />;
       case '/auditoria':
         return (
           <div className="text-center py-20">

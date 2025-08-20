@@ -97,12 +97,18 @@ const createContrato = async (req, res) => {
             });
         }
 
+        // Validar y limpiar fecha_fin
+        let fechaFinProcessed = null;
+        if (fecha_fin && fecha_fin !== '' && fecha_fin !== 'Invalid date' && !isNaN(new Date(fecha_fin))) {
+            fechaFinProcessed = fecha_fin;
+        }
+
         // Crear el nuevo contrato
         const nuevoContrato = await Contrato.create({
             tipo_contrato,
             salario_diario,
             fecha_inicio,
-            fecha_fin
+            fecha_fin: fechaFinProcessed
         });
 
         res.status(201).json({
@@ -143,12 +149,22 @@ const updateContrato = async (req, res) => {
             });
         }
 
+        // Validar y limpiar fecha_fin
+        let fechaFinProcessed = contrato.fecha_fin; // Mantener valor actual por defecto
+        if (fecha_fin !== undefined) {
+            if (fecha_fin === '' || fecha_fin === 'Invalid date' || isNaN(new Date(fecha_fin))) {
+                fechaFinProcessed = null;
+            } else {
+                fechaFinProcessed = fecha_fin;
+            }
+        }
+
         // Actualizar los datos del contrato
         await contrato.update({
             tipo_contrato: tipo_contrato || contrato.tipo_contrato,
             salario_diario: salario_diario !== undefined ? salario_diario : contrato.salario_diario,
             fecha_inicio: fecha_inicio || contrato.fecha_inicio,
-            fecha_fin: fecha_fin !== undefined ? fecha_fin : contrato.fecha_fin
+            fecha_fin: fechaFinProcessed
         });
 
         res.status(200).json({
