@@ -6,6 +6,9 @@ const { verifyToken, verifyRole } = require('../middlewares/auth');
 // Todas las rutas requieren autenticación
 router.use(verifyToken);
 
+// Obtener estadísticas de contratos - Solo administradores
+router.get('/stats', verifyRole([1]), contratosController.getContratosStats);
+
 // Obtener todos los contratos
 router.get('/', contratosController.getAllContratos);
 

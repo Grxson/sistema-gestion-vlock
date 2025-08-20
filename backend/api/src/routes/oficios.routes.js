@@ -6,6 +6,9 @@ const { verifyToken, verifyRole } = require('../middlewares/auth');
 // Todas las rutas requieren autenticación
 router.use(verifyToken);
 
+// Obtener estadísticas de oficios - Solo administradores
+router.get('/stats', verifyRole([1]), oficiosController.getOficiosStats);
+
 // Obtener todos los oficios
 router.get('/', oficiosController.getAllOficios);
 

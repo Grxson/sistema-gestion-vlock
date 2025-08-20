@@ -285,14 +285,50 @@ class ApiService {
   async getContratos() {
     return this.get('/contratos');
   }
+
+  async getContratoById(id) {
+    return this.get(`/contratos/${id}`);
+  }
+
+  async createContrato(contratoData) {
+    return this.post('/contratos', contratoData);
+  }
+
+  async updateContrato(id, contratoData) {
+    return this.put(`/contratos/${id}`, contratoData);
+  }
+
+  async deleteContrato(id) {
+    return this.delete(`/contratos/${id}`);
+  }
+
+  async getContratosStats() {
+    return this.get('/contratos/stats');
+  }
   
   // Métodos para oficios
   async getOficios() {
     return this.get('/oficios');
   }
 
-  async createContrato(contratoData) {
-    return this.post('/contratos', contratoData);
+  async getOficioById(id) {
+    return this.get(`/oficios/${id}`);
+  }
+
+  async createOficio(oficioData) {
+    return this.post('/oficios', oficioData);
+  }
+
+  async updateOficio(id, oficioData) {
+    return this.put(`/oficios/${id}`, oficioData);
+  }
+
+  async deleteOficio(id) {
+    return this.delete(`/oficios/${id}`);
+  }
+
+  async getOficiosStats() {
+    return this.get('/oficios/stats');
   }
 
   // Métodos para auditoría

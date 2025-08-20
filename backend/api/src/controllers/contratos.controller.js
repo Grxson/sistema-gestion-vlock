@@ -9,11 +9,25 @@ const { Op } = require('sequelize');
  */
 const getAllContratos = async (req, res) => {
     try {
-        const contratos = await Contrato.findAll();
+        const contratos = await Contrato.findAll({
+            include: [{
+                model: models.Empleados,
+                as: 'empleados',
+                attributes: ['id_empleado', 'nombre', 'apellido'],
+                required: false
+            }]
+        });
+
+        // Agregar conteo de empleados a cada contrato
+        const contratosConConteo = contratos.map(contrato => {
+            const contratoData = contrato.toJSON();
+            contratoData.empleados_count = contratoData.empleados ? contratoData.empleados.length : 0;
+            return contratoData;
+        });
 
         res.status(200).json({
             message: 'Contratos obtenidos exitosamente',
-            contratos
+            contratos: contratosConConteo
         });
     } catch (error) {
         console.error('Error al obtener contratos:', error);
@@ -33,7 +47,13 @@ const getContratoById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const contrato = await Contrato.findByPk(id);
+        const contrato = await Contrato.findByPk(id, {
+            include: [{
+                model: models.Empleados,
+                as: 'empleados',
+                attributes: ['id_empleado', 'nombre', 'apellido', 'nss', 'fecha_alta']
+            }]
+        });
 
         if (!contrato) {
             return res.status(404).json({
@@ -187,10 +207,75 @@ const deleteContrato = async (req, res) => {
     }
 };
 
+/**
+ * Obtener estadísticas de contratos
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getContratosStats = async (req, res) => {
+    try {
+        // Conteo total de contratos
+        const totalContratos = await Contrato.count();
+
+        // Conteo por tipo de contrato
+        const contratosPorTipo = await Contrato.findAll({
+            attributes: [
+                'tipo_contrato',
+                [models.sequelize.fn('COUNT', models.sequelize.col('id_contrato')), 'count']
+            ],
+            group: ['tipo_contrato']
+        });
+
+        // Conteo de empleados por contrato
+        const empleadosPorContrato = await Contrato.findAll({
+            attributes: [
+                'id_contrato',
+                'tipo_contrato',
+                [models.sequelize.fn('COUNT', models.sequelize.col('empleados.id_empleado')), 'empleados_count']
+            ],
+            include: [{
+                model: models.Empleados,
+                as: 'empleados',
+                attributes: [],
+                required: false
+            }],
+            group: ['contratos.id_contrato']
+        });
+
+        // Salario promedio por tipo de contrato
+        const salarioPromedioPorTipo = await Contrato.findAll({
+            attributes: [
+                'tipo_contrato',
+                [models.sequelize.fn('AVG', models.sequelize.col('salario_diario')), 'salario_promedio'],
+                [models.sequelize.fn('MIN', models.sequelize.col('salario_diario')), 'salario_minimo'],
+                [models.sequelize.fn('MAX', models.sequelize.col('salario_diario')), 'salario_maximo']
+            ],
+            group: ['tipo_contrato']
+        });
+
+        res.status(200).json({
+            message: 'Estadísticas de contratos obtenidas exitosamente',
+            estadisticas: {
+                total_contratos: totalContratos,
+                contratos_por_tipo: contratosPorTipo,
+                empleados_por_contrato: empleadosPorContrato,
+                salarios_por_tipo: salarioPromedioPorTipo
+            }
+        });
+    } catch (error) {
+        console.error('Error al obtener estadísticas de contratos:', error);
+        res.status(500).json({
+            message: 'Error al obtener estadísticas de contratos',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllContratos,
     getContratoById,
     createContrato,
     updateContrato,
-    deleteContrato
+    deleteContrato,
+    getContratosStats
 };

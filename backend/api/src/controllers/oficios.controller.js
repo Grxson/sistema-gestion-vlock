@@ -1,6 +1,7 @@
 const models = require('../models');
 const Oficio = models.Oficios;
 const Empleado = models.Empleados;
+const { Op } = require('sequelize');
 
 /**
  * Obtener todos los oficios
@@ -9,11 +10,25 @@ const Empleado = models.Empleados;
  */
 const getAllOficios = async (req, res) => {
     try {
-        const oficios = await Oficio.findAll();
+        const oficios = await Oficio.findAll({
+            include: [{
+                model: models.Empleados,
+                as: 'empleados',
+                attributes: ['id_empleado', 'nombre', 'apellido'],
+                required: false
+            }]
+        });
+
+        // Agregar conteo de empleados a cada oficio
+        const oficiosConConteo = oficios.map(oficio => {
+            const oficioData = oficio.toJSON();
+            oficioData.empleados_count = oficioData.empleados ? oficioData.empleados.length : 0;
+            return oficioData;
+        });
 
         res.status(200).json({
             message: 'Oficios obtenidos exitosamente',
-            oficios
+            oficios: oficiosConConteo
         });
     } catch (error) {
         console.error('Error al obtener oficios:', error);
@@ -33,7 +48,18 @@ const getOficioById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const oficio = await Oficio.findByPk(id);
+        const oficio = await Oficio.findByPk(id, {
+            include: [{
+                model: models.Empleados,
+                as: 'empleados',
+                attributes: ['id_empleado', 'nombre', 'apellido', 'nss', 'fecha_alta'],
+                include: [{
+                    model: models.Contratos,
+                    as: 'contrato',
+                    attributes: ['tipo_contrato', 'salario_diario']
+                }]
+            }]
+        });
 
         if (!oficio) {
             return res.status(404).json({
@@ -70,21 +96,31 @@ const createOficio = async (req, res) => {
             });
         }
 
-        // Verificar si el oficio ya existe
+        // Validar longitud del nombre
+        if (nombre.length > 50) {
+            return res.status(400).json({
+                message: 'El nombre del oficio no puede exceder 50 caracteres'
+            });
+        }
+
+        // Verificar si el oficio ya existe (case insensitive)
         const oficioExistente = await Oficio.findOne({
-            where: { nombre }
+            where: models.sequelize.where(
+                models.sequelize.fn('LOWER', models.sequelize.col('nombre')),
+                nombre.toLowerCase().trim()
+            )
         });
 
         if (oficioExistente) {
             return res.status(400).json({
-                message: 'El oficio ya existe'
+                message: 'Ya existe un oficio con ese nombre'
             });
         }
 
         // Crear el nuevo oficio
         const nuevoOficio = await Oficio.create({
-            nombre,
-            descripcion
+            nombre: nombre.trim(),
+            descripcion: descripcion ? descripcion.trim() : null
         });
 
         res.status(201).json({
@@ -118,10 +154,36 @@ const updateOficio = async (req, res) => {
             });
         }
 
+        // Validar longitud del nombre si se proporciona
+        if (nombre && nombre.length > 50) {
+            return res.status(400).json({
+                message: 'El nombre del oficio no puede exceder 50 caracteres'
+            });
+        }
+
+        // Verificar si el nuevo nombre ya existe (excluyendo el oficio actual)
+        if (nombre && nombre.trim().toLowerCase() !== oficio.nombre.toLowerCase()) {
+            const oficioExistente = await Oficio.findOne({
+                where: {
+                    id_oficio: { [models.sequelize.Op.ne]: id },
+                    [models.sequelize.Op.where]: models.sequelize.where(
+                        models.sequelize.fn('LOWER', models.sequelize.col('nombre')),
+                        nombre.toLowerCase().trim()
+                    )
+                }
+            });
+
+            if (oficioExistente) {
+                return res.status(400).json({
+                    message: 'Ya existe un oficio con ese nombre'
+                });
+            }
+        }
+
         // Actualizar los datos del oficio
         await oficio.update({
-            nombre: nombre || oficio.nombre,
-            descripcion: descripcion !== undefined ? descripcion : oficio.descripcion
+            nombre: nombre ? nombre.trim() : oficio.nombre,
+            descripcion: descripcion !== undefined ? (descripcion ? descripcion.trim() : null) : oficio.descripcion
         });
 
         res.status(200).json({
@@ -181,10 +243,99 @@ const deleteOficio = async (req, res) => {
     }
 };
 
+/**
+ * Obtener estadísticas de oficios
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getOficiosStats = async (req, res) => {
+    try {
+        // Conteo total de oficios
+        const totalOficios = await Oficio.count();
+
+        // Oficios con más empleados
+        const oficiosConEmpleados = await Oficio.findAll({
+            attributes: [
+                'id_oficio',
+                'nombre',
+                [models.sequelize.fn('COUNT', models.sequelize.col('empleados.id_empleado')), 'empleados_count']
+            ],
+            include: [{
+                model: models.Empleados,
+                as: 'empleados',
+                attributes: [],
+                required: false
+            }],
+            group: ['oficios.id_oficio'],
+            order: [[models.sequelize.literal('empleados_count'), 'DESC']]
+        });
+
+        // Oficios sin empleados asignados
+        const oficiosSinEmpleados = await Oficio.findAll({
+            attributes: ['id_oficio', 'nombre', 'descripcion'],
+            include: [{
+                model: models.Empleados,
+                as: 'empleados',
+                attributes: [],
+                required: false
+            }],
+            having: models.sequelize.where(
+                models.sequelize.fn('COUNT', models.sequelize.col('empleados.id_empleado')), 
+                0
+            ),
+            group: ['oficios.id_oficio']
+        });
+
+        // Salarios promedio por oficio (de los empleados que tienen contrato)
+        const salariosPorOficio = await Oficio.findAll({
+            attributes: [
+                'id_oficio',
+                'nombre',
+                [models.sequelize.fn('AVG', models.sequelize.col('empleados.contrato.salario_diario')), 'salario_promedio'],
+                [models.sequelize.fn('COUNT', models.sequelize.col('empleados.id_empleado')), 'empleados_count']
+            ],
+            include: [{
+                model: models.Empleados,
+                as: 'empleados',
+                attributes: [],
+                include: [{
+                    model: models.Contratos,
+                    as: 'contrato',
+                    attributes: [],
+                    required: true
+                }],
+                required: false
+            }],
+            group: ['oficios.id_oficio'],
+            having: models.sequelize.where(
+                models.sequelize.fn('COUNT', models.sequelize.col('empleados.id_empleado')), 
+                { [models.sequelize.Op.gt]: 0 }
+            )
+        });
+
+        res.status(200).json({
+            message: 'Estadísticas de oficios obtenidas exitosamente',
+            estadisticas: {
+                total_oficios: totalOficios,
+                oficios_con_empleados: oficiosConEmpleados,
+                oficios_sin_empleados: oficiosSinEmpleados,
+                salarios_por_oficio: salariosPorOficio
+            }
+        });
+    } catch (error) {
+        console.error('Error al obtener estadísticas de oficios:', error);
+        res.status(500).json({
+            message: 'Error al obtener estadísticas de oficios',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllOficios,
     getOficioById,
     createOficio,
     updateOficio,
-    deleteOficio
+    deleteOficio,
+    getOficiosStats
 };
