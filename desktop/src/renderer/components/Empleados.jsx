@@ -43,6 +43,25 @@ export default function Empleados() {
     fecha_baja: ''
   });
 
+  const resetForm = () => {
+    setFormData({
+      nombre: '',
+      apellido: '',
+      nss: '',
+      telefono: '',
+      contacto_emergencia: '',
+      telefono_emergencia: '',
+      banco: '',
+      cuenta_bancaria: '',
+      id_contrato: '',
+      id_oficio: '',
+      fecha_alta: new Date().toISOString().split('T')[0],
+      fecha_baja: ''
+    });
+    setEditingEmpleado(null);
+    setShowModal(false);
+  };
+
   useEffect(() => {
     fetchEmpleados();
     fetchOficios();
@@ -72,11 +91,24 @@ export default function Empleados() {
   
   const fetchContratos = async () => {
     try {
-      const response = await apiService.get('/contratos');
+      const response = await apiService.getContratos();
+      console.log('Contratos cargados:', response.contratos); // Debug
       setContratos(response.contratos || []);
     } catch (error) {
       console.error('Error fetching contratos:', error);
+      setContratos([]); // Asegurar que contratos sea un array vacío en caso de error
     }
+  };
+  const validateForm = () => {
+    if (!formData.nombre.trim()) {
+      alert('El nombre es obligatorio');
+      return false;
+    }
+    if (!formData.apellido.trim()) {
+      alert('El apellido es obligatorio');
+      return false;
+    }
+    return true;
   };
     
     const handleSubmit = async (e) => {
@@ -119,11 +151,11 @@ export default function Empleados() {
         
         // Reiniciar el formulario y recargar la lista de empleados
         resetForm();
-        loadEmpleados();
-        toast.success(editingEmpleado ? 'Empleado actualizado con éxito' : 'Empleado creado con éxito');
+        fetchEmpleados();
+        alert(editingEmpleado ? 'Empleado actualizado con éxito' : 'Empleado creado con éxito');
       } catch (error) {
         console.error('Error al guardar empleado:', error);
-        toast.error('Error al guardar el empleado');
+        alert('Error al guardar el empleado: ' + (error.response?.data?.message || error.message));
       }
     };
 
@@ -245,9 +277,14 @@ export default function Empleados() {
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white mb-2">
-                      {empleado.contrato?.nombre || 'Sin contrato'}
+                    <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
+                      {empleado.contrato?.tipo_contrato || 'Sin contrato'}
                     </p>
+                    {empleado.contrato?.salario_diario && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                        ${parseFloat(empleado.contrato.salario_diario).toLocaleString()}/día
+                      </p>
+                    )}
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleViewProfile(empleado)}
@@ -420,7 +457,9 @@ export default function Empleados() {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Contrato</label>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Contrato {contratos.length > 0 ? `(${contratos.length} disponibles)` : '(Cargando...)'}
+                      </label>
                       <select
                         className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                         value={formData.id_contrato}
@@ -429,7 +468,7 @@ export default function Empleados() {
                         <option value="">Seleccionar contrato</option>
                         {contratos.map(contrato => (
                           <option key={contrato.id_contrato} value={contrato.id_contrato}>
-                            {contrato.nombre}
+                            {contrato.tipo_contrato} - ${parseFloat(contrato.salario_diario).toLocaleString()}/día
                           </option>
                         ))}
                       </select>
