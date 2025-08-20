@@ -50,18 +50,25 @@ function classNames(...classes) {
 export default function Dashboard() {
   const [dashboardData, setDashboardData] = useState({
     totalEmpleados: 0,
+    empleadosActivos: 0,
     nominaDelMes: 0,
     contratosActivos: 0,
     reportesGenerados: 0,
     empleadosRecientes: [],
-    nominasRecientes: []
+    nominasRecientes: [],
+    estadisticasDetalladas: null
   });
 
   const [loading, setLoading] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState(new Date());
   const { hasPermission, hasModuleAccess } = usePermissions();
 
   useEffect(() => {
     fetchDashboardData();
+    
+    // Actualizar datos cada 5 minutos
+    const interval = setInterval(fetchDashboardData, 5 * 60 * 1000);
+    return () => clearInterval(interval);
   }, [hasModuleAccess, hasPermission]);
 
   const fetchDashboardData = async () => {
@@ -71,60 +78,106 @@ export default function Dashboard() {
       let empleadosData = [];
       let contratosData = [];
       let nominasData = [];
+      let empleadosStats = null;
+      let contratosStats = null;
+      let nominaStats = null;
       
-      // Fetch empleados solo si tiene permiso
+      // Fetch empleados y sus estadísticas
       if (hasModuleAccess('empleados')) {
         try {
-          const empleados = await apiService.getEmpleados();
-          // Procesar la respuesta para asegurarnos que está en el formato correcto
+          const [empleados, estadisticas] = await Promise.all([
+            apiService.getEmpleados(),
+            apiService.getEmpleadosStats()
+          ]);
+          
           empleadosData = Array.isArray(empleados) ? empleados : empleados.empleados || [];
+          empleadosStats = estadisticas.estadisticas || estadisticas;
           console.log('Datos de empleados cargados:', empleadosData.length);
         } catch (error) {
           console.log('Error al obtener empleados:', error.message);
         }
-      } else {
-        console.log('Usuario sin permiso para ver empleados');
       }
       
-      // Fetch contratos solo si tiene permiso
+      // Fetch contratos y sus estadísticas
       if (hasModuleAccess('contratos')) {
         try {
-          contratosData = await apiService.getContratos();
+          const [contratos, estadisticas] = await Promise.all([
+            apiService.getContratos(),
+            apiService.getContratosStats()
+          ]);
+          
+          contratosData = Array.isArray(contratos) ? contratos : contratos.contratos || [];
+          contratosStats = estadisticas.estadisticas || estadisticas;
           console.log('Datos de contratos cargados:', contratosData.length);
         } catch (error) {
           console.log('Error al obtener contratos:', error.message);
         }
-      } else {
-        console.log('Usuario sin permiso para ver contratos');
       }
 
-      // Fetch nómina solo si tiene permiso
+      // Fetch nómina y sus estadísticas
       if (hasModuleAccess('nomina')) {
         try {
-          nominasData = await apiService.getNominas();
+          const [nominasResponse, estadisticas] = await Promise.all([
+            apiService.getNominas(),
+            apiService.getNominaStats()
+          ]);
+          
+          // La API de nómina devuelve { nominas: [...] }
+          nominasData = Array.isArray(nominasResponse) ? nominasResponse : 
+                       Array.isArray(nominasResponse.nominas) ? nominasResponse.nominas : [];
+          nominaStats = estadisticas.estadisticas || estadisticas;
           console.log('Datos de nóminas cargados:', nominasData.length);
         } catch (error) {
           console.log('Error al obtener nóminas:', error.message);
         }
-      } else {
-        console.log('Usuario sin permiso para ver nóminas');
       }
 
+      // Calcular empleados activos (asegurar que sea array)
+      const empleadosActivosList = Array.isArray(empleadosData) ? empleadosData : [];
+      const empleadosActivos = empleadosActivosList.filter(emp => !emp.fecha_baja).length;
+      
+      // Calcular contratos activos (asegurar que sea array)
+      const contratosActivosList = Array.isArray(contratosData) ? contratosData : [];
+      const contratosActivos = contratosActivosList.filter(c => c.estado === 'activo').length;
+      
+      // Calcular nómina del mes actual (asegurar que sea array)
+      const nominasActivasList = Array.isArray(nominasData) ? nominasData : [];
+      const fechaActual = new Date();
+      const mesActual = fechaActual.getMonth() + 1;
+      const añoActual = fechaActual.getFullYear();
+      
+      const nominaMesActual = nominasActivasList
+        .filter(n => {
+          // Intentar con diferentes campos de fecha que podrían existir
+          const fechaNomina = new Date(n.fecha_creacion || n.createdAt || n.fecha_pago || 0);
+          return fechaNomina.getMonth() + 1 === mesActual && 
+                 fechaNomina.getFullYear() === añoActual;
+        })
+        .reduce((sum, n) => sum + (parseFloat(n.total || n.monto_total || 0)), 0);
+
       // Ordenar empleados por fecha de alta (más recientes primero)
-      const empleadosOrdenados = [...empleadosData].sort((a, b) => {
+      const empleadosOrdenados = [...empleadosActivosList].sort((a, b) => {
         const fechaA = new Date(a.fecha_alta || 0);
         const fechaB = new Date(b.fecha_alta || 0);
         return fechaB - fechaA;
       });
       
       setDashboardData({
-        totalEmpleados: empleadosData.length || 0,
-        nominaDelMes: nominasData.reduce((sum, n) => sum + (n.total || 0), 0),
-        contratosActivos: contratosData.filter(c => c.estado === 'activo').length || 0,
-        reportesGenerados: 0, // Placeholder
+        totalEmpleados: empleadosActivosList.length || 0,
+        empleadosActivos: empleadosActivos,
+        nominaDelMes: nominaMesActual,
+        contratosActivos: contratosActivos,
+        reportesGenerados: nominasActivasList.length || 0, // Usar nóminas como proxy para reportes
         empleadosRecientes: empleadosOrdenados.slice(0, 5),
-        nominasRecientes: nominasData.slice(0, 5)
+        nominasRecientes: nominasActivasList.slice(0, 5),
+        estadisticasDetalladas: {
+          empleados: empleadosStats,
+          contratos: contratosStats,
+          nomina: nominaStats
+        }
       });
+
+      setLastUpdate(new Date());
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
@@ -139,29 +192,30 @@ export default function Dashboard() {
         return { 
           ...stat, 
           stat: hasModuleAccess('empleados') ? dashboardData.totalEmpleados.toString() : '---',
-          change: hasModuleAccess('empleados') ? stat.change : '---',
-          changeType: hasModuleAccess('empleados') ? stat.changeType : 'neutral'
+          change: hasModuleAccess('empleados') && dashboardData.estadisticasDetalladas?.empleados 
+            ? `${dashboardData.empleadosActivos} activos` : '---',
+          changeType: 'neutral'
         };
       case 'Nómina del Mes':
         return { 
           ...stat, 
-          stat: hasModuleAccess('nomina') ? `$${dashboardData.nominaDelMes.toLocaleString()}` : '---',
-          change: hasModuleAccess('nomina') ? stat.change : '---',
-          changeType: hasModuleAccess('nomina') ? stat.changeType : 'neutral'
+          stat: hasModuleAccess('nomina') ? `$${dashboardData.nominaDelMes.toLocaleString('es-MX')}` : '---',
+          change: hasModuleAccess('nomina') ? 'Mes actual' : '---',
+          changeType: 'neutral'
         };
       case 'Contratos Activos':
         return { 
           ...stat, 
           stat: hasModuleAccess('contratos') ? dashboardData.contratosActivos.toString() : '---',
-          change: hasModuleAccess('contratos') ? stat.change : '---',
-          changeType: hasModuleAccess('contratos') ? stat.changeType : 'neutral'
+          change: hasModuleAccess('contratos') ? `de ${dashboardData.totalEmpleados}` : '---',
+          changeType: 'neutral'
         };
       case 'Reportes Generados':
         return { 
           ...stat, 
-          stat: hasModuleAccess('reportes') ? dashboardData.reportesGenerados.toString() : '---',
-          change: hasModuleAccess('reportes') ? stat.change : '---',
-          changeType: hasModuleAccess('reportes') ? stat.changeType : 'neutral'
+          stat: hasModuleAccess('nomina') ? dashboardData.reportesGenerados.toString() : '---',
+          change: hasModuleAccess('nomina') ? 'Total' : '---',
+          changeType: 'neutral'
         };
       default:
         return stat;
@@ -180,10 +234,29 @@ export default function Dashboard() {
     <div className="space-y-6">
       {/* Header */}
       <div className="fade-in">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          Resumen general del sistema de gestión VLock
-        </p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+            <p className="mt-2 text-gray-600 dark:text-gray-400">
+              Resumen general del sistema de gestión VLock
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Última actualización:
+            </p>
+            <p className="text-sm font-medium text-gray-900 dark:text-white">
+              {lastUpdate.toLocaleString('es-MX')}
+            </p>
+            <button
+              onClick={fetchDashboardData}
+              disabled={loading}
+              className="mt-2 inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded text-gray-700 dark:text-gray-300 bg-white dark:bg-dark-100 hover:bg-gray-50 dark:hover:bg-dark-200 disabled:opacity-50"
+            >
+              {loading ? 'Actualizando...' : 'Actualizar'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Stats */}
@@ -222,6 +295,83 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Estadísticas Detalladas */}
+      {dashboardData.estadisticasDetalladas && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Estadísticas de Empleados */}
+          {hasModuleAccess('empleados') && dashboardData.estadisticasDetalladas.empleados && (
+            <div className="bg-white dark:bg-dark-100 shadow-lg dark:shadow-2xl rounded-xl card-shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                  <UserGroupIcon className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
+                  Empleados por Oficios
+                </h3>
+              </div>
+              <div className="p-6">
+                {dashboardData.estadisticasDetalladas.empleados.empleados_por_oficio?.slice(0, 3).map((item, index) => (
+                  <div key={index} className="flex justify-between items-center py-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">{item.nombre_oficio}</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{item.total_empleados}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Estadísticas de Contratos */}
+          {hasModuleAccess('contratos') && dashboardData.estadisticasDetalladas.contratos && (
+            <div className="bg-white dark:bg-dark-100 shadow-lg dark:shadow-2xl rounded-xl card-shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                  <DocumentTextIcon className="h-5 w-5 mr-2 text-green-600 dark:text-green-400" />
+                  Contratos por Tipo
+                </h3>
+              </div>
+              <div className="p-6">
+                {dashboardData.estadisticasDetalladas.contratos.contratos_por_tipo?.slice(0, 3).map((item, index) => (
+                  <div key={index} className="flex justify-between items-center py-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">{item.tipo_contrato}</span>
+                    <span className="text-sm font-semibold text-gray-900 dark:text-white">{item.total}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Estadísticas de Nómina */}
+          {hasModuleAccess('nomina') && dashboardData.estadisticasDetalladas.nomina && (
+            <div className="bg-white dark:bg-dark-100 shadow-lg dark:shadow-2xl rounded-xl card-shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/30 dark:to-purple-800/30">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                  <CurrencyDollarIcon className="h-5 w-5 mr-2 text-purple-600 dark:text-purple-400" />
+                  Resumen de Nómina
+                </h3>
+              </div>
+              <div className="p-6">
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Total Pagado</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    ${(dashboardData.estadisticasDetalladas.nomina.total_pagado || 0).toLocaleString('es-MX')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Promedio por Empleado</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    ${(dashboardData.estadisticasDetalladas.nomina.promedio_por_empleado || 0).toLocaleString('es-MX')}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center py-2">
+                  <span className="text-sm text-gray-600 dark:text-gray-400">Nóminas Procesadas</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
+                    {dashboardData.estadisticasDetalladas.nomina.total_nominas || 0}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">

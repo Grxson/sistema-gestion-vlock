@@ -272,6 +272,10 @@ class ApiService {
     return this.delete(`/empleados/${id}`);
   }
 
+  async getEmpleadosStats() {
+    return this.get('/empleados/stats');
+  }
+
   // Métodos para nómina
   async getNominas() {
     return this.get('/nomina');
@@ -279,6 +283,10 @@ class ApiService {
 
   async procesarNomina(nominaData) {
     return this.post('/nomina', nominaData);
+  }
+
+  async getNominaStats() {
+    return this.get('/nomina/estadisticas');
   }
 
   // Métodos para contratos
