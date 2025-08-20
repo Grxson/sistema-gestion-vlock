@@ -248,10 +248,75 @@ const logout = async (req, res) => {
     }
 };
 
+/**
+ * Controlador para obtener los permisos del usuario actual
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getUserPermissions = async (req, res) => {
+    try {
+        const id_usuario = req.usuario?.id_usuario;
+        
+        if (!id_usuario) {
+            return res.status(401).json({
+                message: 'Usuario no autenticado'
+            });
+        }
+
+        // Obtener el usuario con su rol
+        const usuario = await Usuario.findByPk(id_usuario, {
+            include: [{
+                model: Roles,
+                as: 'rol'
+            }]
+        });
+
+        if (!usuario) {
+            return res.status(404).json({
+                message: 'Usuario no encontrado'
+            });
+        }
+
+        // Obtener los permisos del rol del usuario (solo los permitidos)
+        const permisos = await models.Permisos_rol.findAll({
+            where: { 
+                id_rol: usuario.id_rol,
+                permitido: 1  // Solo permisos permitidos
+            },
+            include: [{
+                model: models.Acciones_permiso,
+                as: 'accion'
+            }]
+        });
+
+        // Extraer solo los nombres de las acciones
+        const listaPermisos = permisos.map(permiso => permiso.accion.nombre);
+
+        res.status(200).json({
+            message: 'Permisos obtenidos exitosamente',
+            permisos: listaPermisos,
+            usuario: {
+                id: usuario.id_usuario,
+                nombre: usuario.nombre_usuario,
+                email: usuario.email,
+                rol: usuario.rol ? usuario.rol.nombre : null,
+                id_rol: usuario.id_rol
+            }
+        });
+    } catch (error) {
+        console.error('Error al obtener permisos:', error);
+        res.status(500).json({
+            message: 'Error al obtener permisos',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     register,
     login,
     verifyAuth,
     changePassword,
-    logout
+    logout,
+    getUserPermissions
 };

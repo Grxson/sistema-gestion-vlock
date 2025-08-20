@@ -27,8 +27,6 @@ const initDB = async () => {
         }
 
         // Sincronizar modelos con la base de datos (crear tablas)
-        // Para una nueva instalación es mejor usar { force: false } para evitar problemas con claves foráneas
-        // Si necesitas recrear las tablas, usa alternativamente el script SQL
         await sequelize.sync({ force: false });
 
         // Crear roles básicos
@@ -52,58 +50,6 @@ const initDB = async () => {
 
         // Crear acciones de permisos básicas
         const accionesPredefinidas = [
-            // Usuarios
-            {
-                nombre: 'Ver usuarios',
-                codigo: 'usuarios.ver',
-                descripcion: 'Ver lista de usuarios',
-                modulo: 'usuarios'
-            },
-            {
-                nombre: 'Crear usuario',
-                codigo: 'usuarios.crear',
-                descripcion: 'Crear nuevos usuarios',
-                modulo: 'usuarios'
-            },
-            {
-                nombre: 'Editar usuario',
-                codigo: 'usuarios.editar',
-                descripcion: 'Modificar usuarios existentes',
-                modulo: 'usuarios'
-            },
-            {
-                nombre: 'Eliminar usuario',
-                codigo: 'usuarios.eliminar',
-                descripcion: 'Eliminar usuarios',
-                modulo: 'usuarios'
-            },
-
-            // Proyectos
-            {
-                nombre: 'Ver proyectos',
-                codigo: 'proyectos.ver',
-                descripcion: 'Ver lista de proyectos',
-                modulo: 'proyectos'
-            },
-            {
-                nombre: 'Crear proyecto',
-                codigo: 'proyectos.crear',
-                descripcion: 'Crear nuevos proyectos',
-                modulo: 'proyectos'
-            },
-            {
-                nombre: 'Editar proyecto',
-                codigo: 'proyectos.editar',
-                descripcion: 'Modificar proyectos existentes',
-                modulo: 'proyectos'
-            },
-            {
-                nombre: 'Eliminar proyecto',
-                codigo: 'proyectos.eliminar',
-                descripcion: 'Eliminar proyectos',
-                modulo: 'proyectos'
-            },
-
             // Empleados
             {
                 nombre: 'Ver empleados',
@@ -130,42 +76,36 @@ const initDB = async () => {
                 modulo: 'empleados'
             },
 
-            // Finanzas
+            // Nómina
             {
-                nombre: 'Ver gastos',
-                codigo: 'finanzas.gastos.ver',
-                descripcion: 'Ver registro de gastos',
-                modulo: 'finanzas'
+                nombre: 'Ver nómina',
+                codigo: 'nomina.ver',
+                descripcion: 'Ver nómina de empleados',
+                modulo: 'nomina'
             },
             {
-                nombre: 'Crear gasto',
-                codigo: 'finanzas.gastos.crear',
-                descripcion: 'Registrar nuevos gastos',
-                modulo: 'finanzas'
+                nombre: 'Crear nómina',
+                codigo: 'nomina.crear',
+                descripcion: 'Crear nueva nómina',
+                modulo: 'nomina'
             },
             {
-                nombre: 'Editar gasto',
-                codigo: 'finanzas.gastos.editar',
-                descripcion: 'Modificar gastos existentes',
-                modulo: 'finanzas'
+                nombre: 'Editar nómina',
+                codigo: 'nomina.editar',
+                descripcion: 'Modificar nómina existente',
+                modulo: 'nomina'
             },
             {
-                nombre: 'Eliminar gasto',
-                codigo: 'finanzas.gastos.eliminar',
-                descripcion: 'Eliminar gastos',
-                modulo: 'finanzas'
+                nombre: 'Procesar nómina',
+                codigo: 'nomina.procesar',
+                descripcion: 'Procesar pagos de nómina',
+                modulo: 'nomina'
             },
             {
-                nombre: 'Ver ingresos',
-                codigo: 'finanzas.ingresos.ver',
-                descripcion: 'Ver registro de ingresos',
-                modulo: 'finanzas'
-            },
-            {
-                nombre: 'Crear ingreso',
-                codigo: 'finanzas.ingresos.crear',
-                descripcion: 'Registrar nuevos ingresos',
-                modulo: 'finanzas'
+                nombre: 'Eliminar nómina',
+                codigo: 'nomina.eliminar',
+                descripcion: 'Eliminar registros de nómina',
+                modulo: 'nomina'
             },
 
             // Contratos
@@ -219,32 +159,6 @@ const initDB = async () => {
                 descripcion: 'Eliminar oficios',
                 modulo: 'oficios'
             },
-            
-            // Nómina
-            {
-                nombre: 'Ver nómina',
-                codigo: 'nomina.ver',
-                descripcion: 'Ver nómina de empleados',
-                modulo: 'nomina'
-            },
-            {
-                nombre: 'Crear nómina',
-                codigo: 'nomina.crear',
-                descripcion: 'Crear nueva nómina',
-                modulo: 'nomina'
-            },
-            {
-                nombre: 'Editar nómina',
-                codigo: 'nomina.editar',
-                descripcion: 'Modificar nómina existente',
-                modulo: 'nomina'
-            },
-            {
-                nombre: 'Procesar nómina',
-                codigo: 'nomina.procesar',
-                descripcion: 'Procesar pagos de nómina',
-                modulo: 'nomina'
-            },
 
             // Auditoría
             {
@@ -273,8 +187,40 @@ const initDB = async () => {
                 descripcion: 'Generar nuevos reportes',
                 modulo: 'reportes'
             },
+            {
+                nombre: 'Exportar reportes',
+                codigo: 'reportes.exportar',
+                descripcion: 'Exportar reportes a diferentes formatos',
+                modulo: 'reportes'
+            },
 
-            // Roles
+            // Usuarios
+            {
+                nombre: 'Ver usuarios',
+                codigo: 'usuarios.ver',
+                descripcion: 'Ver lista de usuarios',
+                modulo: 'usuarios'
+            },
+            {
+                nombre: 'Crear usuario',
+                codigo: 'usuarios.crear',
+                descripcion: 'Crear nuevos usuarios',
+                modulo: 'usuarios'
+            },
+            {
+                nombre: 'Editar usuario',
+                codigo: 'usuarios.editar',
+                descripcion: 'Modificar usuarios existentes',
+                modulo: 'usuarios'
+            },
+            {
+                nombre: 'Eliminar usuario',
+                codigo: 'usuarios.eliminar',
+                descripcion: 'Eliminar usuarios',
+                modulo: 'usuarios'
+            },
+
+            // Roles y Permisos
             {
                 nombre: 'Ver roles',
                 codigo: 'roles.ver',
@@ -297,6 +243,12 @@ const initDB = async () => {
                 nombre: 'Eliminar rol',
                 codigo: 'roles.eliminar',
                 descripcion: 'Eliminar roles',
+                modulo: 'roles'
+            },
+            {
+                nombre: 'Asignar permisos',
+                codigo: 'roles.permisos',
+                descripcion: 'Gestionar permisos de roles',
                 modulo: 'roles'
             },
             
@@ -341,22 +293,19 @@ const initDB = async () => {
             });
         }
 
-        // Asignar permisos básicos al rol de usuario
+        // Asignar solo permisos de "ver" al rol de usuario
         const permisosBasicos = await AccionesPermiso.findAll({
             where: {
                 codigo: {
                     [Op.in]: [
-                        'proyectos.ver',
                         'empleados.ver',
-                        'finanzas.gastos.ver',
-                        'finanzas.ingresos.ver',
-                        'reportes.ver',
                         'nomina.ver',
                         'contratos.ver',
                         'oficios.ver',
                         'auditoria.ver',
-                        'configuracion.ver',
-                        'roles.ver'
+                        'reportes.ver'
+                        // NO incluimos usuarios, roles ni configuración para usuarios normales
+                        // NO incluimos permisos de crear, editar o eliminar
                     ]
                 }
             }

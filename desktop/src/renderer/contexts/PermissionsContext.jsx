@@ -70,8 +70,14 @@ export function PermissionsProvider({ children }) {
    */
   const refreshPermissions = useCallback(() => {
     console.log('[PermissionsContext] Forzando actualización de permisos...');
+    
+    // Limpiar cache completamente
+    setPermissions({});
     setLoading(true);
     setError(null);
+    setLastUpdated(null);
+    
+    // Forzar recarga con timestamp único
     setRefreshToken(Date.now());
   }, []);
   
@@ -95,8 +101,8 @@ export function PermissionsProvider({ children }) {
           check: (permissionCode) => {
             const isAdmin = user?.rol === 'admin' || user?.id_rol === 1;
             const hasPermission = permissions[permissionCode] === true;
-            console.log(`🔐 Permiso '${permissionCode}': ${hasPermission ? '✅ PERMITIDO' : '❌ DENEGADO'} (Admin: ${isAdmin ? 'Sí' : 'No'})`);
-            return hasPermission || isAdmin;
+            console.log(`🔐 Permiso '${permissionCode}': ${hasPermission ? '✅ PERMITIDO' : '❌ DENEGADO'} (Admin: ${isAdmin ? 'Sí' : 'No'}) [Solo debug - no incluye lógica admin]`);
+            return hasPermission; // Solo retornar el permiso real, no aplicar lógica de admin
           },
           // Actualizar permisos
           refresh: refreshPermissions,
@@ -125,18 +131,9 @@ export function PermissionsProvider({ children }) {
       try {
         setLoading(true);
         
-        // Si es admin, podemos cargar permisos por defecto directamente
-        if (user.rol === 'admin' || user.id_rol === 1) {
-          console.log('[PermissionsContext] Usuario es admin, cargando permisos por defecto');
-          const adminPerms = getDefaultAdminPermissions();
-          setPermissions(adminPerms);
-          setLastUpdated(new Date());
-          setLoading(false);
-          return;
-        }
-        
-        // Para otros usuarios, consultar la API
-        const response = await apiService.getPermisosRol(user.id_rol);
+        // Para todos los usuarios (incluidos admins), consultar la API
+        console.log('[PermissionsContext] Consultando API para obtener permisos del usuario actual');
+        const response = await apiService.getCurrentUserPermissions();
         console.log('[PermissionsContext] Respuesta API permisos:', JSON.stringify(response, null, 2));
         
         // Verificar que la respuesta tenga el formato esperado
@@ -150,36 +147,70 @@ export function PermissionsProvider({ children }) {
         
         // Convertir el array de permisos en un objeto para facilitar el acceso
         const permisosMap = {};
-        response.permisos.forEach(permiso => {
-          if (permiso && permiso.codigo) {
-            // Asegurarse de que permitido sea un booleano
-            permisosMap[permiso.codigo] = permiso.permitido === true;
+        
+        // Mapeo de nombres descriptivos a códigos de permisos
+        const nombreACodigoMap = {
+          'Ver empleados': 'empleados.ver',
+          'Crear empleado': 'empleados.crear',
+          'Editar empleado': 'empleados.editar',
+          'Eliminar empleado': 'empleados.eliminar',
+          'Ver nómina': 'nomina.ver',
+          'Crear nómina': 'nomina.crear',
+          'Editar nómina': 'nomina.editar',
+          'Eliminar nómina': 'nomina.eliminar',
+          'Ver contratos': 'contratos.ver',
+          'Crear contrato': 'contratos.crear',
+          'Editar contrato': 'contratos.editar',
+          'Eliminar contrato': 'contratos.eliminar',
+          'Ver oficios': 'oficios.ver',
+          'Crear oficio': 'oficios.crear',
+          'Editar oficio': 'oficios.editar',
+          'Eliminar oficio': 'oficios.eliminar',
+          'Ver auditoría': 'auditoria.ver',
+          'Ver reportes': 'reportes.ver',
+          'Generar reportes': 'reportes.generar',
+          'Ver usuarios': 'usuarios.ver',
+          'Crear usuario': 'usuarios.crear',
+          'Editar usuario': 'usuarios.editar',
+          'Eliminar usuario': 'usuarios.eliminar',
+          'Ver roles': 'roles.ver',
+          'Crear rol': 'roles.crear',
+          'Editar rol': 'roles.editar',
+          'Eliminar rol': 'roles.eliminar',
+          'Ver configuración': 'configuracion.ver',
+          'Editar configuración': 'configuracion.editar'
+        };
+        
+        // Convertir nombres descriptivos a códigos y marcar como permitidos
+        response.permisos.forEach(nombrePermiso => {
+          const codigoPermiso = nombreACodigoMap[nombrePermiso];
+          if (codigoPermiso) {
+            permisosMap[codigoPermiso] = true;
+            console.log(`[PermissionsContext] Mapeo: "${nombrePermiso}" -> "${codigoPermiso}"`);
+          } else {
+            console.warn(`[PermissionsContext] Permiso no reconocido: "${nombrePermiso}"`);
           }
         });
         
-        // Verificar módulos con permisos de "ver"
-        const modulosSet = new Set();
-        const modulosConPermiso = [];
+        console.log(`[PermissionsContext] Permisos mapeados: ${Object.keys(permisosMap).length} códigos generados`);
+        console.log('[PermissionsContext] Códigos de permisos finales:', Object.keys(permisosMap));
         
-        response.permisos.forEach(permiso => {
-          if (permiso && permiso.codigo) {
-            const [module] = permiso.codigo.split('.');
-            modulosSet.add(module);
-          }
-        });
+        // Detectar cambios en permisos para invalidar cache si es necesario
+        const currentPermissionHash = JSON.stringify(Object.keys(permisosMap).sort());
+        const lastPermissionHash = localStorage.getItem('vlock_permissions_hash');
         
-        // Listar permisos de ver para cada módulo
-        Array.from(modulosSet).forEach(module => {
-          const permisoCodigo = `${module}.ver`;
-          const tienePermiso = permisosMap[permisoCodigo] === true;
-          modulosConPermiso.push({ 
-            modulo: module, 
-            permisoCodigo, 
-            permitido: tienePermiso 
+        if (lastPermissionHash && lastPermissionHash !== currentPermissionHash) {
+          console.log('[PermissionsContext] ¡Cambio en permisos detectado! Limpiando cache...');
+          // Limpiar cualquier cache relacionado con permisos
+          Object.keys(localStorage).forEach(key => {
+            if (key.startsWith('vlock_cache_') || key.startsWith('vlock_perm_')) {
+              localStorage.removeItem(key);
+            }
           });
-        });
+        }
         
-        console.log('[PermissionsContext] Estado de permisos de ver por módulo:', modulosConPermiso);
+        // Guardar hash actual para futuras comparaciones
+        localStorage.setItem('vlock_permissions_hash', currentPermissionHash);
         
         setPermissions(permisosMap);
         setLastUpdated(new Date());
@@ -293,7 +324,6 @@ export function PermissionsProvider({ children }) {
       'reportes': 'reportes.ver',
       'usuarios': 'usuarios.ver',
       'roles': 'roles.ver',
-      'config': 'configuracion.ver',
       'configuracion': 'configuracion.ver',
       'finanzas': 'finanzas.gastos.ver',
       'proyectos': 'proyectos.ver',

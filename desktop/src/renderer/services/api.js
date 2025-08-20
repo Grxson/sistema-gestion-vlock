@@ -364,6 +364,18 @@ class ApiService {
     console.log(`[API] Permisos obtenidos para rol ${idRol}:`, response);
     return response;
   }
+
+  async getCurrentUserPermissions() {
+    console.log('[API] Obteniendo permisos del usuario actual');
+    try {
+      const response = await this.get('/auth/permissions');
+      console.log('[API] Permisos del usuario actual:', response);
+      return response;
+    } catch (error) {
+      console.error('[API] Error al obtener permisos del usuario actual:', error);
+      throw error;
+    }
+  }
   
   async updatePermisosRol(idRol, permisos) {
     return this.put(`/roles/${idRol}/permisos`, { permisos });

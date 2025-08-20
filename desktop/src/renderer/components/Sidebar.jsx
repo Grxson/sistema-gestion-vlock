@@ -72,7 +72,6 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
       'reportes': 'reportes.ver',
       'usuarios': 'usuarios.ver',
       'roles': 'roles.ver',
-      'config': 'configuracion.ver',
       'configuracion': 'configuracion.ver',
       'finanzas': 'finanzas.gastos.ver',
       'proyectos': 'proyectos.ver'
@@ -88,7 +87,13 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
     
     // Verificar si el usuario tiene el permiso específico "ver" para este módulo
     const hasAccess = hasPermission(permissionCode);
-    console.log(`[Sidebar] Módulo ${item.name} (${permissionCode}): ${hasAccess ? 'Visible' : 'Oculto'}`);
+    console.log(`[Sidebar] Módulo ${item.name} (${permissionCode}): ${hasAccess ? 'Visible' : 'Oculto'} | Usuario rol: ${user?.id_rol} | Admin: ${user?.id_rol === 1}`);
+    
+    // Log adicional para debug
+    if (hasAccess && user?.id_rol !== 1) {
+      console.log(`[Sidebar] ⚠️ Usuario NO-ADMIN tiene acceso a ${item.name} - verificar si es correcto`);
+    }
+    
     return hasAccess;
   });
   
