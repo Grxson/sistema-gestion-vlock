@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
+import ApiErrorHandler from './ui/ApiErrorHandler';
+import PermissionDenied from './PermissionDenied';
 import {
   PlusIcon,
   PencilIcon,
@@ -35,8 +37,10 @@ export default function Usuarios() {
   const [errors, setErrors] = useState({});
 
   useEffect(() => {
-    fetchUsuarios();
-    fetchRoles();
+    // La llamada inicial a fetchUsuarios se manejará con ApiErrorHandler
+    fetchRoles().catch(error => {
+      console.error('Error fetching roles:', error);
+    });
   }, []);
 
   const fetchUsuarios = async () => {
@@ -44,8 +48,10 @@ export default function Usuarios() {
       setLoading(true);
       const response = await apiService.get('/usuarios');
       setUsuarios(response.usuarios || []);
+      return response;
     } catch (error) {
       console.error('Error fetching usuarios:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -55,8 +61,10 @@ export default function Usuarios() {
     try {
       const response = await apiService.get('/roles');
       setRoles(response.roles || []);
+      return response;
     } catch (error) {
       console.error('Error fetching roles:', error);
+      throw error;
     }
   };
 
@@ -201,15 +209,24 @@ export default function Usuarios() {
     usuario.rol?.nombre?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-      </div>
-    );
-  }
-
   return (
+    <ApiErrorHandler
+      apiCall={fetchUsuarios}
+      onSuccess={(response) => {
+        setUsuarios(response.usuarios || []);
+      }}
+      dependencies={[]}
+    >
+      {({ isLoading }) => {
+        if (isLoading) {
+          return (
+            <div className="flex items-center justify-center h-96">
+              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
+            </div>
+          );
+        }
+
+        return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex justify-between items-center">
@@ -510,5 +527,8 @@ export default function Usuarios() {
         </div>
       )}
     </div>
+        );
+      }}
+    </ApiErrorHandler>
   );
 }

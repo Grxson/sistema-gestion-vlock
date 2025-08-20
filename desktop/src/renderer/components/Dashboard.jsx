@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
+import { usePermissions } from '../contexts/PermissionsContext';
 import {
   UserGroupIcon,
   CurrencyDollarIcon,
@@ -57,41 +58,72 @@ export default function Dashboard() {
   });
 
   const [loading, setLoading] = useState(true);
+  const { hasPermission, hasModuleAccess } = usePermissions();
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [hasModuleAccess, hasPermission]);
 
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       
-      // Fetch empleados
-      const empleados = await apiService.getEmpleados();
+      let empleadosData = [];
+      let contratosData = [];
+      let nominasData = [];
       
-      // Fetch contratos (si existe el endpoint)
-      let contratos = [];
-      try {
-        contratos = await apiService.getContratos();
-      } catch (error) {
-        console.log('Contratos endpoint not available yet');
+      // Fetch empleados solo si tiene permiso
+      if (hasModuleAccess('empleados')) {
+        try {
+          const empleados = await apiService.getEmpleados();
+          // Procesar la respuesta para asegurarnos que está en el formato correcto
+          empleadosData = Array.isArray(empleados) ? empleados : empleados.empleados || [];
+          console.log('Datos de empleados cargados:', empleadosData.length);
+        } catch (error) {
+          console.log('Error al obtener empleados:', error.message);
+        }
+      } else {
+        console.log('Usuario sin permiso para ver empleados');
+      }
+      
+      // Fetch contratos solo si tiene permiso
+      if (hasModuleAccess('contratos')) {
+        try {
+          contratosData = await apiService.getContratos();
+          console.log('Datos de contratos cargados:', contratosData.length);
+        } catch (error) {
+          console.log('Error al obtener contratos:', error.message);
+        }
+      } else {
+        console.log('Usuario sin permiso para ver contratos');
       }
 
-      // Fetch nómina (si existe el endpoint)
-      let nominas = [];
-      try {
-        nominas = await apiService.getNominas();
-      } catch (error) {
-        console.log('Nomina endpoint not available yet');
+      // Fetch nómina solo si tiene permiso
+      if (hasModuleAccess('nomina')) {
+        try {
+          nominasData = await apiService.getNominas();
+          console.log('Datos de nóminas cargados:', nominasData.length);
+        } catch (error) {
+          console.log('Error al obtener nóminas:', error.message);
+        }
+      } else {
+        console.log('Usuario sin permiso para ver nóminas');
       }
 
+      // Ordenar empleados por fecha de alta (más recientes primero)
+      const empleadosOrdenados = [...empleadosData].sort((a, b) => {
+        const fechaA = new Date(a.fecha_alta || 0);
+        const fechaB = new Date(b.fecha_alta || 0);
+        return fechaB - fechaA;
+      });
+      
       setDashboardData({
-        totalEmpleados: empleados.length || 0,
-        nominaDelMes: nominas.reduce((sum, n) => sum + (n.total || 0), 0),
-        contratosActivos: contratos.filter(c => c.estado === 'activo').length || 0,
+        totalEmpleados: empleadosData.length || 0,
+        nominaDelMes: nominasData.reduce((sum, n) => sum + (n.total || 0), 0),
+        contratosActivos: contratosData.filter(c => c.estado === 'activo').length || 0,
         reportesGenerados: 0, // Placeholder
-        empleadosRecientes: empleados.slice(0, 5),
-        nominasRecientes: nominas.slice(0, 5)
+        empleadosRecientes: empleadosOrdenados.slice(0, 5),
+        nominasRecientes: nominasData.slice(0, 5)
       });
 
     } catch (error) {
@@ -104,13 +136,33 @@ export default function Dashboard() {
   const updatedStats = stats.map(stat => {
     switch (stat.name) {
       case 'Total Empleados':
-        return { ...stat, stat: dashboardData.totalEmpleados.toString() };
+        return { 
+          ...stat, 
+          stat: hasModuleAccess('empleados') ? dashboardData.totalEmpleados.toString() : '---',
+          change: hasModuleAccess('empleados') ? stat.change : '---',
+          changeType: hasModuleAccess('empleados') ? stat.changeType : 'neutral'
+        };
       case 'Nómina del Mes':
-        return { ...stat, stat: `$${dashboardData.nominaDelMes.toLocaleString()}` };
+        return { 
+          ...stat, 
+          stat: hasModuleAccess('nomina') ? `$${dashboardData.nominaDelMes.toLocaleString()}` : '---',
+          change: hasModuleAccess('nomina') ? stat.change : '---',
+          changeType: hasModuleAccess('nomina') ? stat.changeType : 'neutral'
+        };
       case 'Contratos Activos':
-        return { ...stat, stat: dashboardData.contratosActivos.toString() };
+        return { 
+          ...stat, 
+          stat: hasModuleAccess('contratos') ? dashboardData.contratosActivos.toString() : '---',
+          change: hasModuleAccess('contratos') ? stat.change : '---',
+          changeType: hasModuleAccess('contratos') ? stat.changeType : 'neutral'
+        };
       case 'Reportes Generados':
-        return { ...stat, stat: dashboardData.reportesGenerados.toString() };
+        return { 
+          ...stat, 
+          stat: hasModuleAccess('reportes') ? dashboardData.reportesGenerados.toString() : '---',
+          change: hasModuleAccess('reportes') ? stat.change : '---',
+          changeType: hasModuleAccess('reportes') ? stat.changeType : 'neutral'
+        };
       default:
         return stat;
     }
@@ -182,23 +234,30 @@ export default function Dashboard() {
             </h3>
           </div>
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {dashboardData.empleadosRecientes.length > 0 ? (
+            {!hasModuleAccess('empleados') ? (
+              <div className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
+                <UserGroupIcon className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-4" />
+                <p className="text-sm">No tienes permiso para ver empleados</p>
+              </div>
+            ) : dashboardData.empleadosRecientes.length > 0 ? (
               dashboardData.empleadosRecientes.map((empleado) => (
-                <div key={empleado.id} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
+                <div key={empleado.id_empleado} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center">
                       <div className="h-12 w-12 bg-gradient-to-br from-primary-500 to-primary-600 rounded-full flex items-center justify-center shadow-md">
                         <span className="text-white font-semibold text-sm">
-                          {empleado.nombre?.charAt(0)?.toUpperCase() || 'E'}
+                          {`${empleado.nombre?.charAt(0) || ''}${empleado.apellido?.charAt(0) || ''}`}
                         </span>
                       </div>
                       <div className="ml-4">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{empleado.nombre}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">{empleado.puesto}</p>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{`${empleado.nombre || ''} ${empleado.apellido || ''}`}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          {empleado.fecha_alta ? new Date(empleado.fecha_alta).toLocaleDateString() : 'Sin fecha'}
+                        </p>
                       </div>
                     </div>
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300">
-                      Activo
+                      {empleado.fecha_baja ? 'Inactivo' : 'Activo'}
                     </span>
                   </div>
                 </div>

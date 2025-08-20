@@ -9,6 +9,7 @@ import Empleados from './components/Empleados';
 import Nomina from './components/Nomina';
 import Usuarios from './components/Usuarios';
 import Roles from './components/Roles';
+import DiagnosticPage from './pages/DiagnosticPage';
 
 // Importar componente AccessDenied
 import AccessDenied from './components/AccessDenied';
@@ -131,6 +132,8 @@ function MainApp() {
         return <Usuarios />;
       case '/roles':
         return <Roles />;
+      case '/diagnostico':
+        return <DiagnosticPage />;
       default:
         return <Dashboard />;
     }

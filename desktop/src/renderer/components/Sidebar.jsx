@@ -16,8 +16,11 @@ import {
   MoonIcon,
   Bars3Icon,
   UserIcon,
-  ShieldCheckIcon
+  ShieldCheckIcon,
+  WrenchScrewdriverIcon
 } from '@heroicons/react/24/outline';
+
+
 
 // Definición de los elementos de navegación con sus respectivos códigos de permiso
 const navigationItems = [
@@ -30,7 +33,7 @@ const navigationItems = [
   { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false, permissionModule: 'reportes' },
   { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false, permissionModule: 'usuarios' },
   { name: 'Roles', href: '/roles', icon: ShieldCheckIcon, current: false, permissionModule: 'roles' },
-  { name: 'Configuración', href: '/configuracion', icon: CogIcon, current: false, permissionModule: 'config' },
+  { name: 'Configuración', href: '/configuracion', icon: CogIcon, current: false, permissionModule: 'configuracion' },
 ];
 
 function classNames(...classes) {
@@ -40,21 +43,71 @@ function classNames(...classes) {
 export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle }) {
   const { user, logout } = useAuth();
   const { isDarkMode, toggleTheme } = useTheme();
-  const { hasModuleAccess, loading: permissionsLoading } = usePermissions();
+  const { hasModuleAccess, hasPermission, refreshPermissions, loading: permissionsLoading } = usePermissions();
 
-  // Filtrar los elementos de navegación según los permisos del usuario
+  // Mostrar elementos de navegación
   const navigation = navigationItems.filter(item => {
     // El dashboard siempre es visible para todos los usuarios autenticados
     if (item.href === '/') return true;
     
-    // Verificar si el usuario tiene acceso al módulo
-    return hasModuleAccess(item.permissionModule);
+    // Si está cargando permisos, no mostrar módulos hasta que esté listo
+    if (permissionsLoading) {
+      console.log(`[Sidebar] Módulo ${item.name}: Cargando permisos...`);
+      return item.href === '/';
+    }
+    
+    // Para usuarios admin, mostrar todos los módulos
+    if (user?.rol === 'admin' || user?.id_rol === 1) {
+      console.log(`[Sidebar] Usuario admin, mostrando módulo: ${item.name}`);
+      return true;
+    }
+
+    // Convertir el módulo a su código de permiso correspondiente
+    const modulePermissionMap = {
+      'empleados': 'empleados.ver',
+      'nomina': 'nomina.ver',
+      'contratos': 'contratos.ver', 
+      'oficios': 'oficios.ver',
+      'auditoria': 'auditoria.ver',
+      'reportes': 'reportes.ver',
+      'usuarios': 'usuarios.ver',
+      'roles': 'roles.ver',
+      'config': 'configuracion.ver',
+      'configuracion': 'configuracion.ver',
+      'finanzas': 'finanzas.gastos.ver',
+      'proyectos': 'proyectos.ver'
+    };
+    
+    // Obtener el código de permiso para este módulo
+    const permissionCode = modulePermissionMap[item.permissionModule];
+    
+    if (!permissionCode) {
+      console.error(`[Sidebar] No se encontró código de permiso para el módulo: ${item.permissionModule}`);
+      return false;
+    }
+    
+    // Verificar si el usuario tiene el permiso específico "ver" para este módulo
+    const hasAccess = hasPermission(permissionCode);
+    console.log(`[Sidebar] Módulo ${item.name} (${permissionCode}): ${hasAccess ? 'Visible' : 'Oculto'}`);
+    return hasAccess;
   });
+  
+  // Si el usuario no tiene acceso a ningún módulo excepto Dashboard, mostrar un mensaje en la consola
+  if (navigation.length <= 1) {
+    console.warn('¡Advertencia! El usuario solo tiene acceso al Dashboard. Verifica la configuración de permisos.');
+    console.log('El usuario actual es:', user);
+  }
 
   const handleLogout = () => {
     if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {
       logout();
     }
+  };
+
+  const handleRefreshPermissions = () => {
+    refreshPermissions();
+    // Mostrar notificación
+    alert('Actualizando permisos. Los cambios se aplicarán en unos segundos.');
   };
   return (
     <div className={`${isCollapsed ? 'w-16' : 'w-64'} sidebar-transition flex flex-col bg-white dark:bg-dark-100 border-r border-gray-200 dark:border-gray-700 h-screen shadow-lg`}>
@@ -117,8 +170,33 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
         })}
       </nav>
 
-      {/* Theme Toggle */}
+      {/* Diagnóstico y utilidades */}
       <div className="px-3 py-2 border-t border-gray-200 dark:border-gray-700">
+        {/* Enlace a la página de diagnóstico */}
+        <button
+          onClick={() => onNavigate('/diagnostico')}
+          className={classNames(
+            currentPath === '/diagnostico'
+              ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400'
+              : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white',
+            'w-full flex items-center px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200 mb-1'
+          )}
+          title={isCollapsed ? "Diagnóstico" : undefined}
+        >
+          <WrenchScrewdriverIcon 
+            className={classNames(
+              currentPath === '/diagnostico'
+                ? 'text-primary-600 dark:text-primary-400'
+                : 'text-gray-400 dark:text-gray-500',
+              'flex-shrink-0 h-5 w-5 transition-colors duration-200'
+            )}
+          />
+          {!isCollapsed && (
+            <span className="ml-3">Diagnóstico</span>
+          )}
+        </button>
+        
+        {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
           className="w-full flex items-center px-3 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-200 hover:text-gray-900 dark:hover:text-white rounded-lg transition-all duration-200"
@@ -157,13 +235,24 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
               </div>
             )}
           </div>
-          <button
-            onClick={handleLogout}
-            className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200"
-            title="Cerrar sesión"
-          >
-            <ArrowRightOnRectangleIcon className="h-5 w-5" />
-          </button>
+          <div className="flex items-center">
+            <button
+              onClick={handleRefreshPermissions}
+              className="text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all duration-200 mr-2"
+              title="Actualizar permisos"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-5 w-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+            </button>
+            <button
+              onClick={handleLogout}
+              className="text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-all duration-200"
+              title="Cerrar sesión"
+            >
+              <ArrowRightOnRectangleIcon className="h-5 w-5" />
+            </button>
+          </div>
         </div>
       </div>
     </div>

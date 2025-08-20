@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
+import PermissionDenied from './PermissionDenied';
 import {
   PlusIcon,
   PencilIcon,
@@ -27,6 +28,8 @@ export default function Roles() {
   });
   const [permisosData, setPermisosData] = useState([]);
   const [errors, setErrors] = useState({});
+  const [permissionDenied, setPermissionDenied] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
     fetchRoles();
@@ -38,8 +41,13 @@ export default function Roles() {
       setLoading(true);
       const response = await apiService.getRoles();
       setRoles(response.roles || []);
+      setPermissionDenied(false);
     } catch (error) {
       console.error('Error fetching roles:', error);
+      if (error.status === 403) {
+        setPermissionDenied(true);
+        setErrorMessage(error.message || 'No tienes permiso para ver los roles');
+      }
     } finally {
       setLoading(false);
     }
@@ -51,6 +59,10 @@ export default function Roles() {
       setAcciones(response.acciones || []);
     } catch (error) {
       console.error('Error fetching acciones:', error);
+      if (error.status === 403) {
+        setPermissionDenied(true);
+        setErrorMessage(error.message || 'No tienes permiso para acceder a las acciones');
+      }
     }
   };
   
@@ -60,6 +72,10 @@ export default function Roles() {
       return response.permisos || [];
     } catch (error) {
       console.error('Error fetching permisos:', error);
+      if (error.status === 403) {
+        setPermissionDenied(true);
+        setErrorMessage(error.message || 'No tienes permiso para ver los permisos de este rol');
+      }
       return [];
     }
   };
@@ -99,7 +115,13 @@ export default function Roles() {
       setErrors({});
     } catch (error) {
       console.error('Error saving rol:', error);
-      alert('Error al guardar rol: ' + error.message);
+      if (error.status === 403) {
+        setPermissionDenied(true);
+        setErrorMessage(error.message || 'No tienes permiso para modificar roles');
+        setShowModal(false);
+      } else {
+        alert('Error al guardar rol: ' + error.message);
+      }
     }
   };
 
@@ -119,7 +141,12 @@ export default function Roles() {
         fetchRoles();
       } catch (error) {
         console.error('Error deleting rol:', error);
-        alert('Error al eliminar rol: ' + error.message);
+        if (error.status === 403) {
+          setPermissionDenied(true);
+          setErrorMessage(error.message || 'No tienes permiso para eliminar roles');
+        } else {
+          alert('Error al eliminar rol: ' + error.message);
+        }
       }
     }
   };
@@ -250,7 +277,14 @@ export default function Roles() {
       alert('Permisos actualizados correctamente');
     } catch (error) {
       console.error('Error saving permisos:', error);
-      alert('Error al guardar permisos: ' + error.message);
+      if (error.status === 403) {
+        setPermissionDenied(true);
+        setErrorMessage(error.message || 'No tienes permiso para modificar permisos de roles');
+        setShowPermisosModal(false);
+        setSelectedRol(null);
+      } else {
+        alert('Error al guardar permisos: ' + error.message);
+      }
     }
   };
 
@@ -274,6 +308,10 @@ export default function Roles() {
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
       </div>
     );
+  }
+
+  if (permissionDenied) {
+    return <PermissionDenied message={errorMessage} />;
   }
 
   return (

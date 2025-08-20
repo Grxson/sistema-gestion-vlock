@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
 import PermissionGuard from './PermissionGuard';
 import { usePermissions } from '../contexts/PermissionsContext';
+import PermissionButton from './ui/PermissionButton';
 import {
   PlusIcon,
   PencilIcon,
@@ -26,6 +27,7 @@ export default function Empleados() {
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [selectedEmpleado, setSelectedEmpleado] = useState(null);
   const [editingEmpleado, setEditingEmpleado] = useState(null);
+  const { hasPermission } = usePermissions();
   const [formData, setFormData] = useState({
     nombre: '',
     apellido: '',
@@ -76,9 +78,6 @@ export default function Empleados() {
       console.error('Error fetching contratos:', error);
     }
   };
-
-    // Hook para verificar permisos
-    const { hasPermission } = usePermissions();
     
     const handleSubmit = async (e) => {
       e.preventDefault();
@@ -190,27 +189,15 @@ export default function Empleados() {
             Gestiona la información de los empleados
           </p>
         </div>
-        <PermissionGuard 
-          permissionCode="empleados.crear" 
-          fallback={
-            <button 
-              disabled
-              className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-gray-400 cursor-not-allowed"
-              title="No tienes permiso para crear empleados"
-            >
-              <ExclamationTriangleIcon className="h-4 w-4 mr-2" />
-              Acceso restringido
-            </button>
-          }
+        <PermissionButton 
+          permissionCode="empleados.crear"
+          onClick={() => setShowModal(true)}
+          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm hover:shadow-md"
+          disabledMessage="No tienes permiso para crear empleados"
         >
-          <button
-            onClick={() => setShowModal(true)}
-            className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 hover:shadow-md"
-          >
-            <PlusIcon className="h-4 w-4 mr-2" />
-            Nuevo Empleado
-          </button>
-        </PermissionGuard>
+          <PlusIcon className="h-4 w-4 mr-2" />
+          Nuevo Empleado
+        </PermissionButton>
       </div>
 
       {/* Search */}
@@ -272,49 +259,23 @@ export default function Empleados() {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                         </svg>
                       </button>
-                      <PermissionGuard 
-                        permissionCode="empleados.editar" 
-                        hideCompletely={false}
-                        fallback={
-                          <button 
-                            disabled
-                            className="text-gray-400 cursor-not-allowed p-1"
-                            title="No tienes permiso para editar empleados"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </button>
-                        }
+                      <PermissionButton
+                        permissionCode="empleados.editar"
+                        onClick={() => handleEdit(empleado)}
+                        className="bg-transparent hover:bg-transparent text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300 p-1"
+                        disabledMessage="No tienes permiso para editar empleados"
                       >
-                        <button
-                          onClick={() => handleEdit(empleado)}
-                          className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300 p-1"
-                          title="Editar"
-                        >
-                          <PencilIcon className="h-4 w-4" />
-                        </button>
-                      </PermissionGuard>
+                        <PencilIcon className="h-4 w-4" />
+                      </PermissionButton>
                       
-                      <PermissionGuard 
-                        permissionCode="empleados.eliminar" 
-                        hideCompletely={false}
-                        fallback={
-                          <button 
-                            disabled
-                            className="text-gray-400 cursor-not-allowed p-1"
-                            title="No tienes permiso para eliminar empleados"
-                          >
-                            <TrashIcon className="h-4 w-4" />
-                          </button>
-                        }
+                      <PermissionButton
+                        permissionCode="empleados.eliminar"
+                        onClick={() => handleDelete(empleado.id_empleado)}
+                        className="bg-transparent hover:bg-transparent text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1"
+                        disabledMessage="No tienes permiso para eliminar empleados"
                       >
-                        <button
-                          onClick={() => handleDelete(empleado.id_empleado)}
-                          className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1"
-                          title="Eliminar"
-                        >
-                          <TrashIcon className="h-4 w-4" />
-                        </button>
-                      </PermissionGuard>
+                        <TrashIcon className="h-4 w-4" />
+                      </PermissionButton>
                     </div>
                   </div>
                 </div>

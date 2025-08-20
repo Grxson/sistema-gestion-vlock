@@ -168,6 +168,98 @@ const initDB = async () => {
                 modulo: 'finanzas'
             },
 
+            // Contratos
+            {
+                nombre: 'Ver contratos',
+                codigo: 'contratos.ver',
+                descripcion: 'Ver lista de contratos',
+                modulo: 'contratos'
+            },
+            {
+                nombre: 'Crear contrato',
+                codigo: 'contratos.crear',
+                descripcion: 'Crear nuevos contratos',
+                modulo: 'contratos'
+            },
+            {
+                nombre: 'Editar contrato',
+                codigo: 'contratos.editar',
+                descripcion: 'Modificar contratos existentes',
+                modulo: 'contratos'
+            },
+            {
+                nombre: 'Eliminar contrato',
+                codigo: 'contratos.eliminar',
+                descripcion: 'Eliminar contratos',
+                modulo: 'contratos'
+            },
+
+            // Oficios
+            {
+                nombre: 'Ver oficios',
+                codigo: 'oficios.ver',
+                descripcion: 'Ver lista de oficios',
+                modulo: 'oficios'
+            },
+            {
+                nombre: 'Crear oficio',
+                codigo: 'oficios.crear',
+                descripcion: 'Crear nuevos oficios',
+                modulo: 'oficios'
+            },
+            {
+                nombre: 'Editar oficio',
+                codigo: 'oficios.editar',
+                descripcion: 'Modificar oficios existentes',
+                modulo: 'oficios'
+            },
+            {
+                nombre: 'Eliminar oficio',
+                codigo: 'oficios.eliminar',
+                descripcion: 'Eliminar oficios',
+                modulo: 'oficios'
+            },
+            
+            // Nómina
+            {
+                nombre: 'Ver nómina',
+                codigo: 'nomina.ver',
+                descripcion: 'Ver nómina de empleados',
+                modulo: 'nomina'
+            },
+            {
+                nombre: 'Crear nómina',
+                codigo: 'nomina.crear',
+                descripcion: 'Crear nueva nómina',
+                modulo: 'nomina'
+            },
+            {
+                nombre: 'Editar nómina',
+                codigo: 'nomina.editar',
+                descripcion: 'Modificar nómina existente',
+                modulo: 'nomina'
+            },
+            {
+                nombre: 'Procesar nómina',
+                codigo: 'nomina.procesar',
+                descripcion: 'Procesar pagos de nómina',
+                modulo: 'nomina'
+            },
+
+            // Auditoría
+            {
+                nombre: 'Ver auditoría',
+                codigo: 'auditoria.ver',
+                descripcion: 'Ver registros de auditoría',
+                modulo: 'auditoria'
+            },
+            {
+                nombre: 'Exportar auditoría',
+                codigo: 'auditoria.exportar',
+                descripcion: 'Exportar registros de auditoría',
+                modulo: 'auditoria'
+            },
+
             // Reportes
             {
                 nombre: 'Ver reportes',
@@ -182,6 +274,32 @@ const initDB = async () => {
                 modulo: 'reportes'
             },
 
+            // Roles
+            {
+                nombre: 'Ver roles',
+                codigo: 'roles.ver',
+                descripcion: 'Ver roles y sus permisos',
+                modulo: 'roles'
+            },
+            {
+                nombre: 'Crear rol',
+                codigo: 'roles.crear',
+                descripcion: 'Crear nuevos roles',
+                modulo: 'roles'
+            },
+            {
+                nombre: 'Editar rol',
+                codigo: 'roles.editar',
+                descripcion: 'Modificar roles existentes',
+                modulo: 'roles'
+            },
+            {
+                nombre: 'Eliminar rol',
+                codigo: 'roles.eliminar',
+                descripcion: 'Eliminar roles',
+                modulo: 'roles'
+            },
+            
             // Configuración
             {
                 nombre: 'Ver configuración',
@@ -232,7 +350,13 @@ const initDB = async () => {
                         'empleados.ver',
                         'finanzas.gastos.ver',
                         'finanzas.ingresos.ver',
-                        'reportes.ver'
+                        'reportes.ver',
+                        'nomina.ver',
+                        'contratos.ver',
+                        'oficios.ver',
+                        'auditoria.ver',
+                        'configuracion.ver',
+                        'roles.ver'
                     ]
                 }
             }

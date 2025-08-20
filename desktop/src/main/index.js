@@ -1,7 +1,10 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
 
 let mainWindow;
+const appVersion = app.getVersion() || '1.0.0';
 
 console.log('Electron main process starting...');
 console.log('NODE_ENV:', process.env.NODE_ENV);
@@ -52,4 +55,35 @@ app.on('window-all-closed', () => {
 
 app.on('activate', () => {
   if (mainWindow === null) createWindow();
+});
+
+// Manejador para obtener información del sistema
+ipcMain.handle('get-system-info', async () => {
+  return {
+    os: `${os.type()} ${os.release()}`,
+    platform: process.platform,
+    node: process.versions.node,
+    electron: process.versions.electron,
+    app: 'VLock Sistema de Gestión',
+    version: appVersion
+  };
+});
+
+// Manejador para reiniciar la aplicación
+ipcMain.handle('restart-app', async () => {
+  app.relaunch();
+  app.exit(0);
+});
+
+// Manejador para abrir los archivos de registro
+ipcMain.handle('open-logs', async () => {
+  const logPath = path.join(app.getPath('userData'), 'logs');
+  
+  // Crear directorio de logs si no existe
+  if (!fs.existsSync(logPath)) {
+    fs.mkdirSync(logPath, { recursive: true });
+    fs.writeFileSync(path.join(logPath, 'app.log'), 'Log file initialized\n');
+  }
+  
+  shell.openPath(logPath);
 });
