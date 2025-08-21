@@ -11,7 +11,7 @@ import Contratos from './components/Contratos';
 import Oficios from './components/Oficios';
 import Usuarios from './components/Usuarios';
 import Roles from './components/Roles';
-import DiagnosticPage from './pages/DiagnosticPage';
+import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 
 // Importar componente AccessDenied
 import AccessDenied from './components/AccessDenied';
@@ -121,7 +121,7 @@ function MainApp() {
       case '/roles':
         return <Roles />;
       case '/diagnostico':
-        return <DiagnosticPage />;
+        return <DiagnosticPageAdvanced />;
       default:
         return <Dashboard />;
     }

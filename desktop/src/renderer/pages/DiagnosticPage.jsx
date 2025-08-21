@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../contexts/PermissionsContext';
 import PermissionDebugger from '../components/PermissionDebugger';
+import ConnectionMonitor from '../components/diagnostic/ConnectionMonitor';
+import PerformanceMonitor from '../components/diagnostic/PerformanceMonitor';
+import ActivityLog from '../components/diagnostic/ActivityLog';
+import MetricsDashboard from '../components/diagnostic/MetricsDashboard';
+import AdvancedTools from '../components/diagnostic/AdvancedTools';
+import SystemSettings from '../components/diagnostic/SystemSettings';
 
 const DiagnosticPage = () => {
   const { user } = useAuth();
@@ -26,6 +32,9 @@ const DiagnosticPage = () => {
   return (
     <div className="container mx-auto py-6 px-4">
       <h1 className="text-2xl font-bold mb-6">Diagnóstico del Sistema</h1>
+      
+      {/* Dashboard de Métricas */}
+      <MetricsDashboard />
       
       {/* Sección de información del sistema */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-6">
@@ -59,14 +68,29 @@ const DiagnosticPage = () => {
         </div>
       </div>
       
+      {/* Monitor de Conectividad */}
+      <ConnectionMonitor />
+      
+      {/* Monitor de Rendimiento */}
+      <PerformanceMonitor />
+      
       {/* Depurador de permisos */}
       <PermissionDebugger />
+      
+      {/* Registro de Actividades */}
+      <ActivityLog />
+      
+      {/* Herramientas Avanzadas */}
+      <AdvancedTools />
+      
+      {/* Configuración del Sistema */}
+      <SystemSettings />
       
       {/* Herramientas de diagnóstico adicionales */}
       <div className="bg-white rounded-lg shadow-md p-4 mb-6">
         <h2 className="text-xl font-semibold mb-3 flex items-center">
           <span role="img" aria-label="Tools" className="mr-2">🔧</span>
-          Herramientas
+          Herramientas Básicas
         </h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -129,7 +153,7 @@ const DiagnosticPage = () => {
       </div>
       
       <p className="text-sm text-gray-500 mt-4">
-        Versión de diagnóstico 1.0 • VLock Sistema de Gestión
+        Versión de diagnóstico 2.0 • VLock Sistema de Gestión • {new Date().toLocaleDateString()}
       </p>
     </div>
   );
