@@ -344,6 +344,101 @@ class ApiService {
     return this.get('/auditoria');
   }
 
+  // Métodos para proyectos
+  async getProyectos() {
+    return this.get('/proyectos');
+  }
+
+  async getProyectosActivos() {
+    return this.get('/proyectos/activos');
+  }
+
+  async getProyectoById(id) {
+    return this.get(`/proyectos/${id}`);
+  }
+
+  async createProyecto(proyectoData) {
+    return this.post('/proyectos', proyectoData);
+  }
+
+  async updateProyecto(id, proyectoData) {
+    return this.put(`/proyectos/${id}`, proyectoData);
+  }
+
+  async deleteProyecto(id) {
+    return this.delete(`/proyectos/${id}`);
+  }
+
+  async getEstadisticasProyecto(id) {
+    return this.get(`/proyectos/${id}/estadisticas`);
+  }
+
+  // Métodos para suministros
+  async getSuministros() {
+    return this.get('/suministros');
+  }
+
+  async getSuministroById(id) {
+    return this.get(`/suministros/${id}`);
+  }
+
+  async createSuministro(suministroData) {
+    return this.post('/suministros', suministroData);
+  }
+
+  async updateSuministro(id, suministroData) {
+    return this.put(`/suministros/${id}`, suministroData);
+  }
+
+  async deleteSuministro(id) {
+    return this.delete(`/suministros/${id}`);
+  }
+
+  async getSuministrosByProyecto(idProyecto) {
+    return this.get(`/suministros/proyecto/${idProyecto}`);
+  }
+
+  // Métodos para proveedores
+  async getProveedores(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.get(`/proveedores${queryString ? '?' + queryString : ''}`);
+  }
+
+  async searchProveedores(query) {
+    return this.get(`/proveedores/search?q=${encodeURIComponent(query)}`);
+  }
+
+  async createProveedor(proveedorData) {
+    return this.post('/proveedores', proveedorData);
+  }
+
+  async createOrGetProveedor(proveedorData) {
+    return this.post('/proveedores/create-or-get', proveedorData);
+  }
+
+  async updateProveedor(id, proveedorData) {
+    return this.put(`/proveedores/${id}`, proveedorData);
+  }
+
+  async deleteProveedor(id) {
+    return this.delete(`/proveedores/${id}`);
+  }
+
+  // Métodos para suministros y reportes
+  async getDashboardSuministros(filtros = {}) {
+    const params = new URLSearchParams();
+    if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
+    if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
+    if (filtros.id_proyecto) params.append('id_proyecto', filtros.id_proyecto);
+    
+    const queryString = params.toString();
+    return this.get(`/reportes/dashboard-suministros${queryString ? '?' + queryString : ''}`);
+  }
+
+  async getReporteComparativo(datos) {
+    return this.post('/reportes/comparativo-obras', datos);
+  }
+
   // Métodos para oficios
   async getOficios() {
     return this.get('/oficios');

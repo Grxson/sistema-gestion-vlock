@@ -17,6 +17,7 @@ import {
   Bars3Icon,
   UserIcon,
   ShieldCheckIcon,
+  TruckIcon,
   WrenchScrewdriverIcon
 } from '@heroicons/react/24/outline';
 
@@ -30,6 +31,7 @@ const navigationItems = [
   { name: 'Contratos', href: '/contratos', icon: DocumentTextIcon, current: false, permissionModule: 'contratos' },
   { name: 'Oficios', href: '/oficios', icon: BuildingOfficeIcon, current: false, permissionModule: 'oficios' },
   { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false, permissionModule: 'auditoria' },
+  { name: 'Suministros', href: '/suministros', icon: TruckIcon, current: false, permissionModule: 'suministros' },
   { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false, permissionModule: 'reportes' },
   { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false, permissionModule: 'usuarios' },
   { name: 'Roles', href: '/roles', icon: ShieldCheckIcon, current: false, permissionModule: 'roles' },
@@ -69,6 +71,7 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
       'contratos': 'contratos.ver', 
       'oficios': 'oficios.ver',
       'auditoria': 'auditoria.ver',
+      'suministros': 'suministros.ver',
       'reportes': 'reportes.ver',
       'usuarios': 'usuarios.ver',
       'roles': 'roles.ver',

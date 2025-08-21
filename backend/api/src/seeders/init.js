@@ -11,6 +11,82 @@ const AccionesPermiso = models.Acciones_permiso;
 const PermisosRol = models.Permisos_rol;
 
 /**
+ * Inicializar proyectos básicos
+ */
+const initProyectosBasicos = async () => {
+    console.log('🏗️ Inicializando proyectos básicos...');
+    
+    try {
+        await sequelize.authenticate();
+        console.log('✅ Conexión a la BD exitosa');
+    } catch (error) {
+        console.error('❌ Error al conectar con la base de datos:', error.message);
+        return;
+    }
+
+    const proyectosBasicos = [
+        {
+            id_proyecto: 1,
+            nombre: 'Flex Park',
+            descripcion: 'Desarrollo de complejo residencial con áreas verdes y estacionamiento',
+            fecha_inicio: '2024-01-15',
+            fecha_fin: '2025-12-30',
+            estado: 'Activo',
+            responsable: 'Ing. Juan Pérez',
+            ubicacion: 'Ciudad de México, CDMX'
+        },
+        {
+            id_proyecto: 2,
+            nombre: 'Complejo Residencial Norte',
+            descripcion: 'Construcción de 150 unidades habitacionales con amenidades',
+            fecha_inicio: '2024-03-01',
+            fecha_fin: '2026-02-28',
+            estado: 'Activo',
+            responsable: 'Arq. María González',
+            ubicacion: 'Monterrey, Nuevo León'
+        },
+        {
+            id_proyecto: 3,
+            nombre: 'Centro Comercial Sur',
+            descripcion: 'Desarrollo de centro comercial de 3 niveles con 80 locales',
+            fecha_inicio: '2024-06-01',
+            fecha_fin: '2025-11-30',
+            estado: 'Pausado',
+            responsable: 'Ing. Carlos Rodríguez',
+            ubicacion: 'Guadalajara, Jalisco'
+        },
+        {
+            id_proyecto: 4,
+            nombre: 'Torre Corporativa Centro',
+            descripcion: 'Edificio de oficinas de 25 pisos con estacionamiento subterráneo',
+            fecha_inicio: '2024-08-15',
+            fecha_fin: '2027-03-15',
+            estado: 'Activo',
+            responsable: 'Ing. Ana Martínez',
+            ubicacion: 'Puebla, Puebla'
+        },
+        {
+            id_proyecto: 5,
+            nombre: 'Fraccionamiento Las Palmas',
+            descripcion: 'Desarrollo habitacional de 80 casas con clubhouse',
+            fecha_inicio: '2024-10-01',
+            estado: 'Activo',
+            responsable: 'Arq. Roberto Sánchez',
+            ubicacion: 'Querétaro, Querétaro'
+        }
+    ];
+
+    for (const proyectoData of proyectosBasicos) {
+        await models.Proyectos.findOrCreate({
+            where: { id_proyecto: proyectoData.id_proyecto },
+            defaults: proyectoData
+        });
+    }
+
+    console.log('✅ Proyectos básicos creados o verificados');
+};
+
+/**
  * Inicializar la base de datos con datos básicos
  */
 const initDB = async () => {
@@ -345,6 +421,9 @@ const initDB = async () => {
         
         // Inicializar datos del módulo de nómina
         await initNominaData();
+        
+        // Inicializar proyectos básicos
+        await initProyectosBasicos();
         
         console.log('🚀 Inicialización completada');
 

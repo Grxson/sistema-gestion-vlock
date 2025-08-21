@@ -3,6 +3,7 @@ import apiService from '../services/api';
 import PermissionGuard from './PermissionGuard';
 import { usePermissions } from '../contexts/PermissionsContext';
 import PermissionButton from './ui/PermissionButton';
+import DateInput from './ui/DateInput';
 import {
   PlusIcon,
   PencilIcon,
@@ -476,25 +477,19 @@ export default function Empleados() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Alta</label>
-                      <input
-                        type="date"
-                        required
-                        className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                        value={formData.fecha_alta}
-                        onChange={(e) => setFormData({...formData, fecha_alta: e.target.value})}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Fecha de Baja</label>
-                      <input
-                        type="date"
-                        className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                        value={formData.fecha_baja}
-                        onChange={(e) => setFormData({...formData, fecha_baja: e.target.value})}
-                      />
-                    </div>
+                    <DateInput
+                      label="Fecha de Alta"
+                      value={formData.fecha_alta}
+                      onChange={(value) => setFormData({...formData, fecha_alta: value})}
+                      required={true}
+                      placeholder="Seleccionar fecha de alta"
+                    />
+                    <DateInput
+                      label="Fecha de Baja"
+                      value={formData.fecha_baja}
+                      onChange={(value) => setFormData({...formData, fecha_baja: value})}
+                      placeholder="Seleccionar fecha de baja (opcional)"
+                    />
                   </div>
                 </div>
 

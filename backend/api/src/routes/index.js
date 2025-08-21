@@ -10,6 +10,10 @@ const empleadosRoutes = require('./empleados.routes');
 const nominaRoutes = require('./nomina.routes');
 const oficiosRoutes = require('./oficios.routes');
 const contratosRoutes = require('./contratos.routes');
+const reportesRoutes = require('./reportes.routes');
+const proyectosRoutes = require('./proyectos.routes');
+const suministrosRoutes = require('./suministros.routes');
+const proveedoresRoutes = require('./proveedores.routes');
 const healthRoutes = require('./health.routes');
 
 // Ruta base para verificar que la API está funcionando
@@ -26,6 +30,11 @@ router.use('/empleados', empleadosRoutes);
 router.use('/nomina', nominaRoutes);
 router.use('/oficios', oficiosRoutes);
 router.use('/contratos', contratosRoutes);
+router.use('/reportes', reportesRoutes);
+router.use('/proyectos', proyectosRoutes);
+router.use('/suministros', suministrosRoutes);
+router.use('/proveedores', proveedoresRoutes);
+router.use('/health', healthRoutes);
 
 // Rutas de health y monitoreo (sin autenticación para permitir health checks)
 router.use('/', healthRoutes);

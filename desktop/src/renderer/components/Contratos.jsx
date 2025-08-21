@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, DocumentTextIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { usePermissions } from '../contexts/PermissionsContext';
 import apiService from '../services/api';
+import DateInput from './ui/DateInput';
 
 export default function Contratos() {
   const [contratos, setContratos] = useState([]);
@@ -422,37 +423,20 @@ export default function Contratos() {
                   </p>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Fecha de Inicio *
-                  </label>
-                  <input
-                    type="date"
-                    required
-                    className="block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                    value={formData.fecha_inicio}
-                    onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})}
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Fecha de inicio del contrato
-                  </p>
-                </div>
+                <DateInput
+                  label="Fecha de Inicio"
+                  value={formData.fecha_inicio}
+                  onChange={(value) => setFormData({...formData, fecha_inicio: value})}
+                  required={true}
+                  placeholder="Seleccionar fecha de inicio"
+                />
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Fecha de Fin
-                  </label>
-                  <input
-                    type="date"
-                    min={formData.fecha_inicio || undefined}
-                    className="block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                    value={formData.fecha_fin}
-                    onChange={(e) => setFormData({...formData, fecha_fin: e.target.value})}
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Opcional. Si no se especifica, el contrato será indefinido
-                  </p>
-                </div>
+                <DateInput
+                  label="Fecha de Fin"
+                  value={formData.fecha_fin}
+                  onChange={(value) => setFormData({...formData, fecha_fin: value})}
+                  placeholder="Seleccionar fecha de fin (opcional)"
+                />
 
                 <div className="flex justify-end space-x-4 pt-6">
                   <button

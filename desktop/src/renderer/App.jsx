@@ -11,6 +11,8 @@ import Contratos from './components/Contratos';
 import Oficios from './components/Oficios';
 import Usuarios from './components/Usuarios';
 import Roles from './components/Roles';
+import Reportes from './components/Reportes';
+import Suministros from './pages/Suministros';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 
 // Importar componente AccessDenied
@@ -69,6 +71,7 @@ function MainApp() {
         nomina: 'Nómina',
         contratos: 'Contratos',
         oficios: 'Oficios',
+        suministros: 'Suministros',
         auditoria: 'Auditoría',
         reportes: 'Reportes',
         usuarios: 'Usuarios',
@@ -99,14 +102,9 @@ function MainApp() {
           </div>
         );
       case '/reportes':
-        return (
-          <div className="text-center py-20">
-            <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl p-10 max-w-md mx-auto">
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">Módulo de Reportes</h2>
-              <p className="text-gray-600 dark:text-gray-400">En desarrollo...</p>
-            </div>
-          </div>
-        );
+        return <Reportes />;
+      case '/suministros':
+        return <Suministros />;
       case '/configuracion':
         return (
           <div className="text-center py-20">
