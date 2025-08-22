@@ -237,7 +237,8 @@ const searchProveedores = async (req, res) => {
 
         const proveedores = await models.Proveedores.findAll({
             where: {
-                activo: true,
+                // Temporalmente removemos el filtro activo para debug
+                // activo: true,
                 [models.sequelize.Sequelize.Op.or]: [
                     {
                         nombre: {
@@ -251,7 +252,7 @@ const searchProveedores = async (req, res) => {
                     }
                 ]
             },
-            attributes: ['id_proveedor', 'nombre', 'razon_social', 'tipo_proveedor'],
+            attributes: ['id_proveedor', 'nombre', 'razon_social', 'tipo_proveedor', 'rfc', 'activo'],
             limit: 10,
             order: [['nombre', 'ASC']]
         });

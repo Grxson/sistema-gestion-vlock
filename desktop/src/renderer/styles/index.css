@@ -178,3 +178,268 @@ body {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+/* Toast animations */
+@keyframes shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+@keyframes slideInRight {
+  from { 
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to { 
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOutRight {
+  from { 
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to { 
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+.toast-enter {
+  animation: slideInRight 0.3s ease-out forwards;
+}
+
+.toast-exit {
+  animation: slideOutRight 0.3s ease-in forwards;
+}
+
+/* Estilos para múltiples toasts */
+.toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9999;
+  pointer-events: none;
+  max-width: 24rem;
+}
+
+.toast-container > * {
+  pointer-events: auto;
+  margin-bottom: 0.75rem;
+}
+
+/* Asegurar que los toasts no se corten */
+.toast-wrapper {
+  width: 100%;
+  max-width: 384px;
+  padding-right: 1rem;
+}
+
+/* Estilos globales para contornos rojos en focus - solo borde simple */
+*:focus {
+  outline: none !important;
+}
+
+/* Estilos específicos para inputs y selects - solo borde */
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+  border-color: #dc2626 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: none !important;
+  --tw-shadow: none !important;
+}
+
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus,
+.dark button:focus {
+  border-color: #ef4444 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: none !important;
+  --tw-shadow: none !important;
+}
+
+/* Forzar estilos en elementos específicos de formulario */
+input[type="text"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+input[type="tel"]:focus,
+input[type="number"]:focus,
+input[type="search"]:focus,
+select:focus,
+textarea:focus {
+  border: 1px solid #dc2626 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: none !important;
+  --tw-shadow: none !important;
+}
+
+.dark input[type="text"]:focus,
+.dark input[type="email"]:focus,
+.dark input[type="password"]:focus,
+.dark input[type="tel"]:focus,
+.dark input[type="number"]:focus,
+.dark input[type="search"]:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border: 1px solid #ef4444 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: none !important;
+  --tw-shadow: none !important;
+}
+
+/* Para elementos con clases específicas de Tailwind - eliminar todos los efectos */
+.focus\:ring-blue-500:focus,
+.focus\:ring-red-500:focus,
+.focus\:ring-1:focus,
+.focus\:ring-2:focus {
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-offset-width: 0px !important;
+  --tw-ring-width: 0px !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.focus\:border-blue-500:focus,
+.focus\:border-red-500:focus,
+.focus\:border-transparent:focus {
+  --tw-border-opacity: 1 !important;
+  border-color: #dc2626 !important;
+}
+
+.focus\:ring-blue-300:focus,
+.focus\:ring-red-300:focus {
+  --tw-ring-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Modo oscuro */
+.dark .focus\:ring-blue-500:focus,
+.dark .focus\:ring-red-500:focus,
+.dark .focus\:ring-1:focus,
+.dark .focus\:ring-2:focus {
+  --tw-ring-color: transparent !important;
+  --tw-ring-offset-color: transparent !important;
+  --tw-ring-offset-width: 0px !important;
+  --tw-ring-width: 0px !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.dark .focus\:border-blue-500:focus,
+.dark .focus\:border-red-500:focus,
+.dark .focus\:border-transparent:focus {
+  --tw-border-opacity: 1 !important;
+  border-color: #ef4444 !important;
+}
+
+.dark .focus\:ring-blue-300:focus,
+.dark .focus\:ring-red-300:focus {
+  --tw-ring-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* Forzar que no haya dobles contornos o efectos ring */
+*:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Reset específico para WebKit browsers */
+input:focus,
+select:focus,
+textarea:focus {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Eliminar cualquier sombra o efecto ring de Tailwind */
+.\!ring-0,
+.ring-0,
+.\!shadow-none,
+.shadow-none,
+.\!outline-none,
+.outline-none {
+  box-shadow: none !important;
+  outline: none !important;
+  --tw-ring-shadow: none !important;
+  --tw-shadow: none !important;
+}
+
+/* Sobrescribir completamente cualquier estilo de focus */
+.w-full.pl-10.pr-4.py-2:focus,
+.px-3.py-2:focus,
+input.w-full:focus,
+select.w-full:focus,
+input:focus,
+select:focus,
+textarea:focus {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: #dc2626 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-shadow: 0 0 #0000 !important;
+  --tw-shadow-colored: 0 0 #0000 !important;
+}
+
+.dark .w-full.pl-10.pr-4.py-2:focus,
+.dark .px-3.py-2:focus,
+.dark input.w-full:focus,
+.dark select.w-full:focus,
+.dark input:focus,
+.dark select:focus,
+.dark textarea:focus {
+  border-width: 1px !important;
+  border-style: solid !important;
+  border-color: #ef4444 !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+  --tw-shadow: 0 0 #0000 !important;
+  --tw-shadow-colored: 0 0 #0000 !important;
+}
+
+/* Estilos para select - mantener tamaño y apariencia consistente */
+select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+  background-position: right 0.5rem center !important;
+  background-repeat: no-repeat !important;
+  background-size: 1.5em 1.5em !important;
+  padding-right: 2.5rem !important;
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+.dark select {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%9ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+}
+
+/* Asegurar que el select mantenga su padding y tamaño */
+select:focus {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%dc2626' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+  background-position: right 0.5rem center !important;
+  background-repeat: no-repeat !important;
+  background-size: 1.5em 1.5em !important;
+  padding-right: 2.5rem !important;
+}
+
+.dark select:focus {
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%ef4444' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
+}

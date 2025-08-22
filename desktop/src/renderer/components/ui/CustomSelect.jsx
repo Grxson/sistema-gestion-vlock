@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDownIcon, CheckIcon } from '@heroicons/react/24/outline';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 const CustomSelect = ({ 
   value, 
@@ -82,10 +82,10 @@ const CustomSelect = ({
     relative w-full px-4 py-3 pr-10 
     border rounded-lg shadow-sm cursor-pointer
     transition-all duration-200 ease-in-out
-    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+    focus:outline-none focus:border-red-500
     dark:bg-gray-700 dark:border-gray-600 dark:text-white
     ${disabled ? 'bg-gray-50 cursor-not-allowed opacity-60' : 'bg-white hover:border-gray-400'}
-    ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}
+    ${error ? 'border-red-300 focus:border-red-500' : 'border-gray-300'}
     ${className}
   `;
 
@@ -131,7 +131,7 @@ const CustomSelect = ({
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md 
-                           focus:ring-2 focus:ring-blue-500 focus:border-blue-500 
+                           focus:outline-none focus:border-red-500 
                            dark:bg-gray-800 dark:text-white text-sm"
                 />
               </div>

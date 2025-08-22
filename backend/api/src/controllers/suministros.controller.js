@@ -4,7 +4,7 @@ const { verifyToken } = require('../middlewares/auth');
 // Obtener todos los suministros
 const getSuministros = async (req, res) => {
     try {
-        const { id_proyecto, fecha_inicio, fecha_fin, proveedor, descripcion } = req.query;
+        const { id_proyecto, fecha_inicio, fecha_fin, proveedor, nombre } = req.query;
         
         let whereClause = {};
         
@@ -18,9 +18,9 @@ const getSuministros = async (req, res) => {
             };
         }
         
-        if (descripcion) {
-            whereClause.descripcion = {
-                [models.sequelize.Sequelize.Op.like]: `%${descripcion}%`
+        if (nombre) {
+            whereClause.nombre = {
+                [models.sequelize.Sequelize.Op.like]: `%${nombre}%`
             };
         }
         
@@ -45,14 +45,34 @@ const getSuministros = async (req, res) => {
                     model: models.Proyectos,
                     as: 'proyecto',
                     attributes: ['nombre', 'ubicacion']
+                },
+                {
+                    model: models.Proveedores,
+                    as: 'proveedorInfo',
+                    attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
                 }
             ],
             order: [['fecha', 'DESC'], ['folio', 'DESC']]
         });
 
+        // Convertir decimales a números para evitar problemas de formateo
+        const suministrosFormateados = suministros.map(suministro => {
+            const data = suministro.toJSON();
+            if (data.cantidad) {
+                data.cantidad = Math.round(parseFloat(data.cantidad) * 100) / 100;
+            }
+            if (data.precio_unitario) {
+                data.precio_unitario = Math.round(parseFloat(data.precio_unitario) * 100) / 100;
+            }
+            if (data.m3_perdidos) {
+                data.m3_perdidos = Math.round(parseFloat(data.m3_perdidos) * 100) / 100;
+            }
+            return data;
+        });
+
         res.json({
             success: true,
-            data: suministros
+            data: suministrosFormateados
         });
     } catch (error) {
         console.error('Error al obtener suministros:', error);
@@ -74,6 +94,11 @@ const getSuministroById = async (req, res) => {
                     model: models.Proyectos,
                     as: 'proyecto',
                     attributes: ['nombre', 'ubicacion']
+                },
+                {
+                    model: models.Proveedores,
+                    as: 'proveedorInfo',
+                    attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
                 }
             ]
         });
@@ -85,9 +110,21 @@ const getSuministroById = async (req, res) => {
             });
         }
 
+        // Convertir decimales a números para evitar problemas de formateo
+        const data = suministro.toJSON();
+        if (data.cantidad) {
+            data.cantidad = parseFloat(data.cantidad);
+        }
+        if (data.precio_unitario) {
+            data.precio_unitario = parseFloat(data.precio_unitario);
+        }
+        if (data.m3_perdidos) {
+            data.m3_perdidos = parseFloat(data.m3_perdidos);
+        }
+
         res.json({
             success: true,
-            data: suministro
+            data: data
         });
     } catch (error) {
         console.error('Error al obtener suministro:', error);
@@ -103,22 +140,26 @@ const createSuministro = async (req, res) => {
     try {
         const {
             proveedor,
+            id_proveedor,
             folio,
+            folio_proveedor,
             fecha,
             id_proyecto,
-            descripcion,
+            tipo_suministro,
+            nombre,
+            codigo_producto,
+            descripcion_detallada,
             cantidad,
             unidad_medida,
             m3_perdidos,
             m3_entregados,
             m3_por_entregar,
-            camion,
-            salida_planta,
-            llegada_obra,
-            inicio_descarga,
-            termina_descarga,
-            salida_obra,
-            operador,
+            vehiculo_transporte,
+            operador_responsable,
+            hora_salida,
+            hora_llegada,
+            hora_inicio_descarga,
+            hora_fin_descarga,
             observaciones,
             precio_unitario,
             costo_total,
@@ -126,10 +167,10 @@ const createSuministro = async (req, res) => {
         } = req.body;
 
         // Validaciones básicas
-        if (!proveedor || !fecha || !id_proyecto || !descripcion) {
+        if (!proveedor || !fecha || !id_proyecto || !nombre) {
             return res.status(400).json({
                 success: false,
-                message: 'Los campos proveedor, fecha, proyecto y descripción son obligatorios'
+                message: 'Los campos proveedor, fecha, proyecto y nombre son obligatorios'
             });
         }
 
@@ -144,26 +185,30 @@ const createSuministro = async (req, res) => {
 
         const nuevoSuministro = await models.Suministros.create({
             proveedor,
+            id_proveedor,
             folio,
+            folio_proveedor,
             fecha,
             id_proyecto,
-            descripcion,
+            tipo_suministro: tipo_suministro || 'Material',
+            nombre,
+            codigo_producto,
+            descripcion_detallada,
             cantidad: cantidad ? parseFloat(cantidad) : null,
-            unidad_medida: unidad_medida || 'm³',
+            unidad_medida: unidad_medida || 'pz',
             m3_perdidos: m3_perdidos ? parseFloat(m3_perdidos) : null,
             m3_entregados: m3_entregados ? parseFloat(m3_entregados) : null,
             m3_por_entregar: m3_por_entregar ? parseFloat(m3_por_entregar) : null,
-            camion,
-            salida_planta,
-            llegada_obra,
-            inicio_descarga,
-            termina_descarga,
-            salida_obra,
-            operador,
+            vehiculo_transporte,
+            operador_responsable,
+            hora_salida,
+            hora_llegada,
+            hora_inicio_descarga,
+            hora_fin_descarga,
             observaciones,
-            precio_unitario: precio_unitario ? parseFloat(precio_unitario) : null,
+            precio_unitario: precio_unitario ? Math.round(parseFloat(precio_unitario) * 100) / 100 : null,
             costo_total: costo_total ? parseFloat(costo_total) : null,
-            estado: estado || 'Entregado'
+            estado: estado || 'Pendiente'
         });
 
         // Obtener el suministro creado con relaciones
@@ -222,7 +267,7 @@ const updateSuministro = async (req, res) => {
         if (updateData.m3_perdidos) updateData.m3_perdidos = parseFloat(updateData.m3_perdidos);
         if (updateData.m3_entregados) updateData.m3_entregados = parseFloat(updateData.m3_entregados);
         if (updateData.m3_por_entregar) updateData.m3_por_entregar = parseFloat(updateData.m3_por_entregar);
-        if (updateData.precio_unitario) updateData.precio_unitario = parseFloat(updateData.precio_unitario);
+        if (updateData.precio_unitario) updateData.precio_unitario = Math.round(parseFloat(updateData.precio_unitario) * 100) / 100;
         if (updateData.costo_total) updateData.costo_total = parseFloat(updateData.costo_total);
 
         await suministro.update(updateData);

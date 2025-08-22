@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
+import { ToastProvider } from './contexts/ToastContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -170,9 +171,11 @@ function App() {
     <ThemeProvider>
       <AuthProvider>
         <PermissionsProvider>
-          <ProtectedRoute>
-            <MainApp />
-          </ProtectedRoute>
+          <ToastProvider>
+            <ProtectedRoute>
+              <MainApp />
+            </ProtectedRoute>
+          </ToastProvider>
         </PermissionsProvider>
       </AuthProvider>
     </ThemeProvider>

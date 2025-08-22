@@ -13,20 +13,40 @@ const DateInput = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(value ? new Date(value) : null);
+  const [selectedDate, setSelectedDate] = useState(() => {
+    if (value && typeof value === 'string' && value.includes('-')) {
+      try {
+        const [year, month, day] = value.split('-');
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      } catch (error) {
+        console.warn('Error parsing initial date value:', value);
+        return null;
+      }
+    }
+    return null;
+  });
+  const [calendarPosition, setCalendarPosition] = useState({ top: 0, left: 0 });
   const containerRef = useRef(null);
 
   // Formatear fecha para mostrar
   const formatDisplayDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    const options = { 
-      weekday: 'short', 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    };
-    return date.toLocaleDateString('es-ES', options);
+    if (!dateString || typeof dateString !== 'string' || !dateString.includes('-')) return '';
+    try {
+      // Crear fecha interpretando la string como fecha local (sin zona horaria)
+      const [year, month, day] = dateString.split('-');
+      const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+      
+      // Formato más compacto: DD/MM/YYYY
+      const options = { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit' 
+      };
+      return date.toLocaleDateString('es-ES', options);
+    } catch (error) {
+      console.warn('Error formatting date:', dateString);
+      return '';
+    }
   };
 
   // Cerrar calendario al hacer clic fuera
@@ -43,9 +63,17 @@ const DateInput = ({
 
   // Actualizar fecha seleccionada cuando cambia el value
   useEffect(() => {
-    if (value) {
-      setSelectedDate(new Date(value));
-      setCurrentDate(new Date(value));
+    if (value && typeof value === 'string' && value.includes('-')) {
+      try {
+        // Crear fecha interpretando la string como fecha local
+        const [year, month, day] = value.split('-');
+        const localDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        setSelectedDate(localDate);
+        setCurrentDate(localDate);
+      } catch (error) {
+        console.warn('Error parsing date value:', value);
+        setSelectedDate(null);
+      }
     } else {
       setSelectedDate(null);
     }
@@ -53,6 +81,13 @@ const DateInput = ({
 
   const handleInputClick = () => {
     if (!disabled) {
+      if (!isOpen && containerRef.current) {
+        const rect = containerRef.current.getBoundingClientRect();
+        setCalendarPosition({
+          top: rect.bottom + window.scrollY + 8,
+          left: rect.left + window.scrollX
+        });
+      }
       setIsOpen(!isOpen);
       if (selectedDate) {
         setCurrentDate(new Date(selectedDate));
@@ -61,8 +96,10 @@ const DateInput = ({
   };
 
   const handleDateSelect = (date) => {
-    const isoString = date.toISOString().split('T')[0];
-    setSelectedDate(date);
+    // Crear fecha en timezone local para evitar problemas de zona horaria
+    const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const isoString = localDate.toISOString().split('T')[0];
+    setSelectedDate(localDate);
     onChange(isoString);
     setIsOpen(false);
   };
@@ -75,8 +112,9 @@ const DateInput = ({
 
   const navigateToToday = () => {
     const today = new Date();
-    setCurrentDate(today);
-    handleDateSelect(today);
+    const localToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    setCurrentDate(localToday);
+    handleDateSelect(localToday);
   };
 
   const getDaysInMonth = (date) => {
@@ -102,10 +140,12 @@ const DateInput = ({
 
     // Días del mes actual
     const today = new Date();
+    const todayLocal = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    
     for (let day = 1; day <= daysInMonth; day++) {
       const dayDate = new Date(year, month, day);
-      const isToday = dayDate.toDateString() === today.toDateString();
-      const isSelected = selectedDate && dayDate.toDateString() === selectedDate.toDateString();
+      const isToday = dayDate.getTime() === todayLocal.getTime();
+      const isSelected = selectedDate && dayDate.getTime() === selectedDate.getTime();
       
       days.push({
         date: dayDate,
@@ -131,14 +171,14 @@ const DateInput = ({
   };
 
   const baseClasses = `
-    relative w-full px-4 py-3 pr-10 
+    relative w-full px-3 py-2 pr-10 
     border rounded-lg shadow-sm
     transition-all duration-200 ease-in-out
-    focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500
+    focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500
     dark:bg-gray-700 dark:border-gray-600 dark:text-white
     ${disabled ? 'bg-gray-50 cursor-not-allowed' : 'bg-white cursor-pointer hover:border-gray-400 hover:shadow-md'}
     ${error ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : 'border-gray-300'}
-    ${isOpen ? 'ring-2 ring-blue-500 border-blue-500' : ''}
+    ${isOpen ? 'ring-2 ring-red-500 border-red-500' : ''}
     ${className}
   `;
 
@@ -164,40 +204,44 @@ const DateInput = ({
           className={baseClasses}
           onClick={handleInputClick}
         >
-          <span className={`block text-left ${!value ? 'text-gray-500' : 'text-gray-900 dark:text-white'}`}>
+          <span className={`block text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${!value ? 'text-gray-500' : 'text-gray-900 dark:text-white'}`}>
             {value ? formatDisplayDate(value) : placeholder}
           </span>
           
           {/* Icono de calendario */}
           <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
             <CalendarIcon className={`h-5 w-5 transition-colors duration-200 ${
-              isOpen ? 'text-blue-500' : error ? 'text-red-400' : 'text-gray-400'
+              isOpen ? 'text-red-500' : error ? 'text-red-400' : 'text-gray-400'
             }`} />
           </div>
         </div>
 
         {/* Modal del calendario */}
         {isOpen && (
-          <div className="absolute z-50 mt-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-xl shadow-2xl overflow-hidden">
+          <div className="fixed z-[9999] w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-lg shadow-2xl overflow-hidden" 
+               style={{
+                 top: calendarPosition.top + 'px',
+                 left: calendarPosition.left + 'px'
+               }}>
             {/* Header del calendario */}
-            <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4">
+            <div className="bg-gradient-to-r from-red-500 to-red-600 text-white p-3">
               <div className="flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => navigateMonth(-1)}
-                  className="p-1 hover:bg-blue-600 rounded-lg transition-colors duration-200"
+                  className="p-1 hover:bg-red-600 rounded-lg transition-colors duration-200"
                 >
-                  <ChevronLeftIcon className="h-5 w-5" />
+                  <ChevronLeftIcon className="h-4 w-4" />
                 </button>
                 
                 <div className="text-center">
-                  <div className="text-lg font-semibold">
+                  <div className="text-sm font-semibold">
                     {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
                   </div>
                   <button
                     type="button"
                     onClick={navigateToToday}
-                    className="text-sm text-blue-100 hover:text-white transition-colors duration-200"
+                    className="text-xs text-red-100 hover:text-white transition-colors duration-200"
                   >
                     Ir a hoy
                   </button>
@@ -206,9 +250,9 @@ const DateInput = ({
                 <button
                   type="button"
                   onClick={() => navigateMonth(1)}
-                  className="p-1 hover:bg-blue-600 rounded-lg transition-colors duration-200"
+                  className="p-1 hover:bg-red-600 rounded-lg transition-colors duration-200"
                 >
-                  <ChevronRightIcon className="h-5 w-5" />
+                  <ChevronRightIcon className="h-4 w-4" />
                 </button>
               </div>
             </div>
@@ -216,7 +260,7 @@ const DateInput = ({
             {/* Días de la semana */}
             <div className="grid grid-cols-7 bg-gray-50 dark:bg-gray-700">
               {dayNames.map((day) => (
-                <div key={day} className="p-2 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
+                <div key={day} className="p-1.5 text-center text-xs font-medium text-gray-500 dark:text-gray-400">
                   {day}
                 </div>
               ))}
@@ -231,17 +275,17 @@ const DateInput = ({
                   onClick={() => day.isCurrentMonth && handleDateSelect(day.date)}
                   disabled={!day.isCurrentMonth}
                   className={`
-                    p-2 text-sm transition-all duration-200 relative
+                    p-1.5 text-sm transition-all duration-200 relative
                     ${day.isCurrentMonth 
-                      ? 'text-gray-900 dark:text-white hover:bg-blue-50 dark:hover:bg-blue-900/20' 
+                      ? 'text-gray-900 dark:text-white hover:bg-red-50 dark:hover:bg-red-900/20' 
                       : 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
                     }
                     ${day.isSelected 
-                      ? 'bg-blue-500 text-white hover:bg-blue-600' 
+                      ? 'bg-red-500 text-white hover:bg-red-600' 
                       : ''
                     }
                     ${day.isToday && !day.isSelected 
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-semibold' 
+                      ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 font-semibold' 
                       : ''
                     }
                   `}
@@ -250,14 +294,14 @@ const DateInput = ({
                   
                   {/* Indicador de día actual */}
                   {day.isToday && !day.isSelected && (
-                    <div className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-blue-500 rounded-full"></div>
+                    <div className="absolute bottom-0.5 left-1/2 transform -translate-x-1/2 w-1 h-1 bg-red-500 rounded-full"></div>
                   )}
                 </button>
               ))}
             </div>
 
             {/* Footer con acciones */}
-            <div className="p-3 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
+            <div className="p-2 bg-gray-50 dark:bg-gray-700 border-t border-gray-200 dark:border-gray-600">
               <div className="flex justify-between items-center">
                 <button
                   type="button"
@@ -266,14 +310,14 @@ const DateInput = ({
                     setSelectedDate(null);
                     setIsOpen(false);
                   }}
-                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-200"
+                  className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors duration-200"
                 >
                   Limpiar
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsOpen(false)}
-                  className="px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded-lg hover:bg-blue-600 transition-colors duration-200"
+                  className="px-3 py-1.5 bg-red-500 text-white text-xs font-medium rounded-lg hover:bg-red-600 transition-colors duration-200"
                 >
                   Cerrar
                 </button>

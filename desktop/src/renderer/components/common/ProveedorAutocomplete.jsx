@@ -25,12 +25,8 @@ const ProveedorAutocomplete = ({
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [newProviderData, setNewProviderData] = useState({
     nombre: '',
-    razon_social: '',
-    rfc: '',
     telefono: '',
-    email: '',
-    direccion: '',
-    tipo_proveedor: tipoSugerido
+     tipo_proveedor: tipoSugerido
   });
 
   const inputRef = useRef(null);
@@ -102,16 +98,13 @@ const ProveedorAutocomplete = ({
     setNewProviderData({
       ...newProviderData,
       nombre: query,
-      razon_social: query,
       tipo_proveedor: tipoSugerido
     });
     setShowCreateForm(true);
     setShowDropdown(false);
   };
 
-  const handleCreateProvider = async (e) => {
-    e.preventDefault();
-    
+  const handleCreateProvider = async () => {
     if (!newProviderData.nombre.trim()) {
       alert('El nombre del proveedor es requerido');
       return;
@@ -158,18 +151,18 @@ const ProveedorAutocomplete = ({
           onFocus={() => setShowDropdown(true)}
           placeholder={placeholder}
           required={required}
-          className={`w-full px-3 py-2 pl-10 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
-            selectedProvider ? 'bg-green-50 border-green-300' : ''
+          className={`w-full px-3 py-2 pl-10 pr-10 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500 ${
+            selectedProvider ? 'bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-600' : ''
           }`}
         />
         
-        <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+        <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
         
         {selectedProvider && (
           <button
             type="button"
             onClick={clearSelection}
-            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-red-500"
+            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-red-500 dark:text-gray-500 dark:hover:text-red-400"
           >
             <FaTimes className="w-4 h-4" />
           </button>
@@ -177,29 +170,29 @@ const ProveedorAutocomplete = ({
 
         {selectedProvider && (
           <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
-            <FaBuilding className="text-green-500 w-4 h-4" />
+            <FaBuilding className="text-green-500 dark:text-green-400 w-4 h-4" />
           </div>
         )}
       </div>
 
       {/* Dropdown de sugerencias */}
       {showDropdown && !showCreateForm && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-dark-100 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-auto">
           {isLoading && (
-            <div className="px-4 py-2 text-center text-gray-500">
+            <div className="px-4 py-2 text-center text-gray-500 dark:text-gray-400">
               Buscando proveedores...
             </div>
           )}
 
           {!isLoading && suggestions.length === 0 && query.trim() && (
             <div className="px-4 py-2">
-              <div className="text-gray-500 text-sm mb-2">
+              <div className="text-gray-500 dark:text-gray-400 text-sm mb-2">
                 No se encontraron proveedores
               </div>
               <button
                 type="button"
                 onClick={handleCreateNew}
-                className="flex items-center gap-2 w-full px-2 py-2 text-left text-blue-600 hover:bg-blue-50 rounded"
+                className="flex items-center gap-2 w-full px-2 py-2 text-left text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded"
               >
                 <FaPlus className="w-4 h-4" />
                 <span>Crear nuevo proveedor: "{query}"</span>
@@ -214,29 +207,29 @@ const ProveedorAutocomplete = ({
                   key={provider.id_proveedor}
                   type="button"
                   onClick={() => handleProviderSelect(provider)}
-                  className="w-full px-4 py-3 text-left hover:bg-gray-50 border-b border-gray-100 last:border-b-0"
+                  className="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-dark-200 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                 >
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="font-medium text-gray-900">{provider.nombre}</div>
+                      <div className="font-medium text-gray-900 dark:text-white">{provider.nombre}</div>
                       {provider.razon_social && provider.razon_social !== provider.nombre && (
-                        <div className="text-sm text-gray-600">{provider.razon_social}</div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">{provider.razon_social}</div>
                       )}
-                      <div className="text-xs text-gray-500">
-                        {provider.tipo_proveedor} • RFC: {provider.rfc || 'Sin RFC'}
+                      <div className="text-xs text-gray-500 dark:text-gray-500">
+                        {provider.tipo_proveedor}
                       </div>
                     </div>
-                    <FaBuilding className="text-gray-400 w-4 h-4" />
+                    <FaBuilding className="text-gray-400 dark:text-gray-500 w-4 h-4" />
                   </div>
                 </button>
               ))}
               
               {query.trim() && (
-                <div className="border-t border-gray-200">
+                <div className="border-t border-gray-200 dark:border-gray-700">
                   <button
                     type="button"
                     onClick={handleCreateNew}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-blue-600 hover:bg-blue-50"
+                    className="flex items-center gap-2 w-full px-4 py-2 text-left text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
                   >
                     <FaPlus className="w-4 h-4" />
                     <span>Crear nuevo proveedor</span>
@@ -250,84 +243,60 @@ const ProveedorAutocomplete = ({
 
       {/* Formulario de creación */}
       {showCreateForm && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-4">
-          <h4 className="font-medium text-gray-900 mb-3">Crear Nuevo Proveedor</h4>
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-dark-100 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg p-4">
+          <h4 className="font-medium text-gray-900 dark:text-white mb-3">Crear Nuevo Proveedor</h4>
           
-          <form onSubmit={handleCreateProvider} className="space-y-3">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Nombre del Proveedor *
+              </label>
+              <input
+                type="text"
+                value={newProviderData.nombre}
+                onChange={(e) => setNewProviderData({...newProviderData, nombre: e.target.value})}
+                className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                placeholder="Ej: CEMEX, Ferretería La Esperanza, etc."
+                required
+              />
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Nombre *
-                </label>
-                <input
-                  type="text"
-                  value={newProviderData.nombre}
-                  onChange={(e) => setNewProviderData({...newProviderData, nombre: e.target.value})}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  required
-                />
-              </div>
-              
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Tipo
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Tipo de Proveedor
                 </label>
                 <select
                   value={newProviderData.tipo_proveedor}
                   onChange={(e) => setNewProviderData({...newProviderData, tipo_proveedor: e.target.value})}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                   {Object.entries(TIPOS_PROVEEDOR).map(([key, label]) => (
                     <option key={key} value={key}>{label}</option>
                   ))}
                 </select>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1">
-                Razón Social
-              </label>
-              <input
-                type="text"
-                value={newProviderData.razon_social}
-                onChange={(e) => setNewProviderData({...newProviderData, razon_social: e.target.value})}
-                className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  RFC
-                </label>
-                <input
-                  type="text"
-                  value={newProviderData.rfc}
-                  onChange={(e) => setNewProviderData({...newProviderData, rfc: e.target.value.toUpperCase()})}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  maxLength={13}
-                />
-              </div>
               
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Teléfono
                 </label>
                 <input
                   type="tel"
                   value={newProviderData.telefono}
                   onChange={(e) => setNewProviderData({...newProviderData, telefono: e.target.value})}
-                  className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  placeholder="Opcional"
                 />
               </div>
             </div>
 
             <div className="flex gap-2 pt-2">
               <button
-                type="submit"
+                type="button"
+                onClick={handleCreateProvider}
                 disabled={isLoading}
-                className="flex-1 bg-blue-600 text-white px-3 py-1 text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+                className="flex-1 bg-red-600 text-white px-3 py-1 text-sm rounded hover:bg-red-700 disabled:opacity-50 transition-colors duration-200"
               >
                 {isLoading ? 'Creando...' : 'Crear Proveedor'}
               </button>
@@ -335,12 +304,12 @@ const ProveedorAutocomplete = ({
               <button
                 type="button"
                 onClick={() => setShowCreateForm(false)}
-                className="px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded hover:bg-gray-50 dark:hover:bg-dark-200 text-gray-700 dark:text-gray-300 transition-colors duration-200"
               >
                 Cancelar
               </button>
             </div>
-          </form>
+          </div>
         </div>
       )}
     </div>

@@ -31,20 +31,36 @@ module.exports = (sequelize) => {
     },
     folio: {
       type: DataTypes.STRING(50),
-      allowNull: true
+      allowNull: true,
+      comment: 'Folio interno del sistema'
+    },
+    folio_proveedor: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Folio del proveedor que aparece en el recibo físico'
     },
     fecha: {
       type: DataTypes.DATEONLY,
       allowNull: false
     },
     tipo_suministro: {
-      type: DataTypes.ENUM('Material', 'Servicio', 'Equipo'),
+      type: DataTypes.ENUM('Material', 'Servicio', 'Equipo', 'Herramienta', 'Maquinaria'),
       defaultValue: 'Material'
     },
-    descripcion: {
-      type: DataTypes.STRING(200),
+    nombre: {
+      type: DataTypes.STRING(255),
       allowNull: false,
-      comment: 'Descripción del material, servicio o equipo'
+      comment: 'Nombre del suministro'
+    },
+    codigo_producto: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'SKU o código interno del producto'
+    },
+    descripcion_detallada: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Descripción detallada del suministro'
     },
     cantidad: {
       type: DataTypes.DECIMAL(10,3),
@@ -53,8 +69,9 @@ module.exports = (sequelize) => {
       comment: 'Cantidad del suministro'
     },
     unidad_medida: {
-      type: DataTypes.ENUM('m³', 'unidad', 'hora', 'día', 'kg', 'ton', 'm²', 'm'),
-      defaultValue: 'm³'
+      type: DataTypes.STRING(20),
+      defaultValue: 'pz',
+      comment: 'Unidad de medida del suministro (pz, kg, m, m2, m3, ton, etc.)'
     },
     
     // Campos específicos para materiales
@@ -75,35 +92,35 @@ module.exports = (sequelize) => {
     },
     
     // Campos de logística
-    camion: {
+    vehiculo_transporte: {
       type: DataTypes.STRING(50),
       allowNull: true,
-      comment: 'Placas o identificador del camión'
+      comment: 'Placas o identificador del vehículo de transporte'
     },
-    operador: {
+    operador_responsable: {
       type: DataTypes.STRING(100),
       allowNull: true,
-      comment: 'Nombre del operador'
+      comment: 'Nombre del operador responsable'
     },
-    salida_planta: {
+    hora_salida: {
       type: DataTypes.TIME,
-      allowNull: true
+      allowNull: true,
+      comment: 'Hora de salida de la planta'
     },
-    llegada_obra: {
+    hora_llegada: {
       type: DataTypes.TIME,
-      allowNull: true
+      allowNull: true,
+      comment: 'Hora de llegada a la obra'
     },
-    inicio_descarga: {
+    hora_inicio_descarga: {
       type: DataTypes.TIME,
-      allowNull: true
+      allowNull: true,
+      comment: 'Hora de inicio de descarga'
     },
-    termina_descarga: {
+    hora_fin_descarga: {
       type: DataTypes.TIME,
-      allowNull: true
-    },
-    salida_obra: {
-      type: DataTypes.TIME,
-      allowNull: true
+      allowNull: true,
+      comment: 'Hora de finalización de descarga'
     },
     
     // Campos financieros (para futuro)
@@ -127,8 +144,8 @@ module.exports = (sequelize) => {
       comment: 'Observaciones adicionales'
     },
     estado: {
-      type: DataTypes.ENUM('Pendiente', 'En_Transito', 'Entregado', 'Cancelado'),
-      defaultValue: 'Entregado'
+      type: DataTypes.ENUM('Solicitado', 'Aprobado', 'Pedido', 'En_Transito', 'Entregado', 'Cancelado'),
+      defaultValue: 'Solicitado'
     }
   }, {
     timestamps: true,
