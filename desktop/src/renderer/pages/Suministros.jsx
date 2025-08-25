@@ -16,6 +16,7 @@ import {
   FaChevronDown,
   FaChevronUp
 } from 'react-icons/fa';
+import { formatCurrency } from '../utils/currency';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -27,6 +28,7 @@ import {
   Title,
   Tooltip,
   Legend,
+  Filler,
 } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
 import api from '../services/api';
@@ -45,7 +47,8 @@ ChartJS.register(
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  Filler
 );
 
 const CATEGORIAS_SUMINISTRO = {
@@ -54,7 +57,8 @@ const CATEGORIAS_SUMINISTRO = {
   'Equipo': 'Equipo',
   'Servicio': 'Servicio',
   'Consumible': 'Consumible',
-  'Maquinaria': 'Maquinaria'
+  'Maquinaria': 'Maquinaria',
+  'Concreto': 'Concreto'
 };
 
 const UNIDADES_MEDIDA = {
@@ -100,6 +104,10 @@ const Suministros = () => {
     proveedor: ''
   });
 
+  // Estados para detección de duplicados
+  const [duplicatesSuggestions, setDuplicatesSuggestions] = useState([]);
+  const [showDuplicatesWarning, setShowDuplicatesWarning] = useState(false);
+
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
 
@@ -108,11 +116,37 @@ const Suministros = () => {
   const [chartData, setChartData] = useState({
     gastosPorMes: null,
     valorPorCategoria: null,
-    suministrosPorMes: null
+    suministrosPorMes: null,
+    gastosPorProyecto: null,
+    gastosPorProveedor: null,
+    cantidadPorEstado: null,
+    distribucionTipos: null,
+    tendenciaEntregas: null,
+    codigosProducto: null,
+    analisisTecnicoConcreto: null,
+    concretoDetallado: null
   });
   const [chartFilters, setChartFilters] = useState({
     fechaInicio: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0], // Enero del año actual
-    fechaFin: new Date().toISOString().split('T')[0] // Hoy
+    fechaFin: new Date().toISOString().split('T')[0], // Hoy
+    proyectoId: '', // Filtro por proyecto específico
+    proveedorNombre: '', // Filtro por proveedor específico
+    tipoSuministro: '', // Filtro por tipo (Material, Servicio, etc.)
+    estado: '', // Filtro por estado
+    tipoAnalisis: 'gastos' // Tipo de análisis: 'gastos', 'cantidad', 'frecuencia'
+  });
+  const [selectedCharts, setSelectedCharts] = useState({
+    gastosPorMes: true,
+    valorPorCategoria: true,
+    suministrosPorMes: true,
+    gastosPorProyecto: false,
+    gastosPorProveedor: false,
+    cantidadPorEstado: false,
+    distribucionTipos: false,
+    tendenciaEntregas: false,
+    codigosProducto: false,
+    analisisTecnicoConcreto: false,
+    concretoDetallado: false
   });
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [themeVersion, setThemeVersion] = useState(0); // Para forzar re-render cuando cambie el tema
@@ -207,19 +241,46 @@ const Suministros = () => {
       if (response.success) {
         const suministrosData = response.data || [];
         
-        // Filtrar por fechas
+        // Aplicar todos los filtros
         const filteredData = suministrosData.filter(suministro => {
+          // Filtro por fechas
           const fechaSuministro = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
           const fechaInicio = new Date(chartFilters.fechaInicio);
           const fechaFin = new Date(chartFilters.fechaFin);
-          return fechaSuministro >= fechaInicio && fechaSuministro <= fechaFin;
+          const matchesFecha = fechaSuministro >= fechaInicio && fechaSuministro <= fechaFin;
+          
+          // Filtro por proyecto
+          const matchesProyecto = !chartFilters.proyectoId || 
+                                 suministro.id_proyecto?.toString() === chartFilters.proyectoId;
+          
+          // Filtro por proveedor
+          const matchesProveedor = !chartFilters.proveedorNombre || 
+                                  suministro.proveedor === chartFilters.proveedorNombre ||
+                                  suministro.proveedorInfo?.nombre === chartFilters.proveedorNombre;
+          
+          // Filtro por tipo de suministro
+          const matchesTipo = !chartFilters.tipoSuministro || 
+                             (suministro.tipo_suministro || suministro.categoria) === chartFilters.tipoSuministro;
+          
+          // Filtro por estado
+          const matchesEstado = !chartFilters.estado || suministro.estado === chartFilters.estado;
+          
+          return matchesFecha && matchesProyecto && matchesProveedor && matchesTipo && matchesEstado;
         });
 
-        // Procesar datos para gráficas
+        // Procesar datos para todas las gráficas
         const chartDataProcessed = {
           gastosPorMes: processGastosPorMes(filteredData),
           valorPorCategoria: processValorPorCategoria(filteredData),
-          suministrosPorMes: processSuministrosPorMes(filteredData)
+          suministrosPorMes: processSuministrosPorMes(filteredData),
+          gastosPorProyecto: processGastosPorProyecto(filteredData),
+          gastosPorProveedor: processGastosPorProveedor(filteredData),
+          cantidadPorEstado: processCantidadPorEstado(filteredData),
+          distribucionTipos: processDistribucionTipos(filteredData),
+          tendenciaEntregas: processTendenciaEntregas(filteredData),
+          codigosProducto: processCodigosProducto(filteredData),
+          analisisTecnicoConcreto: processAnalisisTecnicoConcreto(filteredData),
+          concretoDetallado: processConcretoDetallado(filteredData)
         };
 
         setChartData(chartDataProcessed);
@@ -348,6 +409,339 @@ const Suministros = () => {
     };
   };
 
+  // Procesar gastos por proyecto
+  const processGastosPorProyecto = (data) => {
+    const gastosPorProyecto = {};
+    
+    data.forEach(suministro => {
+      const proyectoId = suministro.id_proyecto;
+      const proyectoNombre = proyectos.find(p => p.id_proyecto === proyectoId)?.nombre || `Proyecto ${proyectoId}`;
+      
+      const cantidad = parseFloat(suministro.cantidad) || 0;
+      const precio = parseFloat(suministro.precio_unitario) || 0;
+      const gasto = cantidad * precio;
+      
+      if (!gastosPorProyecto[proyectoNombre]) {
+        gastosPorProyecto[proyectoNombre] = 0;
+      }
+      gastosPorProyecto[proyectoNombre] += gasto;
+    });
+
+    const proyectosList = Object.keys(gastosPorProyecto);
+    const valores = proyectosList.map(proyecto => Math.round(gastosPorProyecto[proyecto] * 100) / 100);
+
+    return {
+      labels: proyectosList,
+      datasets: [{
+        label: 'Gasto Total ($)',
+        data: valores,
+        backgroundColor: [
+          'rgba(239, 68, 68, 0.8)',   // Rojo
+          'rgba(245, 158, 11, 0.8)',  // Amarillo
+          'rgba(16, 185, 129, 0.8)',  // Verde
+          'rgba(59, 130, 246, 0.8)',  // Azul
+          'rgba(139, 92, 246, 0.8)',  // Púrpura
+          'rgba(249, 115, 22, 0.8)',  // Naranja
+          'rgba(236, 72, 153, 0.8)',  // Rosa
+          'rgba(14, 165, 233, 0.8)'   // Cyan
+        ],
+        borderWidth: 2
+      }]
+    };
+  };
+
+  // Procesar gastos por proveedor
+  const processGastosPorProveedor = (data) => {
+    const gastosPorProveedor = {};
+    
+    data.forEach(suministro => {
+      const proveedorNombre = suministro.proveedor || suministro.proveedorInfo?.nombre || 'Sin proveedor';
+      
+      const cantidad = parseFloat(suministro.cantidad) || 0;
+      const precio = parseFloat(suministro.precio_unitario) || 0;
+      const gasto = cantidad * precio;
+      
+      if (!gastosPorProveedor[proveedorNombre]) {
+        gastosPorProveedor[proveedorNombre] = 0;
+      }
+      gastosPorProveedor[proveedorNombre] += gasto;
+    });
+
+    const proveedoresList = Object.keys(gastosPorProveedor);
+    const valores = proveedoresList.map(proveedor => Math.round(gastosPorProveedor[proveedor] * 100) / 100);
+
+    return {
+      labels: proveedoresList,
+      datasets: [{
+        label: 'Gasto Total ($)',
+        data: valores,
+        backgroundColor: [
+          'rgba(34, 197, 94, 0.8)',   // Verde
+          'rgba(168, 85, 247, 0.8)',  // Violeta
+          'rgba(251, 146, 60, 0.8)',  // Naranja
+          'rgba(59, 130, 246, 0.8)',  // Azul
+          'rgba(239, 68, 68, 0.8)',   // Rojo
+          'rgba(245, 158, 11, 0.8)',  // Amarillo
+          'rgba(20, 184, 166, 0.8)',  // Teal
+          'rgba(217, 70, 239, 0.8)'   // Magenta
+        ],
+        borderWidth: 2
+      }]
+    };
+  };
+
+  // Procesar cantidad por estado
+  const processCantidadPorEstado = (data) => {
+    const cantidadPorEstado = {};
+    
+    data.forEach(suministro => {
+      const estado = suministro.estado || 'Sin estado';
+      
+      if (!cantidadPorEstado[estado]) {
+        cantidadPorEstado[estado] = 0;
+      }
+      cantidadPorEstado[estado]++;
+    });
+
+    const estados = Object.keys(cantidadPorEstado);
+    const cantidades = estados.map(estado => cantidadPorEstado[estado]);
+
+    return {
+      labels: estados,
+      datasets: [{
+        label: 'Cantidad de Suministros',
+        data: cantidades,
+        backgroundColor: [
+          'rgba(156, 163, 175, 0.8)',  // Gris - Solicitado
+          'rgba(59, 130, 246, 0.8)',   // Azul - Aprobado
+          'rgba(245, 158, 11, 0.8)',   // Amarillo - Pedido
+          'rgba(139, 92, 246, 0.8)',   // Púrpura - En Tránsito
+          'rgba(16, 185, 129, 0.8)',   // Verde - Entregado
+          'rgba(239, 68, 68, 0.8)'     // Rojo - Cancelado
+        ],
+        borderWidth: 2
+      }]
+    };
+  };
+
+  // Procesar distribución de tipos
+  const processDistribucionTipos = (data) => {
+    const distribucionTipos = {};
+    
+    data.forEach(suministro => {
+      const tipo = suministro.tipo_suministro || suministro.categoria || 'Sin tipo';
+      
+      if (!distribucionTipos[tipo]) {
+        distribucionTipos[tipo] = 0;
+      }
+      distribucionTipos[tipo]++;
+    });
+
+    const tipos = Object.keys(distribucionTipos);
+    const cantidades = tipos.map(tipo => distribucionTipos[tipo]);
+
+    return {
+      labels: tipos,
+      datasets: [{
+        label: 'Cantidad de Suministros',
+        data: cantidades,
+        backgroundColor: [
+          'rgba(239, 68, 68, 0.8)',   // Rojo - Material
+          'rgba(16, 185, 129, 0.8)',  // Verde - Servicio
+          'rgba(59, 130, 246, 0.8)',  // Azul - Equipo
+          'rgba(245, 158, 11, 0.8)',  // Amarillo - Herramienta
+          'rgba(139, 92, 246, 0.8)'   // Púrpura - Maquinaria
+        ],
+        borderWidth: 2
+      }]
+    };
+  };
+
+  // Procesar tendencia de entregas (suministros entregados por mes)
+  const processTendenciaEntregas = (data) => {
+    const entregasPorMes = {};
+    
+    data.filter(suministro => suministro.estado === 'Entregado').forEach(suministro => {
+      const fecha = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
+      const mesAnio = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      
+      if (!entregasPorMes[mesAnio]) {
+        entregasPorMes[mesAnio] = 0;
+      }
+      entregasPorMes[mesAnio]++;
+    });
+
+    const meses = Object.keys(entregasPorMes).sort();
+    const entregas = meses.map(mes => entregasPorMes[mes]);
+
+    return {
+      labels: meses.map(mes => {
+        const [año, mesNum] = mes.split('-');
+        const nombreMes = new Date(año, mesNum - 1).toLocaleDateString('es-MX', { month: 'short', year: 'numeric' });
+        return nombreMes;
+      }),
+      datasets: [{
+        label: 'Entregas Completadas',
+        data: entregas,
+        borderColor: 'rgb(16, 185, 129)',
+        backgroundColor: 'rgba(16, 185, 129, 0.2)',
+        tension: 0.4,
+        fill: true
+      }]
+    };
+  };
+
+  // Procesar códigos de producto (análisis general)
+  const processCodigosProducto = (data) => {
+    const codigosPorProducto = {};
+    
+    data.forEach(suministro => {
+      const codigo = suministro.codigo_producto || 'Sin código';
+      if (!codigosPorProducto[codigo]) {
+        codigosPorProducto[codigo] = {
+          cantidad: 0,
+          valor: 0,
+          nombre: suministro.nombre || 'Sin nombre'
+        };
+      }
+      codigosPorProducto[codigo].cantidad += parseFloat(suministro.cantidad || 0);
+      codigosPorProducto[codigo].valor += parseFloat(suministro.cantidad || 0) * parseFloat(suministro.precio_unitario || 0);
+    });
+
+    const codigos = Object.keys(codigosPorProducto).filter(codigo => codigo !== 'Sin código');
+    const valores = codigos.map(codigo => Math.round(codigosPorProducto[codigo].valor * 100) / 100);
+
+    return {
+      labels: codigos.map(codigo => `${codigo} (${codigosPorProducto[codigo].nombre})`),
+      datasets: [{
+        label: 'Valor por Código ($MXN)',
+        data: valores,
+        backgroundColor: [
+          'rgba(239, 68, 68, 0.8)',
+          'rgba(245, 101, 101, 0.8)',
+          'rgba(248, 113, 113, 0.8)',
+          'rgba(252, 165, 165, 0.8)',
+          'rgba(254, 202, 202, 0.8)',
+          'rgba(59, 130, 246, 0.8)',
+          'rgba(96, 165, 250, 0.8)',
+          'rgba(147, 197, 253, 0.8)'
+        ],
+        borderColor: [
+          'rgba(239, 68, 68, 1)',
+          'rgba(245, 101, 101, 1)',
+          'rgba(248, 113, 113, 1)',
+          'rgba(252, 165, 165, 1)',
+          'rgba(254, 202, 202, 1)',
+          'rgba(59, 130, 246, 1)',
+          'rgba(96, 165, 250, 1)',
+          'rgba(147, 197, 253, 1)'
+        ],
+        borderWidth: 1
+      }]
+    };
+  };
+
+  // Procesar análisis técnico específico de concreto
+  const processAnalisisTecnicoConcreto = (data) => {
+    const concretoData = data.filter(suministro => 
+      (suministro.tipo_suministro === 'Concreto' || 
+       suministro.categoria === 'Concreto' ||
+       suministro.nombre?.toLowerCase().includes('concreto'))
+    );
+
+    const analisisPorCodigo = {};
+    
+    concretoData.forEach(suministro => {
+      const codigo = suministro.codigo_producto || 'Sin especificación';
+      if (!analisisPorCodigo[codigo]) {
+        analisisPorCodigo[codigo] = {
+          volumen: 0,
+          costo: 0,
+          entregas: 0,
+          proyectos: new Set()
+        };
+      }
+      analisisPorCodigo[codigo].volumen += parseFloat(suministro.cantidad || 0);
+      analisisPorCodigo[codigo].costo += parseFloat(suministro.cantidad || 0) * parseFloat(suministro.precio_unitario || 0);
+      analisisPorCodigo[codigo].entregas += 1;
+      if (suministro.id_proyecto) {
+        analisisPorCodigo[codigo].proyectos.add(suministro.id_proyecto);
+      }
+    });
+
+    const especificaciones = Object.keys(analisisPorCodigo);
+    const volumenes = especificaciones.map(spec => Math.round(analisisPorCodigo[spec].volumen * 100) / 100);
+
+    return {
+      labels: especificaciones,
+      datasets: [{
+        label: 'Volumen (m³)',
+        data: volumenes,
+        backgroundColor: 'rgba(34, 197, 94, 0.8)',
+        borderColor: 'rgba(34, 197, 94, 1)',
+        borderWidth: 1
+      }]
+    };
+  };
+
+  // Procesar concreto detallado (por proveedor y especificación)
+  const processConcretoDetallado = (data) => {
+    const concretoData = data.filter(suministro => 
+      (suministro.tipo_suministro === 'Concreto' || 
+       suministro.categoria === 'Concreto' ||
+       suministro.nombre?.toLowerCase().includes('concreto'))
+    );
+
+    const proveedores = {};
+    
+    concretoData.forEach(suministro => {
+      const proveedor = suministro.proveedor || suministro.proveedorInfo?.nombre || 'Sin proveedor';
+      const codigo = suministro.codigo_producto || 'Sin código';
+      
+      if (!proveedores[proveedor]) {
+        proveedores[proveedor] = {};
+      }
+      if (!proveedores[proveedor][codigo]) {
+        proveedores[proveedor][codigo] = 0;
+      }
+      proveedores[proveedor][codigo] += parseFloat(suministro.cantidad || 0);
+    });
+
+    // Crear datasets por proveedor
+    const datasets = Object.keys(proveedores).map((proveedor, index) => {
+      const colores = [
+        'rgba(239, 68, 68, 0.8)',
+        'rgba(59, 130, 246, 0.8)', 
+        'rgba(34, 197, 94, 0.8)',
+        'rgba(245, 158, 11, 0.8)',
+        'rgba(168, 85, 247, 0.8)'
+      ];
+      
+      const todosLosCodigos = new Set();
+      Object.values(proveedores).forEach(prov => {
+        Object.keys(prov).forEach(codigo => todosLosCodigos.add(codigo));
+      });
+      
+      return {
+        label: proveedor,
+        data: Array.from(todosLosCodigos).map(codigo => proveedores[proveedor][codigo] || 0),
+        backgroundColor: colores[index % colores.length],
+        borderColor: colores[index % colores.length].replace('0.8', '1'),
+        borderWidth: 1
+      };
+    });
+
+    const todosLosCodigos = new Set();
+    Object.values(proveedores).forEach(prov => {
+      Object.keys(prov).forEach(codigo => todosLosCodigos.add(codigo));
+    });
+
+    return {
+      labels: Array.from(todosLosCodigos),
+      datasets: datasets
+    };
+  };
+
   // Función para obtener colores según el tema
   const getChartColors = () => {
     const isDarkMode = document.documentElement.classList.contains('dark');
@@ -366,6 +760,60 @@ const Suministros = () => {
       loadChartData();
     }
   }, [chartFilters, showCharts]);
+
+  // Función para verificar duplicados - SOLO POR FOLIO
+  const checkForDuplicates = (newSuministro) => {
+    // Solo verificar duplicados si hay folio_proveedor
+    if (!newSuministro.folio_proveedor || newSuministro.folio_proveedor.trim() === '') {
+      return []; // Sin folio, no hay duplicados que verificar
+    }
+
+    const duplicates = suministros.filter(suministro => {
+      // Si estamos editando, excluir el suministro actual de la verificación
+      if (editingSuministro && suministro.id_suministro === editingSuministro.id_suministro) {
+        return false;
+      }
+
+      // ÚNICO CRITERIO: Folio del proveedor
+      return suministro.folio_proveedor && 
+             suministro.folio_proveedor.toLowerCase().trim() === newSuministro.folio_proveedor.toLowerCase().trim();
+    });
+
+    return duplicates;
+  };
+
+  // Función para buscar sugerencias de duplicados en tiempo real - SOLO POR FOLIO
+  const searchDuplicateSuggestions = useCallback((nombre, codigo_producto, folio_proveedor) => {
+    // Solo mostrar advertencias para folios duplicados EXACTOS
+    if (!folio_proveedor || folio_proveedor.trim() === '') {
+      setDuplicatesSuggestions([]);
+      setShowDuplicatesWarning(false);
+      return;
+    }
+
+    const suggestions = suministros.filter(suministro => {
+      // Excluir el suministro actual si estamos editando
+      if (editingSuministro && suministro.id_suministro === editingSuministro.id_suministro) {
+        return false;
+      }
+
+      // CRITERIO MÁS ESTRICTO: Solo folios que coincidan exactamente o sean muy similares
+      return suministro.folio_proveedor && 
+             suministro.folio_proveedor.toLowerCase().trim() === folio_proveedor.toLowerCase().trim();
+    }).slice(0, 5); // Limitar a 5 sugerencias
+
+    setDuplicatesSuggestions(suggestions);
+    setShowDuplicatesWarning(suggestions.length > 0);
+  }, [suministros, editingSuministro]);
+
+  // Efecto para buscar duplicados cuando cambia el nombre, código o folio
+  useEffect(() => {
+    const delayedSearch = setTimeout(() => {
+      searchDuplicateSuggestions(formData.nombre, formData.codigo_producto, formData.folio_proveedor);
+    }, 300); // Debounce de 300ms
+
+    return () => clearTimeout(delayedSearch);
+  }, [formData.nombre, formData.codigo_producto, formData.folio_proveedor, searchDuplicateSuggestions]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -398,6 +846,29 @@ const Suministros = () => {
         hora_inicio_descarga: formData.hora_inicio_descarga,
         hora_fin_descarga: formData.hora_fin_descarga
       };
+
+      // Verificar duplicados solo al crear (no al editar)
+      if (!editingSuministro) {
+        const duplicates = checkForDuplicates(submitData);
+        
+        if (duplicates.length > 0) {
+          const duplicateInfo = duplicates.map(dup => {
+            const proyecto = proyectos.find(p => p.id_proyecto === dup.id_proyecto)?.nombre || 'Sin proyecto';
+            const proveedor = dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor';
+            const folioInfo = dup.folio_proveedor ? ` - Folio: ${dup.folio_proveedor}` : '';
+            return `• ${dup.nombre} (${proyecto} - ${proveedor}${folioInfo})`;
+          }).join('\n');
+
+          const warningTitle = "🚫 DUPLICADO DE FOLIO DETECTADO";
+          const warningMessage = `¡ATENCIÓN! El folio "${submitData.folio_proveedor}" ya existe:\n\n${duplicateInfo}\n\n` +
+                         `Los folios deben ser únicos. ¿Está seguro de que desea continuar?`;
+
+          const confirmed = await showConfirmDialog(warningTitle, warningMessage);
+          if (!confirmed) {
+            return;
+          }
+        }
+      }
 
       let response;
       if (editingSuministro) {
@@ -512,6 +983,11 @@ const Suministros = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingSuministro(null);
+    
+    // Limpiar estado de duplicados
+    setDuplicatesSuggestions([]);
+    setShowDuplicatesWarning(false);
+    
     setFormData({
       nombre: '',
       descripcion: '',
@@ -534,13 +1010,18 @@ const Suministros = () => {
       hora_inicio_descarga: '',
       hora_fin_descarga: ''
     });
+    
+    // Limpiar estado de duplicados
+    setDuplicatesSuggestions([]);
+    setShowDuplicatesWarning(false);
   };
 
   const filteredSuministros = suministros.filter(suministro => {
     const matchesSearch = suministro.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.descripcion_detallada?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         suministro.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase());
+                         suministro.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         suministro.folio_proveedor?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesCategoria = !filters.categoria || (suministro.tipo_suministro || suministro.categoria) === filters.categoria;
     const matchesEstado = !filters.estado || suministro.estado === filters.estado;
@@ -559,21 +1040,6 @@ const Suministros = () => {
     
     // Redondear a 2 decimales exactos para evitar problemas de precisión
     return Math.round(total * 100) / 100;
-  };
-
-  const formatCurrency = (amount) => {
-    // Asegurar que el monto sea un número válido
-    const numericAmount = parseFloat(amount) || 0;
-    
-    // Redondear a 2 decimales exactos para evitar problemas de precisión
-    const roundedAmount = Math.round(numericAmount * 100) / 100;
-    
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN',
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }).format(roundedAmount);
   };
 
   // Función para validar y formatear precios en tiempo real
@@ -647,7 +1113,7 @@ const Suministros = () => {
             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
-              placeholder="Buscar suministros..."
+              placeholder="Buscar por nombre, código, folio o descripción..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500"
@@ -717,45 +1183,251 @@ const Suministros = () => {
       {showCharts && (
         <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
           <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Análisis de Suministros</h2>
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Análisis Personalizado de Suministros</h2>
             
-            {/* Controles de fecha para gráficas */}
-            <div className="flex flex-wrap gap-4 items-center mb-6 p-4 bg-gray-50 dark:bg-dark-200 rounded-lg">
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Desde:</label>
-                <DateInput
-                  value={chartFilters.fechaInicio}
-                  onChange={(value) => setChartFilters({...chartFilters, fechaInicio: value})}
-                  placeholder="Fecha inicial"
-                  className="w-48 min-w-48"
-                />
+            {/* Panel de Filtros Avanzados */}
+            <div className="bg-gray-50 dark:bg-dark-200 rounded-lg p-6 mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                <FaFilter className="w-5 h-5 mr-2" />
+                Filtros de Análisis
+              </h3>
+              
+              {/* Fila 1: Fechas */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha Inicio</label>
+                  <DateInput
+                    value={chartFilters.fechaInicio}
+                    onChange={(value) => setChartFilters({...chartFilters, fechaInicio: value})}
+                    placeholder="Fecha inicial"
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Fecha Fin</label>
+                  <DateInput
+                    value={chartFilters.fechaFin}
+                    onChange={(value) => setChartFilters({...chartFilters, fechaFin: value})}
+                    placeholder="Fecha final"
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Proyecto</label>
+                  <select
+                    value={chartFilters.proyectoId}
+                    onChange={(e) => setChartFilters({...chartFilters, proyectoId: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  >
+                    <option value="">Todos los proyectos</option>
+                    {proyectos.map((proyecto) => (
+                      <option key={proyecto.id_proyecto} value={proyecto.id_proyecto.toString()}>
+                        {proyecto.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Proveedor</label>
+                  <select
+                    value={chartFilters.proveedorNombre}
+                    onChange={(e) => setChartFilters({...chartFilters, proveedorNombre: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  >
+                    <option value="">Todos los proveedores</option>
+                    {proveedores.map((proveedor) => (
+                      <option key={proveedor.id_proveedor} value={proveedor.nombre}>
+                        {proveedor.nombre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">Hasta:</label>
-                <DateInput
-                  value={chartFilters.fechaFin}
-                  onChange={(value) => setChartFilters({...chartFilters, fechaFin: value})}
-                  placeholder="Fecha final"
-                  className="w-48 min-w-48"
-                />
+
+              {/* Fila 2: Tipo, Estado y más filtros */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Tipo de Suministro</label>
+                  <select
+                    value={chartFilters.tipoSuministro}
+                    onChange={(e) => setChartFilters({...chartFilters, tipoSuministro: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  >
+                    <option value="">Todos los tipos</option>
+                    {Object.entries(CATEGORIAS_SUMINISTRO).map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Estado</label>
+                  <select
+                    value={chartFilters.estado}
+                    onChange={(e) => setChartFilters({...chartFilters, estado: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  >
+                    <option value="">Todos los estados</option>
+                    {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <button
+                    onClick={loadChartData}
+                    className="mt-6 w-full bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors duration-200"
+                  >
+                    {loadingCharts ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    ) : (
+                      <FaSearch className="w-4 h-4" />
+                    )}
+                    Generar Análisis
+                  </button>
+                </div>
               </div>
-              <button
-                onClick={loadChartData}
-                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200 whitespace-nowrap"
-              >
-                {loadingCharts ? (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                ) : (
-                  <FaSearch className="w-4 h-4" />
-                )}
-                Actualizar
-              </button>
+
+              {/* Selector de Gráficas a Mostrar */}
+              <div className="border-t border-gray-300 dark:border-gray-600 pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="text-md font-medium text-gray-900 dark:text-white">Gráficas a Mostrar</h4>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setSelectedCharts({
+                        gastosPorMes: true,
+                        valorPorCategoria: true,
+                        suministrosPorMes: true,
+                        gastosPorProyecto: true,
+                        gastosPorProveedor: true,
+                        cantidadPorEstado: true,
+                        distribucionTipos: true,
+                        tendenciaEntregas: true,
+                        codigosProducto: true,
+                        analisisTecnicoConcreto: true,
+                        concretoDetallado: true
+                      })}
+                      className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded transition-colors"
+                    >
+                      Todas
+                    </button>
+                    <button
+                      onClick={() => setSelectedCharts({
+                        gastosPorMes: false,
+                        valorPorCategoria: false,
+                        suministrosPorMes: false,
+                        gastosPorProyecto: false,
+                        gastosPorProveedor: false,
+                        cantidadPorEstado: false,
+                        distribucionTipos: false,
+                        tendenciaEntregas: false,
+                        codigosProducto: false,
+                        analisisTecnicoConcreto: false,
+                        concretoDetallado: false
+                      })}
+                      className="text-xs bg-gray-600 hover:bg-gray-700 text-white px-2 py-1 rounded transition-colors"
+                    >
+                      Ninguna
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.gastosPorMes}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, gastosPorMes: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Gastos por Mes</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.valorPorCategoria}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, valorPorCategoria: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Valor por Categoría</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.suministrosPorMes}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, suministrosPorMes: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Cantidad por Mes</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.gastosPorProyecto}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, gastosPorProyecto: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Gastos por Proyecto</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.gastosPorProveedor}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, gastosPorProveedor: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Gastos por Proveedor</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.cantidadPorEstado}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, cantidadPorEstado: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Cantidad por Estado</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.distribucionTipos}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, distribucionTipos: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Distribución de Tipos</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.tendenciaEntregas}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, tendenciaEntregas: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Tendencia de Entregas</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.codigosProducto}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, codigosProducto: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Códigos de Producto</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.analisisTecnicoConcreto}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, analisisTecnicoConcreto: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Análisis Técnico Concreto</span>
+                  </label>
+                  <label className="flex items-center space-x-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCharts.concretoDetallado}
+                      onChange={(e) => setSelectedCharts({...selectedCharts, concretoDetallado: e.target.checked})}
+                    />
+                    <span className="text-sm text-gray-700 dark:text-gray-300">Concreto Detallado</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
+            {/* Sección de Gráficas Dinámicas */}
             {loadingCharts ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
                 {/* Placeholders de carga para mantener el layout */}
-                {[1, 2, 3].map((index) => (
+                {[1, 2, 3, 4, 5, 6].map((index) => (
                   <div key={index} className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
                     <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded mb-4 animate-pulse"></div>
                     <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded animate-pulse flex items-center justify-center">
@@ -766,11 +1438,12 @@ const Suministros = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                
                 {/* Gráfica de Gastos por Mes */}
-                <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Gastos por Mes</h3>
-                  <div className="h-64">
-                    {chartData.gastosPorMes ? (
+                {selectedCharts.gastosPorMes && chartData.gastosPorMes && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Gastos por Mes</h3>
+                    <div className="h-64">
                       <Line 
                         key={`gastos-${themeVersion}`}
                         data={chartData.gastosPorMes} 
@@ -782,10 +1455,7 @@ const Suministros = () => {
                               position: 'top',
                               labels: {
                                 color: getChartColors().textColor,
-                                font: {
-                                  size: 12,
-                                  weight: '500'
-                                }
+                                font: { size: 12, weight: '500' }
                               }
                             },
                             tooltip: {
@@ -809,46 +1479,29 @@ const Suministros = () => {
                               beginAtZero: true,
                               ticks: {
                                 color: getChartColors().textColor,
-                                font: {
-                                  size: 11,
-                                  weight: '500'
-                                },
+                                font: { size: 11, weight: '500' },
                                 callback: function(value) {
                                   return '$' + value.toLocaleString('es-MX');
                                 }
                               },
-                              grid: {
-                                color: getChartColors().gridColor
-                              }
+                              grid: { color: getChartColors().gridColor }
                             },
                             x: {
-                              ticks: {
-                                color: getChartColors().textColor,
-                                font: {
-                                  size: 11,
-                                  weight: '500'
-                                }
-                              },
-                              grid: {
-                                color: getChartColors().gridColor
-                              }
+                              ticks: { color: getChartColors().textColor, font: { size: 11, weight: '500' } },
+                              grid: { color: getChartColors().gridColor }
                             }
                           }
                         }}
                       />
-                    ) : (
-                      <div className="h-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse flex items-center justify-center">
-                        <span className="text-gray-500 dark:text-gray-400">No hay datos disponibles</span>
-                      </div>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Gráfica de Valor por Categoría */}
-                <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Valor Total por Categoría</h3>
-                  <div className="h-64">
-                    {chartData.valorPorCategoria ? (
+                {selectedCharts.valorPorCategoria && chartData.valorPorCategoria && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Valor Total por Categoría</h3>
+                    <div className="h-64">
                       <Doughnut 
                         key={`categoria-${themeVersion}`}
                         data={chartData.valorPorCategoria} 
@@ -861,10 +1514,7 @@ const Suministros = () => {
                               labels: {
                                 color: getChartColors().textColor,
                                 padding: 15,
-                                font: {
-                                  size: 12,
-                                  weight: '500'
-                                }
+                                font: { size: 12, weight: '500' }
                               }
                             },
                             tooltip: {
@@ -887,19 +1537,15 @@ const Suministros = () => {
                           }
                         }}
                       />
-                    ) : (
-                      <div className="h-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse flex items-center justify-center">
-                        <span className="text-gray-500 dark:text-gray-400">No hay datos disponibles</span>
-                      </div>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Gráfica de Suministros por Mes */}
-                <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Suministros Solicitados por Mes</h3>
-                  <div className="h-64">
-                    {chartData.suministrosPorMes ? (
+                {selectedCharts.suministrosPorMes && chartData.suministrosPorMes && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Suministros Solicitados por Mes</h3>
+                    <div className="h-64">
                       <Bar 
                         key={`suministros-${themeVersion}`}
                         data={chartData.suministrosPorMes} 
@@ -911,10 +1557,7 @@ const Suministros = () => {
                               position: 'top',
                               labels: {
                                 color: getChartColors().textColor,
-                                font: {
-                                  size: 12,
-                                  weight: '500'
-                                }
+                                font: { size: 12, weight: '500' }
                               }
                             },
                             tooltip: {
@@ -935,38 +1578,406 @@ const Suministros = () => {
                               beginAtZero: true,
                               ticks: {
                                 color: getChartColors().textColor,
-                                font: {
-                                  size: 11,
-                                  weight: '500'
-                                },
+                                font: { size: 11, weight: '500' },
                                 stepSize: 1
                               },
-                              grid: {
-                                color: getChartColors().gridColor
-                              }
+                              grid: { color: getChartColors().gridColor }
                             },
                             x: {
+                              ticks: { color: getChartColors().textColor, font: { size: 11, weight: '500' } },
+                              grid: { color: getChartColors().gridColor }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Gastos por Proyecto */}
+                {selectedCharts.gastosPorProyecto && chartData.gastosPorProyecto && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Gastos por Proyecto</h3>
+                    <div className="h-64">
+                      <Bar 
+                        key={`proyectos-${themeVersion}`}
+                        data={chartData.gastosPorProyecto} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  return `Gasto: $${context.parsed.y.toLocaleString('es-MX', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}`;
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
                               ticks: {
                                 color: getChartColors().textColor,
-                                font: {
-                                  size: 11,
-                                  weight: '500'
+                                callback: function(value) {
+                                  return '$' + value.toLocaleString('es-MX');
                                 }
                               },
-                              grid: {
-                                color: getChartColors().gridColor
+                              grid: { color: getChartColors().gridColor }
+                            },
+                            x: {
+                              ticks: { color: getChartColors().textColor },
+                              grid: { color: getChartColors().gridColor }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Gastos por Proveedor */}
+                {selectedCharts.gastosPorProveedor && chartData.gastosPorProveedor && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Gastos por Proveedor</h3>
+                    <div className="h-64">
+                      <Doughnut 
+                        key={`proveedores-${themeVersion}`}
+                        data={chartData.gastosPorProveedor} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'bottom',
+                              labels: {
+                                color: getChartColors().textColor,
+                                padding: 15,
+                                font: { size: 12, weight: '500' }
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  return `${context.label}: $${context.parsed.toLocaleString('es-MX', {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2
+                                  })}`;
+                                }
                               }
                             }
                           }
                         }}
                       />
-                    ) : (
-                      <div className="h-full bg-gray-200 dark:bg-gray-700 rounded animate-pulse flex items-center justify-center">
-                        <span className="text-gray-500 dark:text-gray-400">No hay datos disponibles</span>
-                      </div>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* Gráfica de Cantidad por Estado */}
+                {selectedCharts.cantidadPorEstado && chartData.cantidadPorEstado && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Cantidad por Estado</h3>
+                    <div className="h-64">
+                      <Bar 
+                        key={`estados-${themeVersion}`}
+                        data={chartData.cantidadPorEstado} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  return `${context.label}: ${context.parsed.y} suministros`;
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              ticks: {
+                                color: getChartColors().textColor,
+                                stepSize: 1
+                              },
+                              grid: { color: getChartColors().gridColor }
+                            },
+                            x: {
+                              ticks: { color: getChartColors().textColor },
+                              grid: { color: getChartColors().gridColor }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Distribución de Tipos */}
+                {selectedCharts.distribucionTipos && chartData.distribucionTipos && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Distribución por Tipo de Suministro</h3>
+                    <div className="h-64">
+                      <Doughnut 
+                        key={`tipos-${themeVersion}`}
+                        data={chartData.distribucionTipos} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'bottom',
+                              labels: {
+                                color: getChartColors().textColor,
+                                padding: 15,
+                                font: { size: 12, weight: '500' }
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                  const percentage = ((context.parsed * 100) / total).toFixed(1);
+                                  return `${context.label}: ${context.parsed} suministros (${percentage}%)`;
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Tendencia de Entregas */}
+                {selectedCharts.tendenciaEntregas && chartData.tendenciaEntregas && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tendencia de Entregas Completadas</h3>
+                    <div className="h-64">
+                      <Line 
+                        key={`entregas-${themeVersion}`}
+                        data={chartData.tendenciaEntregas} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'top',
+                              labels: {
+                                color: getChartColors().textColor,
+                                font: { size: 12, weight: '500' }
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  return `${context.dataset.label}: ${context.parsed.y} entregas`;
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              ticks: {
+                                color: getChartColors().textColor,
+                                stepSize: 1
+                              },
+                              grid: { color: getChartColors().gridColor }
+                            },
+                            x: {
+                              ticks: { color: getChartColors().textColor },
+                              grid: { color: getChartColors().gridColor }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Códigos de Producto */}
+                {selectedCharts.codigosProducto && chartData.codigosProducto && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Análisis por Códigos de Producto</h3>
+                    <div className="h-64">
+                      <Doughnut 
+                        key={`codigos-${themeVersion}`}
+                        data={chartData.codigosProducto} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'right',
+                              labels: {
+                                color: getChartColors().textColor,
+                                font: { size: 10, weight: '500' },
+                                usePointStyle: true,
+                                pointStyle: 'circle'
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  const value = new Intl.NumberFormat('es-MX', { 
+                                    style: 'currency', 
+                                    currency: 'MXN' 
+                                  }).format(context.parsed);
+                                  return `${context.label}: ${value}`;
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Análisis Técnico de Concreto */}
+                {selectedCharts.analisisTecnicoConcreto && chartData.analisisTecnicoConcreto && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Análisis Técnico - Volumen por Especificación</h3>
+                    <div className="h-64">
+                      <Bar 
+                        key={`analisis-concreto-${themeVersion}`}
+                        data={chartData.analisisTecnicoConcreto} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'top',
+                              labels: {
+                                color: getChartColors().textColor,
+                                font: { size: 12, weight: '500' }
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  return `${context.dataset.label}: ${context.parsed.y} m³`;
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              ticks: {
+                                color: getChartColors().textColor,
+                                callback: function(value) {
+                                  return value + ' m³';
+                                }
+                              },
+                              grid: { color: getChartColors().gridColor }
+                            },
+                            x: {
+                              ticks: { 
+                                color: getChartColors().textColor,
+                                maxRotation: 45
+                              },
+                              grid: { color: getChartColors().gridColor }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Concreto Detallado */}
+                {selectedCharts.concretoDetallado && chartData.concretoDetallado && (
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Concreto Detallado - Por Proveedor y Especificación</h3>
+                    <div className="h-64">
+                      <Bar 
+                        key={`concreto-detallado-${themeVersion}`}
+                        data={chartData.concretoDetallado} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'top',
+                              labels: {
+                                color: getChartColors().textColor,
+                                font: { size: 12, weight: '500' }
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  return `${context.dataset.label}: ${context.parsed.y} m³`;
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              stacked: true,
+                              ticks: {
+                                color: getChartColors().textColor,
+                                callback: function(value) {
+                                  return value + ' m³';
+                                }
+                              },
+                              grid: { color: getChartColors().gridColor }
+                            },
+                            x: {
+                              stacked: true,
+                              ticks: { 
+                                color: getChartColors().textColor,
+                                maxRotation: 45
+                              },
+                              grid: { color: getChartColors().gridColor }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Mensaje cuando no hay gráficas seleccionadas */}
+                {!Object.values(selectedCharts).some(selected => selected) && (
+                  <div className="col-span-full bg-gray-50 dark:bg-dark-200 p-8 rounded-lg text-center">
+                    <FaChartBar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No hay gráficas seleccionadas</h3>
+                    <p className="text-gray-600 dark:text-gray-400">Selecciona al menos una gráfica para visualizar los datos de suministros.</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1156,14 +2167,54 @@ const Suministros = () => {
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Nombre del Suministro *
                         </label>
-                        <input
-                          type="text"
-                          value={formData.nombre}
-                          onChange={(e) => setFormData({...formData, nombre: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          placeholder="Ej: Grava 1 1/2, Retroexcavadora 415F"
-                          required
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={formData.nombre}
+                            onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+                            className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 ${
+                              showDuplicatesWarning 
+                                ? 'border-yellow-500 dark:border-yellow-400 focus:ring-yellow-500' 
+                                : 'border-gray-300 dark:border-gray-600 focus:ring-red-500'
+                            }`}
+                            placeholder="Ej: Grava 1 1/2, Retroexcavadora 415F"
+                            required
+                          />
+                          {showDuplicatesWarning && (
+                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                              <span className="text-yellow-500 text-sm">⚠️</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Sugerencias de duplicados */}
+                        {showDuplicatesWarning && duplicatesSuggestions.length > 0 && (
+                          <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
+                            <div className="flex items-center mb-2">
+                              <span className="text-yellow-600 dark:text-yellow-400 text-sm font-medium">
+                                ⚠️ Posibles duplicados encontrados:
+                              </span>
+                            </div>
+                            <div className="space-y-1 max-h-32 overflow-y-auto">
+                              {duplicatesSuggestions.map((suggestion, index) => {
+                                const proyecto = proyectos.find(p => p.id_proyecto === suggestion.id_proyecto)?.nombre || 'Sin proyecto';
+                                const proveedor = suggestion.proveedor || suggestion.proveedorInfo?.nombre || 'Sin proveedor';
+                                return (
+                                  <div key={index} className="text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-800/30 p-2 rounded">
+                                    <div className="font-medium">{suggestion.nombre}</div>
+                                    <div className="text-yellow-600 dark:text-yellow-400">
+                                      {proyecto} • {proveedor} • {suggestion.estado}
+                                      {suggestion.codigo_producto && ` • Código: ${suggestion.codigo_producto}`}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
+                              💡 Verifica si alguno de estos coincide con lo que intentas crear
+                            </div>
+                          </div>
+                        )}
                       </div>
 
                       <div>

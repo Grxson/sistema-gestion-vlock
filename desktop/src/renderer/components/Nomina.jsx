@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
+import { formatCurrency } from '../utils/currency';
 import {
   PlusIcon,
   CalendarIcon,
@@ -86,13 +87,6 @@ export default function Nomina() {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     return `${year}-${month}`;
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-ES', {
-      style: 'currency',
-      currency: 'EUR'
-    }).format(amount || 0);
   };
 
   if (loading) {

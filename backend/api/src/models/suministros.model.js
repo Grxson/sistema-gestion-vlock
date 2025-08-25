@@ -122,6 +122,16 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment: 'Hora de finalización de descarga'
     },
+    hora_salida_obra: {
+      type: DataTypes.TIME,
+      allowNull: true,
+      comment: 'Hora de salida de la obra'
+    },
+    total_horas: {
+      type: DataTypes.DECIMAL(4,2),
+      allowNull: true,
+      comment: 'Total de horas calculadas automáticamente'
+    },
     
     // Campos financieros (para futuro)
     precio_unitario: {

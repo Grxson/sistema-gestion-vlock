@@ -48,7 +48,8 @@ export default function Suministros() {
     'Equipo': 'Equipo',
     'Servicio': 'Servicio',
     'Consumible': 'Consumible',
-    'Maquinaria': 'Maquinaria'
+      'Maquinaria': 'Maquinaria',
+    'Concreto': 'Concreto'
   };
 
   const ESTADOS_SUMINISTRO = {
@@ -177,7 +178,8 @@ export default function Suministros() {
       item.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.proveedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase())
+      item.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.folio_proveedor?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const matchesProyecto = !filtroProyecto || item.id_proyecto?.toString() === filtroProyecto;
     const matchesCategoria = !filtroCategoria || item.categoria === filtroCategoria;
@@ -224,7 +226,7 @@ export default function Suministros() {
               <input
                 type="text"
                 className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-primary-500 focus:border-primary-500 sm:text-sm transition-colors duration-200"
-                placeholder="Buscar suministros..."
+                placeholder="Buscar por nombre, código, folio o descripción..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />

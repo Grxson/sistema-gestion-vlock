@@ -135,7 +135,38 @@ const getSuministroById = async (req, res) => {
     }
 };
 
-// Crear un nuevo suministro
+// Función auxiliar para verificar duplicados
+const checkForDuplicates = async (data, excludeId = null) => {
+    console.log('🔍 Verificando duplicados para:', data);
+    
+    // Solo verificar duplicados por folio_proveedor
+    if (data.folio_proveedor && data.folio_proveedor.trim() !== '') {
+        const whereConditionFolio = {
+            folio_proveedor: data.folio_proveedor.trim()
+        };
+        
+        if (excludeId) {
+            whereConditionFolio.id = { [Op.ne]: excludeId };
+        }
+
+        const duplicateByFolio = await Suministros.findOne({
+            where: whereConditionFolio
+        });
+
+        if (duplicateByFolio) {
+            return {
+                isDuplicate: true,
+                type: 'folio',
+                existing: duplicateByFolio,
+                message: `Ya existe un suministro con el folio "${data.folio_proveedor}"`
+            };
+        }
+    }
+
+    // Si no hay folio o no hay duplicados, permitir el registro
+    return { isDuplicate: false };
+};
+
 const createSuministro = async (req, res) => {
     try {
         const {
@@ -180,6 +211,35 @@ const createSuministro = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'El proyecto especificado no existe'
+            });
+        }
+
+        // Verificar duplicados
+        const duplicates = await checkForDuplicates({
+            nombre,
+            codigo_producto,
+            folio_proveedor,
+            id_proyecto,
+            tipo_suministro,
+            id_proveedor,
+            proveedor
+        });
+
+        if (duplicates.length > 0) {
+            const duplicateInfo = duplicates.map(dup => ({
+                id: dup.id_suministro,
+                nombre: dup.nombre,
+                proyecto: dup.proyecto?.nombre || 'Sin proyecto',
+                proveedor: dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor',
+                codigo_producto: dup.codigo_producto,
+                folio_proveedor: dup.folio_proveedor
+            }));
+
+            return res.status(409).json({
+                success: false,
+                message: 'Posible duplicado detectado',
+                duplicates: duplicateInfo,
+                suggestion: 'Verifica si alguno de estos suministros coincide con el que intentas crear'
             });
         }
 
@@ -258,6 +318,39 @@ const updateSuministro = async (req, res) => {
                 return res.status(400).json({
                     success: false,
                     message: 'El proyecto especificado no existe'
+                });
+            }
+        }
+
+        // Verificar duplicados si se están actualizando campos clave
+        if (updateData.nombre || updateData.codigo_producto || updateData.folio_proveedor) {
+            const dataToCheck = {
+                nombre: updateData.nombre || suministro.nombre,
+                codigo_producto: updateData.codigo_producto || suministro.codigo_producto,
+                folio_proveedor: updateData.folio_proveedor || suministro.folio_proveedor,
+                id_proyecto: updateData.id_proyecto || suministro.id_proyecto,
+                tipo_suministro: updateData.tipo_suministro || suministro.tipo_suministro,
+                id_proveedor: updateData.id_proveedor || suministro.id_proveedor,
+                proveedor: updateData.proveedor || suministro.proveedor
+            };
+
+            const duplicates = await checkForDuplicates(dataToCheck, id);
+
+            if (duplicates.length > 0) {
+                const duplicateInfo = duplicates.map(dup => ({
+                    id: dup.id_suministro,
+                    nombre: dup.nombre,
+                    proyecto: dup.proyecto?.nombre || 'Sin proyecto',
+                    proveedor: dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor',
+                    codigo_producto: dup.codigo_producto,
+                    folio_proveedor: dup.folio_proveedor
+                }));
+
+                return res.status(409).json({
+                    success: false,
+                    message: 'Posible duplicado detectado',
+                    duplicates: duplicateInfo,
+                    suggestion: 'Verifica si alguno de estos suministros coincide con los cambios que intentas hacer'
                 });
             }
         }

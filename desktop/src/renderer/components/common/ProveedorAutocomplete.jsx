@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { FaSearch, FaPlus, FaBuilding, FaTimes } from 'react-icons/fa';
 import api from '../../services/api';
 
@@ -31,6 +31,48 @@ const ProveedorAutocomplete = ({
 
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
+
+  // Función de búsqueda optimizada con useCallback
+  const searchProviders = useCallback(async (searchQuery) => {
+    if (!searchQuery.trim()) {
+      setSuggestions([]);
+      setIsLoading(false);
+      return;
+    }
+
+    // No buscar si ya tenemos un proveedor seleccionado y el query coincide
+    if (selectedProvider && selectedProvider.nombre === searchQuery.trim()) {
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const response = await api.searchProveedores(searchQuery);
+      if (response.success) {
+        setSuggestions(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error buscando proveedores:', error);
+      setSuggestions([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedProvider]);
+
+  // Debounce optimizado con useCallback
+  const debouncedSearch = useCallback((searchQuery) => {
+    // Limpiar timeout anterior
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // Establecer nuevo timeout
+    searchTimeoutRef.current = setTimeout(() => {
+      searchProviders(searchQuery);
+    }, 300);
+  }, [searchProviders]);
 
   useEffect(() => {
     if (value && value.nombre) {
@@ -48,53 +90,41 @@ const ProveedorAutocomplete = ({
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      // Limpiar timeout al desmontar componente
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, []);
 
-  const searchProviders = async (searchQuery) => {
-    if (!searchQuery.trim()) {
-      setSuggestions([]);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await api.searchProveedores(searchQuery);
-      if (response.success) {
-        setSuggestions(response.data || []);
-      }
-    } catch (error) {
-      console.error('Error buscando proveedores:', error);
-      setSuggestions([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleInputChange = (e) => {
+  const handleInputChange = useCallback((e) => {
     const newQuery = e.target.value;
     setQuery(newQuery);
-    setSelectedProvider(null);
+    
+    // Solo resetear selección si el query cambió
+    if (selectedProvider && selectedProvider.nombre !== newQuery) {
+      setSelectedProvider(null);
+      onChange && onChange(null);
+    }
+    
     setShowDropdown(true);
     setShowCreateForm(false);
     
-    // Debounce de búsqueda
-    const timeoutId = setTimeout(() => {
-      searchProviders(newQuery);
-    }, 300);
+    // Usar la búsqueda con debounce
+    debouncedSearch(newQuery);
+  }, [selectedProvider, onChange, debouncedSearch]);
 
-    return () => clearTimeout(timeoutId);
-  };
-
-  const handleProviderSelect = (provider) => {
+  const handleProviderSelect = useCallback((provider) => {
     setSelectedProvider(provider);
     setQuery(provider.nombre);
     setShowDropdown(false);
     setShowCreateForm(false);
     onChange && onChange(provider);
-  };
+  }, [onChange]);
 
-  const handleCreateNew = () => {
+  const handleCreateNew = useCallback(() => {
     setNewProviderData({
       ...newProviderData,
       nombre: query,
@@ -102,9 +132,9 @@ const ProveedorAutocomplete = ({
     });
     setShowCreateForm(true);
     setShowDropdown(false);
-  };
+  }, [newProviderData, query, tipoSugerido]);
 
-  const handleCreateProvider = async () => {
+  const handleCreateProvider = useCallback(async () => {
     if (!newProviderData.nombre.trim()) {
       alert('El nombre del proveedor es requerido');
       return;
@@ -131,14 +161,18 @@ const ProveedorAutocomplete = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [newProviderData, tipoSugerido, handleProviderSelect]);
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedProvider(null);
     setQuery('');
     onChange && onChange(null);
     inputRef.current?.focus();
-  };
+  }, [onChange]);
+
+  const handleFocus = useCallback(() => {
+    setShowDropdown(true);
+  }, []);
 
   return (
     <div className={`relative ${className}`} ref={dropdownRef}>
@@ -148,7 +182,7 @@ const ProveedorAutocomplete = ({
           type="text"
           value={query}
           onChange={handleInputChange}
-          onFocus={() => setShowDropdown(true)}
+          onFocus={handleFocus}
           placeholder={placeholder}
           required={required}
           className={`w-full px-3 py-2 pl-10 pr-10 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500 ${

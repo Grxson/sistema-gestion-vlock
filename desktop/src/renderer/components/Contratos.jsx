@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, DocumentTextIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { usePermissions } from '../contexts/PermissionsContext';
+import { formatCurrency } from '../utils/currency';
 import apiService from '../services/api';
 import DateInput from './ui/DateInput';
 
@@ -121,13 +122,6 @@ export default function Contratos() {
     contrato.tipo_contrato?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     contrato.salario_diario?.toString().includes(searchTerm)
   );
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(amount || 0);
-  };
 
   const formatDate = (dateString) => {
     if (!dateString) return 'N/A';

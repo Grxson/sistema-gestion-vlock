@@ -443,3 +443,80 @@ select:focus {
 .dark select:focus {
   background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%ef4444' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e") !important;
 }
+
+/* Estilos para checkboxes personalizados */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #d1d5db;
+  border-radius: 0.25rem;
+  background-color: #ffffff;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+input[type="checkbox"]:checked {
+  background-color: #dc2626;
+  border-color: #dc2626;
+}
+
+input[type="checkbox"]:checked::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0.375rem;
+  height: 0.1875rem;
+  border: solid #ffffff;
+  border-width: 0 0 2px 2px;
+  transform: translate(-50%, -75%) rotate(-45deg);
+}
+
+input[type="checkbox"]:focus {
+  border-color: #dc2626 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2) !important;
+}
+
+/* Estilos para modo oscuro */
+.dark input[type="checkbox"] {
+  border-color: #6b7280;
+  background-color: #374151;
+}
+
+.dark input[type="checkbox"]:checked {
+  background-color: #ef4444;
+  border-color: #ef4444;
+}
+
+.dark input[type="checkbox"]:focus {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2) !important;
+}
+
+/* Asegurar que el estado hover funcione */
+input[type="checkbox"]:hover {
+  border-color: #dc2626;
+}
+
+.dark input[type="checkbox"]:hover {
+  border-color: #ef4444;
+}
+
+/* Estilos para checkboxes deshabilitados */
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input[type="checkbox"]:disabled:hover {
+  border-color: #d1d5db;
+}
+
+.dark input[type="checkbox"]:disabled:hover {
+  border-color: #6b7280;
+}
