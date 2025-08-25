@@ -146,10 +146,10 @@ const checkForDuplicates = async (data, excludeId = null) => {
         };
         
         if (excludeId) {
-            whereConditionFolio.id = { [Op.ne]: excludeId };
+            whereConditionFolio.id_suministro = { [models.sequelize.Sequelize.Op.ne]: excludeId };
         }
 
-        const duplicateByFolio = await Suministros.findOne({
+        const duplicateByFolio = await models.Suministros.findOne({
             where: whereConditionFolio
         });
 
