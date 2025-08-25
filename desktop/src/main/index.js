@@ -24,8 +24,8 @@ function createWindow() {
 
   console.log('Window created, loading content...');
   if (process.env.NODE_ENV === 'development') {
-    console.log('Loading development URL: http://localhost:3001');
-    mainWindow.loadURL('http://localhost:3001');
+    console.log('Loading development URL: http://localhost:3000');
+    mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
     const buildPath = path.join(__dirname, '../build/index.html');
