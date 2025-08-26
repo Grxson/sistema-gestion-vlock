@@ -2276,15 +2276,12 @@ const Suministros = () => {
                               backgroundColor: getChartColors().tooltipBg,
                               titleColor: getChartColors().tooltipText,
                               bodyColor: getChartColors().tooltipText,
-                              borderColor: 'rgba(16, 185, 129, 0.5)',
-                              borderWidth: 2,
+                              borderColor: 'rgba(239, 68, 68, 0.5)',
+                              borderWidth: 1,
                               cornerRadius: 12,
                               padding: 16,
                               titleFont: { size: 14, weight: '600' },
                               bodyFont: { size: 13, weight: '500' },
-                              bodyColor: getChartColors().tooltipText,
-                              borderColor: 'rgba(239, 68, 68, 0.5)',
-                              borderWidth: 1,
                               callbacks: {
                                 label: function(context) {
                                   const total = context.dataset.data.reduce((a, b) => a + b, 0);
