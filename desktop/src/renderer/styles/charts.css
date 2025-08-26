@@ -1,0 +1,283 @@
+/* Estilos mejorados para gráficas profesionales */
+
+/* Contenedores de gráficas */
+.chart-container {
+  background: white;
+  border-radius: 0.75rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(229, 231, 235, 1);
+  padding: 2rem;
+  transition: all 0.3s ease;
+}
+
+.chart-container:hover {
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  transform: translateY(-2px);
+}
+
+/* Modo oscuro */
+.dark .chart-container {
+  background: rgb(31, 41, 55);
+  border: 1px solid rgb(75, 85, 99);
+}
+
+/* Encabezados de gráficas */
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.chart-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: rgb(17, 24, 39);
+  margin: 0;
+}
+
+.dark .chart-title {
+  color: rgb(249, 250, 251);
+}
+
+.chart-subtitle {
+  font-size: 0.875rem;
+  color: rgb(107, 114, 128);
+  margin-top: 0.25rem;
+}
+
+.dark .chart-subtitle {
+  color: rgb(156, 163, 175);
+}
+
+/* Iconos de gráficas */
+.chart-icon {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-icon-blue {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.chart-icon-green {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.chart-icon-purple {
+  background: rgba(139, 92, 246, 0.1);
+}
+
+.chart-icon-orange {
+  background: rgba(249, 115, 22, 0.1);
+}
+
+.chart-icon-cyan {
+  background: rgba(6, 182, 212, 0.1);
+}
+
+.chart-icon-pink {
+  background: rgba(244, 114, 182, 0.1);
+}
+
+.chart-icon-emerald {
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.chart-icon-indigo {
+  background: rgba(99, 102, 241, 0.1);
+}
+
+/* Modo oscuro para iconos */
+.dark .chart-icon-blue {
+  background: rgba(59, 130, 246, 0.2);
+}
+
+.dark .chart-icon-green {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.dark .chart-icon-purple {
+  background: rgba(139, 92, 246, 0.2);
+}
+
+.dark .chart-icon-orange {
+  background: rgba(249, 115, 22, 0.2);
+}
+
+.dark .chart-icon-cyan {
+  background: rgba(6, 182, 212, 0.2);
+}
+
+.dark .chart-icon-pink {
+  background: rgba(244, 114, 182, 0.2);
+}
+
+.dark .chart-icon-emerald {
+  background: rgba(16, 185, 129, 0.2);
+}
+
+.dark .chart-icon-indigo {
+  background: rgba(99, 102, 241, 0.2);
+}
+
+/* Área de gráfica */
+.chart-area {
+  height: 20rem; /* 80 en Tailwind */
+  position: relative;
+}
+
+/* Grid de gráficas */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2rem;
+}
+
+@media (min-width: 1280px) {
+  .charts-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* Placeholders de carga */
+.chart-skeleton {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background: rgb(229, 231, 235);
+  border-radius: 0.5rem;
+}
+
+.dark .chart-skeleton {
+  background: rgb(75, 85, 99);
+}
+
+/* Animaciones */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: .5;
+  }
+}
+
+/* Mejoras para tooltips */
+.chart-tooltip {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+  font-weight: 500;
+  border-radius: 0.75rem !important;
+  backdrop-filter: blur(10px);
+}
+
+/* Estilos específicos para Chart.js */
+.chartjs-tooltip {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+}
+
+.chartjs-tooltip-title {
+  font-weight: 600 !important;
+  font-size: 14px !important;
+}
+
+.chartjs-tooltip-body {
+  font-weight: 500 !important;
+  font-size: 13px !important;
+}
+
+/* Leyendas mejoradas */
+.chart-legend-item {
+  display: flex;
+  align-items: center;
+  margin: 0.5rem;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.chart-legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-right: 8px;
+  border: 2px solid white;
+}
+
+/* Estados de gráficas */
+.chart-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 20rem;
+  color: rgb(107, 114, 128);
+}
+
+.chart-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 20rem;
+  color: rgb(239, 68, 68);
+  text-align: center;
+}
+
+.chart-no-data {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 20rem;
+  color: rgb(107, 114, 128);
+  text-align: center;
+}
+
+/* Responsive para gráficas */
+@media (max-width: 768px) {
+  .chart-container {
+    padding: 1rem;
+  }
+  
+  .chart-area {
+    height: 16rem;
+  }
+  
+  .chart-title {
+    font-size: 1.125rem;
+  }
+  
+  .chart-icon {
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+}
+
+/* Hover effects para interactividad */
+.chart-container canvas {
+  transition: transform 0.2s ease;
+}
+
+.chart-container:hover canvas {
+  transform: scale(1.02);
+}
+
+/* Mejoras de accesibilidad */
+.chart-container:focus-within {
+  outline: 2px solid rgb(59, 130, 246);
+  outline-offset: 2px;
+}
+
+/* Estilos para el toggle de gráficas */
+.charts-toggle {
+  transition: all 0.3s ease;
+}
+
+.charts-toggle:hover {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.dark .charts-toggle:hover {
+  background: rgba(59, 130, 246, 0.2);
+}

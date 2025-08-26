@@ -12,7 +12,7 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
-import { CalendarIcon, ChartBarIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline';
+import { CalendarIcon, ChartBarIcon, BuildingOffice2Icon, CurrencyDollarIcon } from '@heroicons/react/24/outline';
 import apiService from '../services/api';
 import DateRangePicker from './ui/DateRangePicker';
 import CustomSelect from './ui/CustomSelect';
@@ -77,52 +77,171 @@ export default function DashboardSuministros() {
     cargarDashboard();
   };
 
-  // Configuración para gráfica de barras - Consumo por obra
+  // Configuración para gráfica de barras - Consumo por obra con colores profesionales
   const chartConsumoPorObra = dashboardData?.consumoPorObra ? {
     labels: dashboardData.consumoPorObra.map(item => item.obra),
     datasets: [{
       label: 'Total Cantidad (m³)',
       data: dashboardData.consumoPorObra.map(item => parseFloat(item.total_cantidad || 0)),
       backgroundColor: [
-        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#F97316'
+        'rgba(59, 130, 246, 0.8)',   // Blue
+        'rgba(16, 185, 129, 0.8)',   // Emerald
+        'rgba(245, 158, 11, 0.8)',   // Amber
+        'rgba(239, 68, 68, 0.8)',    // Red
+        'rgba(139, 92, 246, 0.8)',   // Violet
+        'rgba(249, 115, 22, 0.8)',   // Orange
+        'rgba(6, 182, 212, 0.8)',    // Cyan
+        'rgba(132, 204, 22, 0.8)',   // Lime
+        'rgba(244, 114, 182, 0.8)',  // Pink
+        'rgba(167, 139, 250, 0.8)'   // Purple
       ],
       borderColor: [
-        '#2563EB', '#059669', '#D97706', '#DC2626', '#7C3AED', '#EA580C'
+        'rgb(59, 130, 246)',
+        'rgb(16, 185, 129)',
+        'rgb(245, 158, 11)',
+        'rgb(239, 68, 68)',
+        'rgb(139, 92, 246)',
+        'rgb(249, 115, 22)',
+        'rgb(6, 182, 212)',
+        'rgb(132, 204, 22)',
+        'rgb(244, 114, 182)',
+        'rgb(167, 139, 250)'
       ],
-      borderWidth: 1
+      borderWidth: 2,
+      borderRadius: 8,
+      borderSkipped: false,
+      hoverBackgroundColor: [
+        'rgba(59, 130, 246, 0.9)',
+        'rgba(16, 185, 129, 0.9)',
+        'rgba(245, 158, 11, 0.9)',
+        'rgba(239, 68, 68, 0.9)',
+        'rgba(139, 92, 246, 0.9)',
+        'rgba(249, 115, 22, 0.9)',
+        'rgba(6, 182, 212, 0.9)',
+        'rgba(132, 204, 22, 0.9)',
+        'rgba(244, 114, 182, 0.9)',
+        'rgba(167, 139, 250, 0.9)'
+      ]
     }]
   } : null;
 
-  // Configuración para gráfica de dona - Distribución por proveedores
+  // Configuración para gráfica de dona - Distribución por proveedores con gradientes
   const chartProveedores = dashboardData?.distribicionProveedores ? {
     labels: dashboardData.distribicionProveedores.map(item => item.proveedor),
     datasets: [{
       data: dashboardData.distribicionProveedores.map(item => parseInt(item.total_entregas)),
       backgroundColor: [
-        '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#F97316',
-        '#06B6D4', '#84CC16', '#F472B6', '#A78BFA'
+        'rgba(59, 130, 246, 0.8)',   // Blue
+        'rgba(16, 185, 129, 0.8)',   // Emerald
+        'rgba(245, 158, 11, 0.8)',   // Amber
+        'rgba(239, 68, 68, 0.8)',    // Red
+        'rgba(139, 92, 246, 0.8)',   // Violet
+        'rgba(249, 115, 22, 0.8)',   // Orange
+        'rgba(6, 182, 212, 0.8)',    // Cyan
+        'rgba(132, 204, 22, 0.8)',   // Lime
+        'rgba(244, 114, 182, 0.8)',  // Pink
+        'rgba(167, 139, 250, 0.8)'   // Purple
       ],
-      borderWidth: 2,
-      borderColor: '#ffffff'
+      borderColor: [
+        'rgb(59, 130, 246)',
+        'rgb(16, 185, 129)',
+        'rgb(245, 158, 11)',
+        'rgb(239, 68, 68)',
+        'rgb(139, 92, 246)',
+        'rgb(249, 115, 22)',
+        'rgb(6, 182, 212)',
+        'rgb(132, 204, 22)',
+        'rgb(244, 114, 182)',
+        'rgb(167, 139, 250)'
+      ],
+      borderWidth: 3,
+      hoverBorderWidth: 4,
+      hoverBackgroundColor: [
+        'rgba(59, 130, 246, 0.9)',
+        'rgba(16, 185, 129, 0.9)',
+        'rgba(245, 158, 11, 0.9)',
+        'rgba(239, 68, 68, 0.9)',
+        'rgba(139, 92, 246, 0.9)',
+        'rgba(249, 115, 22, 0.9)',
+        'rgba(6, 182, 212, 0.9)',
+        'rgba(132, 204, 22, 0.9)',
+        'rgba(244, 114, 182, 0.9)',
+        'rgba(167, 139, 250, 0.9)'
+      ],
+      spacing: 2,
+      cutout: '45%'
     }]
   } : null;
 
-  // Opciones comunes para las gráficas
+  // Opciones comunes para las gráficas - Diseño profesional mejorado
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'top',
+        align: 'start',
+        labels: {
+          usePointStyle: true,
+          pointStyle: 'circle',
+          padding: 20,
+          font: {
+            size: 13,
+            weight: '600',
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
+          },
+          color: document.documentElement.classList.contains('dark') ? '#F9FAFB' : '#1F2937',
+          generateLabels: function(chart) {
+            const original = ChartJS.defaults.plugins.legend.labels.generateLabels;
+            const labels = original.call(this, chart);
+            labels.forEach(label => {
+              label.borderRadius = 6;
+            });
+            return labels;
+          }
+        }
       },
       tooltip: {
-        backgroundColor: 'rgba(0, 0, 0, 0.8)',
-        titleColor: '#ffffff',
-        bodyColor: '#ffffff',
-        borderColor: '#374151',
-        borderWidth: 1
+        backgroundColor: 'rgba(17, 24, 39, 0.95)',
+        titleColor: '#F9FAFB',
+        bodyColor: '#F9FAFB',
+        borderColor: 'rgba(59, 130, 246, 0.5)',
+        borderWidth: 2,
+        cornerRadius: 12,
+        padding: 16,
+        titleFont: {
+          size: 14,
+          weight: '600',
+          family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
+        },
+        bodyFont: {
+          size: 13,
+          weight: '500',
+          family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
+        },
+        titleSpacing: 8,
+        bodySpacing: 6,
+        usePointStyle: true,
+        boxPadding: 8,
+        titleAlign: 'center',
+        bodyAlign: 'left'
       }
     },
+    elements: {
+      point: {
+        radius: 6,
+        hoverRadius: 8,
+        borderWidth: 3
+      },
+      line: {
+        borderWidth: 3,
+        tension: 0.4
+      },
+      bar: {
+        borderRadius: 8,
+        borderSkipped: false
+      }
+    }
   };
 
   const barChartOptions = {
@@ -131,14 +250,44 @@ export default function DashboardSuministros() {
       y: {
         beginAtZero: true,
         grid: {
-          color: 'rgba(156, 163, 175, 0.1)'
+          color: document.documentElement.classList.contains('dark') 
+            ? 'rgba(75, 85, 99, 0.2)' 
+            : 'rgba(156, 163, 175, 0.2)',
+          lineWidth: 1,
+          drawBorder: false
+        },
+        ticks: {
+          color: document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#4B5563',
+          font: {
+            size: 12,
+            weight: '500',
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
+          },
+          padding: 12,
+          callback: function(value) {
+            return value.toLocaleString('es-MX');
+          }
         }
       },
       x: {
         grid: {
           display: false
+        },
+        ticks: {
+          color: document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#4B5563',
+          font: {
+            size: 12,
+            weight: '500',
+            family: 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
+          },
+          padding: 8,
+          maxRotation: 45
         }
       }
+    },
+    animation: {
+      duration: 1500,
+      easing: 'easeInOutQuart'
     }
   };
 
@@ -152,8 +301,8 @@ export default function DashboardSuministros() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
+      {/* Header con Total Gastado */}
+      <div className="flex justify-between items-start">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
             Dashboard de Suministros
@@ -161,6 +310,32 @@ export default function DashboardSuministros() {
           <p className="text-gray-600 dark:text-gray-400">
             Análisis y reportes de materiales y servicios por obra
           </p>
+        </div>
+        
+        {/* Marcador de Total Gastado */}
+        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 dark:from-emerald-900/20 dark:to-emerald-800/20 border border-emerald-200 dark:border-emerald-700 rounded-xl p-6 shadow-lg min-w-[200px]">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center mb-2">
+                <div className="w-10 h-10 bg-emerald-500 rounded-lg flex items-center justify-center shadow-lg">
+                  <CurrencyDollarIcon className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300 mb-1">Total Gastado</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                {dashboardData?.totalGastado ? 
+                  `$${parseFloat(dashboardData.totalGastado).toLocaleString('es-MX', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}` : 
+                  '$0.00'
+                }
+              </p>
+            </div>
+            <div className="text-emerald-500 dark:text-emerald-400 opacity-20">
+              <CurrencyDollarIcon className="h-12 w-12" />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -217,76 +392,106 @@ export default function DashboardSuministros() {
         </div>
       </div>
 
-      {/* Estadísticas Generales */}
+      {/* Estadísticas Generales - Diseño mejorado */}
       {dashboardData?.estadisticasGenerales && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <ChartBarIcon className="h-8 w-8 text-blue-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700 rounded-xl p-6 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center shadow-lg">
+                    <ChartBarIcon className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                   {dashboardData.estadisticasGenerales.total_registros}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Registros</p>
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Total Registros</p>
+              </div>
+              <div className="text-blue-500 dark:text-blue-400 opacity-20">
+                <ChartBarIcon className="h-16 w-16" />
               </div>
             </div>
           </div>
           
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <BuildingOffice2Icon className="h-8 w-8 text-green-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+          <div className="bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-700 rounded-xl p-6 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 bg-green-500 rounded-lg flex items-center justify-center shadow-lg">
+                    <BuildingOffice2Icon className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                   {parseFloat(dashboardData.estadisticasGenerales.total_cantidad || 0).toFixed(1)} m³
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Total Materiales</p>
+                <p className="text-sm font-medium text-green-700 dark:text-green-300">Total Materiales</p>
+              </div>
+              <div className="text-green-500 dark:text-green-400 opacity-20">
+                <BuildingOffice2Icon className="h-16 w-16" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <BuildingOffice2Icon className="h-8 w-8 text-purple-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+          <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-700 rounded-xl p-6 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center shadow-lg">
+                    <BuildingOffice2Icon className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                   {dashboardData.estadisticasGenerales.total_proveedores}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Proveedores</p>
+                <p className="text-sm font-medium text-purple-700 dark:text-purple-300">Proveedores</p>
+              </div>
+              <div className="text-purple-500 dark:text-purple-400 opacity-20">
+                <BuildingOffice2Icon className="h-16 w-16" />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <BuildingOffice2Icon className="h-8 w-8 text-orange-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+          <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border border-orange-200 dark:border-orange-700 rounded-xl p-6 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center shadow-lg">
+                    <BuildingOffice2Icon className="h-5 w-5 text-white" />
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
                   {dashboardData.estadisticasGenerales.total_obras}
                 </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Obras Activas</p>
+                <p className="text-sm font-medium text-orange-700 dark:text-orange-300">Obras Activas</p>
+              </div>
+              <div className="text-orange-500 dark:text-orange-400 opacity-20">
+                <BuildingOffice2Icon className="h-16 w-16" />
               </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Gráficas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Gráficas - Diseño mejorado con mayor tamaño */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         {/* Gráfica de barras - Consumo por obra */}
         {chartConsumoPorObra && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Consumo de Materiales por Obra
-            </h3>
-            <div className="h-80">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Consumo de Materiales por Obra
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Análisis comparativo del consumo total
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                <ChartBarIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              </div>
+            </div>
+            <div className="h-96 relative">
               <Bar data={chartConsumoPorObra} options={barChartOptions} />
             </div>
           </div>
@@ -294,11 +499,21 @@ export default function DashboardSuministros() {
 
         {/* Gráfica de dona - Distribución por proveedores */}
         {chartProveedores && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-              Distribución por Proveedores
-            </h3>
-            <div className="h-80 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  Distribución por Proveedores
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  Participación de cada proveedor
+                </p>
+              </div>
+              <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                <BuildingOffice2Icon className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+            <div className="h-96 flex items-center justify-center">
               <Doughnut data={chartProveedores} options={chartOptions} />
             </div>
           </div>

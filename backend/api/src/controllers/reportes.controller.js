@@ -9,9 +9,35 @@ const getDashboardSuministros = async (req, res) => {
     try {
         const { fecha_inicio, fecha_fin, id_proyecto } = req.query;
         
-        // Por ahora devolvemos datos de ejemplo para demostrar las gráficas
-        // Cuando tengamos datos reales de suministros, este endpoint consultará la base de datos
+        // Construir filtros WHERE para consulta
+        let whereClause = {};
         
+        if (id_proyecto) {
+            whereClause.id_proyecto = id_proyecto;
+        }
+        
+        if (fecha_inicio && fecha_fin) {
+            whereClause.fecha = {
+                [Op.between]: [fecha_inicio, fecha_fin]
+            };
+        } else if (fecha_inicio) {
+            whereClause.fecha = {
+                [Op.gte]: fecha_inicio
+            };
+        } else if (fecha_fin) {
+            whereClause.fecha = {
+                [Op.lte]: fecha_fin
+            };
+        }
+
+        // Calcular total gastado de todos los suministros
+        const totalGastadoResult = await models.Suministros.sum('costo_total', {
+            where: whereClause
+        });
+        
+        const totalGastado = totalGastadoResult || 0;
+        
+        // Por ahora combinamos datos de ejemplo con el total gastado real
         // 1. Consumo por obra (gráfica de barras)
         const consumoPorObra = [
             { obra: 'Flex Park', total_cantidad: 450.5, total_entregas: 25 },
@@ -58,7 +84,8 @@ const getDashboardSuministros = async (req, res) => {
                 consumoMensual,
                 distribicionProveedores,
                 tiposMateriales,
-                estadisticasGenerales
+                estadisticasGenerales,
+                totalGastado: totalGastado
             }
         });
 
