@@ -44,7 +44,7 @@ module.exports = (sequelize) => {
       allowNull: false
     },
     tipo_suministro: {
-      type: DataTypes.ENUM('Material', 'Servicio', 'Equipo', 'Herramienta', 'Maquinaria', 'Concreto', 'Consumible'),
+      type: DataTypes.ENUM('Material', 'Herramienta', 'Equipo Ligero', 'Acero', 'Cimbra', 'Ferretería', 'Servicio', 'Consumible', 'Maquinaria', 'Concreto'),
       defaultValue: 'Material'
     },
     nombre: {

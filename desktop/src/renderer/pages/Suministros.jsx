@@ -62,7 +62,10 @@ ChartJS.register(
 const CATEGORIAS_SUMINISTRO = {
   'Material': 'Material',
   'Herramienta': 'Herramienta',
-  'Equipo': 'Equipo',
+  'Equipo Ligero': 'Equipo Ligero',
+  'Acero': 'Acero',
+  'Cimbra': 'Cimbra',
+  'Ferretería': 'Ferretería',
   'Servicio': 'Servicio',
   'Consumible': 'Consumible',
   'Maquinaria': 'Maquinaria',
