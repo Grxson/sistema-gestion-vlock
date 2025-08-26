@@ -394,7 +394,7 @@ export default function DashboardSuministros() {
 
       {/* Estadísticas Generales - Diseño mejorado */}
       {dashboardData?.estadisticasGenerales && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-6">
           <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700 rounded-xl p-6 shadow-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -467,6 +467,35 @@ export default function DashboardSuministros() {
               </div>
               <div className="text-orange-500 dark:text-orange-400 opacity-20">
                 <BuildingOffice2Icon className="h-16 w-16" />
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 border border-indigo-200 dark:border-indigo-700 rounded-xl p-6 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 bg-indigo-500 rounded-lg flex items-center justify-center shadow-lg">
+                    <svg className="h-5 w-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                    </svg>
+                  </div>
+                </div>
+                <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                  {dashboardData.estadisticasGenerales.total_metros_cubicos ? 
+                    `${parseFloat(dashboardData.estadisticasGenerales.total_metros_cubicos).toLocaleString('es-MX', {
+                      minimumFractionDigits: 1,
+                      maximumFractionDigits: 1
+                    })}` : 
+                    '0.0'
+                  }
+                </p>
+                <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">m³ de Concreto</p>
+              </div>
+              <div className="text-indigo-500 dark:text-indigo-400 opacity-20">
+                <svg className="h-16 w-16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+                </svg>
               </div>
             </div>
           </div>

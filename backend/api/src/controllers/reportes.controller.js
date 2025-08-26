@@ -69,12 +69,58 @@ const getDashboardSuministros = async (req, res) => {
             { descripcion: 'Grava 3/4', frecuencia: 3, total_cantidad: 10.0 }
         ];
 
-        // 5. Estadísticas generales
+        // 5. Estadísticas generales - Calculadas dinámicamente
+        
+        // Contar total de registros
+        const totalRegistros = await models.Suministros.count({
+            where: whereClause
+        });
+
+        // Calcular total de metros cúbicos de concreto
+        const totalMetrosCubicosResult = await models.Suministros.sum('cantidad', {
+            where: {
+                ...whereClause,
+                [Op.and]: [
+                    {
+                        [Op.or]: [
+                            { tipo_suministro: 'Concreto' },
+                            { nombre: { [Op.like]: '%concreto%' } }
+                        ]
+                    },
+                    { unidad_medida: 'm³' }
+                ]
+            }
+        });
+
+        const totalMetrosCubicos = totalMetrosCubicosResult || 0;
+
+        // Contar total de proveedores únicos
+        const totalProveedores = await models.Suministros.count({
+            where: whereClause,
+            distinct: true,
+            col: 'id_proveedor'
+        });
+
+        // Contar total de obras/proyectos únicos
+        const totalObras = await models.Suministros.count({
+            where: whereClause,
+            distinct: true,
+            col: 'id_proyecto'
+        });
+
+        // Calcular total de cantidad general
+        const totalCantidadResult = await models.Suministros.sum('cantidad', {
+            where: whereClause
+        });
+
+        const totalCantidad = totalCantidadResult || 0;
+
         const estadisticasGenerales = {
-            total_registros: 55,
-            total_cantidad: 950.5,
-            total_proveedores: 3,
-            total_obras: 3
+            total_registros: totalRegistros,
+            total_cantidad: Math.round(totalCantidad * 100) / 100,
+            total_proveedores: totalProveedores,
+            total_obras: totalObras,
+            total_metros_cubicos: Math.round(totalMetrosCubicos * 100) / 100
         };
 
         res.json({

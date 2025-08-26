@@ -20,7 +20,9 @@ import {
   FaClock,
   FaBoxes,
   FaCog,
-  FaTimes
+  FaTimes,
+  FaRuler,
+  FaCalculator
 } from 'react-icons/fa';
 import { formatCurrency } from '../utils/currency';
 import {
@@ -119,6 +121,14 @@ const Suministros = () => {
   const [duplicatesSuggestions, setDuplicatesSuggestions] = useState([]);
   const [showDuplicatesWarning, setShowDuplicatesWarning] = useState(false);
 
+  // Estados para autocompletado avanzado
+  const [nameSuggestions, setNameSuggestions] = useState([]);
+  const [showNameSuggestions, setShowNameSuggestions] = useState(false);
+  const [codeSuggestions, setCodeSuggestions] = useState([]);
+  const [showCodeSuggestions, setShowCodeSuggestions] = useState(false);
+  const [proveedorSuministros, setProveedorSuministros] = useState([]);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(null);
+
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
 
@@ -172,7 +182,10 @@ const Suministros = () => {
     distribucionUnidades: false,
     cantidadPorUnidad: false,
     valorPorUnidad: false,
-    comparativoUnidades: false
+    comparativoUnidades: false,
+    // Análisis por unidades específicas
+    totalMetrosCubicos: false,
+    analisisUnidadesMedida: false
   });
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [themeVersion, setThemeVersion] = useState(0); // Para forzar re-render cuando cambie el tema
@@ -310,7 +323,7 @@ const Suministros = () => {
           distribucionTipos: processDistribucionTipos(filteredData),
           tendenciaEntregas: processTendenciaEntregas(filteredData),
           codigosProducto: processCodigosProducto(filteredData),
-          analisisTecnicoConcreto: processAnalisisTecnicoConcreto(filteredData),
+          analisisTecnicoConcreto: processAnalisisTecnicoInteligente(filteredData),
           concretoDetallado: processConcretoDetallado(filteredData),
           // Gráficas para horas
           horasPorMes: processHorasPorMes(filteredData),
@@ -321,7 +334,10 @@ const Suministros = () => {
           distribucionUnidades: processDistribucionUnidades(filteredData),
           cantidadPorUnidad: processCantidadPorUnidad(filteredData),
           valorPorUnidad: processValorPorUnidad(filteredData),
-          comparativoUnidades: processComparativoUnidades(filteredData)
+          comparativoUnidades: processComparativoUnidades(filteredData),
+          // Análisis por unidades específicas
+          totalMetrosCubicos: processTotalMetrosCubicos(filteredData),
+          analisisUnidadesMedida: processAnalisisUnidadesMedida(filteredData)
         };
 
         setChartData(chartDataProcessed);
@@ -635,7 +651,6 @@ const Suministros = () => {
   // Procesar códigos de producto (análisis general)
   const processCodigosProducto = (data) => {
     const codigosPorProducto = {};
-    
     data.forEach(suministro => {
       const codigo = suministro.codigo_producto || 'Sin código';
       if (!codigosPorProducto[codigo]) {
@@ -652,57 +667,72 @@ const Suministros = () => {
     const codigos = Object.keys(codigosPorProducto).filter(codigo => codigo !== 'Sin código');
     const valores = codigos.map(codigo => Math.round(codigosPorProducto[codigo].valor * 100) / 100);
 
+    // Generar colores automáticamente (HSL)
+    const generateColors = (n, alpha = 0.8) => {
+      return Array.from({ length: n }, (_, i) => `hsl(${Math.round(360 * i / n)}, 70%, 60%, ${alpha})`);
+    };
+    const generateBorderColors = (n) => {
+      return Array.from({ length: n }, (_, i) => `hsl(${Math.round(360 * i / n)}, 70%, 40%)`);
+    };
+
+    const backgroundColor = generateColors(codigos.length);
+    const borderColor = generateBorderColors(codigos.length);
+
     return {
       labels: codigos.map(codigo => `${codigo} (${codigosPorProducto[codigo].nombre})`),
       datasets: [{
         label: 'Valor por Código ($MXN)',
         data: valores,
-        backgroundColor: [
-          'rgba(239, 68, 68, 0.8)',
-          'rgba(245, 101, 101, 0.8)',
-          'rgba(248, 113, 113, 0.8)',
-          'rgba(252, 165, 165, 0.8)',
-          'rgba(254, 202, 202, 0.8)',
-          'rgba(59, 130, 246, 0.8)',
-          'rgba(96, 165, 250, 0.8)',
-          'rgba(147, 197, 253, 0.8)'
-        ],
-        borderColor: [
-          'rgba(239, 68, 68, 1)',
-          'rgba(245, 101, 101, 1)',
-          'rgba(248, 113, 113, 1)',
-          'rgba(252, 165, 165, 1)',
-          'rgba(254, 202, 202, 1)',
-          'rgba(59, 130, 246, 1)',
-          'rgba(96, 165, 250, 1)',
-          'rgba(147, 197, 253, 1)'
-        ],
+        backgroundColor,
+        borderColor,
         borderWidth: 1
       }]
     };
   };
 
-  // Procesar análisis técnico específico de concreto
-  const processAnalisisTecnicoConcreto = (data) => {
-    const concretoData = data.filter(suministro => 
-      (suministro.tipo_suministro === 'Concreto' || 
-       suministro.categoria === 'Concreto' ||
-       suministro.nombre?.toLowerCase().includes('concreto'))
+  // Procesar análisis técnico inteligente según categoría
+  const processAnalisisTecnicoInteligente = (data) => {
+    // Determinar qué categoría analizar (basado en filtros o la más común)
+    const categoriaFiltrada = chartFilters.tipoSuministro;
+    let categoriaAnalizar = categoriaFiltrada;
+    
+    // Si no hay filtro, determinar la categoría principal en los datos
+    if (!categoriaAnalizar || categoriaAnalizar === 'Todos') {
+      const categorias = {};
+      data.forEach(suministro => {
+        const cat = suministro.tipo_suministro || suministro.categoria || 'Material';
+        categorias[cat] = (categorias[cat] || 0) + 1;
+      });
+      categoriaAnalizar = Object.keys(categorias).reduce((a, b) => categorias[a] > categorias[b] ? a : b);
+    }
+
+    // Filtrar datos por categoría
+    const datosCategoria = data.filter(suministro => 
+      (suministro.tipo_suministro === categoriaAnalizar || 
+       suministro.categoria === categoriaAnalizar)
     );
 
+    if (datosCategoria.length === 0) return null;
+
+    // Determinar unidad de medida principal de la categoría
+    const unidadPrincipal = getUnidadPrincipalCategoria(categoriaAnalizar, datosCategoria);
+    
+    // Procesar análisis específico por categoría
     const analisisPorCodigo = {};
     
-    concretoData.forEach(suministro => {
+    datosCategoria.forEach(suministro => {
       const codigo = suministro.codigo_producto || 'Sin especificación';
       if (!analisisPorCodigo[codigo]) {
         analisisPorCodigo[codigo] = {
-          volumen: 0,
+          cantidad: 0,
           costo: 0,
           entregas: 0,
-          proyectos: new Set()
+          proyectos: new Set(),
+          unidad: suministro.unidad_medida || unidadPrincipal,
+          nombreCompleto: suministro.nombre || codigo
         };
       }
-      analisisPorCodigo[codigo].volumen += parseFloat(suministro.cantidad || 0);
+      analisisPorCodigo[codigo].cantidad += parseFloat(suministro.cantidad || 0);
       analisisPorCodigo[codigo].costo += parseFloat(suministro.cantidad || 0) * parseFloat(suministro.precio_unitario || 0);
       analisisPorCodigo[codigo].entregas += 1;
       if (suministro.id_proyecto) {
@@ -710,18 +740,103 @@ const Suministros = () => {
       }
     });
 
-    const especificaciones = Object.keys(analisisPorCodigo);
-    const volumenes = especificaciones.map(spec => Math.round(analisisPorCodigo[spec].volumen * 100) / 100);
+    // Convertir a arrays y ordenar por cantidad
+    const especificaciones = Object.keys(analisisPorCodigo)
+      .map(codigo => ({
+        codigo,
+        ...analisisPorCodigo[codigo],
+        proyectos: analisisPorCodigo[codigo].proyectos.size
+      }))
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 10); // Top 10
+
+    if (especificaciones.length === 0) return null;
+
+    const etiquetaTitulo = getTituloAnalisisTecnico(categoriaAnalizar, unidadPrincipal);
 
     return {
-      labels: especificaciones,
-      datasets: [{
-        label: 'Volumen (m³)',
-        data: volumenes,
-        backgroundColor: 'rgba(34, 197, 94, 0.8)',
-        borderColor: 'rgba(34, 197, 94, 1)',
-        borderWidth: 1
-      }]
+      labels: especificaciones.map(item => {
+        const codigo = item.codigo.length > 15 ? item.codigo.substring(0, 15) + '...' : item.codigo;
+        return codigo;
+      }),
+      datasets: [
+        {
+          label: `${etiquetaTitulo.cantidad}`,
+          data: especificaciones.map(item => Math.round(item.cantidad * 100) / 100),
+          backgroundColor: 'rgba(59, 130, 246, 0.8)',
+          borderColor: 'rgba(59, 130, 246, 1)',
+          borderWidth: 2,
+          borderRadius: 4,
+        }
+      ],
+      metadata: {
+        categoria: categoriaAnalizar,
+        unidad: unidadPrincipal,
+        titulo: etiquetaTitulo.titulo,
+        total: especificaciones.reduce((sum, item) => sum + item.cantidad, 0),
+        especificaciones
+      }
+    };
+  };
+
+  // Función auxiliar para determinar la unidad principal de una categoría
+  const getUnidadPrincipalCategoria = (categoria, datos) => {
+    const unidades = {};
+    datos.forEach(suministro => {
+      const unidad = suministro.unidad_medida;
+      if (unidad) {
+        unidades[unidad] = (unidades[unidad] || 0) + 1;
+      }
+    });
+    
+    // Unidades por defecto según categoría
+    const defaultUnidades = {
+      'Concreto': 'm³',
+      'Material': 'ton',
+      'Herramienta': 'hr',
+      'Servicio': 'hr',
+      'Equipo': 'hr',
+      'Maquinaria': 'hr',
+      'Consumible': 'pz'
+    };
+
+    return Object.keys(unidades).length > 0 
+      ? Object.keys(unidades).reduce((a, b) => unidades[a] > unidades[b] ? a : b)
+      : defaultUnidades[categoria] || 'pz';
+  };
+
+  // Función auxiliar para obtener títulos apropiados
+  const getTituloAnalisisTecnico = (categoria, unidad) => {
+    const configuraciones = {
+      'Concreto': {
+        titulo: 'Análisis Técnico - Volumen de Concreto por Especificación',
+        cantidad: `Volumen (${unidad})`
+      },
+      'Material': {
+        titulo: 'Análisis Técnico - Cantidad de Material por Tipo',
+        cantidad: `Cantidad (${unidad})`
+      },
+      'Herramienta': {
+        titulo: 'Análisis Técnico - Uso de Herramientas',
+        cantidad: `Tiempo de Uso (${unidad})`
+      },
+      'Servicio': {
+        titulo: 'Análisis Técnico - Servicios Contratados',
+        cantidad: `Horas de Servicio (${unidad})`
+      },
+      'Equipo': {
+        titulo: 'Análisis Técnico - Uso de Equipos',
+        cantidad: `Horas de Operación (${unidad})`
+      },
+      'Maquinaria': {
+        titulo: 'Análisis Técnico - Operación de Maquinaria',
+        cantidad: `Horas de Trabajo (${unidad})`
+      }
+    };
+
+    return configuraciones[categoria] || {
+      titulo: `Análisis Técnico - ${categoria}`,
+      cantidad: `Cantidad (${unidad})`
     };
   };
 
@@ -1125,6 +1240,129 @@ const Suministros = () => {
     };
   };
 
+  // Procesar total de metros cúbicos de concreto
+  const processTotalMetrosCubicos = (data) => {
+    const concretoData = data.filter(suministro => 
+      (suministro.tipo_suministro === 'Concreto' || 
+       suministro.categoria === 'Concreto' ||
+       suministro.nombre?.toLowerCase().includes('concreto')) &&
+      (suministro.unidad_medida === 'm³')
+    );
+
+    // Agrupar por mes
+    const metrosPorMes = {};
+    
+    concretoData.forEach(suministro => {
+      const fecha = new Date(suministro.fecha);
+      const mesAnio = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+      const metros = parseFloat(suministro.cantidad) || 0;
+      
+      if (!metrosPorMes[mesAnio]) {
+        metrosPorMes[mesAnio] = 0;
+      }
+      metrosPorMes[mesAnio] += metros;
+    });
+
+    const labels = Object.keys(metrosPorMes).sort();
+    const chartData = labels.map(mes => Math.round(metrosPorMes[mes] * 100) / 100);
+
+    return {
+      labels: labels.map(mes => {
+        const [año, mesNum] = mes.split('-');
+        const fecha = new Date(año, mesNum - 1);
+        return fecha.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' });
+      }),
+      datasets: [{
+        label: 'Metros Cúbicos de Concreto',
+        data: chartData,
+        backgroundColor: 'rgba(99, 102, 241, 0.8)', // Indigo
+        borderColor: 'rgba(99, 102, 241, 1)',
+        borderWidth: 2,
+        borderRadius: 4
+      }],
+      metadata: {
+        total: chartData.reduce((sum, val) => sum + val, 0),
+        promedio: chartData.length > 0 ? Math.round((chartData.reduce((sum, val) => sum + val, 0) / chartData.length) * 100) / 100 : 0
+      }
+    };
+  };
+
+  // Procesar análisis general de unidades de medida
+  const processAnalisisUnidadesMedida = (data) => {
+    // Obtener la categoría filtrada actual
+    const categoriaFiltrada = chartFilters.tipoSuministro;
+    
+    // Filtrar datos por categoría si hay filtro específico
+    let datosAnalizar = data;
+    if (categoriaFiltrada && categoriaFiltrada !== 'Todos') {
+      datosAnalizar = data.filter(suministro => 
+        suministro.tipo_suministro === categoriaFiltrada || 
+        suministro.categoria === categoriaFiltrada
+      );
+    }
+
+    const analisisUnidades = {};
+    
+    datosAnalizar.forEach(suministro => {
+      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const cantidad = parseFloat(suministro.cantidad) || 0;
+      
+      if (!analisisUnidades[unidad]) {
+        analisisUnidades[unidad] = {
+          cantidad: 0,
+          registros: 0,
+          categorias: new Set()
+        };
+      }
+      analisisUnidades[unidad].cantidad += cantidad;
+      analisisUnidades[unidad].registros += 1;
+      analisisUnidades[unidad].categorias.add(suministro.tipo_suministro || suministro.categoria || 'Sin categoría');
+    });
+
+    // Convertir a array y ordenar por cantidad
+    const unidadesOrdenadas = Object.entries(analisisUnidades)
+      .map(([unidad, data]) => ({
+        unidad,
+        cantidad: Math.round(data.cantidad * 100) / 100,
+        registros: data.registros,
+        categorias: Array.from(data.categorias).join(', ')
+      }))
+      .sort((a, b) => b.cantidad - a.cantidad)
+      .slice(0, 10);
+
+    if (unidadesOrdenadas.length === 0) return null;
+
+    const colores = [
+      'rgba(99, 102, 241, 0.8)',   // Indigo
+      'rgba(34, 197, 94, 0.8)',    // Green
+      'rgba(59, 130, 246, 0.8)',   // Blue
+      'rgba(245, 101, 101, 0.8)',  // Red
+      'rgba(251, 191, 36, 0.8)',   // Yellow
+      'rgba(139, 92, 246, 0.8)',   // Purple
+      'rgba(236, 72, 153, 0.8)',   // Pink
+      'rgba(14, 165, 233, 0.8)',   // Sky
+      'rgba(34, 197, 94, 0.8)',    // Emerald
+      'rgba(168, 85, 247, 0.8)'    // Violet
+    ];
+
+    return {
+      labels: unidadesOrdenadas.map(item => `${item.unidad}\n(${item.registros} registros)`),
+      datasets: [{
+        label: 'Cantidad por Unidad',
+        data: unidadesOrdenadas.map(item => item.cantidad),
+        backgroundColor: colores.slice(0, unidadesOrdenadas.length),
+        borderColor: colores.slice(0, unidadesOrdenadas.length).map(color => color.replace('0.8', '1')),
+        borderWidth: 2,
+        borderRadius: 4
+      }],
+      metadata: {
+        categoria: categoriaFiltrada || 'Todas las categorías',
+        totalUnidades: unidadesOrdenadas.length,
+        detalles: unidadesOrdenadas
+      }
+    };
+  };
+
   // Función para obtener colores según el tema - Mejorada
   const getChartColors = () => {
     const isDarkMode = document.documentElement.classList.contains('dark');
@@ -1189,6 +1427,103 @@ const Suministros = () => {
     setShowDuplicatesWarning(suggestions.length > 0);
   }, [suministros, editingSuministro]);
 
+  // =================== FUNCIONES DE AUTOCOMPLETADO AVANZADO ===================
+
+  // Función para autocompletar nombres de suministros
+  const searchNameSuggestions = useCallback((nombre) => {
+    if (!nombre || nombre.length < 2) {
+      setNameSuggestions([]);
+      setShowNameSuggestions(false);
+      return;
+    }
+
+    // Buscar nombres similares en registros existentes
+    const uniqueNames = [...new Set(suministros.map(s => s.nombre))].filter(name => 
+      name && name.toLowerCase().includes(nombre.toLowerCase()) && name.toLowerCase() !== nombre.toLowerCase()
+    );
+
+    // Ordenar por relevancia (coincidencias exactas primero)
+    const sortedNames = uniqueNames.sort((a, b) => {
+      const aExact = a.toLowerCase().startsWith(nombre.toLowerCase()) ? 0 : 1;
+      const bExact = b.toLowerCase().startsWith(nombre.toLowerCase()) ? 0 : 1;
+      return aExact - bExact || a.length - b.length;
+    }).slice(0, 8);
+
+    setNameSuggestions(sortedNames);
+    setShowNameSuggestions(sortedNames.length > 0);
+  }, [suministros]);
+
+  // Función para autocompletar códigos de producto
+  const searchCodeSuggestions = useCallback((codigo) => {
+    if (!codigo || codigo.length < 2) {
+      setCodeSuggestions([]);
+      setShowCodeSuggestions(false);
+      return;
+    }
+
+    // Buscar códigos similares
+    const uniqueCodes = [...new Set(suministros.map(s => s.codigo_producto))].filter(code => 
+      code && code.toLowerCase().includes(codigo.toLowerCase()) && code.toLowerCase() !== codigo.toLowerCase()
+    );
+
+    const sortedCodes = uniqueCodes.sort((a, b) => {
+      const aExact = a.toLowerCase().startsWith(codigo.toLowerCase()) ? 0 : 1;
+      const bExact = b.toLowerCase().startsWith(codigo.toLowerCase()) ? 0 : 1;
+      return aExact - bExact || a.length - b.length;
+    }).slice(0, 5);
+
+    setCodeSuggestions(sortedCodes);
+    setShowCodeSuggestions(sortedCodes.length > 0);
+  }, [suministros]);
+
+  // Función para cargar suministros del proveedor seleccionado
+  const loadProveedorSuministros = useCallback((proveedorId) => {
+    if (!proveedorId) {
+      setProveedorSuministros([]);
+      return;
+    }
+
+    // Obtener los últimos 10 suministros únicos del proveedor
+    const suministrosProveedor = suministros
+      .filter(s => s.id_proveedor === parseInt(proveedorId))
+      .reduce((unique, suministro) => {
+        // Evitar duplicados por nombre
+        if (!unique.find(u => u.nombre === suministro.nombre)) {
+          unique.push(suministro);
+        }
+        return unique;
+      }, [])
+      .slice(-10) // Últimos 10
+      .reverse(); // Más recientes primero
+
+    setProveedorSuministros(suministrosProveedor);
+  }, [suministros]);
+
+  // Función para aplicar una plantilla de suministro existente
+  const applyTemplate = (templateSuministro) => {
+    setFormData(prev => ({
+      ...prev,
+      nombre: templateSuministro.nombre,
+      descripcion: templateSuministro.descripcion_detallada || '',
+      tipo_suministro: templateSuministro.tipo_suministro || 'Material',
+      unidad_medida: templateSuministro.unidad_medida || 'pz',
+      codigo_producto: templateSuministro.codigo_producto || '',
+      precio_unitario: templateSuministro.precio_unitario || '',
+      // Mantener los campos específicos del nuevo registro
+      folio_proveedor: prev.folio_proveedor,
+      fecha_necesaria: prev.fecha_necesaria,
+      cantidad: prev.cantidad,
+      observaciones: prev.observaciones
+    }));
+
+    // Ocultar sugerencias
+    setShowNameSuggestions(false);
+    setShowCodeSuggestions(false);
+    setSelectedSuggestion(templateSuministro);
+
+    showInfo('Plantilla aplicada', `Se aplicaron los datos de: ${templateSuministro.nombre}`);
+  };
+
   // Efecto para buscar duplicados cuando cambia el nombre, código o folio
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
@@ -1197,6 +1532,40 @@ const Suministros = () => {
 
     return () => clearTimeout(delayedSearch);
   }, [formData.nombre, formData.codigo_producto, formData.folio_proveedor, searchDuplicateSuggestions]);
+
+  // Efecto para autocompletar nombres
+  useEffect(() => {
+    const delayedSearch = setTimeout(() => {
+      searchNameSuggestions(formData.nombre);
+    }, 200);
+
+    return () => clearTimeout(delayedSearch);
+  }, [formData.nombre, searchNameSuggestions]);
+
+  // Efecto para autocompletar códigos
+  useEffect(() => {
+    const delayedSearch = setTimeout(() => {
+      searchCodeSuggestions(formData.codigo_producto);
+    }, 200);
+
+    return () => clearTimeout(delayedSearch);
+  }, [formData.codigo_producto, searchCodeSuggestions]);
+
+  // Efecto para cargar suministros del proveedor cuando se selecciona uno
+  useEffect(() => {
+    if (formData.proveedor_info?.id_proveedor) {
+      loadProveedorSuministros(formData.proveedor_info.id_proveedor);
+    } else {
+      setProveedorSuministros([]);
+    }
+  }, [formData.proveedor_info, loadProveedorSuministros]);
+
+  // Función para limpiar todas las sugerencias
+  const clearAllSuggestions = useCallback(() => {
+    setShowNameSuggestions(false);
+    setShowCodeSuggestions(false);
+    setShowDuplicatesWarning(false);
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -1366,6 +1735,9 @@ const Suministros = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingSuministro(null);
+    
+    // Limpiar todas las sugerencias
+    clearAllSuggestions();
     
     // Limpiar estado de duplicados
     setDuplicatesSuggestions([]);
@@ -1872,7 +2244,13 @@ const Suministros = () => {
                         horasPorMes: true,
                         horasPorProyecto: true,
                         horasPorEquipo: true,
-                        comparativoHorasVsCosto: true
+                        comparativoHorasVsCosto: true,
+                        distribucionUnidades: true,
+                        cantidadPorUnidad: true,
+                        valorPorUnidad: true,
+                        comparativoUnidades: true,
+                        totalMetrosCubicos: true,
+                        analisisUnidadesMedida: true
                       })}
                       className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md transition-colors font-medium"
                     >
@@ -1894,7 +2272,13 @@ const Suministros = () => {
                         horasPorMes: false,
                         horasPorProyecto: false,
                         horasPorEquipo: false,
-                        comparativoHorasVsCosto: false
+                        comparativoHorasVsCosto: false,
+                        distribucionUnidades: false,
+                        cantidadPorUnidad: false,
+                        valorPorUnidad: false,
+                        comparativoUnidades: false,
+                        totalMetrosCubicos: false,
+                        analisisUnidadesMedida: false
                       })}
                       className="text-xs bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-md transition-colors font-medium"
                     >
@@ -2017,7 +2401,7 @@ const Suministros = () => {
                           onChange={(e) => setSelectedCharts({...selectedCharts, analisisTecnicoConcreto: e.target.checked})}
                           className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Análisis Técnico Concreto</span>
+                        <span className="text-gray-700 dark:text-gray-300">Análisis Técnico</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
@@ -2027,6 +2411,34 @@ const Suministros = () => {
                           className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
                         />
                         <span className="text-gray-700 dark:text-gray-300">Concreto Detallado</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Sección de Análisis por Unidades */}
+                  <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                    <h5 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200 mb-2 flex items-center">
+                      <FaRuler className="mr-1.5 h-3.5 w-3.5" />
+                      Análisis por Unidades de Medida
+                    </h5>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedCharts.totalMetrosCubicos}
+                          onChange={(e) => setSelectedCharts({...selectedCharts, totalMetrosCubicos: e.target.checked})}
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
+                        <span className="text-gray-700 dark:text-gray-300">Total m³ (Concreto)</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedCharts.analisisUnidadesMedida}
+                          onChange={(e) => setSelectedCharts({...selectedCharts, analisisUnidadesMedida: e.target.checked})}
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
+                        />
+                        <span className="text-gray-700 dark:text-gray-300">Distribución por Unidades</span>
                       </label>
                     </div>
                   </div>
@@ -2489,8 +2901,12 @@ const Suministros = () => {
 
                 {/* Gráfica de Cantidad por Estado */}
                 {selectedCharts.cantidadPorEstado && chartData.cantidadPorEstado && (
-                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg relative">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Cantidad por Estado</h3>
+                    {/* Badge de total */}
+                    <div className="absolute top-4 right-4 bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 text-xs font-bold px-3 py-1 rounded shadow">
+                      Total: {chartData.cantidadPorEstado.datasets[0].data.reduce((a, b) => a + b, 0)} suministros
+                    </div>
                     <div className="h-64">
                       <Bar 
                         key={`estados-${themeVersion}`}
@@ -2533,8 +2949,12 @@ const Suministros = () => {
 
                 {/* Gráfica de Distribución de Tipos */}
                 {selectedCharts.distribucionTipos && chartData.distribucionTipos && (
-                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg relative">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Distribución por Tipo de Suministro</h3>
+                    {/* Badge de total */}
+                    <div className="absolute top-4 right-4 bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 text-xs font-bold px-3 py-1 rounded shadow">
+                      Total: {chartData.distribucionTipos.datasets[0].data.reduce((a, b) => a + b, 0)} suministros
+                    </div>
                     <div className="h-64">
                       <Doughnut 
                         key={`tipos-${themeVersion}`}
@@ -2572,8 +2992,12 @@ const Suministros = () => {
 
                 {/* Gráfica de Tendencia de Entregas */}
                 {selectedCharts.tendenciaEntregas && chartData.tendenciaEntregas && (
-                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
+                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg relative">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tendencia de Entregas Completadas</h3>
+                    {/* Badge de total */}
+                    <div className="absolute top-4 right-4 bg-green-100 dark:bg-green-900/60 text-green-800 dark:text-green-200 text-xs font-bold px-3 py-1 rounded shadow">
+                      Total: {chartData.tendenciaEntregas.datasets.reduce((sum, dataset) => sum + dataset.data.reduce((a, b) => a + b, 0), 0)} entregas
+                    </div>
                     <div className="h-64">
                       <Line 
                         key={`entregas-${themeVersion}`}
@@ -2662,10 +3086,24 @@ const Suministros = () => {
                   </div>
                 )}
 
-                {/* Gráfica de Análisis Técnico de Concreto */}
+                {/* Gráfica de Análisis Técnico */}
                 {selectedCharts.analisisTecnicoConcreto && chartData.analisisTecnicoConcreto && (
                   <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Análisis Técnico - Volumen por Especificación</h3>
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {chartData.analisisTecnicoConcreto.metadata?.titulo || 'Análisis Técnico'}
+                      </h3>
+                      {chartData.analisisTecnicoConcreto.metadata && (
+                        <div className="text-sm text-gray-600 dark:text-gray-400">
+                          <span className="bg-blue-100 dark:bg-blue-900 px-2 py-1 rounded">
+                            {chartData.analisisTecnicoConcreto.metadata.categoria}
+                          </span>
+                          <span className="ml-2">
+                            Total: {Math.round(chartData.analisisTecnicoConcreto.metadata.total * 100) / 100} {chartData.analisisTecnicoConcreto.metadata.unidad}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     <div className="h-64">
                       <Bar 
                         key={`analisis-concreto-${themeVersion}`}
@@ -2686,8 +3124,21 @@ const Suministros = () => {
                               titleColor: getChartColors().tooltipText,
                               bodyColor: getChartColors().tooltipText,
                               callbacks: {
+                                title: function(context) {
+                                  const especificaciones = chartData.analisisTecnicoConcreto.metadata?.especificaciones;
+                                  const item = especificaciones?.[context[0].dataIndex];
+                                  return item?.nombreCompleto || context[0].label;
+                                },
                                 label: function(context) {
-                                  return `${context.dataset.label}: ${context.parsed.y} m³`;
+                                  const unidad = chartData.analisisTecnicoConcreto.metadata?.unidad || 'unidad';
+                                  const especificaciones = chartData.analisisTecnicoConcreto.metadata?.especificaciones;
+                                  const item = especificaciones?.[context.dataIndex];
+                                  
+                                  return [
+                                    `${context.dataset.label}: ${context.parsed.y.toLocaleString()} ${unidad}`,
+                                    item ? `Registros: ${item.entregas}` : '',
+                                    item ? `Proyectos: ${item.proyectos}` : ''
+                                  ].filter(Boolean);
                                 }
                               }
                             }
@@ -2698,7 +3149,8 @@ const Suministros = () => {
                               ticks: {
                                 color: getChartColors().textColor,
                                 callback: function(value) {
-                                  return value + ' m³';
+                                  const unidad = chartData.analisisTecnicoConcreto.metadata?.unidad || 'unidad';
+                                  return value + ' ' + unidad;
                                 }
                               },
                               grid: { color: getChartColors().gridColor }
@@ -3067,9 +3519,9 @@ const Suministros = () => {
 
                 {/* ===== GRÁFICAS DE UNIDADES DE MEDIDA ===== */}
 
-                {/* Distribución por Unidades de Medida */}
+                {/* Distribución por Unidades de Medida - Espacio ampliado */}
                 {selectedCharts.distribucionUnidades && chartData.distribucionUnidades && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Distribución por Unidades de Medida</h3>
@@ -3077,45 +3529,89 @@ const Suministros = () => {
                           Cantidad de suministros por tipo de unidad
                         </p>
                       </div>
-                      <div className="bg-teal-100 dark:bg-teal-900 p-3 rounded-lg">
-                        <FaCog className="h-6 w-6 text-teal-600 dark:text-teal-400" />
+                      <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg">
+                        <FaRuler className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                       </div>
                     </div>
-                    <div className="h-80">
-                      <Doughnut
-                        data={chartData.distribucionUnidades}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'right',
-                              labels: {
-                                usePointStyle: true,
-                                pointStyle: 'circle',
-                                padding: 20,
-                                font: {
-                                  size: 12,
-                                  weight: '500'
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Gráfica de Distribución por Unidades */}
+                      <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <div className="h-80">
+                          <Doughnut 
+                            key={`unidades-${themeVersion}`}
+                            data={chartData.distribucionUnidades} 
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: {
+                                  position: 'right',
+                                  labels: {
+                                    color: getChartColors().textColor,
+                                    padding: 15,
+                                    font: { size: 12, weight: '500' }
+                                  }
                                 },
-                                color: getChartColors().textColor
-                              }
-                            },
-                            tooltip: {
-                              backgroundColor: getChartColors().tooltipBg,
-                              titleColor: getChartColors().tooltipText,
-                              bodyColor: getChartColors().tooltipText,
-                              callbacks: {
-                                label: function(context) {
-                                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                  const percentage = ((context.parsed / total) * 100).toFixed(1);
-                                  return `${context.label}: ${context.parsed} suministros (${percentage}%)`;
+                                tooltip: {
+                                  backgroundColor: getChartColors().tooltipBg,
+                                  titleColor: getChartColors().tooltipText,
+                                  bodyColor: getChartColors().tooltipText,
+                                  callbacks: {
+                                    label: function(context) {
+                                      const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                      const percentage = ((context.parsed * 100) / total).toFixed(1);
+                                      return `${context.label}: ${context.parsed} suministros (${percentage}%)`;
+                                    }
+                                  }
                                 }
                               }
-                            }
-                          }
-                        }}
-                      />
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Gráfica de Análisis por Códigos */}
+                      {selectedCharts.codigosProducto && chartData.codigosProducto && (
+                        <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg relative">
+                          <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Análisis por Códigos de Producto</h4>
+                          {/* Badge de total */}
+                          <div className="absolute top-4 right-4 bg-blue-100 dark:bg-blue-900/60 text-blue-800 dark:text-blue-200 text-xs font-bold px-3 py-1 rounded shadow">
+                            Total: ${chartData.codigosProducto.datasets[0].data.reduce((a, b) => a + b, 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}
+                          </div>
+                          <div className="h-80">
+                            <Doughnut 
+                              key={`codigos-${themeVersion}`}
+                              data={chartData.codigosProducto} 
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: {
+                                    position: 'right',
+                                    labels: {
+                                      color: getChartColors().textColor,
+                                      padding: 15,
+                                      font: { size: 12, weight: '500' }
+                                    }
+                                  },
+                                  tooltip: {
+                                    backgroundColor: getChartColors().tooltipBg,
+                                    titleColor: getChartColors().tooltipText,
+                                    bodyColor: getChartColors().tooltipText,
+                                    callbacks: {
+                                      label: function(context) {
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((context.parsed * 100) / total).toFixed(1);
+                                        return `${context.label}: $${context.parsed} (${percentage}%)`;
+                                      }
+                                    }
+                                  }
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -3130,8 +3626,8 @@ const Suministros = () => {
                           Suma de cantidades agrupadas por unidad de medida
                         </p>
                       </div>
-                      <div className="bg-green-100 dark:bg-green-900 p-3 rounded-lg">
-                        <FaBoxes className="h-6 w-6 text-green-600 dark:text-green-400" />
+                      <div className="bg-emerald-100 dark:bg-emerald-900 p-3 rounded-lg">
+                        <FaCalculator className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />
                       </div>
                     </div>
                     <div className="h-80">
@@ -3141,37 +3637,27 @@ const Suministros = () => {
                           responsive: true,
                           maintainAspectRatio: false,
                           plugins: {
-                            legend: {
-                              display: false
-                            },
+                            legend: { display: false },
                             tooltip: {
                               backgroundColor: getChartColors().tooltipBg,
                               titleColor: getChartColors().tooltipText,
                               bodyColor: getChartColors().tooltipText,
                               callbacks: {
                                 label: function(context) {
-                                  return `Cantidad total: ${context.parsed.y.toLocaleString()}`;
+                                  return `${context.dataset.label}: ${context.parsed.y}`;
                                 }
                               }
                             }
                           },
                           scales: {
+                            x: {
+                              ticks: { color: getChartColors().textColor },
+                              grid: { color: getChartColors().gridColor }
+                            },
                             y: {
                               beginAtZero: true,
-                              ticks: {
-                                color: getChartColors().textColor
-                              },
-                              grid: {
-                                color: getChartColors().gridColor
-                              }
-                            },
-                            x: {
-                              ticks: {
-                                color: getChartColors().textColor
-                              },
-                              grid: {
-                                color: getChartColors().gridColor
-                              }
+                              ticks: { color: getChartColors().textColor },
+                              grid: { color: getChartColors().gridColor }
                             }
                           }
                         }}
@@ -3182,7 +3668,7 @@ const Suministros = () => {
 
                 {/* Valor Económico por Unidad */}
                 {selectedCharts.valorPorUnidad && chartData.valorPorUnidad && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 relative">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Valor Económico por Unidad</h3>
@@ -3190,9 +3676,11 @@ const Suministros = () => {
                           Gasto total agrupado por unidad de medida
                         </p>
                       </div>
-                      <div className="bg-indigo-100 dark:bg-indigo-900 p-3 rounded-lg">
-                        <FaDollarSign className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                      </div>
+                      
+                    </div>
+                    {/* Badge de total */}
+                    <div className="absolute top-4 right-10 bg-purple-100 dark:bg-purple-900/60 text-purple-800 dark:text-purple-200 text-xs font-bold px-3 py-1 rounded shadow">
+                      Total: ${chartData.valorPorUnidad.datasets[0].data.reduce((a, b) => a + b, 0).toLocaleString('es-MX', {minimumFractionDigits: 2})}
                     </div>
                     <div className="h-80">
                       <Doughnut
@@ -3321,6 +3809,143 @@ const Suministros = () => {
                               ticks: {
                                 color: getChartColors().textColor,
                                 maxRotation: 45
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Total de Metros Cúbicos de Concreto */}
+                {selectedCharts.totalMetrosCubicos && chartData.totalMetrosCubicos && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Total de Metros Cúbicos de Concreto</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Volumen de concreto por mes - Total: {chartData.totalMetrosCubicos.metadata?.total.toLocaleString()} m³
+                        </p>
+                      </div>
+                      <div className="bg-indigo-100 dark:bg-indigo-900 p-3 rounded-lg">
+                        <FaRuler className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                    </div>
+                    <div className="h-80">
+                      <Bar
+                        data={chartData.totalMetrosCubicos}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'top',
+                              labels: {
+                                usePointStyle: true,
+                                pointStyle: 'circle',
+                                padding: 20,
+                                font: { size: 13, weight: '500' },
+                                color: getChartColors().textColor
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  return `${context.parsed.y.toLocaleString()} m³`;
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              grid: { color: getChartColors().gridColor },
+                              ticks: {
+                                color: getChartColors().textColor,
+                                callback: function(value) {
+                                  return value.toLocaleString() + ' m³';
+                                }
+                              }
+                            },
+                            x: {
+                              grid: { color: getChartColors().gridColor },
+                              ticks: {
+                                color: getChartColors().textColor,
+                                maxRotation: 45
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Análisis de Unidades de Medida */}
+                {selectedCharts.analisisUnidadesMedida && chartData.analisisUnidadesMedida && (
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Análisis por Unidades de Medida</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {chartData.analisisUnidadesMedida.metadata?.categoria} - {chartData.analisisUnidadesMedida.metadata?.totalUnidades} unidades diferentes
+                        </p>
+                      </div>
+                      <div className="bg-indigo-100 dark:bg-indigo-900 p-3 rounded-lg">
+                        <FaChartPie className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                    </div>
+                    <div className="h-80">
+                      <Bar
+                        data={chartData.analisisUnidadesMedida}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          indexAxis: 'y', // Gráfica horizontal
+                          plugins: {
+                            legend: {
+                              display: false
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                title: function(context) {
+                                  return context[0].label.split('\n')[0];
+                                },
+                                label: function(context) {
+                                  const detalles = chartData.analisisUnidadesMedida.metadata?.detalles;
+                                  const item = detalles?.[context.dataIndex];
+                                  return [
+                                    `Cantidad: ${context.parsed.x.toLocaleString()}`,
+                                    `Registros: ${item?.registros || 0}`,
+                                    `Categorías: ${item?.categorias || 'N/A'}`
+                                  ];
+                                }
+                              }
+                            }
+                          },
+                          scales: {
+                            x: {
+                              beginAtZero: true,
+                              grid: { color: getChartColors().gridColor },
+                              ticks: {
+                                color: getChartColors().textColor,
+                                callback: function(value) {
+                                  return value.toLocaleString();
+                                }
+                              }
+                            },
+                            y: {
+                              grid: { display: false },
+                              ticks: {
+                                color: getChartColors().textColor,
+                                font: { size: 11 }
                               }
                             }
                           }
@@ -3633,7 +4258,12 @@ const Suministros = () => {
                           <input
                             type="text"
                             value={formData.nombre}
-                            onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+                            onChange={(e) => {
+                              setFormData({...formData, nombre: e.target.value});
+                              setSelectedSuggestion(null);
+                            }}
+                            onFocus={() => formData.nombre.length >= 2 && setShowNameSuggestions(nameSuggestions.length > 0)}
+                            onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
                             className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 ${
                               showDuplicatesWarning 
                                 ? 'border-yellow-500 dark:border-yellow-400 focus:ring-yellow-500' 
@@ -3645,6 +4275,28 @@ const Suministros = () => {
                           {showDuplicatesWarning && (
                             <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                               <span className="text-yellow-500 text-sm">⚠️</span>
+                            </div>
+                          )}
+
+                          {/* Dropdown de sugerencias de nombres */}
+                          {showNameSuggestions && nameSuggestions.length > 0 && (
+                            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                              <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 border-b">
+                                Sugerencias de nombres similares
+                              </div>
+                              {nameSuggestions.map((suggestion, index) => (
+                                <div
+                                  key={index}
+                                  onClick={() => {
+                                    setFormData(prev => ({...prev, nombre: suggestion}));
+                                    setShowNameSuggestions(false);
+                                  }}
+                                  className="px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 flex items-center justify-between"
+                                >
+                                  <span>{suggestion}</span>
+                                  <FaSearch className="h-3 w-3 text-gray-400" />
+                                </div>
+                              ))}
                             </div>
                           )}
                         </div>
@@ -3746,13 +4398,38 @@ const Suministros = () => {
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Código de Producto
                       </label>
-                      <input
-                        type="text"
-                        value={formData.codigo_producto}
-                        onChange={(e) => setFormData({...formData, codigo_producto: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-                        placeholder="SKU, código interno, etc."
-                      />
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={formData.codigo_producto}
+                          onChange={(e) => setFormData({...formData, codigo_producto: e.target.value})}
+                          onFocus={() => formData.codigo_producto.length >= 2 && setShowCodeSuggestions(codeSuggestions.length > 0)}
+                          onBlur={() => setTimeout(() => setShowCodeSuggestions(false), 200)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                          placeholder="SKU, código interno, etc."
+                        />
+
+                        {/* Dropdown de sugerencias de códigos */}
+                        {showCodeSuggestions && codeSuggestions.length > 0 && (
+                          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-40 overflow-y-auto">
+                            <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 border-b">
+                              Códigos similares
+                            </div>
+                            {codeSuggestions.map((suggestion, index) => (
+                              <div
+                                key={index}
+                                onClick={() => {
+                                  setFormData(prev => ({...prev, codigo_producto: suggestion}));
+                                  setShowCodeSuggestions(false);
+                                }}
+                                className="px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                              >
+                                {suggestion}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -3775,6 +4452,67 @@ const Suministros = () => {
                         required
                       />
                     </div>
+
+                    {/* Plantillas de Proveedor */}
+                    {formData.proveedor_info && proveedorSuministros.length > 0 && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center">
+                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Suministros comunes de {formData.proveedor_info.nombre}
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
+                          {proveedorSuministros.slice(0, 6).map((suministro, index) => (
+                            <button
+                              key={index}
+                              type="button"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  // Información básica
+                                  nombre: suministro.nombre,
+                                  descripcion: suministro.descripcion_detallada || suministro.descripcion || '',
+                                  tipo_suministro: suministro.tipo_suministro || suministro.categoria || 'Material',
+                                  codigo_producto: suministro.codigo_producto || suministro.codigo || '',
+                                  
+                                  // Información comercial (mantener proveedor actual)
+                                  cantidad: suministro.cantidad || '',
+                                  unidad_medida: suministro.unidad_medida || 'pz',
+                                  precio_unitario: suministro.precio_unitario || '',
+                                  
+                                  // Estado y proyecto (usar valores por defecto)
+                                  estado: 'Solicitado', // Nuevo estado por defecto
+                                  // NO copiamos el folio_proveedor para que sea único
+                                  
+                                  // Observaciones si existen
+                                  observaciones: suministro.observaciones || ''
+                                });
+                                // Ocultar todas las sugerencias después de seleccionar
+                                setShowNameSuggestions(false);
+                                setShowCodeSuggestions(false);
+                              }}
+                              className="text-left p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors text-xs"
+                            >
+                              <div className="font-medium text-gray-900 dark:text-white truncate">
+                                {suministro.nombre}
+                              </div>
+                              <div className="text-gray-500 dark:text-gray-400 truncate text-xs">
+                                {suministro.codigo_producto || suministro.codigo} • {suministro.tipo_suministro || suministro.categoria}
+                              </div>
+                              <div className="text-gray-500 dark:text-gray-400 truncate text-xs">
+                                {suministro.unidad_medida} • {suministro.precio_unitario ? `$${parseFloat(suministro.precio_unitario).toFixed(2)}` : 'Sin precio'}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                        {proveedorSuministros.length > 6 && (
+                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                            +{proveedorSuministros.length - 6} suministros más
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                       <div>
