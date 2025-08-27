@@ -523,7 +523,10 @@ const Suministros = () => {
     });
 
     const meses = Object.keys(gastosPorMes).sort();
-    const valores = meses.map(mes => Math.round(gastosPorMes[mes] * 100) / 100);
+    const valores = meses.map(mes => {
+      const valor = gastosPorMes[mes];
+      return Math.round(valor * 100) / 100; // Redondear a 2 decimales
+    });
     const cantidades = meses.map(mes => cantidadPorMes[mes]);
     
     // Calcular métricas para insights
@@ -1389,19 +1392,26 @@ const Suministros = () => {
     };
   };
 
-  // Procesar horas por proyecto
+  // Procesar horas de maquinaria por proyecto
   const processHorasPorProyecto = (data) => {
     const horasPorProyecto = {};
     
-    // Filtrar solo suministros con unidad de medida en horas
+    // Filtrar solo suministros de maquinaria/equipos con unidad de medida en horas
     const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
+      (suministro.unidad_medida === 'hr' || 
+       suministro.unidad_medida === 'hora' ||
+       suministro.unidad_medida === 'Hora (hr)') &&
+      (suministro.tipo_suministro === 'Maquinaria' || 
+       suministro.tipo_suministro === 'Equipo Ligero' ||
+       suministro.categoria === 'Maquinaria' ||
+       suministro.categoria === 'Equipo Ligero')
     );
     
     datosHoras.forEach(suministro => {
-      const proyecto = suministro.proyecto_nombre || suministro.proyectoInfo?.nombre || 'Sin proyecto';
+      const proyecto = suministro.proyecto?.nombre || 
+                      suministro.proyectoInfo?.nombre || 
+                      suministro.proyecto_nombre || 
+                      'Sin proyecto asignado';
       const horas = parseFloat(suministro.cantidad) || 0;
       
       if (!horasPorProyecto[proyecto]) {
@@ -1850,6 +1860,20 @@ const Suministros = () => {
           title: function(context) {
             return `${title} - ${context[0].label}`;
           },
+          label: function(context) {
+            const value = context.parsed.y;
+            if (title.includes('Gastos') || title.includes('Valor')) {
+              return `${context.dataset.label}: ${new Intl.NumberFormat('es-MX', {
+                style: 'currency',
+                currency: 'MXN',
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+              }).format(value)}`;
+            } else if (title.includes('Horas')) {
+              return `${context.dataset.label}: ${value.toFixed(1)} horas`;
+            }
+            return `${context.dataset.label}: ${value.toLocaleString('es-MX')}`;
+          },
           afterBody: function(context) {
             if (metrics.total) {
               const percentage = ((context[0].parsed.y / metrics.total) * 100).toFixed(1);
@@ -1882,8 +1906,8 @@ const Suministros = () => {
             return new Intl.NumberFormat('es-MX', {
               style: 'currency',
               currency: 'MXN',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
             }).format(value);
           }
         },
@@ -3227,7 +3251,7 @@ const Suministros = () => {
                           onChange={(e) => setSelectedCharts({...selectedCharts, horasPorProyecto: e.target.checked})}
                           className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Horas por Proyecto</span>
+                        <span className="text-gray-700 dark:text-gray-300">Horas de Maquinaria por Proyecto</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
@@ -3341,14 +3365,6 @@ const Suministros = () => {
                         <FaChartBar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                       </div>
                     </div>
-                    
-                    {/* Métricas */}
-                    <MetricsDisplay 
-                      title="Gastos Mensuales"
-                      metrics={chartData.gastosPorMes.metrics}
-                      icon={FaChartBar}
-                      color="blue"
-                    />
                     
                     <div className="h-80">
                       <Line 
@@ -3973,9 +3989,9 @@ const Suministros = () => {
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
                     <div className="flex items-center justify-between mb-6">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Horas por Proyecto</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Horas de Maquinaria por Proyecto</h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Distribución de horas de trabajo por proyecto
+                          Distribución de horas de maquinaria y equipos por proyecto
                         </p>
                       </div>
                       <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
