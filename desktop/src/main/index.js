@@ -28,8 +28,37 @@ function createWindow() {
     mainWindow.loadURL('http://localhost:3000');
     mainWindow.webContents.openDevTools();
   } else {
-    const buildPath = path.join(__dirname, '../build/index.html');
-    console.log('Loading production file:', buildPath);
+    // En producción, buscar el archivo en diferentes ubicaciones posibles
+    let buildPath;
+    
+    // Opción 1: Desde la carpeta build (desarrollo/build local)
+    const localBuildPath = path.join(__dirname, '../build/index.html');
+    
+    // Opción 2: Desde extraResources/app (empaquetado con electron-builder)
+    const resourcesPath = path.join(process.resourcesPath, 'app/index.html');
+    
+    // Opción 3: Desde la carpeta build relativa al directorio de la app
+    const appBuildPath = path.join(__dirname, '../../build/index.html');
+    
+    // Verificar cuál existe
+    if (fs.existsSync(resourcesPath)) {
+      buildPath = resourcesPath;
+      console.log('Loading production file from resources:', buildPath);
+    } else if (fs.existsSync(localBuildPath)) {
+      buildPath = localBuildPath;
+      console.log('Loading production file from local build:', buildPath);
+    } else if (fs.existsSync(appBuildPath)) {
+      buildPath = appBuildPath;
+      console.log('Loading production file from app build:', buildPath);
+    } else {
+      console.error('No se pudo encontrar el archivo index.html en ninguna ubicación');
+      console.log('Ubicaciones verificadas:');
+      console.log('- Resources:', resourcesPath);
+      console.log('- Local build:', localBuildPath);
+      console.log('- App build:', appBuildPath);
+      return;
+    }
+    
     mainWindow.loadFile(buildPath);
   }
 
