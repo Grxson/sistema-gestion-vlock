@@ -41,10 +41,11 @@ module.exports = (sequelize) => {
   });
 
   CategoriasSuministro.associate = function(models) {
-    CategoriasSuministro.hasMany(models.Suministros, {
-      foreignKey: 'id_categoria_suministro',
-      as: 'suministros'
-    });
+    // Comentado temporalmente para la beta - la tabla suministros no tiene id_categoria_suministro
+    // CategoriasSuministro.hasMany(models.Suministros, {
+    //   foreignKey: 'id_categoria_suministro',
+    //   as: 'suministros'
+    // });
   };
 
   return CategoriasSuministro;
