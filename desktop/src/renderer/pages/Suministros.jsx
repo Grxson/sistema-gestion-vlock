@@ -284,9 +284,11 @@ const Suministros = () => {
   const loadChartData = async () => {
     setLoadingCharts(true);
     try {
+      console.log('🔍 Cargando datos de gráficas con filtros:', chartFilters);
       const response = await api.getSuministros();
       if (response.success) {
         const suministrosData = response.data || [];
+        console.log('📊 Datos recibidos:', suministrosData.length, 'suministros');
         
         // Aplicar todos los filtros
         const filteredData = suministrosData.filter(suministro => {
@@ -315,35 +317,181 @@ const Suministros = () => {
           return matchesFecha && matchesProyecto && matchesProveedor && matchesTipo && matchesEstado;
         });
 
-        // Procesar datos para todas las gráficas
-        const chartDataProcessed = {
-          gastosPorMes: processGastosPorMes(filteredData),
-          valorPorCategoria: processValorPorCategoria(filteredData),
-          suministrosPorMes: processSuministrosPorMes(filteredData),
-          gastosPorProyecto: processGastosPorProyecto(filteredData),
-          gastosPorProveedor: processGastosPorProveedor(filteredData),
-          cantidadPorEstado: processCantidadPorEstado(filteredData),
-          distribucionTipos: processDistribucionTipos(filteredData),
-          tendenciaEntregas: processTendenciaEntregas(filteredData),
-          codigosProducto: processCodigosProducto(filteredData),
-          analisisTecnicoConcreto: processAnalisisTecnicoInteligente(filteredData),
-          concretoDetallado: processConcretoDetallado(filteredData),
-          // Gráficas para horas
-          horasPorMes: processHorasPorMes(filteredData),
-          horasPorProyecto: processHorasPorProyecto(filteredData),
-          horasPorEquipo: processHorasPorEquipo(filteredData),
-          comparativoHorasVsCosto: processComparativoHorasVsCosto(filteredData),
-          // Gráficas para unidades de medida
-          distribucionUnidades: processDistribucionUnidades(filteredData),
-          cantidadPorUnidad: processCantidadPorUnidad(filteredData),
-          valorPorUnidad: processValorPorUnidad(filteredData),
-          comparativoUnidades: processComparativoUnidades(filteredData),
-          // Análisis por unidades específicas
-          totalMetrosCubicos: processTotalMetrosCubicos(filteredData),
-          analisisUnidadesMedida: processAnalisisUnidadesMedida(filteredData)
-        };
+        console.log('🔍 Datos filtrados:', filteredData.length, 'suministros');
+
+        // Procesar datos para todas las gráficas con manejo de errores individual
+        const chartDataProcessed = {};
+        
+        try {
+          chartDataProcessed.gastosPorMes = processGastosPorMes(filteredData);
+          console.log('✅ gastosPorMes procesado');
+        } catch (error) {
+          console.error('❌ Error en gastosPorMes:', error);
+          chartDataProcessed.gastosPorMes = null;
+        }
+
+        try {
+          chartDataProcessed.valorPorCategoria = processValorPorCategoria(filteredData);
+          console.log('✅ valorPorCategoria procesado');
+        } catch (error) {
+          console.error('❌ Error en valorPorCategoria:', error);
+          chartDataProcessed.valorPorCategoria = null;
+        }
+
+        try {
+          chartDataProcessed.suministrosPorMes = processSuministrosPorMes(filteredData);
+          console.log('✅ suministrosPorMes procesado');
+        } catch (error) {
+          console.error('❌ Error en suministrosPorMes:', error);
+          chartDataProcessed.suministrosPorMes = null;
+        }
+
+        try {
+          chartDataProcessed.gastosPorProyecto = processGastosPorProyecto(filteredData);
+          console.log('✅ gastosPorProyecto procesado');
+        } catch (error) {
+          console.error('❌ Error en gastosPorProyecto:', error);
+          chartDataProcessed.gastosPorProyecto = null;
+        }
+
+        try {
+          chartDataProcessed.gastosPorProveedor = processGastosPorProveedor(filteredData);
+          console.log('✅ gastosPorProveedor procesado');
+        } catch (error) {
+          console.error('❌ Error en gastosPorProveedor:', error);
+          chartDataProcessed.gastosPorProveedor = null;
+        }
+
+        try {
+          chartDataProcessed.cantidadPorEstado = processCantidadPorEstado(filteredData);
+          console.log('✅ cantidadPorEstado procesado');
+        } catch (error) {
+          console.error('❌ Error en cantidadPorEstado:', error);
+          chartDataProcessed.cantidadPorEstado = null;
+        }
+
+        try {
+          chartDataProcessed.distribucionTipos = processDistribucionTipos(filteredData);
+          console.log('✅ distribucionTipos procesado');
+        } catch (error) {
+          console.error('❌ Error en distribucionTipos:', error);
+          chartDataProcessed.distribucionTipos = null;
+        }
+
+        try {
+          chartDataProcessed.tendenciaEntregas = processTendenciaEntregas(filteredData);
+          console.log('✅ tendenciaEntregas procesado');
+        } catch (error) {
+          console.error('❌ Error en tendenciaEntregas:', error);
+          chartDataProcessed.tendenciaEntregas = null;
+        }
+
+        try {
+          chartDataProcessed.codigosProducto = processCodigosProducto(filteredData);
+          console.log('✅ codigosProducto procesado');
+        } catch (error) {
+          console.error('❌ Error en codigosProducto:', error);
+          chartDataProcessed.codigosProducto = null;
+        }
+
+        try {
+          chartDataProcessed.analisisTecnicoConcreto = processAnalisisTecnicoInteligente(filteredData);
+          console.log('✅ analisisTecnicoConcreto procesado');
+        } catch (error) {
+          console.error('❌ Error en analisisTecnicoConcreto:', error);
+          chartDataProcessed.analisisTecnicoConcreto = null;
+        }
+
+        try {
+          chartDataProcessed.concretoDetallado = processConcretoDetallado(filteredData);
+          console.log('✅ concretoDetallado procesado');
+        } catch (error) {
+          console.error('❌ Error en concretoDetallado:', error);
+          chartDataProcessed.concretoDetallado = null;
+        }
+
+        try {
+          chartDataProcessed.horasPorMes = processHorasPorMes(filteredData);
+          console.log('✅ horasPorMes procesado');
+        } catch (error) {
+          console.error('❌ Error en horasPorMes:', error);
+          chartDataProcessed.horasPorMes = null;
+        }
+
+        try {
+          chartDataProcessed.horasPorProyecto = processHorasPorProyecto(filteredData);
+          console.log('✅ horasPorProyecto procesado');
+        } catch (error) {
+          console.error('❌ Error en horasPorProyecto:', error);
+          chartDataProcessed.horasPorProyecto = null;
+        }
+
+        try {
+          chartDataProcessed.horasPorEquipo = processHorasPorEquipo(filteredData);
+          console.log('✅ horasPorEquipo procesado');
+        } catch (error) {
+          console.error('❌ Error en horasPorEquipo:', error);
+          chartDataProcessed.horasPorEquipo = null;
+        }
+
+        try {
+          chartDataProcessed.comparativoHorasVsCosto = processComparativoHorasVsCosto(filteredData);
+          console.log('✅ comparativoHorasVsCosto procesado');
+        } catch (error) {
+          console.error('❌ Error en comparativoHorasVsCosto:', error);
+          chartDataProcessed.comparativoHorasVsCosto = null;
+        }
+
+        try {
+          chartDataProcessed.distribucionUnidades = processDistribucionUnidades(filteredData);
+          console.log('✅ distribucionUnidades procesado');
+        } catch (error) {
+          console.error('❌ Error en distribucionUnidades:', error);
+          chartDataProcessed.distribucionUnidades = null;
+        }
+
+        try {
+          chartDataProcessed.cantidadPorUnidad = processCantidadPorUnidad(filteredData);
+          console.log('✅ cantidadPorUnidad procesado');
+        } catch (error) {
+          console.error('❌ Error en cantidadPorUnidad:', error);
+          chartDataProcessed.cantidadPorUnidad = null;
+        }
+
+        try {
+          chartDataProcessed.valorPorUnidad = processValorPorUnidad(filteredData);
+          console.log('✅ valorPorUnidad procesado');
+        } catch (error) {
+          console.error('❌ Error en valorPorUnidad:', error);
+          chartDataProcessed.valorPorUnidad = null;
+        }
+
+        try {
+          chartDataProcessed.comparativoUnidades = processComparativoUnidades(filteredData);
+          console.log('✅ comparativoUnidades procesado');
+        } catch (error) {
+          console.error('❌ Error en comparativoUnidades:', error);
+          chartDataProcessed.comparativoUnidades = null;
+        }
+
+        try {
+          chartDataProcessed.totalMetrosCubicos = processTotalMetrosCubicos(filteredData);
+          console.log('✅ totalMetrosCubicos procesado');
+        } catch (error) {
+          console.error('❌ Error en totalMetrosCubicos:', error);
+          chartDataProcessed.totalMetrosCubicos = null;
+        }
+
+        try {
+          chartDataProcessed.analisisUnidadesMedida = processAnalisisUnidadesMedida(filteredData);
+          console.log('✅ analisisUnidadesMedida procesado');
+        } catch (error) {
+          console.error('❌ Error en analisisUnidadesMedida:', error);
+          chartDataProcessed.analisisUnidadesMedida = null;
+        }
 
         setChartData(chartDataProcessed);
+        console.log('📊 Datos de gráficas cargados exitosamente');
       }
     } catch (error) {
       console.error('Error cargando datos de gráficas:', error);
@@ -393,47 +541,69 @@ const Suministros = () => {
 
   // Procesar valor por categoría
   const processValorPorCategoria = (data) => {
-    const valorPorCategoria = {};
-    
-    data.forEach(suministro => {
-      const categoria = suministro.tipo_suministro || suministro.categoria || 'Sin categoría';
-      const cantidad = parseFloat(suministro.cantidad) || 0;
-      const precio = parseFloat(suministro.precio_unitario) || 0;
-      const valor = cantidad * precio;
+    try {
+      const valorPorCategoria = {};
       
-      if (!valorPorCategoria[categoria]) {
-        valorPorCategoria[categoria] = 0;
+      data.forEach(suministro => {
+        try {
+          const categoria = suministro.tipo_suministro || suministro.categoria || 'Sin categoría';
+          const cantidad = parseFloat(suministro.cantidad) || 0;
+          const precio = parseFloat(suministro.precio_unitario) || 0;
+          const valor = cantidad * precio;
+          
+          if (!valorPorCategoria[categoria]) {
+            valorPorCategoria[categoria] = 0;
+          }
+          valorPorCategoria[categoria] += valor;
+        } catch (itemError) {
+          console.error('Error procesando suministro en valorPorCategoria:', itemError, suministro);
+        }
+      });
+
+      const categorias = Object.keys(valorPorCategoria);
+      const valores = categorias.map(cat => Math.round(valorPorCategoria[cat] * 100) / 100);
+
+      if (categorias.length === 0) {
+        return {
+          labels: ['Sin datos'],
+          datasets: [{
+            label: 'Valor Total ($)',
+            data: [0],
+            backgroundColor: ['rgba(156, 163, 175, 0.8)']
+          }]
+        };
       }
-      valorPorCategoria[categoria] += valor;
-    });
 
-    const categorias = Object.keys(valorPorCategoria);
-    const valores = categorias.map(cat => Math.round(valorPorCategoria[cat] * 100) / 100);
-
-    return {
-      labels: categorias,
-      datasets: [{
-        label: 'Valor Total ($)',
-        data: valores,
-        backgroundColor: [
-          'rgba(239, 68, 68, 0.8)',   // Rojo
-          'rgba(245, 158, 11, 0.8)',  // Amarillo
-          'rgba(16, 185, 129, 0.8)',  // Verde
-          'rgba(59, 130, 246, 0.8)',  // Azul
-          'rgba(139, 92, 246, 0.8)',  // Púrpura
-          'rgba(249, 115, 22, 0.8)'   // Naranja
-        ],
-        borderColor: [
-          'rgb(239, 68, 68)',
-          'rgb(245, 158, 11)',
-          'rgb(16, 185, 129)',
-          'rgb(59, 130, 246)',
-          'rgb(139, 92, 246)',
-          'rgb(249, 115, 22)'
-        ],
-        borderWidth: 2
-      }]
-    };
+      return {
+        labels: categorias,
+        datasets: [{
+          label: 'Valor Total ($)',
+          data: valores,
+          backgroundColor: [
+            'rgba(239, 68, 68, 0.8)',   // Rojo
+            'rgba(245, 158, 11, 0.8)',  // Amarillo
+            'rgba(34, 197, 94, 0.8)',   // Verde
+            'rgba(59, 130, 246, 0.8)',  // Azul
+            'rgba(147, 51, 234, 0.8)',  // Morado
+            'rgba(236, 72, 153, 0.8)',  // Rosa
+            'rgba(20, 184, 166, 0.8)',  // Teal
+            'rgba(251, 146, 60, 0.8)',  // Naranja
+            'rgba(156, 163, 175, 0.8)', // Gris
+            'rgba(99, 102, 241, 0.8)'   // Índigo
+          ].slice(0, categorias.length)
+        }]
+      };
+    } catch (error) {
+      console.error('Error en processValorPorCategoria:', error);
+      return {
+        labels: ['Error'],
+        datasets: [{
+          label: 'Valor Total ($)',
+          data: [0],
+          backgroundColor: ['rgba(239, 68, 68, 0.8)']
+        }]
+      };
+    }
   };
 
   // Procesar cantidad de suministros por mes
