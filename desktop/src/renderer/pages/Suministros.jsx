@@ -504,6 +504,7 @@ const Suministros = () => {
   // Procesar gastos por mes
   const processGastosPorMes = (data) => {
     const gastosPorMes = {};
+    const cantidadPorMes = {};
     
     data.forEach(suministro => {
       const fecha = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
@@ -515,12 +516,22 @@ const Suministros = () => {
       
       if (!gastosPorMes[mesAnio]) {
         gastosPorMes[mesAnio] = 0;
+        cantidadPorMes[mesAnio] = 0;
       }
       gastosPorMes[mesAnio] += gasto;
+      cantidadPorMes[mesAnio] += cantidad;
     });
 
     const meses = Object.keys(gastosPorMes).sort();
     const valores = meses.map(mes => Math.round(gastosPorMes[mes] * 100) / 100);
+    const cantidades = meses.map(mes => cantidadPorMes[mes]);
+    
+    // Calcular métricas para insights
+    const totalGasto = valores.reduce((sum, val) => sum + val, 0);
+    const promedioMensual = totalGasto / meses.length;
+    const ultimoMes = valores[valores.length - 1] || 0;
+    const mesAnterior = valores[valores.length - 2] || 0;
+    const cambioMensual = mesAnterior ? ((ultimoMes - mesAnterior) / mesAnterior * 100) : 0;
 
     return {
       labels: meses.map(mes => {
@@ -531,11 +542,24 @@ const Suministros = () => {
       datasets: [{
         label: 'Gasto Total ($)',
         data: valores,
-        borderColor: 'rgb(239, 68, 68)',
-        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+        borderColor: 'rgb(59, 130, 246)',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
         tension: 0.4,
-        fill: true
-      }]
+        fill: true,
+        pointBackgroundColor: 'rgb(59, 130, 246)',
+        pointBorderColor: '#ffffff',
+        pointBorderWidth: 3,
+        pointRadius: 6,
+        pointHoverRadius: 8
+      }],
+      // Agregar métricas para mostrar en el dashboard
+      metrics: {
+        totalGasto,
+        promedioMensual,
+        cambioMensual,
+        ultimoMes,
+        totalItems: cantidades.reduce((sum, cant) => sum + cant, 0)
+      }
     };
   };
 
@@ -543,6 +567,7 @@ const Suministros = () => {
   const processValorPorCategoria = (data) => {
     try {
       const valorPorCategoria = {};
+      const cantidadPorCategoria = {};
       
       data.forEach(suministro => {
         try {
@@ -553,8 +578,10 @@ const Suministros = () => {
           
           if (!valorPorCategoria[categoria]) {
             valorPorCategoria[categoria] = 0;
+            cantidadPorCategoria[categoria] = 0;
           }
           valorPorCategoria[categoria] += valor;
+          cantidadPorCategoria[categoria] += cantidad;
         } catch (itemError) {
           console.error('Error procesando suministro en valorPorCategoria:', itemError, suministro);
         }
@@ -574,27 +601,48 @@ const Suministros = () => {
         };
       }
 
+      // Paleta de colores más profesional y diferenciada
+      const coloresProfesionales = [
+        'rgba(59, 130, 246, 0.8)',   // Azul principal
+        'rgba(16, 185, 129, 0.8)',   // Verde esmeralda
+        'rgba(245, 158, 11, 0.8)',   // Ámbar
+        'rgba(239, 68, 68, 0.8)',    // Rojo
+        'rgba(139, 92, 246, 0.8)',   // Púrpura
+        'rgba(236, 72, 153, 0.8)',   // Rosa
+        'rgba(14, 165, 233, 0.8)',   // Azul cielo
+        'rgba(34, 197, 94, 0.8)',    // Verde
+        'rgba(251, 146, 60, 0.8)',   // Naranja
+        'rgba(168, 85, 247, 0.8)'    // Violeta
+      ];
+
+      const total = valores.reduce((sum, val) => sum + val, 0);
+      const categoriaTop = categorias[valores.indexOf(Math.max(...valores))];
+      const porcentajeTop = ((Math.max(...valores) / total) * 100).toFixed(1);
+
       return {
         labels: categorias,
         datasets: [{
           label: 'Valor Total ($)',
           data: valores,
-          backgroundColor: [
-            'rgba(239, 68, 68, 0.8)',   // Rojo
-            'rgba(245, 158, 11, 0.8)',  // Amarillo
-            'rgba(34, 197, 94, 0.8)',   // Verde
-            'rgba(59, 130, 246, 0.8)',  // Azul
-            'rgba(147, 51, 234, 0.8)',  // Morado
-            'rgba(236, 72, 153, 0.8)',  // Rosa
-            'rgba(20, 184, 166, 0.8)',  // Teal
-            'rgba(251, 146, 60, 0.8)',  // Naranja
-            'rgba(156, 163, 175, 0.8)', // Gris
-            'rgba(99, 102, 241, 0.8)'   // Índigo
-          ].slice(0, categorias.length)
-        }]
+          backgroundColor: coloresProfesionales.slice(0, categorias.length),
+          borderColor: coloresProfesionales.slice(0, categorias.length).map(color => 
+            color.replace('0.8', '1')
+          ),
+          borderWidth: 2,
+          hoverBorderWidth: 3,
+          hoverOffset: 15
+        }],
+        // Métricas adicionales
+        metrics: {
+          total,
+          categoriaTop,
+          porcentajeTop,
+          totalCategorias: categorias.length,
+          cantidadItems: Object.values(cantidadPorCategoria).reduce((sum, cant) => sum + cant, 0)
+        }
       };
     } catch (error) {
-      console.error('Error en processValorPorCategoria:', error);
+      console.error('Error procesando valorPorCategoria:', error);
       return {
         labels: ['Error'],
         datasets: [{
@@ -682,143 +730,367 @@ const Suministros = () => {
 
   // Procesar gastos por proveedor
   const processGastosPorProveedor = (data) => {
-    const gastosPorProveedor = {};
-    
-    data.forEach(suministro => {
-      const proveedorNombre = suministro.proveedor || suministro.proveedorInfo?.nombre || 'Sin proveedor';
+    try {
+      const gastosPorProveedor = {};
+      const cantidadPorProveedor = {};
       
-      const cantidad = parseFloat(suministro.cantidad) || 0;
-      const precio = parseFloat(suministro.precio_unitario) || 0;
-      const gasto = cantidad * precio;
-      
-      if (!gastosPorProveedor[proveedorNombre]) {
-        gastosPorProveedor[proveedorNombre] = 0;
+      data.forEach(suministro => {
+        try {
+          const proveedorNombre = suministro.proveedor || suministro.proveedorInfo?.nombre || 'Sin proveedor';
+          
+          const cantidad = parseFloat(suministro.cantidad) || 0;
+          const precio = parseFloat(suministro.precio_unitario) || 0;
+          const gasto = cantidad * precio;
+          
+          if (!gastosPorProveedor[proveedorNombre]) {
+            gastosPorProveedor[proveedorNombre] = 0;
+            cantidadPorProveedor[proveedorNombre] = 0;
+          }
+          gastosPorProveedor[proveedorNombre] += gasto;
+          cantidadPorProveedor[proveedorNombre] += cantidad;
+        } catch (itemError) {
+          console.error('Error procesando suministro en gastosPorProveedor:', itemError, suministro);
+        }
+      });
+
+      const proveedoresList = Object.keys(gastosPorProveedor);
+      const valores = proveedoresList.map(proveedor => Math.round(gastosPorProveedor[proveedor] * 100) / 100);
+
+      if (proveedoresList.length === 0) {
+        return {
+          labels: ['Sin datos'],
+          datasets: [{
+            label: 'Gasto Total ($)',
+            data: [0],
+            backgroundColor: ['rgba(156, 163, 175, 0.8)']
+          }]
+        };
       }
-      gastosPorProveedor[proveedorNombre] += gasto;
-    });
 
-    const proveedoresList = Object.keys(gastosPorProveedor);
-    const valores = proveedoresList.map(proveedor => Math.round(gastosPorProveedor[proveedor] * 100) / 100);
+      // Colores distintivos para proveedores
+      const coloresProveedores = [
+        'rgba(34, 197, 94, 0.8)',   // Verde
+        'rgba(168, 85, 247, 0.8)',  // Violeta
+        'rgba(251, 146, 60, 0.8)',  // Naranja
+        'rgba(59, 130, 246, 0.8)',  // Azul
+        'rgba(239, 68, 68, 0.8)',   // Rojo
+        'rgba(245, 158, 11, 0.8)',  // Amarillo
+        'rgba(20, 184, 166, 0.8)',  // Teal
+        'rgba(217, 70, 239, 0.8)',  // Magenta
+        'rgba(16, 185, 129, 0.8)',  // Esmeralda
+        'rgba(139, 92, 246, 0.8)'   // Púrpura
+      ];
 
-    return {
-      labels: proveedoresList,
-      datasets: [{
-        label: 'Gasto Total ($)',
-        data: valores,
-        backgroundColor: [
-          'rgba(34, 197, 94, 0.8)',   // Verde
-          'rgba(168, 85, 247, 0.8)',  // Violeta
-          'rgba(251, 146, 60, 0.8)',  // Naranja
-          'rgba(59, 130, 246, 0.8)',  // Azul
-          'rgba(239, 68, 68, 0.8)',   // Rojo
-          'rgba(245, 158, 11, 0.8)',  // Amarillo
-          'rgba(20, 184, 166, 0.8)',  // Teal
-          'rgba(217, 70, 239, 0.8)'   // Magenta
-        ],
-        borderWidth: 2
-      }]
-    };
+      const total = valores.reduce((sum, val) => sum + val, 0);
+      const proveedorTop = proveedoresList[valores.indexOf(Math.max(...valores))];
+      const porcentajeTop = ((Math.max(...valores) / total) * 100).toFixed(1);
+
+      return {
+        labels: proveedoresList,
+        datasets: [{
+          label: 'Gasto Total ($)',
+          data: valores,
+          backgroundColor: coloresProveedores.slice(0, proveedoresList.length),
+          borderColor: coloresProveedores.slice(0, proveedoresList.length).map(color => 
+            color.replace('0.8', '1')
+          ),
+          borderWidth: 2,
+          hoverBorderWidth: 3
+        }],
+        // Métricas adicionales
+        metrics: {
+          total,
+          proveedorTop,
+          porcentajeTop,
+          totalProveedores: proveedoresList.length,
+          gastoPromedio: (total / proveedoresList.length).toFixed(2)
+        }
+      };
+    } catch (error) {
+      console.error('Error procesando gastosPorProveedor:', error);
+      return {
+        labels: ['Error'],
+        datasets: [{
+          label: 'Gasto Total ($)',
+          data: [0],
+          backgroundColor: ['rgba(239, 68, 68, 0.8)']
+        }]
+      };
+    }
   };
 
   // Procesar cantidad por estado
   const processCantidadPorEstado = (data) => {
-    const cantidadPorEstado = {};
-    
-    data.forEach(suministro => {
-      const estado = suministro.estado || 'Sin estado';
+    try {
+      const cantidadPorEstado = {};
+      const suministrosPorEstado = {};
       
-      if (!cantidadPorEstado[estado]) {
-        cantidadPorEstado[estado] = 0;
+      data.forEach(suministro => {
+        try {
+          const estado = suministro.estado || 'Sin estado';
+          
+          if (!cantidadPorEstado[estado]) {
+            cantidadPorEstado[estado] = 0;
+            suministrosPorEstado[estado] = [];
+          }
+          cantidadPorEstado[estado]++;
+          suministrosPorEstado[estado].push(suministro);
+        } catch (itemError) {
+          console.error('Error procesando suministro en cantidadPorEstado:', itemError, suministro);
+        }
+      });
+
+      const estados = Object.keys(cantidadPorEstado);
+      const cantidades = estados.map(estado => cantidadPorEstado[estado]);
+
+      if (estados.length === 0) {
+        return {
+          labels: ['Sin datos'],
+          datasets: [{
+            label: 'Cantidad de Suministros',
+            data: [0],
+            backgroundColor: ['rgba(156, 163, 175, 0.8)']
+          }]
+        };
       }
-      cantidadPorEstado[estado]++;
-    });
 
-    const estados = Object.keys(cantidadPorEstado);
-    const cantidades = estados.map(estado => cantidadPorEstado[estado]);
+      // Colores semánticos para estados
+      const coloresEstados = {
+        'Sin estado': 'rgba(156, 163, 175, 0.8)',    // Gris
+        'Solicitado': 'rgba(156, 163, 175, 0.8)',    // Gris
+        'Aprobado': 'rgba(59, 130, 246, 0.8)',       // Azul
+        'Pedido': 'rgba(245, 158, 11, 0.8)',         // Amarillo
+        'En Tránsito': 'rgba(139, 92, 246, 0.8)',    // Púrpura
+        'Entregado': 'rgba(16, 185, 129, 0.8)',      // Verde
+        'Cancelado': 'rgba(239, 68, 68, 0.8)',       // Rojo
+        'Recibido': 'rgba(34, 197, 94, 0.8)',        // Verde claro
+        'Pendiente': 'rgba(251, 146, 60, 0.8)'       // Naranja
+      };
 
-    return {
-      labels: estados,
-      datasets: [{
-        label: 'Cantidad de Suministros',
-        data: cantidades,
-        backgroundColor: [
-          'rgba(156, 163, 175, 0.8)',  // Gris - Solicitado
-          'rgba(59, 130, 246, 0.8)',   // Azul - Aprobado
-          'rgba(245, 158, 11, 0.8)',   // Amarillo - Pedido
-          'rgba(139, 92, 246, 0.8)',   // Púrpura - En Tránsito
-          'rgba(16, 185, 129, 0.8)',   // Verde - Entregado
-          'rgba(239, 68, 68, 0.8)'     // Rojo - Cancelado
-        ],
-        borderWidth: 2
-      }]
-    };
+      const backgroundColors = estados.map(estado => 
+        coloresEstados[estado] || 'rgba(107, 114, 128, 0.8)'
+      );
+
+      const total = cantidades.reduce((sum, cant) => sum + cant, 0);
+      const estadoTop = estados[cantidades.indexOf(Math.max(...cantidades))];
+      const porcentajeTop = ((Math.max(...cantidades) / total) * 100).toFixed(1);
+
+      return {
+        labels: estados,
+        datasets: [{
+          label: 'Cantidad de Suministros',
+          data: cantidades,
+          backgroundColor: backgroundColors,
+          borderColor: backgroundColors.map(color => color.replace('0.8', '1')),
+          borderWidth: 2,
+          hoverBorderWidth: 3
+        }],
+        // Métricas adicionales
+        metrics: {
+          total,
+          estadoTop,
+          porcentajeTop,
+          totalEstados: estados.length,
+          promedioXEstado: (total / estados.length).toFixed(0)
+        }
+      };
+    } catch (error) {
+      console.error('Error procesando cantidadPorEstado:', error);
+      return {
+        labels: ['Error'],
+        datasets: [{
+          label: 'Cantidad de Suministros',
+          data: [0],
+          backgroundColor: ['rgba(239, 68, 68, 0.8)']
+        }]
+      };
+    }
   };
 
   // Procesar distribución de tipos
   const processDistribucionTipos = (data) => {
-    const distribucionTipos = {};
-    
-    data.forEach(suministro => {
-      const tipo = suministro.tipo_suministro || suministro.categoria || 'Sin tipo';
+    try {
+      const distribucionTipos = {};
+      const valorPorTipo = {};
       
-      if (!distribucionTipos[tipo]) {
-        distribucionTipos[tipo] = 0;
+      data.forEach(suministro => {
+        try {
+          const tipo = suministro.tipo_suministro || suministro.categoria || 'Sin tipo';
+          const cantidad = parseFloat(suministro.cantidad) || 0;
+          const precio = parseFloat(suministro.precio_unitario) || 0;
+          const valor = cantidad * precio;
+          
+          if (!distribucionTipos[tipo]) {
+            distribucionTipos[tipo] = 0;
+            valorPorTipo[tipo] = 0;
+          }
+          distribucionTipos[tipo]++;
+          valorPorTipo[tipo] += valor;
+        } catch (itemError) {
+          console.error('Error procesando suministro en distribucionTipos:', itemError, suministro);
+        }
+      });
+
+      const tipos = Object.keys(distribucionTipos);
+      const cantidades = tipos.map(tipo => distribucionTipos[tipo]);
+
+      if (tipos.length === 0) {
+        return {
+          labels: ['Sin datos'],
+          datasets: [{
+            label: 'Cantidad de Suministros',
+            data: [0],
+            backgroundColor: ['rgba(156, 163, 175, 0.8)']
+          }]
+        };
       }
-      distribucionTipos[tipo]++;
-    });
 
-    const tipos = Object.keys(distribucionTipos);
-    const cantidades = tipos.map(tipo => distribucionTipos[tipo]);
+      // Colores diferenciados para tipos de suministros
+      const coloresTipos = [
+        'rgba(239, 68, 68, 0.8)',   // Rojo - Material
+        'rgba(16, 185, 129, 0.8)',  // Verde - Servicio
+        'rgba(59, 130, 246, 0.8)',  // Azul - Equipo
+        'rgba(245, 158, 11, 0.8)',  // Amarillo - Herramienta
+        'rgba(139, 92, 246, 0.8)',  // Púrpura - Maquinaria
+        'rgba(236, 72, 153, 0.8)',  // Rosa - Insumo
+        'rgba(20, 184, 166, 0.8)',  // Teal - Repuesto
+        'rgba(251, 146, 60, 0.8)',  // Naranja - Consumible
+        'rgba(168, 85, 247, 0.8)',  // Violeta - Otro
+        'rgba(34, 197, 94, 0.8)'    // Verde esmeralda
+      ];
 
-    return {
-      labels: tipos,
-      datasets: [{
-        label: 'Cantidad de Suministros',
-        data: cantidades,
-        backgroundColor: [
-          'rgba(239, 68, 68, 0.8)',   // Rojo - Material
-          'rgba(16, 185, 129, 0.8)',  // Verde - Servicio
-          'rgba(59, 130, 246, 0.8)',  // Azul - Equipo
-          'rgba(245, 158, 11, 0.8)',  // Amarillo - Herramienta
-          'rgba(139, 92, 246, 0.8)'   // Púrpura - Maquinaria
-        ],
-        borderWidth: 2
-      }]
-    };
+      const total = cantidades.reduce((sum, cant) => sum + cant, 0);
+      const tipoTop = tipos[cantidades.indexOf(Math.max(...cantidades))];
+      const porcentajeTop = ((Math.max(...cantidades) / total) * 100).toFixed(1);
+
+      return {
+        labels: tipos,
+        datasets: [{
+          label: 'Cantidad de Suministros',
+          data: cantidades,
+          backgroundColor: coloresTipos.slice(0, tipos.length),
+          borderColor: coloresTipos.slice(0, tipos.length).map(color => 
+            color.replace('0.8', '1')
+          ),
+          borderWidth: 2,
+          hoverBorderWidth: 3
+        }],
+        // Métricas adicionales
+        metrics: {
+          total,
+          tipoTop,
+          porcentajeTop,
+          totalTipos: tipos.length,
+          valorTotal: Object.values(valorPorTipo).reduce((sum, val) => sum + val, 0).toFixed(2)
+        }
+      };
+    } catch (error) {
+      console.error('Error procesando distribucionTipos:', error);
+      return {
+        labels: ['Error'],
+        datasets: [{
+          label: 'Cantidad de Suministros',
+          data: [0],
+          backgroundColor: ['rgba(239, 68, 68, 0.8)']
+        }]
+      };
+    }
   };
 
   // Procesar tendencia de entregas (suministros entregados por mes)
   const processTendenciaEntregas = (data) => {
-    const entregasPorMes = {};
-    
-    data.filter(suministro => suministro.estado === 'Entregado').forEach(suministro => {
-      const fecha = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
-      const mesAnio = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+    try {
+      const entregasPorMes = {};
+      const valorEntregadoPorMes = {};
       
-      if (!entregasPorMes[mesAnio]) {
-        entregasPorMes[mesAnio] = 0;
+      data.filter(suministro => suministro.estado === 'Entregado').forEach(suministro => {
+        try {
+          const fecha = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
+          
+          if (isNaN(fecha.getTime())) {
+            console.warn('Fecha inválida en suministro:', suministro);
+            return;
+          }
+          
+          const mesAnio = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
+          const cantidad = parseFloat(suministro.cantidad) || 0;
+          const precio = parseFloat(suministro.precio_unitario) || 0;
+          const valor = cantidad * precio;
+          
+          if (!entregasPorMes[mesAnio]) {
+            entregasPorMes[mesAnio] = 0;
+            valorEntregadoPorMes[mesAnio] = 0;
+          }
+          entregasPorMes[mesAnio]++;
+          valorEntregadoPorMes[mesAnio] += valor;
+        } catch (itemError) {
+          console.error('Error procesando entrega:', itemError, suministro);
+        }
+      });
+
+      const meses = Object.keys(entregasPorMes).sort();
+      const entregas = meses.map(mes => entregasPorMes[mes]);
+
+      if (meses.length === 0) {
+        return {
+          labels: ['Sin entregas'],
+          datasets: [{
+            label: 'Entregas Completadas',
+            data: [0],
+            borderColor: 'rgba(156, 163, 175, 1)',
+            backgroundColor: 'rgba(156, 163, 175, 0.2)'
+          }]
+        };
       }
-      entregasPorMes[mesAnio]++;
-    });
 
-    const meses = Object.keys(entregasPorMes).sort();
-    const entregas = meses.map(mes => entregasPorMes[mes]);
+      const totalEntregas = entregas.reduce((sum, ent) => sum + ent, 0);
+      const promedioMensual = (totalEntregas / meses.length).toFixed(1);
+      const mesTop = meses[entregas.indexOf(Math.max(...entregas))];
+      const maxEntregas = Math.max(...entregas);
 
-    return {
-      labels: meses.map(mes => {
-        const [año, mesNum] = mes.split('-');
-        const nombreMes = new Date(año, mesNum - 1).toLocaleDateString('es-MX', { month: 'short', year: 'numeric' });
-        return nombreMes;
-      }),
-      datasets: [{
-        label: 'Entregas Completadas',
-        data: entregas,
-        borderColor: 'rgb(16, 185, 129)',
-        backgroundColor: 'rgba(16, 185, 129, 0.2)',
-        tension: 0.4,
-        fill: true
-      }]
-    };
+      return {
+        labels: meses.map(mes => {
+          const [año, mesNum] = mes.split('-');
+          const nombreMes = new Date(año, mesNum - 1).toLocaleDateString('es-MX', { 
+            month: 'short', 
+            year: 'numeric' 
+          });
+          return nombreMes;
+        }),
+        datasets: [{
+          label: 'Entregas Completadas',
+          data: entregas,
+          borderColor: 'rgb(16, 185, 129)',
+          backgroundColor: 'rgba(16, 185, 129, 0.2)',
+          tension: 0.4,
+          fill: true,
+          pointBackgroundColor: 'rgb(16, 185, 129)',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }],
+        // Métricas adicionales
+        metrics: {
+          totalEntregas,
+          promedioMensual,
+          mesTop: mesTop ? new Date(mesTop + '-01').toLocaleDateString('es-MX', { month: 'long', year: 'numeric' }) : 'N/A',
+          maxEntregas,
+          mesesActivos: meses.length
+        }
+      };
+    } catch (error) {
+      console.error('Error procesando tendenciaEntregas:', error);
+      return {
+        labels: ['Error'],
+        datasets: [{
+          label: 'Entregas Completadas',
+          data: [0],
+          borderColor: 'rgba(239, 68, 68, 1)',
+          backgroundColor: 'rgba(239, 68, 68, 0.2)'
+        }]
+      };
+    }
   };
 
   // Procesar códigos de producto (análisis general)
@@ -1546,6 +1818,322 @@ const Suministros = () => {
       tooltipBg: isDarkMode ? 'rgba(17, 24, 39, 0.95)' : 'rgba(0, 0, 0, 0.85)',
       tooltipText: '#F9FAFB'
     };
+  };
+
+  // Opciones mejoradas para gráficas de línea
+  const getLineChartOptions = (title, metrics = {}) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: getChartColors().textColor,
+          font: { size: 13, weight: '600' },
+          usePointStyle: true,
+          pointStyle: 'circle',
+          padding: 20
+        }
+      },
+      tooltip: {
+        backgroundColor: getChartColors().tooltipBg,
+        titleColor: getChartColors().tooltipText,
+        bodyColor: getChartColors().tooltipText,
+        borderColor: 'rgba(59, 130, 246, 0.5)',
+        borderWidth: 1,
+        cornerRadius: 8,
+        titleAlign: 'center',
+        bodyAlign: 'left',
+        footerAlign: 'left',
+        displayColors: true,
+        callbacks: {
+          title: function(context) {
+            return `${title} - ${context[0].label}`;
+          },
+          afterBody: function(context) {
+            if (metrics.total) {
+              const percentage = ((context[0].parsed.y / metrics.total) * 100).toFixed(1);
+              return [
+                `Porcentaje del total: ${percentage}%`,
+                metrics.tendencia ? `Tendencia: ${metrics.tendencia}` : ''
+              ].filter(Boolean);
+            }
+            return [];
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: getChartColors().textColor,
+          font: { size: 12 }
+        },
+        grid: {
+          color: getChartColors().gridColor,
+          drawBorder: false
+        }
+      },
+      y: {
+        ticks: {
+          color: getChartColors().textColor,
+          font: { size: 12 },
+          callback: function(value) {
+            return new Intl.NumberFormat('es-MX', {
+              style: 'currency',
+              currency: 'MXN',
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0
+            }).format(value);
+          }
+        },
+        grid: { color: getChartColors().gridColor }
+      }
+    },
+    interaction: {
+      intersect: false,
+      mode: 'index'
+    }
+  });
+
+  // Opciones mejoradas para gráficas de dona
+  const getDoughnutChartOptions = (title, metrics = {}) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    cutout: '60%',
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          color: getChartColors().textColor,
+          font: { size: 12, weight: '500' },
+          usePointStyle: true,
+          pointStyle: 'circle',
+          padding: 15,
+          generateLabels: function(chart) {
+            const data = chart.data;
+            if (data.labels.length && data.datasets.length) {
+              return data.labels.map((label, index) => {
+                const value = data.datasets[0].data[index];
+                const total = data.datasets[0].data.reduce((sum, val) => sum + val, 0);
+                const percentage = ((value / total) * 100).toFixed(1);
+                return {
+                  text: `${label}: ${percentage}%`,
+                  fillStyle: data.datasets[0].backgroundColor[index],
+                  fontColor: getChartColors().textColor,
+                  index: index
+                };
+              });
+            }
+            return [];
+          }
+        }
+      },
+      tooltip: {
+        backgroundColor: getChartColors().tooltipBg,
+        titleColor: getChartColors().tooltipText,
+        bodyColor: getChartColors().tooltipText,
+        borderColor: 'rgba(59, 130, 246, 0.5)',
+        borderWidth: 1,
+        cornerRadius: 8,
+        callbacks: {
+          title: function(context) {
+            return `${title}`;
+          },
+          label: function(context) {
+            const label = context.label || '';
+            const value = context.parsed || 0;
+            const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+            const percentage = ((value / total) * 100).toFixed(1);
+            return `${label}: ${value} (${percentage}%)`;
+          },
+          afterLabel: function(context) {
+            if (metrics.total) {
+              return `Total general: ${metrics.total}`;
+            }
+            return '';
+          }
+        }
+      }
+    }
+  });
+
+  // Opciones mejoradas para gráficas de barras
+  const getBarChartOptions = (title, metrics = {}) => ({
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top',
+        labels: {
+          color: getChartColors().textColor,
+          font: { size: 13, weight: '600' },
+          usePointStyle: true,
+          pointStyle: 'rect',
+          padding: 20
+        }
+      },
+      tooltip: {
+        backgroundColor: getChartColors().tooltipBg,
+        titleColor: getChartColors().tooltipText,
+        bodyColor: getChartColors().tooltipText,
+        borderColor: 'rgba(59, 130, 246, 0.5)',
+        borderWidth: 1,
+        cornerRadius: 8,
+        callbacks: {
+          title: function(context) {
+            return `${title} - ${context[0].label}`;
+          },
+          afterBody: function(context) {
+            if (metrics.total) {
+              const percentage = ((context[0].parsed.y / metrics.total) * 100).toFixed(1);
+              return [
+                `Porcentaje: ${percentage}%`,
+                metrics.promedio ? `Promedio: ${metrics.promedio}` : ''
+              ].filter(Boolean);
+            }
+            return [];
+          }
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: {
+          color: getChartColors().textColor,
+          font: { size: 11 },
+          maxRotation: 45,
+          minRotation: 0
+        },
+        grid: {
+          color: getChartColors().gridColor,
+          drawBorder: false
+        }
+      },
+      y: {
+        ticks: {
+          color: getChartColors().textColor,
+          font: { size: 12 },
+          callback: function(value) {
+            return new Intl.NumberFormat('es-MX').format(value);
+          }
+        },
+        grid: { color: getChartColors().gridColor }
+      }
+    }
+  });
+
+  // Componente de métricas para mostrar datos clave
+  const MetricsDisplay = ({ title, metrics, icon: Icon, color = "blue" }) => {
+    const colorClasses = {
+      blue: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200",
+      green: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200",
+      amber: "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200",
+      red: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200",
+      purple: "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-200"
+    };
+
+    if (!metrics || Object.keys(metrics).length === 0) return null;
+
+    return (
+      <div className={`border rounded-lg p-3 mb-4 ${colorClasses[color]}`}>
+        <div className="flex items-center gap-2 mb-2">
+          {Icon && <Icon className="h-4 w-4" />}
+          <h5 className="font-medium text-sm">{title} - Métricas Clave</h5>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+          {Object.entries(metrics).map(([key, value]) => {
+            if (value === undefined || value === null) return null;
+            
+            let displayValue = value;
+            let label = key;
+
+            // Formatear etiquetas y valores
+            switch (key) {
+              case 'total':
+                label = 'Total';
+                displayValue = typeof value === 'number' ? 
+                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
+                  value;
+                break;
+              case 'promedio':
+              case 'gastoPromedio':
+                label = 'Promedio';
+                displayValue = typeof value === 'number' ? 
+                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
+                  value;
+                break;
+              case 'mesTop':
+                label = 'Mes Principal';
+                break;
+              case 'categoriaTop':
+                label = 'Categoría Principal';
+                break;
+              case 'proveedorTop':
+                label = 'Proveedor Principal';
+                break;
+              case 'tipoTop':
+                label = 'Tipo Principal';
+                break;
+              case 'estadoTop':
+                label = 'Estado Principal';
+                break;
+              case 'porcentajeTop':
+                label = 'Porcentaje';
+                displayValue = `${value}%`;
+                break;
+              case 'totalCategorias':
+                label = 'Categorías';
+                break;
+              case 'totalProveedores':
+                label = 'Proveedores';
+                break;
+              case 'totalTipos':
+                label = 'Tipos';
+                break;
+              case 'totalEstados':
+                label = 'Estados';
+                break;
+              case 'mesesActivos':
+                label = 'Meses';
+                break;
+              case 'totalEntregas':
+                label = 'Entregas';
+                break;
+              case 'promedioMensual':
+                label = 'Promedio/Mes';
+                break;
+              case 'maxEntregas':
+                label = 'Máx/Mes';
+                break;
+              case 'valorTotal':
+                label = 'Valor Total';
+                displayValue = typeof value === 'number' ? 
+                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
+                  `$${value}`;
+                break;
+              case 'cantidadItems':
+                label = 'Items';
+                break;
+              case 'promedioXEstado':
+                label = 'Prom/Estado';
+                break;
+              default:
+                label = key.charAt(0).toUpperCase() + key.slice(1);
+            }
+
+            return (
+              <div key={key} className="flex flex-col">
+                <span className="font-medium">{label}</span>
+                <span className="text-xs opacity-80 truncate" title={displayValue}>
+                  {displayValue}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   // Cargar gráficas cuando se cambian los filtros
@@ -2746,80 +3334,27 @@ const Suministros = () => {
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gastos por Mes</h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Evolución temporal de los gastos
+                          Evolución temporal de los gastos en suministros
                         </p>
                       </div>
                       <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
                         <FaChartBar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                       </div>
                     </div>
+                    
+                    {/* Métricas */}
+                    <MetricsDisplay 
+                      title="Gastos Mensuales"
+                      metrics={chartData.gastosPorMes.metrics}
+                      icon={FaChartBar}
+                      color="blue"
+                    />
+                    
                     <div className="h-80">
                       <Line 
                         key={`gastos-${themeVersion}`}
                         data={chartData.gastosPorMes} 
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'top',
-                              labels: {
-                                color: getChartColors().textColor,
-                                font: { size: 13, weight: '600' },
-                                usePointStyle: true,
-                                pointStyle: 'circle',
-                                padding: 20
-                              }
-                            },
-                            tooltip: {
-                              backgroundColor: getChartColors().tooltipBg,
-                              titleColor: getChartColors().tooltipText,
-                              bodyColor: getChartColors().tooltipText,
-                              borderColor: 'rgba(59, 130, 246, 0.5)',
-                              borderWidth: 2,
-                              cornerRadius: 12,
-                              padding: 16,
-                              titleFont: { size: 14, weight: '600' },
-                              bodyFont: { size: 13, weight: '500' },
-                              callbacks: {
-                                label: function(context) {
-                                  return `${context.dataset.label}: $${context.parsed.y.toLocaleString('es-MX', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                  })}`;
-                                }
-                              }
-                            }
-                          },
-                          elements: {
-                            point: { radius: 6, hoverRadius: 8, borderWidth: 3 },
-                            line: { borderWidth: 3, tension: 0.4 }
-                          },
-                          scales: {
-                            y: {
-                              beginAtZero: true,
-                              ticks: {
-                                color: getChartColors().textColor,
-                                font: { size: 12, weight: '500' },
-                                callback: function(value) {
-                                  return '$' + value.toLocaleString('es-MX');
-                                }
-                              },
-                              grid: { 
-                                color: getChartColors().gridColor,
-                                lineWidth: 1,
-                                drawBorder: false
-                              }
-                            },
-                            x: {
-                              ticks: { 
-                                color: getChartColors().textColor, 
-                                font: { size: 12, weight: '500' } 
-                              },
-                              grid: { color: getChartColors().gridColor }
-                            }
-                          }
-                        }}
+                        options={getLineChartOptions("Gastos por Mes", chartData.gastosPorMes.metrics)}
                       />
                     </div>
                   </div>
@@ -2832,54 +3367,27 @@ const Suministros = () => {
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Valor Total por Categoría</h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Distribución de inversión por categoría
+                          Distribución de inversión por categoría de suministros
                         </p>
                       </div>
                       <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
                         <FaChartBar className="h-6 w-6 text-green-600 dark:text-green-400" />
                       </div>
                     </div>
+                    
+                    {/* Métricas */}
+                    <MetricsDisplay 
+                      title="Inversión por Categoría"
+                      metrics={chartData.valorPorCategoria.metrics}
+                      icon={FaChartBar}
+                      color="green"
+                    />
+                    
                     <div className="h-80">
                       <Doughnut 
                         key={`categoria-${themeVersion}`}
                         data={chartData.valorPorCategoria} 
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'bottom',
-                              labels: {
-                                color: getChartColors().textColor,
-                                padding: 20,
-                                font: { size: 13, weight: '600' },
-                                usePointStyle: true,
-                                pointStyle: 'circle'
-                              }
-                            },
-                            tooltip: {
-                              backgroundColor: getChartColors().tooltipBg,
-                              titleColor: getChartColors().tooltipText,
-                              bodyColor: getChartColors().tooltipText,
-                              borderColor: 'rgba(239, 68, 68, 0.5)',
-                              borderWidth: 1,
-                              cornerRadius: 12,
-                              padding: 16,
-                              titleFont: { size: 14, weight: '600' },
-                              bodyFont: { size: 13, weight: '500' },
-                              callbacks: {
-                                label: function(context) {
-                                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                  const percentage = ((context.parsed * 100) / total).toFixed(1);
-                                  return `${context.label}: $${context.parsed.toLocaleString('es-MX', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                  })} (${percentage}%)`;
-                                }
-                              }
-                            }
-                          }
-                        }}
+                        options={getDoughnutChartOptions("Valor por Categoría", chartData.valorPorCategoria.metrics)}
                       />
                     </div>
                   </div>
@@ -3034,39 +3542,32 @@ const Suministros = () => {
 
                 {/* Gráfica de Gastos por Proveedor */}
                 {selectedCharts.gastosPorProveedor && chartData.gastosPorProveedor && (
-                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Gastos por Proveedor</h3>
-                    <div className="h-64">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gastos por Proveedor</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Distribución de gastos por empresa proveedora
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                        <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                      </div>
+                    </div>
+                    
+                    {/* Métricas */}
+                    <MetricsDisplay 
+                      title="Proveedores"
+                      metrics={chartData.gastosPorProveedor.metrics}
+                      icon={FaChartBar}
+                      color="purple"
+                    />
+                    
+                    <div className="h-80">
                       <Doughnut 
                         key={`proveedores-${themeVersion}`}
                         data={chartData.gastosPorProveedor} 
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'bottom',
-                              labels: {
-                                color: getChartColors().textColor,
-                                padding: 15,
-                                font: { size: 12, weight: '500' }
-                              }
-                            },
-                            tooltip: {
-                              backgroundColor: getChartColors().tooltipBg,
-                              titleColor: getChartColors().tooltipText,
-                              bodyColor: getChartColors().tooltipText,
-                              callbacks: {
-                                label: function(context) {
-                                  return `${context.label}: $${context.parsed.toLocaleString('es-MX', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2
-                                  })}`;
-                                }
-                              }
-                            }
-                          }
-                        }}
+                        options={getDoughnutChartOptions("Gastos por Proveedor", chartData.gastosPorProveedor.metrics)}
                       />
                     </div>
                   </div>
@@ -3074,47 +3575,32 @@ const Suministros = () => {
 
                 {/* Gráfica de Cantidad por Estado */}
                 {selectedCharts.cantidadPorEstado && chartData.cantidadPorEstado && (
-                  <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg relative">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Cantidad por Estado</h3>
-                    {/* Badge de total */}
-                    <div className="absolute top-4 right-4 bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 text-xs font-bold px-3 py-1 rounded shadow">
-                      Total: {chartData.cantidadPorEstado.datasets[0].data.reduce((a, b) => a + b, 0)} suministros
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Cantidad por Estado</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Distribución de suministros según su estado actual
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
+                        <FaChartBar className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                      </div>
                     </div>
-                    <div className="h-64">
+                    
+                    {/* Métricas */}
+                    <MetricsDisplay 
+                      title="Estados"
+                      metrics={chartData.cantidadPorEstado.metrics}
+                      icon={FaChartBar}
+                      color="amber"
+                    />
+                    
+                    <div className="h-80">
                       <Bar 
                         key={`estados-${themeVersion}`}
                         data={chartData.cantidadPorEstado} 
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: { display: false },
-                            tooltip: {
-                              backgroundColor: getChartColors().tooltipBg,
-                              titleColor: getChartColors().tooltipText,
-                              bodyColor: getChartColors().tooltipText,
-                              callbacks: {
-                                label: function(context) {
-                                  return `${context.label}: ${context.parsed.y} suministros`;
-                                }
-                              }
-                            }
-                          },
-                          scales: {
-                            y: {
-                              beginAtZero: true,
-                              ticks: {
-                                color: getChartColors().textColor,
-                                stepSize: 1
-                              },
-                              grid: { color: getChartColors().gridColor }
-                            },
-                            x: {
-                              ticks: { color: getChartColors().textColor },
-                              grid: { color: getChartColors().gridColor }
-                            }
-                          }
-                        }}
+                        options={getBarChartOptions("Cantidad por Estado", chartData.cantidadPorEstado.metrics)}
                       />
                     </div>
                   </div>
