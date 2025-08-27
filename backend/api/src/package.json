@@ -31,5 +31,13 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Grxson/sistema-gestion-vlock.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Grxson/sistema-gestion-vlock/issues"
+  },
+  "homepage": "https://github.com/Grxson/sistema-gestion-vlock#readme"
 }
