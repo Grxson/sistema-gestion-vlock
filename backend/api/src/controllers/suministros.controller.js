@@ -296,6 +296,154 @@ const createSuministro = async (req, res) => {
     }
 };
 
+// Crear múltiples suministros en una sola transacción
+const createMultipleSuministros = async (req, res) => {
+    try {
+        const {
+            // Información común del recibo
+            info_recibo: {
+                proveedor,
+                id_proveedor,
+                folio,
+                folio_proveedor,
+                fecha,
+                id_proyecto,
+                vehiculo_transporte,
+                operador_responsable,
+                hora_salida,
+                hora_llegada,
+                hora_inicio_descarga,
+                hora_fin_descarga,
+                observaciones_generales
+            },
+            // Array de suministros
+            suministros
+        } = req.body;
+
+        // Validaciones básicas
+        if (!proveedor || !fecha || !id_proyecto) {
+            return res.status(400).json({
+                success: false,
+                message: 'Los campos proveedor, fecha y proyecto son obligatorios'
+            });
+        }
+
+        if (!suministros || !Array.isArray(suministros) || suministros.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Debe proporcionar al menos un suministro'
+            });
+        }
+
+        // Verificar que el proyecto existe
+        const proyecto = await models.Proyectos.findByPk(id_proyecto);
+        if (!proyecto) {
+            return res.status(400).json({
+                success: false,
+                message: 'El proyecto especificado no existe'
+            });
+        }
+
+        // Validar cada suministro
+        for (let i = 0; i < suministros.length; i++) {
+            const suministro = suministros[i];
+            if (!suministro.nombre || !suministro.cantidad || !suministro.unidad_medida || !suministro.precio_unitario) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Suministro ${i + 1}: Los campos nombre, cantidad, unidad de medida y precio son obligatorios`
+                });
+            }
+        }
+
+        // Usar transacción para crear todos los suministros
+        const transaction = await models.sequelize.transaction();
+        
+        try {
+            const suministrosCreados = [];
+            
+            for (const suministroData of suministros) {
+                const nuevoSuministro = await models.Suministros.create({
+                    // Información común del recibo
+                    proveedor,
+                    id_proveedor,
+                    folio,
+                    folio_proveedor,
+                    fecha,
+                    id_proyecto,
+                    vehiculo_transporte,
+                    operador_responsable,
+                    hora_salida,
+                    hora_llegada,
+                    hora_inicio_descarga,
+                    hora_fin_descarga,
+                    observaciones: observaciones_generales,
+                    
+                    // Información específica del suministro
+                    tipo_suministro: suministroData.tipo_suministro || 'Material',
+                    nombre: suministroData.nombre,
+                    codigo_producto: suministroData.codigo_producto,
+                    descripcion_detallada: suministroData.descripcion_detallada,
+                    cantidad: parseFloat(suministroData.cantidad),
+                    unidad_medida: suministroData.unidad_medida,
+                    m3_perdidos: suministroData.m3_perdidos ? parseFloat(suministroData.m3_perdidos) : null,
+                    m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
+                    m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
+                    precio_unitario: Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100,
+                    costo_total: parseFloat(suministroData.cantidad) * parseFloat(suministroData.precio_unitario),
+                    estado: suministroData.estado || 'Pendiente'
+                }, { transaction });
+
+                suministrosCreados.push(nuevoSuministro);
+            }
+
+            // Confirmar la transacción
+            await transaction.commit();
+
+            // Obtener los suministros creados con relaciones
+            const suministrosCompletos = await models.Suministros.findAll({
+                where: {
+                    id_suministro: suministrosCreados.map(s => s.id_suministro)
+                },
+                include: [
+                    {
+                        model: models.Proyectos,
+                        as: 'proyecto',
+                        attributes: ['nombre', 'ubicacion']
+                    },
+                    {
+                        model: models.Proveedores,
+                        as: 'proveedorInfo',
+                        attributes: ['nombre', 'tipo_proveedor', 'telefono']
+                    }
+                ]
+            });
+
+            res.status(201).json({
+                success: true,
+                message: `${suministrosCreados.length} suministros creados exitosamente`,
+                data: {
+                    cantidad_creados: suministrosCreados.length,
+                    folio_proveedor,
+                    suministros: suministrosCompletos
+                }
+            });
+
+        } catch (error) {
+            // Revertir la transacción en caso de error
+            await transaction.rollback();
+            throw error;
+        }
+
+    } catch (error) {
+        console.error('Error al crear múltiples suministros:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
 // Actualizar un suministro
 const updateSuministro = async (req, res) => {
     try {
@@ -514,6 +662,7 @@ module.exports = {
     getSuministros,
     getSuministroById,
     createSuministro,
+    createMultipleSuministros,
     updateSuministro,
     deleteSuministro,
     getSuministrosByProyecto,

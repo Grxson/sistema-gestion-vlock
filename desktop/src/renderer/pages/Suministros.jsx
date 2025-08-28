@@ -22,7 +22,8 @@ import {
   FaCog,
   FaTimes,
   FaRuler,
-  FaCalculator
+  FaCalculator,
+  FaReceipt
 } from 'react-icons/fa';
 import { formatCurrency } from '../utils/currency';
 import {
@@ -43,6 +44,7 @@ import api from '../services/api';
 import ProveedorAutocomplete from '../components/common/ProveedorAutocomplete';
 import DateInput from '../components/ui/DateInput';
 import TimeInput from '../components/ui/TimeInput';
+import FormularioMultipleSuministros from '../components/FormularioMultipleSuministros';
 import { useToast } from '../contexts/ToastContext';
 
 // Registrar componentes de Chart.js
@@ -104,9 +106,14 @@ const Suministros = () => {
   const [suministros, setSuministros] = useState([]);
   const [proyectos, setProyectos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
+  const [categorias, setCategorias] = useState(Object.keys(CATEGORIAS_SUMINISTRO));
+  const [unidadesMedida, setUnidadesMedida] = useState(Object.keys(UNIDADES_MEDIDA));
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [showMultipleModal, setShowMultipleModal] = useState(false);
   const [editingSuministro, setEditingSuministro] = useState(null);
+  const [editingRecibo, setEditingRecibo] = useState(null);
+  const [expandedRecibos, setExpandedRecibos] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     categoria: '',
@@ -2328,6 +2335,48 @@ const Suministros = () => {
     setShowDuplicatesWarning(false);
   }, []);
 
+  // Función para agrupar suministros por recibo (jerarquía)
+  const agruparSuministrosPorRecibo = useCallback((suministrosList) => {
+    const grupos = {};
+    
+    suministrosList.forEach(suministro => {
+      // Crear clave única para el recibo basada en proveedor, fecha y folio
+      const proveedor = suministro.proveedorInfo?.nombre || suministro.proveedor || 'Sin proveedor';
+      const fecha = suministro.fecha || 'Sin fecha';
+      const folio = suministro.folio_proveedor || '';
+      const proyecto = suministro.proyecto?.nombre || 'Sin proyecto';
+      
+      const claveRecibo = `${proveedor}_${fecha}_${folio}_${proyecto}`;
+      
+      if (!grupos[claveRecibo]) {
+        grupos[claveRecibo] = {
+          id: claveRecibo,
+          proveedor,
+          fecha,
+          folio_proveedor: folio,
+          proyecto,
+          suministros: [],
+          total: 0,
+          cantidad_items: 0,
+          isHierarchical: false
+        };
+      }
+      
+      grupos[claveRecibo].suministros.push(suministro);
+      grupos[claveRecibo].total += parseFloat(suministro.costo_total) || 0;
+      grupos[claveRecibo].cantidad_items += 1;
+    });
+    
+    // Marcar grupos con más de 1 suministro como jerárquicos
+    Object.values(grupos).forEach(grupo => {
+      if (grupo.suministros.length > 1) {
+        grupo.isHierarchical = true;
+      }
+    });
+    
+    return Object.values(grupos).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -2416,6 +2465,80 @@ const Suministros = () => {
     }
   };
 
+  // Función para manejar el envío de múltiples suministros
+  const handleMultipleSubmit = async (suministrosData) => {
+    try {
+      if (editingRecibo) {
+        // Modo edición: actualizar suministros existentes
+        const updatePromises = suministrosData.suministros.map((suministroData) => {
+          // Si el suministro tiene id_suministro, actualizarlo; si no, crearlo
+          if (suministroData.id_suministro) {
+            return api.updateSuministro(suministroData.id_suministro, suministroData);
+          } else {
+            return api.createSuministro(suministroData);
+          }
+        });
+
+        await Promise.all(updatePromises);
+        
+        showSuccess(
+          'Suministros actualizados',
+          `Se han actualizado/creado ${suministrosData.suministros.length} suministros correctamente`,
+          { duration: 4000 }
+        );
+      } else {
+        // Modo creación: crear nuevos suministros
+        const response = await api.createMultipleSuministros(suministrosData);
+        showSuccess(
+          'Suministros creados',
+          `Se han creado ${suministrosData.suministros.length} suministros correctamente`,
+          { duration: 4000 }
+        );
+      }
+        
+      await loadData();
+      setShowMultipleModal(false);
+      setEditingRecibo(null);
+    } catch (error) {
+      console.error('Error guardando múltiples suministros:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
+      const action = editingRecibo ? 'actualizar' : 'crear';
+      showError(
+        `Error al ${action}`,
+        `No se pudieron ${action} los suministros: ${errorMessage}`
+      );
+    }
+  };
+
+  // Función para eliminar un grupo completo de suministros
+  const handleDeleteRecibo = async (recibo) => {
+    if (!confirm(`¿Está seguro de que desea eliminar el grupo de ${recibo.suministros.length} suministros? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      // Eliminar todos los suministros del grupo
+      for (const suministro of recibo.suministros) {
+        await api.deleteSuministro(suministro.id_suministro);
+      }
+
+      showSuccess(
+        'Grupo eliminado',
+        `Se han eliminado ${recibo.suministros.length} suministros correctamente`,
+        { duration: 4000 }
+      );
+      
+      await loadData();
+    } catch (error) {
+      console.error('Error eliminando grupo:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
+      showError(
+        'Error al eliminar',
+        `No se pudo eliminar el grupo: ${errorMessage}`
+      );
+    }
+  };
+
   const handleEdit = (suministro) => {
     console.log('Editando suministro:', suministro); // Para debug
     console.log('proveedorInfo:', suministro.proveedorInfo); // Para debug específico del proveedor
@@ -2465,6 +2588,40 @@ const Suministros = () => {
       hora_fin_descarga: cleanTimeField(suministro.hora_fin_descarga)
     });
     setShowModal(true);
+  };
+
+  // Funciones helper para formatear precios y cantidades (mostrar 0 en lugar de NaN)
+  const formatPriceDisplay = (value) => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return '$0.00';
+    return formatCurrency(num);
+  };
+
+  const formatQuantityDisplay = (value) => {
+    const num = parseFloat(value);
+    if (isNaN(num)) return '0';
+    return num % 1 === 0 ? num.toString() : num.toFixed(2);
+  };
+
+  // Funciones para manejar la expansión/contracción de recibos jerárquicos
+  const toggleReciboExpansion = (reciboId) => {
+    setExpandedRecibos(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(reciboId)) {
+        newSet.delete(reciboId);
+      } else {
+        newSet.add(reciboId);
+      }
+      return newSet;
+    });
+  };
+
+  // Función para editar recibo (abrir modal múltiple con datos pre-cargados)
+  const handleEditRecibo = (recibo) => {
+    console.log('Editando recibo:', recibo); // Debug
+    console.log('Suministros del recibo:', recibo.suministros); // Debug
+    setEditingRecibo(recibo);
+    setShowMultipleModal(true);
   };
 
   const handleDelete = async (id) => {
@@ -2867,7 +3024,14 @@ const Suministros = () => {
               className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
             >
               <FaPlus className="w-4 h-4" />
-              Nuevo Suministro
+              Individual
+            </button>
+            <button
+              onClick={() => setShowMultipleModal(true)}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+            >
+              <FaBoxes className="w-4 h-4" />
+              Múltiple
             </button>
           </div>
         </div>
@@ -4664,7 +4828,7 @@ const Suministros = () => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
-              {filteredSuministros.length === 0 ? (
+              {paginatedSuministros.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <FaBox className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-4" />
@@ -4672,92 +4836,274 @@ const Suministros = () => {
                   </td>
                 </tr>
               ) : (
-                paginatedSuministros.map((suministro) => (
-                  <tr key={suministro.id_suministro} className="hover:bg-gray-50 dark:hover:bg-dark-200">
-                    <td className="px-6 py-4">
-                      <div>
-                        <div className="font-medium text-gray-900 dark:text-white">
-                          {suministro.nombre || suministro.descripcion}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {suministro.descripcion_detallada || suministro.observaciones}
-                        </div>
-                        {suministro.codigo_producto && (
-                          <div className="text-xs text-gray-400 dark:text-gray-500">Código: {suministro.codigo_producto}</div>
-                        )}
-                        {suministro.folio_proveedor && (
-                          <div className="text-xs text-blue-600 dark:text-blue-400">Folio: {suministro.folio_proveedor}</div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                        {suministro.tipo_suministro || suministro.categoria}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <FaBuilding className="text-gray-400 dark:text-gray-500 w-4 h-4" />
-                        <div>
-                          <div className="font-medium text-gray-900 dark:text-white">
-                            {suministro.proveedorInfo?.nombre || suministro.proveedor || 'Sin asignar'}
-                          </div>
-                          {suministro.proveedorInfo?.tipo_proveedor && (
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {suministro.proveedorInfo.tipo_proveedor}
+                // Renderizado inteligente: muestra suministros agrupados jerárquicamente cuando es posible
+                (() => {
+                  const recibosAgrupados = agruparSuministrosPorRecibo(paginatedSuministros);
+                  const rows = [];
+                  
+                  recibosAgrupados.forEach((recibo) => {
+                    if (recibo.isHierarchical && filters.proveedor === '') {
+                      // Grupo jerárquico - mostrar encabezado con opción de expandir
+                      rows.push(
+                        <tr key={`grupo-${recibo.id}`} className="bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30">
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => toggleReciboExpansion(recibo.id)}
+                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                              >
+                                {expandedRecibos.has(recibo.id) ? 
+                                  <FaChevronDown className="w-4 h-4" /> : 
+                                  <FaChevronUp className="w-4 h-4" />
+                                }
+                              </button>
+                              <FaReceipt className="text-blue-600 dark:text-blue-400 w-4 h-4" />
+                              <div>
+                                <div className="font-semibold text-gray-900 dark:text-white">
+                                  Recibo - {recibo.cantidad_items} artículos
+                                </div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400">
+                                  {recibo.proyecto} • {new Date(recibo.fecha).toLocaleDateString()}
+                                  {recibo.folio_proveedor && ` • Folio: ${recibo.folio_proveedor}`}
+                                </div>
+                              </div>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900 dark:text-white">
-                        {suministro.folio_proveedor || '-'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900 dark:text-white">
-                        {formatQuantity(suministro.cantidad)} {suministro.unidad_medida}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div>
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {formatCurrency(suministro.precio_unitario)} / {suministro.unidad_medida}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          Total: {formatCurrency(calculateTotal(suministro))}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEstadoStyle(suministro.estado)}`}>
-                        {ESTADOS_SUMINISTRO[suministro.estado]?.label || suministro.estado}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
-                      {formatDate(suministro.fecha || suministro.fecha_necesaria)}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleEdit(suministro)}
-                          className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
-                          title="Editar"
-                        >
-                          <FaEdit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(suministro.id_suministro)}
-                          className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
-                          title="Eliminar"
-                        >
-                          <FaTrash className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                              Múltiple
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <FaBuilding className="text-gray-400 dark:text-gray-500 w-4 h-4" />
+                              <div className="font-medium text-gray-900 dark:text-white">
+                                {recibo.proveedor}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              {recibo.folio_proveedor || '-'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              {recibo.cantidad_items} artículos
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm font-semibold text-gray-900 dark:text-white">
+                              Total: {formatPriceDisplay(recibo.total)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                              Agrupado
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                            {formatDate(recibo.fecha)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleEditRecibo(recibo)}
+                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
+                                title="Editar grupo"
+                              >
+                                <FaEdit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteRecibo(recibo)}
+                                className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
+                                title="Eliminar grupo"
+                              >
+                                <FaTrash className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                      
+                      // Si está expandido, mostrar todos los suministros del grupo
+                      if (expandedRecibos.has(recibo.id)) {
+                        recibo.suministros.forEach((suministro) => {
+                          rows.push(
+                            <tr key={`sub-${suministro.id_suministro}`} className="bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700">
+                              <td className="px-6 py-4 pl-12">
+                                <div>
+                                  <div className="font-medium text-gray-900 dark:text-white">
+                                    {suministro.nombre || suministro.descripcion}
+                                  </div>
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {suministro.descripcion_detallada || suministro.observaciones}
+                                  </div>
+                                  {suministro.codigo_producto && (
+                                    <div className="text-xs text-gray-400 dark:text-gray-500">
+                                      Código: {suministro.codigo_producto}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                                  {suministro.tipo_suministro || suministro.categoria}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-gray-500 dark:text-gray-400 pl-6">
+                                  (Grupo)
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  -
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  {formatQuantityDisplay(suministro.cantidad)} {suministro.unidad_medida}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {formatPriceDisplay(suministro.precio_unitario)} / {suministro.unidad_medida}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    Total: {formatPriceDisplay(calculateTotal(suministro))}
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEstadoStyle(suministro.estado)}`}>
+                                  {ESTADOS_SUMINISTRO[suministro.estado]?.label || suministro.estado}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                                {formatDate(suministro.fecha || suministro.fecha_necesaria)}
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => handleEdit(suministro)}
+                                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
+                                    title="Editar individual"
+                                  >
+                                    <FaEdit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(suministro.id_suministro)}
+                                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
+                                    title="Eliminar"
+                                  >
+                                    <FaTrash className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        });
+                      }
+                    } else {
+                      // Suministro individual o filtrado por proveedor - renderizar normalmente
+                      const suministro = recibo.suministros[0];
+                      rows.push(
+                        <tr key={suministro.id_suministro} className="hover:bg-gray-50 dark:hover:bg-dark-200">
+                          <td className="px-6 py-4">
+                            <div>
+                              <div className="font-medium text-gray-900 dark:text-white">
+                                {suministro.nombre || suministro.descripcion}
+                              </div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {suministro.descripcion_detallada || suministro.observaciones}
+                              </div>
+                              {suministro.codigo_producto && (
+                                <div className="text-xs text-gray-400 dark:text-gray-500">
+                                  Código: {suministro.codigo_producto}
+                                </div>
+                              )}
+                              {suministro.folio_proveedor && (
+                                <div className="text-xs text-blue-600 dark:text-blue-400">
+                                  Folio: {suministro.folio_proveedor}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                              {suministro.tipo_suministro || suministro.categoria}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <FaBuilding className="text-gray-400 dark:text-gray-500 w-4 h-4" />
+                              <div>
+                                <div className="font-medium text-gray-900 dark:text-white">
+                                  {suministro.proveedorInfo?.nombre || suministro.proveedor || 'Sin asignar'}
+                                </div>
+                                {suministro.proveedorInfo?.tipo_proveedor && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    {suministro.proveedorInfo.tipo_proveedor}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              {suministro.folio_proveedor || '-'}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-gray-900 dark:text-white">
+                              {formatQuantityDisplay(suministro.cantidad)} {suministro.unidad_medida}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div>
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {formatPriceDisplay(suministro.precio_unitario)} / {suministro.unidad_medida}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                Total: {formatPriceDisplay(calculateTotal(suministro))}
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getEstadoStyle(suministro.estado)}`}>
+                              {ESTADOS_SUMINISTRO[suministro.estado]?.label || suministro.estado}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-white">
+                            {formatDate(suministro.fecha || suministro.fecha_necesaria)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleEdit(suministro)}
+                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
+                                title="Editar"
+                              >
+                                <FaEdit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleDelete(suministro.id_suministro)}
+                                className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
+                                title="Eliminar"
+                              >
+                                <FaTrash className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    }
+                  });
+                  
+                  return rows;
+                })()
               )}
             </tbody>
           </table>
@@ -5373,6 +5719,26 @@ const Suministros = () => {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Formulario Múltiple */}
+      {showMultipleModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="w-full max-w-7xl max-h-[90vh] overflow-y-auto">
+            <FormularioMultipleSuministros
+              onSubmit={handleMultipleSubmit}
+              onCancel={() => {
+                setShowMultipleModal(false);
+                setEditingRecibo(null);
+              }}
+              proyectos={proyectos}
+              proveedores={proveedores}
+              categorias={categorias}
+              unidades={unidadesMedida}
+              initialData={editingRecibo}
+            />
           </div>
         </div>
       )}

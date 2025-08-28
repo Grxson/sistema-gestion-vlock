@@ -386,6 +386,10 @@ class ApiService {
     return this.post('/suministros', suministroData);
   }
 
+  async createMultipleSuministros(multipleData) {
+    return this.post('/suministros/multiple', multipleData);
+  }
+
   async updateSuministro(id, suministroData) {
     return this.put(`/suministros/${id}`, suministroData);
   }

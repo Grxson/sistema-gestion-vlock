@@ -21,6 +21,9 @@ router.get('/:id', suministrosController.getSuministroById);
 // Crear un nuevo suministro
 router.post('/', suministrosController.createSuministro);
 
+// Crear múltiples suministros en un recibo
+router.post('/multiple', suministrosController.createMultipleSuministros);
+
 // Actualizar un suministro
 router.put('/:id', suministrosController.updateSuministro);
 
