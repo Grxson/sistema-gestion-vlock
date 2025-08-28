@@ -4,8 +4,11 @@ import { usePermissions } from '../contexts/PermissionsContext';
 import { formatCurrency } from '../utils/currency';
 import apiService from '../services/api';
 import DateInput from './ui/DateInput';
+import { useAlert } from '../hooks/useAlert';
+import AlertContainer from './ui/AlertContainer';
 
 export default function Contratos() {
+  const { alerts, showError, showSuccess, showWarning, removeAlert } = useAlert();
   const [contratos, setContratos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -40,7 +43,16 @@ export default function Contratos() {
       setContratos(response.contratos || []);
     } catch (error) {
       console.error('Error al cargar contratos:', error);
-      alert('Error al cargar los contratos');
+      showError('Error al cargar los contratos', {
+        title: 'Error de carga',
+        actions: [
+          {
+            label: 'Reintentar',
+            variant: 'primary',
+            onClick: () => loadContratos()
+          }
+        ]
+      });
     } finally {
       setLoading(false);
     }
@@ -53,7 +65,16 @@ export default function Contratos() {
       setShowStatsModal(true);
     } catch (error) {
       console.error('Error al cargar estadísticas:', error);
-      alert('Error al cargar las estadísticas');
+      showError('Error al cargar las estadísticas', {
+        title: 'Error de carga',
+        actions: [
+          {
+            label: 'Reintentar',
+            variant: 'primary',
+            onClick: () => loadStats()
+          }
+        ]
+      });
     }
   };
 
@@ -79,10 +100,10 @@ export default function Contratos() {
 
       if (editingContrato) {
         await apiService.updateContrato(editingContrato.id_contrato, dataToSend);
-        alert('Contrato actualizado con éxito');
+        showSuccess('Contrato actualizado con éxito', { duration: 4000 });
       } else {
         await apiService.createContrato(dataToSend);
-        alert('Contrato creado con éxito');
+        showSuccess('Contrato creado con éxito', { duration: 4000 });
       }
       
       resetForm();
@@ -90,7 +111,16 @@ export default function Contratos() {
       loadContratos();
     } catch (error) {
       console.error('Error al guardar contrato:', error);
-      alert(error.response?.data?.message || 'Error al guardar el contrato');
+      showError(error.response?.data?.message || 'Error al guardar el contrato', {
+        title: 'Error de operación',
+        actions: [
+          {
+            label: 'Reintentar',
+            variant: 'primary',
+            onClick: () => handleSubmit({ preventDefault: () => {} })
+          }
+        ]
+      });
     }
   };
 
@@ -106,16 +136,32 @@ export default function Contratos() {
   };
 
   const handleDelete = async (contrato) => {
-    if (window.confirm(`¿Estás seguro de eliminar el contrato ${contrato.tipo_contrato}?`)) {
-      try {
-        await apiService.deleteContrato(contrato.id_contrato);
-        alert('Contrato eliminado con éxito');
-        loadContratos();
-      } catch (error) {
-        console.error('Error al eliminar contrato:', error);
-        alert(error.response?.data?.message || 'Error al eliminar el contrato');
-      }
-    }
+    showWarning(`¿Estás seguro de eliminar el contrato ${contrato.tipo_contrato}?`, {
+      title: 'Confirmar eliminación',
+      autoClose: false,
+      actions: [
+        {
+          label: 'Cancelar',
+          onClick: () => {}
+        },
+        {
+          label: 'Eliminar',
+          variant: 'primary',
+          onClick: async () => {
+            try {
+              await apiService.deleteContrato(contrato.id_contrato);
+              showSuccess('Contrato eliminado con éxito', { duration: 3000 });
+              loadContratos();
+            } catch (error) {
+              console.error('Error al eliminar contrato:', error);
+              showError(error.response?.data?.message || 'Error al eliminar el contrato', {
+                title: 'Error de operación'
+              });
+            }
+          }
+        }
+      ]
+    });
   };
 
   const filteredContratos = contratos.filter(contrato =>
@@ -519,6 +565,8 @@ export default function Contratos() {
           </div>
         </div>
       )}
+      
+      <AlertContainer alerts={alerts} onRemoveAlert={removeAlert} />
     </div>
   );
 }

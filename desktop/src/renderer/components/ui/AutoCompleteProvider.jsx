@@ -100,7 +100,8 @@ export default function AutoCompleteProvider({
       setSearchTerm('');
     } catch (error) {
       console.error('Error al crear proveedor:', error);
-      alert('Error al crear el proveedor');
+      // Simplemente mostrar en consola por ahora, ya que este es un componente de utilidad
+      // Se puede mejorar después implementando un sistema de notificaciones más integrado
     }
   };
 

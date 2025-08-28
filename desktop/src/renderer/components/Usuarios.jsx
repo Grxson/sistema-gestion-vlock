@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
 import ApiErrorHandler from './ui/ApiErrorHandler';
 import PermissionDenied from './PermissionDenied';
+import { useAlert } from '../hooks/useAlert';
+import AlertContainer from './ui/AlertContainer';
 import {
   PlusIcon,
   PencilIcon,
@@ -15,6 +17,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function Usuarios() {
+  const { alerts, showError, showSuccess, showWarning, removeAlert } = useAlert();
   const [usuarios, setUsuarios] = useState([]);
   const [roles, setRoles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -143,9 +146,23 @@ export default function Usuarios() {
         activo: true
       });
       setErrors({});
+      
+      // Mostrar mensaje de éxito
+      showSuccess(editingUsuario ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente', {
+        duration: 4000
+      });
     } catch (error) {
       console.error('Error saving usuario:', error);
-      alert('Error al guardar usuario: ' + error.message);
+      showError(`Error al ${editingUsuario ? 'actualizar' : 'crear'} usuario: ${error.message}`, {
+        title: 'Error de operación',
+        actions: [
+          {
+            label: 'Reintentar',
+            variant: 'primary',
+            onClick: () => handleSubmit({ preventDefault: () => {} })
+          }
+        ]
+      });
     }
   };
 
@@ -166,10 +183,21 @@ export default function Usuarios() {
       setResetPasswordData({ password: '', confirmPassword: '' });
       setErrors({});
       
-      alert('Contraseña actualizada correctamente');
+      showSuccess('Contraseña actualizada correctamente', {
+        duration: 4000
+      });
     } catch (error) {
       console.error('Error resetting password:', error);
-      alert('Error al actualizar contraseña: ' + error.message);
+      showError(`Error al actualizar contraseña: ${error.message}`, {
+        title: 'Error de operación',
+        actions: [
+          {
+            label: 'Reintentar',
+            variant: 'primary',
+            onClick: () => handleResetPassword({ preventDefault: () => {} })
+          }
+        ]
+      });
     }
   };
 
@@ -192,15 +220,34 @@ export default function Usuarios() {
   };
 
   const handleDelete = async (id) => {
-    if (window.confirm('¿Estás seguro de que quieres desactivar este usuario?')) {
-      try {
-        await apiService.delete(`/usuarios/${id}`);
-        fetchUsuarios();
-      } catch (error) {
-        console.error('Error deleting usuario:', error);
-        alert('Error al desactivar usuario: ' + error.message);
-      }
-    }
+    showWarning('¿Estás seguro de que quieres desactivar este usuario?', {
+      title: 'Confirmar desactivación',
+      autoClose: false,
+      actions: [
+        {
+          label: 'Cancelar',
+          onClick: () => {}
+        },
+        {
+          label: 'Desactivar',
+          variant: 'primary',
+          onClick: async () => {
+            try {
+              await apiService.delete(`/usuarios/${id}`);
+              fetchUsuarios();
+              showSuccess('Usuario desactivado correctamente', {
+                duration: 3000
+              });
+            } catch (error) {
+              console.error('Error deleting usuario:', error);
+              showError(`Error al desactivar usuario: ${error.message}`, {
+                title: 'Error de operación'
+              });
+            }
+          }
+        }
+      ]
+    });
   };
 
   const filteredUsuarios = usuarios.filter(usuario =>
@@ -526,6 +573,8 @@ export default function Usuarios() {
           </div>
         </div>
       )}
+      
+      <AlertContainer alerts={alerts} onRemoveAlert={removeAlert} />
     </div>
         );
       }}
