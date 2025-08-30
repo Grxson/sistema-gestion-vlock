@@ -146,6 +146,12 @@ module.exports = (sequelize) => {
       defaultValue: 0,
       comment: 'Costo total del suministro'
     },
+    include_iva: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      comment: 'Indica si el costo_total incluye IVA'
+    },
     
     // Campos adicionales
     observaciones: {

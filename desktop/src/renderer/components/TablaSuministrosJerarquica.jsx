@@ -31,7 +31,21 @@ export default function TablaSuministrosJerarquica({
       }
       
       grupos[folio].suministros.push(suministro);
-      grupos[folio].total += (parseFloat(suministro.cantidad || 0) * parseFloat(suministro.precio_unitario || 0));
+      
+      // Usar costo_total si está disponible, sino calcular manualmente
+      let costoSuministro;
+      if (suministro.costo_total && !isNaN(parseFloat(suministro.costo_total))) {
+        costoSuministro = parseFloat(suministro.costo_total);
+      } else {
+        // Normalizar cantidad y precio antes de calcular total (evitar símbolos/sep. de miles)
+        const cantidadVal = parseFloat(String(suministro.cantidad || '0').replace(/,/g, '').replace(/\s/g, '')) || 0;
+        // eliminar cualquier caracter no numérico excepto punto y guión
+        const precioStr = String(suministro.precio_unitario || '0');
+        const precioVal = parseFloat(precioStr.replace(/[^0-9.\-]/g, '')) || 0;
+        costoSuministro = cantidadVal * precioVal;
+      }
+      
+      grupos[folio].total += costoSuministro;
       grupos[folio].cantidad_items += 1;
     });
     
@@ -293,7 +307,11 @@ export default function TablaSuministrosJerarquica({
                           {formatCurrency(suministro.precio_unitario)}/{suministro.unidad_medida}
                         </div>
                         <div className="font-medium text-gray-700 dark:text-gray-300">
-                          Total: {formatCurrency((suministro.cantidad || 0) * (suministro.precio_unitario || 0))}
+                          Total: {formatCurrency(
+                            suministro.costo_total && !isNaN(parseFloat(suministro.costo_total)) 
+                              ? parseFloat(suministro.costo_total)
+                              : (suministro.cantidad || 0) * (suministro.precio_unitario || 0)
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-3">

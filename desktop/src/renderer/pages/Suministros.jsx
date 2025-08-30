@@ -2363,7 +2363,7 @@ const Suministros = () => {
       }
       
       grupos[claveRecibo].suministros.push(suministro);
-      grupos[claveRecibo].total += parseFloat(suministro.costo_total) || 0;
+      grupos[claveRecibo].total += calculateTotal(suministro);
       grupos[claveRecibo].cantidad_items += 1;
     });
     
@@ -2381,15 +2381,21 @@ const Suministros = () => {
     e.preventDefault();
     
     try {
+      // Calcular costo total
+      const cantidad = parseFloat(formData.cantidad) || 0;
+      const precioUnitario = parseFloat(formData.precio_unitario) || 0;
+      const costoTotal = cantidad * precioUnitario;
+
       const submitData = {
         // Campos básicos mapeados correctamente
         nombre: formData.nombre,
         descripcion_detallada: formData.descripcion,
         tipo_suministro: formData.tipo_suministro,
         codigo_producto: formData.codigo_producto,
-        cantidad: parseFloat(formData.cantidad) || 0,
+        cantidad: cantidad,
         unidad_medida: formData.unidad_medida,
-        precio_unitario: parseFloat(formData.precio_unitario) || 0,
+        precio_unitario: precioUnitario,
+        costo_total: costoTotal, // Añadir el costo total calculado
         fecha: formData.fecha_necesaria,
         estado: formData.estado,
         id_proyecto: formData.id_proyecto,
@@ -2434,7 +2440,12 @@ const Suministros = () => {
 
       let response;
       if (editingSuministro) {
-        response = await api.updateSuministro(editingSuministro.id_suministro, submitData);
+        // Agregar estado del IVA por defecto para actualizaciones individuales
+        const updatePayload = {
+          ...submitData,
+          include_iva: true // Por defecto incluir IVA en actualizaciones individuales
+        };
+        response = await api.updateSuministro(editingSuministro.id_suministro, updatePayload);
         if (response.success) {
           showSuccess(
             'Suministro actualizado',
@@ -2470,22 +2481,99 @@ const Suministros = () => {
     try {
       if (editingRecibo) {
         // Modo edición: actualizar suministros existentes
-        const updatePromises = suministrosData.suministros.map((suministroData) => {
-          // Si el suministro tiene id_suministro, actualizarlo; si no, crearlo
-          if (suministroData.id_suministro) {
-            return api.updateSuministro(suministroData.id_suministro, suministroData);
-          } else {
-            return api.createSuministro(suministroData);
-          }
-        });
+        const infoRecibo = suministrosData.info_recibo || {};
+        const updates = [];
+        const creations = [];
 
-        await Promise.all(updatePromises);
+        // Primero eliminar suministros marcados para eliminar
+        if (suministrosData.suministros_eliminados && suministrosData.suministros_eliminados.length > 0) {
+          const deletePromises = suministrosData.suministros_eliminados.map(id => 
+            api.deleteSuministro(id)
+          );
+          await Promise.all(deletePromises);
+        }
+
+        for (const suministroData of suministrosData.suministros) {
+          if (suministroData.id_suministro) {
+            // Incluir información del IVA en cada actualización
+            const updatePayload = {
+              ...suministroData,
+              include_iva: suministrosData.include_iva
+            };
+            updates.push(api.updateSuministro(suministroData.id_suministro, updatePayload));
+          } else {
+            // construir objeto de suministro para creación (sin duplicar campos de recibo)
+            const newItem = {
+              tipo_suministro: suministroData.tipo_suministro,
+              nombre: suministroData.nombre,
+              codigo_producto: suministroData.codigo_producto,
+              descripcion_detallada: suministroData.descripcion_detallada,
+              estado: suministroData.estado,
+              observaciones: suministroData.observaciones
+            };
+
+            // Función helper para normalizar números
+            const normalizeNumber = (value) => {
+              if (value === '' || value === null || value === undefined) return undefined;
+              return parseFloat(String(value).replace(/,/g, '')) || undefined;
+            };
+
+            if (suministroData.cantidad !== '' && suministroData.cantidad !== null && suministroData.cantidad !== undefined) {
+              newItem.cantidad = normalizeNumber(suministroData.cantidad);
+            }
+            if (suministroData.precio_unitario !== '' && suministroData.precio_unitario !== null && suministroData.precio_unitario !== undefined) {
+              newItem.precio_unitario = normalizeNumber(suministroData.precio_unitario);
+            }
+            if (suministroData.unidad_medida) {
+              newItem.unidad_medida = suministroData.unidad_medida;
+            }
+            if (suministroData.m3_perdidos !== '' && suministroData.m3_perdidos !== null && suministroData.m3_perdidos !== undefined) {
+              newItem.m3_perdidos = normalizeNumber(suministroData.m3_perdidos);
+            }
+            if (suministroData.m3_entregados !== '' && suministroData.m3_entregados !== null && suministroData.m3_entregados !== undefined) {
+              newItem.m3_entregados = normalizeNumber(suministroData.m3_entregados);
+            }
+            if (suministroData.m3_por_entregar !== '' && suministroData.m3_por_entregar !== null && suministroData.m3_por_entregar !== undefined) {
+              newItem.m3_por_entregar = normalizeNumber(suministroData.m3_por_entregar);
+            }
+
+            creations.push(newItem);
+          }
+        }
+
+        // Ejecutar actualizaciones primero
+        await Promise.all(updates);
+
+        // Si hay nuevas filas, crear en lote usando el endpoint de múltiple con info_recibo
+        if (creations.length > 0) {
+          const createPayload = {
+            info_recibo: {
+              proveedor: infoRecibo.proveedor || infoRecibo.proveedor_info?.nombre || '',
+              id_proveedor: infoRecibo.id_proveedor || infoRecibo.proveedor_info?.id_proveedor || null,
+              folio: infoRecibo.folio || infoRecibo.folio_proveedor || null,
+              folio_proveedor: infoRecibo.folio_proveedor || null,
+              fecha: infoRecibo.fecha || null,
+              id_proyecto: infoRecibo.id_proyecto ? parseInt(infoRecibo.id_proyecto) : null,
+              vehiculo_transporte: infoRecibo.vehiculo_transporte || null,
+              operador_responsable: infoRecibo.operador_responsable || null,
+              hora_salida: infoRecibo.hora_salida || null,
+              hora_llegada: infoRecibo.hora_llegada || null,
+              hora_inicio_descarga: infoRecibo.hora_inicio_descarga || null,
+              hora_fin_descarga: infoRecibo.hora_fin_descarga || null,
+              observaciones_generales: infoRecibo.observaciones_generales || infoRecibo.observaciones || ''
+            },
+            suministros: creations
+          };
+
+          await api.createMultipleSuministros(createPayload);
+        }
         
         showSuccess(
           'Suministros actualizados',
           `Se han actualizado/creado ${suministrosData.suministros.length} suministros correctamente`,
           { duration: 4000 }
         );
+        
       } else {
         // Modo creación: crear nuevos suministros
         const response = await api.createMultipleSuministros(suministrosData);
@@ -5726,8 +5814,9 @@ const Suministros = () => {
       {/* Modal Formulario Múltiple */}
       {showMultipleModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-7xl max-h-[90vh] overflow-y-auto">
+          <div className="flex items-center justify-center w-full h-full">
             <FormularioMultipleSuministros
+              key={editingRecibo ? `edit-${editingRecibo.id}` : 'new'}
               onSubmit={handleMultipleSubmit}
               onCancel={() => {
                 setShowMultipleModal(false);
