@@ -44,7 +44,7 @@ import api from '../services/api';
 import ProveedorAutocomplete from '../components/common/ProveedorAutocomplete';
 import DateInput from '../components/ui/DateInput';
 import TimeInput from '../components/ui/TimeInput';
-import FormularioMultipleSuministros from '../components/FormularioMultipleSuministros';
+import FormularioSuministros from '../components/FormularioSuministros';
 import { useToast } from '../contexts/ToastContext';
 
 // Registrar componentes de Chart.js
@@ -109,7 +109,6 @@ const Suministros = () => {
   const [categorias, setCategorias] = useState(Object.keys(CATEGORIAS_SUMINISTRO));
   const [unidadesMedida, setUnidadesMedida] = useState(Object.keys(UNIDADES_MEDIDA));
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [showMultipleModal, setShowMultipleModal] = useState(false);
   const [editingSuministro, setEditingSuministro] = useState(null);
   const [editingRecibo, setEditingRecibo] = useState(null);
@@ -2630,15 +2629,7 @@ const Suministros = () => {
   const handleEdit = (suministro) => {
     console.log('Editando suministro:', suministro); // Para debug
     console.log('proveedorInfo:', suministro.proveedorInfo); // Para debug específico del proveedor
-    setEditingSuministro(suministro);
     
-    // Formatear cantidad para evitar decimales innecesarios
-    const formatQuantityForEdit = (qty) => {
-      if (!qty) return '';
-      const num = parseFloat(qty);
-      return num % 1 === 0 ? num.toString() : num.toString();
-    };
-
     // Función para limpiar horas - convertir 00:00:00 o null a cadena vacía
     const cleanTimeField = (timeValue) => {
       if (!timeValue || timeValue === '00:00:00' || timeValue === '00:00') {
@@ -2651,31 +2642,20 @@ const Suministros = () => {
     const proveedorInfo = suministro.proveedorInfo || suministro.proveedor_info || null;
     console.log('Proveedor procesado:', proveedorInfo); // Debug
     
-    setFormData({
-      nombre: suministro.nombre || suministro.descripcion || '',
-      descripcion: suministro.descripcion_detallada || '',
-      categoria: suministro.tipo_suministro || suministro.categoria || 'Material',
-      cantidad: formatQuantityForEdit(suministro.cantidad),
-      unidad_medida: suministro.unidad_medida || '',
-      precio_unitario: suministro.precio_unitario ? 
-        (Math.round(parseFloat(suministro.precio_unitario) * 100) / 100).toFixed(2) : '',
-      fecha_necesaria: suministro.fecha || suministro.fecha_necesaria ? 
-        new Date(suministro.fecha || suministro.fecha_necesaria).toISOString().split('T')[0] : '',
-      estado: suministro.estado || 'Solicitado',
-      id_proyecto: suministro.id_proyecto?.toString() || '',
+    // Limpiar campos de hora antes de pasar al formulario
+    const suministroLimpio = {
+      ...suministro,
+      proveedorInfo: proveedorInfo,
       proveedor_info: proveedorInfo,
-      observaciones: suministro.observaciones || '',
-      codigo_producto: suministro.codigo_producto || '',
-      // Campos de recibo - limpiar valores de hora
-      folio_proveedor: suministro.folio_proveedor || '',
-      operador_responsable: suministro.operador_responsable || '',
-      vehiculo_transporte: suministro.vehiculo_transporte || '',
       hora_salida: cleanTimeField(suministro.hora_salida),
       hora_llegada: cleanTimeField(suministro.hora_llegada),
       hora_inicio_descarga: cleanTimeField(suministro.hora_inicio_descarga),
       hora_fin_descarga: cleanTimeField(suministro.hora_fin_descarga)
-    });
-    setShowModal(true);
+    };
+    
+    // Pasar el suministro individual directamente - FormularioSuministros ahora puede manejarlo
+    setEditingRecibo(suministroLimpio);
+    setShowMultipleModal(true);
   };
 
   // Funciones helper para formatear precios y cantidades (mostrar 0 en lugar de NaN)
@@ -2739,7 +2719,7 @@ const Suministros = () => {
   };
 
   const handleCloseModal = () => {
-    setShowModal(false);
+    setShowMultipleModal(false);
     setEditingSuministro(null);
     
     // Limpiar todas las sugerencias
@@ -3108,18 +3088,11 @@ const Suministros = () => {
               {showCharts ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
             </button>
             <button
-              onClick={() => setShowModal(true)}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
-            >
-              <FaPlus className="w-4 h-4" />
-              Individual
-            </button>
-            <button
               onClick={() => setShowMultipleModal(true)}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
             >
-              <FaBoxes className="w-4 h-4" />
-              Múltiple
+              <FaPlus className="w-4 h-4" />
+              Nuevo Suministro
             </button>
           </div>
         </div>
@@ -5300,522 +5273,12 @@ const Suministros = () => {
         )}
       </div>
 
-      {/* Modal de formulario */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                {editingSuministro ? 'Editar Suministro' : 'Nuevo Suministro'}
-              </h2>
 
-              {/* Texto explicativo */}
-              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-                      Guía de llenado
-                    </h3>
-                    <div className="mt-2 text-sm text-red-700 dark:text-red-400">
-                      <p className="mb-2">
-                        <strong>Campos obligatorios (*):</strong> Nombre, Categoría, Proveedor, Cantidad, Unidad de Medida y Precio.
-                      </p>
-                      <p className="mb-2">
-                        <strong>Información de Recibo:</strong> Completa según los datos del recibo físico. El folio del proveedor aparece usualmente en la parte superior del documento.
-                      </p>
-                      <p>
-                        <strong>Horarios y Transporte:</strong> Información opcional para seguimiento detallado de entregas y logística.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Información básica */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Información Básica</h3>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Nombre del Suministro *
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={formData.nombre}
-                            onChange={(e) => {
-                              setFormData({...formData, nombre: e.target.value});
-                              setSelectedSuggestion(null);
-                            }}
-                            onFocus={() => formData.nombre.length >= 2 && setShowNameSuggestions(nameSuggestions.length > 0)}
-                            onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
-                            className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 ${
-                              showDuplicatesWarning 
-                                ? 'border-yellow-500 dark:border-yellow-400 focus:ring-yellow-500' 
-                                : 'border-gray-300 dark:border-gray-600 focus:ring-red-500'
-                            }`}
-                            placeholder="Ej: Grava 1 1/2, Retroexcavadora 415F"
-                            required
-                          />
-                          {showDuplicatesWarning && (
-                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                              <span className="text-yellow-500 text-sm">⚠️</span>
-                            </div>
-                          )}
-
-                          {/* Dropdown de sugerencias de nombres */}
-                          {showNameSuggestions && nameSuggestions.length > 0 && (
-                            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                              <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 border-b">
-                                Sugerencias de nombres similares
-                              </div>
-                              {nameSuggestions.map((suggestion, index) => (
-                                <div
-                                  key={index}
-                                  onClick={() => {
-                                    setFormData(prev => ({...prev, nombre: suggestion}));
-                                    setShowNameSuggestions(false);
-                                  }}
-                                  className="px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 flex items-center justify-between"
-                                >
-                                  <span>{suggestion}</span>
-                                  <FaSearch className="h-3 w-3 text-gray-400" />
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Sugerencias de duplicados */}
-                        {showDuplicatesWarning && duplicatesSuggestions.length > 0 && (
-                          <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
-                            <div className="flex items-center mb-2">
-                              <span className="text-yellow-600 dark:text-yellow-400 text-sm font-medium">
-                                ⚠️ Posibles duplicados encontrados:
-                              </span>
-                            </div>
-                            <div className="space-y-1 max-h-32 overflow-y-auto">
-                              {duplicatesSuggestions.map((suggestion, index) => {
-                                const proyecto = proyectos.find(p => p.id_proyecto === suggestion.id_proyecto)?.nombre || 'Sin proyecto';
-                                const proveedor = suggestion.proveedor || suggestion.proveedorInfo?.nombre || 'Sin proveedor';
-                                return (
-                                  <div key={index} className="text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-800/30 p-2 rounded">
-                                    <div className="font-medium">{suggestion.nombre}</div>
-                                    <div className="text-yellow-600 dark:text-yellow-400">
-                                      {proyecto} • {proveedor} • {suggestion.estado}
-                                      {suggestion.codigo_producto && ` • Código: ${suggestion.codigo_producto}`}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
-                              💡 Verifica si alguno de estos coincide con lo que intentas crear
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Folio del Proveedor
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.folio_proveedor}
-                          onChange={(e) => setFormData({...formData, folio_proveedor: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          placeholder="Ej: 37946, 62289"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Descripción
-                      </label>
-                      <textarea
-                        value={formData.descripcion}
-                        onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Categoría *
-                        </label>
-                        <select
-                          value={formData.tipo_suministro}
-                          onChange={(e) => setFormData({...formData, tipo_suministro: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          required
-                        >
-                          {Object.entries(CATEGORIAS_SUMINISTRO).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Proyecto *
-                        </label>
-                        <select
-                          value={formData.id_proyecto}
-                          onChange={(e) => setFormData({...formData, id_proyecto: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          required
-                        >
-                          <option value="">Seleccionar proyecto</option>
-                          {proyectos.map((proyecto) => (
-                            <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
-                              {proyecto.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Código de Producto
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={formData.codigo_producto}
-                          onChange={(e) => setFormData({...formData, codigo_producto: e.target.value})}
-                          onFocus={() => formData.codigo_producto.length >= 2 && setShowCodeSuggestions(codeSuggestions.length > 0)}
-                          onBlur={() => setTimeout(() => setShowCodeSuggestions(false), 200)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-                          placeholder="SKU, código interno, etc."
-                        />
-
-                        {/* Dropdown de sugerencias de códigos */}
-                        {showCodeSuggestions && codeSuggestions.length > 0 && (
-                          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-40 overflow-y-auto">
-                            <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 border-b">
-                              Códigos similares
-                            </div>
-                            {codeSuggestions.map((suggestion, index) => (
-                              <div
-                                key={index}
-                                onClick={() => {
-                                  setFormData(prev => ({...prev, codigo_producto: suggestion}));
-                                  setShowCodeSuggestions(false);
-                                }}
-                                className="px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                              >
-                                {suggestion}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Información comercial */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Información Comercial</h3>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Proveedor *
-                      </label>
-                      <ProveedorAutocomplete
-                        value={formData.proveedor_info}
-                        onChange={(proveedor) => setFormData({...formData, proveedor_info: proveedor})}
-                        tipoSugerido={
-                          formData.categoria === 'Material' ? 'Material' :
-                          formData.categoria === 'Servicio' ? 'Servicio' :
-                          formData.categoria === 'Equipo' ? 'Equipo' : 'Mixto'
-                        }
-                        required
-                      />
-                    </div>
-
-                    {/* Plantillas de Proveedor */}
-                    {formData.proveedor_info && proveedorSuministros.length > 0 && (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center">
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          Suministros comunes de {formData.proveedor_info.nombre}
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                          {proveedorSuministros.slice(0, 6).map((suministro, index) => (
-                            <button
-                              key={index}
-                              type="button"
-                              onClick={() => {
-                                setFormData({
-                                  ...formData,
-                                  // Información básica
-                                  nombre: suministro.nombre,
-                                  descripcion: suministro.descripcion_detallada || suministro.descripcion || '',
-                                  tipo_suministro: suministro.tipo_suministro || suministro.categoria || 'Material',
-                                  codigo_producto: suministro.codigo_producto || suministro.codigo || '',
-                                  
-                                  // Información comercial (mantener proveedor actual)
-                                  cantidad: suministro.cantidad || '',
-                                  unidad_medida: suministro.unidad_medida || 'pz',
-                                  precio_unitario: suministro.precio_unitario || '',
-                                  
-                                  // Estado y proyecto (usar valores por defecto)
-                                  estado: 'Solicitado', // Nuevo estado por defecto
-                                  // NO copiamos el folio_proveedor para que sea único
-                                  
-                                  // Observaciones si existen
-                                  observaciones: suministro.observaciones || ''
-                                });
-                                // Ocultar todas las sugerencias después de seleccionar
-                                setShowNameSuggestions(false);
-                                setShowCodeSuggestions(false);
-                              }}
-                              className="text-left p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors text-xs"
-                            >
-                              <div className="font-medium text-gray-900 dark:text-white truncate">
-                                {suministro.nombre}
-                              </div>
-                              <div className="text-gray-500 dark:text-gray-400 truncate text-xs">
-                                {suministro.codigo_producto || suministro.codigo} • {suministro.tipo_suministro || suministro.categoria}
-                              </div>
-                              <div className="text-gray-500 dark:text-gray-400 truncate text-xs">
-                                {suministro.unidad_medida} • {suministro.precio_unitario ? `$${parseFloat(suministro.precio_unitario).toFixed(2)}` : 'Sin precio'}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                        {proveedorSuministros.length > 6 && (
-                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                            +{proveedorSuministros.length - 6} suministros más
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Cantidad *
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.cantidad}
-                          onChange={(e) => setFormData({...formData, cantidad: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Unidad de Medida *
-                        </label>
-                        <select
-                          value={formData.unidad_medida}
-                          onChange={(e) => setFormData({...formData, unidad_medida: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          required
-                        >
-                          {Object.entries(UNIDADES_MEDIDA).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Precio Unitario *
-                      </label>
-                      <div className="relative">
-                        <FaDollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.precio_unitario}
-                          onChange={(e) => {
-                            const formattedValue = handlePriceChange(e.target.value);
-                            setFormData({...formData, precio_unitario: formattedValue});
-                          }}
-                          onBlur={(e) => {
-                            // Al perder el foco, redondear a 2 decimales si es necesario
-                            const value = e.target.value;
-                            if (value && !isNaN(value)) {
-                              const rounded = Math.round(parseFloat(value) * 100) / 100;
-                              setFormData({...formData, precio_unitario: rounded.toFixed(2)});
-                            }
-                          }}
-                          className="w-full pl-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          placeholder="Ej: 520.75"
-                          required
-                        />
-                      </div>
-                      {formData.cantidad && formData.precio_unitario && (
-                        <div className="text-sm mt-1 space-y-1">
-                          <p className="text-green-600 dark:text-green-400 font-medium">
-                            Total: {formatCurrency(parseFloat(formData.cantidad) * parseFloat(formData.precio_unitario))}
-                          </p>
-                          <p className="text-gray-500 dark:text-gray-400 text-xs">
-                            Precio unitario: {formatCurrency(parseFloat(formData.precio_unitario || 0))}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Estado
-                        </label>
-                        <select
-                          value={formData.estado}
-                          onChange={(e) => setFormData({...formData, estado: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                        >
-                          {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <DateInput
-                          label="Fecha"
-                          value={formData.fecha_necesaria}
-                          onChange={(date) => setFormData({...formData, fecha_necesaria: date})}
-                          placeholder="Seleccionar fecha"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Observaciones
-                      </label>
-                      <textarea
-                        value={formData.observaciones}
-                        onChange={(e) => setFormData({...formData, observaciones: e.target.value})}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                        placeholder="Notas adicionales, especificaciones técnicas, etc."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sección de Información de Recibo */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2 flex items-center">
-                    <FaTruck className="mr-2 text-red-600" />
-                    Información de Recibo
-                  </h3>
-                  
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Complete esta sección con la información del recibo físico. Los horarios son opcionales y útiles para el seguimiento logístico.
-                  </p>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Operador/Responsable
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.operador_responsable}
-                            onChange={(e) => setFormData({...formData, operador_responsable: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                            placeholder="Ej: Ramiro Leyva López"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Vehículo/Camión
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.vehiculo_transporte}
-                            onChange={(e) => setFormData({...formData, vehiculo_transporte: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                            placeholder="Ej: 19-AV-8P, 22-AM-6R"
-                          />
-                        </div>
-
-                        <TimeInput
-                          label="Hora de Salida"
-                          value={formData.hora_salida}
-                          onChange={(time) => setFormData({...formData, hora_salida: time})}
-                          placeholder="Seleccionar hora de salida"
-                        />
-
-                        <TimeInput
-                          label="Hora de Llegada"
-                          value={formData.hora_llegada}
-                          onChange={(time) => setFormData({...formData, hora_llegada: time})}
-                          placeholder="Seleccionar hora de llegada"
-                        />
-
-                        <TimeInput
-                          label="Inicio de Descarga"
-                          value={formData.hora_inicio_descarga}
-                          onChange={(time) => setFormData({...formData, hora_inicio_descarga: time})}
-                          placeholder="Seleccionar hora de inicio"
-                        />
-
-                        <TimeInput
-                          label="Fin de Descarga"
-                          value={formData.hora_fin_descarga}
-                          onChange={(time) => setFormData({...formData, hora_fin_descarga: time})}
-                          placeholder="Seleccionar hora de fin"
-                        />
-                      </div>
-                </div>
-
-                {/* Botones */}
-                <div className="flex justify-end gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-dark-200 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-300 transition-colors duration-200"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
-                  >
-                    {editingSuministro ? 'Actualizar' : 'Crear'} Suministro
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Modal Formulario Múltiple */}
+      {/* Modal Formulario Unificado */}
       {showMultipleModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="flex items-center justify-center w-full h-full">
-            <FormularioMultipleSuministros
+            <FormularioSuministros
               key={editingRecibo ? `edit-${editingRecibo.id}` : 'new'}
               onSubmit={handleMultipleSubmit}
               onCancel={() => {

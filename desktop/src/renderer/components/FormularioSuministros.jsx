@@ -3,6 +3,7 @@ import { FaPlus, FaTrash, FaCopy, FaSave, FaTimes, FaBoxes } from "react-icons/f
 import ProveedorAutocomplete from "./common/ProveedorAutocomplete";
 import DateInput from "./ui/DateInput";
 import TimeInput from "./ui/TimeInput";
+import api from '../services/api';
 
 const CATEGORIAS_SUMINISTRO = {
   'Material': 'Material',
@@ -45,7 +46,7 @@ const UNIDADES_MEDIDA = {
   'set': 'Set'
 };
 
-export default function FormularioMultipleSuministros({ 
+export default function FormularioSuministros({ 
   onSubmit, 
   onCancel, 
   proyectos = [],
@@ -145,45 +146,58 @@ export default function FormularioMultipleSuministros({
 
   // Cargar datos iniciales cuando se edita un recibo existente
   useEffect(() => {
-    if (initialData && initialData.suministros && initialData.suministros.length > 0) {
-      // Cargar información del recibo
-      const primerSuministro = initialData.suministros[0];
-      setReciboInfo({
-        folio_proveedor: primerSuministro.folio_proveedor || '',
-        id_proyecto: primerSuministro.id_proyecto?.toString() || '',
-        proveedor_info: primerSuministro.proveedorInfo || null,
-        fecha: primerSuministro.fecha ? new Date(primerSuministro.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        numero_factura: primerSuministro.numero_factura || '',
-        metodo_pago: primerSuministro.metodo_pago || 'Efectivo',
-        observaciones: primerSuministro.observaciones || '',
-        vehiculo_transporte: primerSuministro.vehiculo_transporte || '',
-        operador_responsable: primerSuministro.operador_responsable || '',
-        hora_salida: primerSuministro.hora_salida || '',
-        hora_llegada: primerSuministro.hora_llegada || '',
-        hora_inicio_descarga: primerSuministro.hora_inicio_descarga || '',
-        hora_fin_descarga: primerSuministro.hora_fin_descarga || ''
-      });
+    if (initialData) {
+      // Detectar si es un suministro individual o múltiple
+      let suministrosParaProcesar = [];
+      
+      if (initialData.suministros && Array.isArray(initialData.suministros)) {
+        // Es la estructura de múltiples (recibo con array de suministros)
+        suministrosParaProcesar = initialData.suministros;
+      } else if (initialData.id_suministro || initialData.nombre) {
+        // Es un suministro individual, convertirlo a estructura de array
+        suministrosParaProcesar = [initialData];
+      }
 
-      // Cargar suministros
-      const suministrosCargados = initialData.suministros.map((suministro, index) => ({
-        id_temp: Date.now() + index,
-        id_suministro: suministro.id_suministro, // Mantener ID original para actualizaciones
-        tipo_suministro: suministro.tipo_suministro || suministro.categoria || 'Material',
-        nombre: suministro.nombre || '',
-        codigo_producto: suministro.codigo_producto || '',
-        descripcion_detallada: suministro.descripcion_detallada || '',
-        cantidad: suministro.cantidad?.toString() || '',
-        unidad_medida: suministro.unidad_medida || 'pz',
-        precio_unitario: suministro.precio_unitario?.toString() || '',
-        estado: suministro.estado || 'Entregado',
-        fecha_necesaria: suministro.fecha_necesaria ? new Date(suministro.fecha_necesaria).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-        observaciones: suministro.observaciones || '',
-        m3_perdidos: suministro.m3_perdidos?.toString() || '',
-        m3_entregados: suministro.m3_entregados?.toString() || '',
-        m3_por_entregar: suministro.m3_por_entregar?.toString() || ''
-      }));
+      if (suministrosParaProcesar.length > 0) {
+        // Cargar información del recibo del primer suministro
+        const primerSuministro = suministrosParaProcesar[0];
+        setReciboInfo({
+          folio_proveedor: primerSuministro.folio_proveedor || '',
+          id_proyecto: primerSuministro.id_proyecto?.toString() || '',
+          proveedor_info: primerSuministro.proveedorInfo || primerSuministro.proveedor_info || null,
+          fecha: primerSuministro.fecha ? new Date(primerSuministro.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          numero_factura: primerSuministro.numero_factura || '',
+          metodo_pago: primerSuministro.metodo_pago || 'Efectivo',
+          observaciones: primerSuministro.observaciones || '',
+          vehiculo_transporte: primerSuministro.vehiculo_transporte || '',
+          operador_responsable: primerSuministro.operador_responsable || '',
+          hora_salida: primerSuministro.hora_salida || '',
+          hora_llegada: primerSuministro.hora_llegada || '',
+          hora_inicio_descarga: primerSuministro.hora_inicio_descarga || '',
+          hora_fin_descarga: primerSuministro.hora_fin_descarga || ''
+        });
 
-      setSuministros(suministrosCargados);
+        // Cargar suministros
+        const suministrosCargados = suministrosParaProcesar.map((suministro, index) => ({
+          id_temp: Date.now() + index,
+          id_suministro: suministro.id_suministro, // Mantener ID original para actualizaciones
+          tipo_suministro: suministro.tipo_suministro || suministro.categoria || 'Material',
+          nombre: suministro.nombre || '',
+          codigo_producto: suministro.codigo_producto || '',
+          descripcion_detallada: suministro.descripcion_detallada || '',
+          cantidad: suministro.cantidad?.toString() || '',
+          unidad_medida: suministro.unidad_medida || 'pz',
+          precio_unitario: suministro.precio_unitario?.toString() || '',
+          estado: suministro.estado || 'Entregado',
+          fecha_necesaria: suministro.fecha_necesaria ? new Date(suministro.fecha_necesaria).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          observaciones: suministro.observaciones || '',
+          m3_perdidos: suministro.m3_perdidos?.toString() || '',
+          m3_entregados: suministro.m3_entregados?.toString() || '',
+          m3_por_entregar: suministro.m3_por_entregar?.toString() || ''
+        }));
+
+        setSuministros(suministrosCargados);
+      }
     }
   }, [initialData]);
 
@@ -193,11 +207,9 @@ export default function FormularioMultipleSuministros({
   useEffect(() => {
     const cargarSuministrosExistentes = async () => {
       try {
-        const response = await fetch('/api/suministros');
-        if (response.ok) {
-          const data = await response.json();
-          setExistingSuministros(data.suministros || []);
-        }
+        const response = await api.getSuministros();
+        console.log('🔍 Suministros cargados para autocompletado:', response.suministros?.length || 0);
+        setExistingSuministros(response.suministros || []);
       } catch (error) {
         console.warn('No se pudieron cargar suministros existentes para autocompletado:', error);
       }
@@ -205,33 +217,47 @@ export default function FormularioMultipleSuministros({
     cargarSuministrosExistentes();
   }, []);
 
-  // Función para verificar duplicados por folio de proveedor
-  const checkForDuplicates = useCallback((folioProveedor) => {
+  // Función para verificar duplicados DENTRO del formulario actual
+  const checkForDuplicates = useCallback((folioProveedor, currentIndex = -1) => {
     if (!folioProveedor || folioProveedor.trim() === '') {
       return [];
     }
 
-    return existingSuministros.filter(suministro => 
+    return suministros.filter((suministro, index) => 
+      index !== currentIndex &&
       suministro.folio_proveedor && 
       suministro.folio_proveedor.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
     );
-  }, [existingSuministros]);
+  }, [suministros]);
 
-  // Función para buscar sugerencias de duplicados en tiempo real
-  const searchDuplicateSuggestions = useCallback((folioProveedor) => {
+  // Función para buscar registros existentes en la base de datos (advertencia, no bloqueo)
+  const searchExistingRecords = useCallback((folioProveedor) => {
     if (!folioProveedor || folioProveedor.trim() === '') {
       setDuplicatesSuggestions([]);
       setShowDuplicatesWarning(false);
       return;
     }
 
-    const suggestions = existingSuministros.filter(suministro => 
+    console.log('🔍 Buscando duplicados para folio:', folioProveedor);
+    console.log('📊 Total suministros en base:', existingSuministros.length);
+
+    const existingRecords = existingSuministros.filter(suministro => 
       suministro.folio_proveedor && 
       suministro.folio_proveedor.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
-    ).slice(0, 5);
+    ).slice(0, 3);
 
-    setDuplicatesSuggestions(suggestions);
-    setShowDuplicatesWarning(suggestions.length > 0);
+    console.log('⚠️ Duplicados encontrados:', existingRecords.length);
+    if (existingRecords.length > 0) {
+      console.log('📋 Registros duplicados:', existingRecords.map(r => ({ 
+        nombre: r.nombre, 
+        proveedor: r.proveedor || r.proveedorInfo?.nombre,
+        folio: r.folio_proveedor,
+        fecha: r.fecha
+      })));
+    }
+
+    setDuplicatesSuggestions(existingRecords);
+    setShowDuplicatesWarning(existingRecords.length > 0);
   }, [existingSuministros]);
 
   // Función para autocompletar nombres de suministros
@@ -398,7 +424,7 @@ export default function FormularioMultipleSuministros({
     
     // Buscar duplicados cuando cambia el folio
     if (value && value.trim() !== '') {
-      searchDuplicateSuggestions(value);
+      searchExistingRecords(value);
     } else {
       setDuplicatesSuggestions([]);
       setShowDuplicatesWarning(false);
@@ -450,16 +476,57 @@ export default function FormularioMultipleSuministros({
       return;
     }
 
-    // Validar duplicados por folio de proveedor (solo si no estamos editando)
-    if (!initialData && reciboInfo.folio_proveedor) {
+    // Validar duplicados por folio de proveedor (solo dentro del mismo registro)
+    if (reciboInfo.folio_proveedor && suministros.length > 1) {
+      // Solo validamos duplicados si hay múltiples suministros en el mismo registro
       const duplicates = checkForDuplicates(reciboInfo.folio_proveedor);
       if (duplicates.length > 0) {
         const confirmar = window.confirm(
-          `Se encontraron ${duplicates.length} suministro(s) con el mismo folio "${reciboInfo.folio_proveedor}". ¿Desea continuar de todas formas?`
+          `Está registrando ${suministros.length} suministros con el mismo folio "${reciboInfo.folio_proveedor}". ¿Desea continuar de todas formas?`
         );
         if (!confirmar) {
           return;
         }
+      }
+    }
+
+    // NUEVA VALIDACIÓN: Verificar duplicados con registros existentes en la base de datos
+    if (reciboInfo.folio_proveedor && reciboInfo.folio_proveedor.trim() !== '') {
+      console.log('🔍 Verificando duplicados contra base de datos para folio:', reciboInfo.folio_proveedor);
+      
+      const existingDuplicates = existingSuministros.filter(suministro => {
+        // Excluir suministros que estamos editando (si aplica)
+        const isBeingEdited = initialData?.suministros?.some(s => s.id_suministro === suministro.id_suministro);
+        if (isBeingEdited) {
+          return false;
+        }
+
+        // Verificar folio exacto
+        return suministro.folio_proveedor && 
+               suministro.folio_proveedor.toLowerCase().trim() === reciboInfo.folio_proveedor.toLowerCase().trim();
+      });
+
+      if (existingDuplicates.length > 0) {
+        console.log('⚠️ Duplicados encontrados en base de datos:', existingDuplicates.length);
+        
+        const duplicateInfo = existingDuplicates.slice(0, 3).map(dup => {
+          const proveedor = dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor';
+          const fecha = dup.fecha ? new Date(dup.fecha).toLocaleDateString('es-MX') : 'Sin fecha';
+          return `• ${dup.nombre} (${proveedor} - ${fecha})`;
+        }).join('\n');
+
+        const moreMessage = existingDuplicates.length > 3 ? `\n... y ${existingDuplicates.length - 3} más` : '';
+        
+        const warningTitle = "🚫 FOLIO DUPLICADO DETECTADO";
+        const warningMessage = `¡ATENCIÓN! El folio "${reciboInfo.folio_proveedor}" ya existe en:\n\n${duplicateInfo}${moreMessage}\n\n` +
+                         `Los folios deben ser únicos. ¿Está seguro de que desea continuar?`;
+
+        const confirmed = window.confirm(warningMessage);
+        if (!confirmed) {
+          console.log('❌ Usuario canceló por duplicados');
+          return;
+        }
+        console.log('✅ Usuario confirmó continuar con duplicados');
       }
     }
     
@@ -1024,7 +1091,7 @@ export default function FormularioMultipleSuministros({
             ) : (
               <>
                 <FaSave className="w-4 h-4" />
-                Guardar ({totales.cantidad_items} artículos)
+                {suministros.length === 1 ? 'Guardar Suministro' : `Guardar ${suministros.length} Suministros`}
               </>
             )}
           </button>
