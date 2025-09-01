@@ -96,11 +96,17 @@ const DateInput = ({
   };
 
   const handleDateSelect = (date) => {
-    // Crear fecha en timezone local para evitar problemas de zona horaria
+    // Crear fecha local sin problemas de zona horaria
     const localDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const isoString = localDate.toISOString().split('T')[0];
+    
+    // Formatear manualmente para evitar problemas de zona horaria
+    const year = localDate.getFullYear();
+    const month = String(localDate.getMonth() + 1).padStart(2, '0');
+    const day = String(localDate.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+    
     setSelectedDate(localDate);
-    onChange(isoString);
+    onChange(dateString);
     setIsOpen(false);
   };
 
@@ -204,7 +210,7 @@ const DateInput = ({
           className={baseClasses}
           onClick={handleInputClick}
         >
-          <span className={`block text-left text-sm whitespace-nowrap overflow-hidden text-ellipsis ${!value ? 'text-gray-500' : 'text-gray-900 dark:text-white'}`}>
+          <span className={`block text-left text-sm ${!value ? 'text-gray-500' : 'text-gray-900 dark:text-white'}`}>
             {value ? formatDisplayDate(value) : placeholder}
           </span>
           

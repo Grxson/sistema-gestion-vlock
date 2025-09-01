@@ -2929,7 +2929,23 @@ const Suministros = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'No especificada';
-    return new Date(dateString).toLocaleDateString('es-MX');
+    
+    // Si ya está en formato YYYY-MM-DD, formatearlo directamente sin crear Date object
+    if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    
+    // Fallback para otros formatos, crear fecha local
+    try {
+      const fecha = new Date(dateString + 'T00:00:00'); // Agregar tiempo para evitar zona horaria
+      const day = String(fecha.getDate()).padStart(2, '0');
+      const month = String(fecha.getMonth() + 1).padStart(2, '0');
+      const year = fecha.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch (error) {
+      return 'Fecha inválida';
+    }
   };
 
   const getEstadoStyle = (estado) => {
@@ -4898,7 +4914,7 @@ const Suministros = () => {
                   Estado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Fecha Necesaria
+                  Fecha
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Acciones

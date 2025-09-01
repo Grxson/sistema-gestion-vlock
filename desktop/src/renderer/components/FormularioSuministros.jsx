@@ -71,12 +71,21 @@ export default function FormularioSuministros({
     return true;
   }, [initialData]);
 
+  // Función para obtener fecha local correcta (sin problemas de zona horaria)
+  const getLocalDateString = useCallback(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
   // Estado del recibo/folio principal
   const [reciboInfo, setReciboInfo] = useState({
     folio_proveedor: '',
     id_proyecto: '',
     proveedor_info: null,
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: getLocalDateString(),
     numero_factura: '',
     metodo_pago: 'Efectivo',
     observaciones: '',
@@ -100,7 +109,7 @@ export default function FormularioSuministros({
       unidad_medida: 'pz',
       precio_unitario: '',
       estado: 'Entregado',
-      fecha_necesaria: new Date().toISOString().split('T')[0],
+      fecha_necesaria: getLocalDateString(),
       observaciones: '',
       
       // Campos específicos para ciertos materiales
@@ -147,14 +156,32 @@ export default function FormularioSuministros({
     fecha: { required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ }
   });
   
-  // Validador para cada suministro
-  suministros.forEach((suministro, index) => {
-    debugTools.useFormStateValidator(suministro, {
-      nombre: { required: true },
-      cantidad: { required: true, type: 'number', min: 0.01 },
-      precio_unitario: { required: true, type: 'number', min: 0.01 }
-    });
-  });
+  // Validador para suministros (sin usar forEach para evitar violación de reglas de hooks)
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+      suministros.forEach((suministro, index) => {
+        const issues = [];
+        
+        if (!suministro.nombre || suministro.nombre === '') {
+          issues.push(`❌ Suministro ${index + 1}: Nombre requerido`);
+        }
+        
+        if (!suministro.cantidad || isNaN(Number(suministro.cantidad)) || Number(suministro.cantidad) <= 0) {
+          issues.push(`❌ Suministro ${index + 1}: Cantidad debe ser mayor a 0`);
+        }
+        
+        if (!suministro.precio_unitario || isNaN(Number(suministro.precio_unitario)) || Number(suministro.precio_unitario) <= 0) {
+          issues.push(`❌ Suministro ${index + 1}: Precio unitario debe ser mayor a 0`);
+        }
+        
+        if (issues.length > 0) {
+          console.group(`🚨 Problemas en suministro ${index + 1}:`);
+          issues.forEach(issue => console.warn(issue));
+          console.groupEnd();
+        }
+      });
+    }
+  }, [suministros]);
 
   // Calcular totales automáticamente (optimizado con useMemo)
   const totales = useMemo(() => {
@@ -174,96 +201,6 @@ export default function FormularioSuministros({
       total: total.toFixed(2)
     };
   }, [suministros, includeIVA]);
-
-  // ⚡ OPTIMIZACIÓN CRÍTICA: Cargar datos iniciales de forma asíncrona
-  useEffect(() => {
-    // ⚡ Early return si no hay datos iniciales
-    if (!initialData) return;
-    
-    // ⚡ Usar requestAnimationFrame para diferir el procesamiento pesado
-    const processInitialData = () => {
-      const startTime = performance.now();
-      
-      // Detectar si es un suministro individual o múltiple
-      let suministrosParaProcesar = [];
-      
-      if (initialData.suministros && Array.isArray(initialData.suministros)) {
-        // Es la estructura de múltiples (recibo con array de suministros)
-        suministrosParaProcesar = initialData.suministros;
-      } else if (initialData.id_suministro || initialData.nombre) {
-        // Es un suministro individual, convertirlo a estructura de array
-        suministrosParaProcesar = [initialData];
-      }
-
-      // ⚡ Early return si no hay suministros para procesar
-      if (suministrosParaProcesar.length === 0) return;
-
-      // Cargar información del recibo del primer suministro
-      const primerSuministro = suministrosParaProcesar[0];
-      
-      // ⚡ BATCH: Actualizar reciboInfo una sola vez
-      setReciboInfo(prevState => ({
-        ...prevState,
-        folio_proveedor: primerSuministro.folio_proveedor || '',
-        id_proyecto: primerSuministro.id_proyecto?.toString() || '',
-        proveedor_info: primerSuministro.proveedorInfo || primerSuministro.proveedor_info || null,
-        fecha: normalizeFecha(primerSuministro.fecha),
-        numero_factura: primerSuministro.numero_factura || '',
-        metodo_pago: primerSuministro.metodo_pago || 'Efectivo',
-        observaciones: primerSuministro.observaciones || '',
-        vehiculo_transporte: primerSuministro.vehiculo_transporte || '',
-        operador_responsable: primerSuministro.operador_responsable || '',
-        hora_salida: primerSuministro.hora_salida || '',
-        hora_llegada: primerSuministro.hora_llegada || '',
-        hora_inicio_descarga: primerSuministro.hora_inicio_descarga || '',
-        hora_fin_descarga: primerSuministro.hora_fin_descarga || ''
-      }));
-
-      // ⚡ OPTIMIZACIÓN: Procesar suministros usando reduce para una sola pasada
-      const timestamp = Date.now();
-      const suministrosCargados = suministrosParaProcesar.reduce((acc, suministro, index) => {
-        // ⚡ Cache normalizaciones para evitar recálculos
-        const unidadNormalizada = normalizeUnidadMedida(suministro.unidad_medida);
-        const categoriaNormalizada = normalizeCategoria(suministro.tipo_suministro || suministro.categoria);
-        const fechaNormalizada = normalizeFecha(suministro.fecha_necesaria || suministro.fecha);
-        
-        acc.push({
-          id_temp: timestamp + index,
-          id_suministro: suministro.id_suministro,
-          tipo_suministro: categoriaNormalizada,
-          nombre: suministro.nombre || '',
-          codigo_producto: suministro.codigo_producto || '',
-          descripcion_detallada: suministro.descripcion_detallada || '',
-          cantidad: suministro.cantidad?.toString() || '',
-          unidad_medida: unidadNormalizada,
-          precio_unitario: suministro.precio_unitario?.toString() || '',
-          estado: suministro.estado || 'Entregado',
-          fecha_necesaria: fechaNormalizada,
-          observaciones: suministro.observaciones || '',
-          m3_perdidos: suministro.m3_perdidos?.toString() || '',
-          m3_entregados: suministro.m3_entregados?.toString() || '',
-          m3_por_entregar: suministro.m3_por_entregar?.toString() || ''
-        });
-        
-        return acc;
-      }, []);
-
-      // ⚡ BATCH: Actualizar suministros una sola vez
-      setSuministros(suministrosCargados);
-      
-      const processingTime = performance.now() - startTime;
-      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log(`✅ InitialData procesado: ${suministrosCargados.length} suministros en ${processingTime.toFixed(2)}ms`);
-      }
-    };
-    
-    // ⚡ Diferir el procesamiento para no bloquear el render inicial
-    const frameId = requestAnimationFrame(processInitialData);
-    
-    return () => {
-      cancelAnimationFrame(frameId);
-    };
-  }, [initialData, normalizeUnidadMedida, normalizeCategoria, normalizeFecha]);
 
   // =================== FUNCIONES DE NORMALIZACIÓN OPTIMIZADAS ===================
   
@@ -351,18 +288,123 @@ export default function FormularioSuministros({
 
   // Función optimizada para normalizar fecha
   const normalizeFecha = useCallback((fechaFromDB) => {
-    if (!fechaFromDB) return new Date().toISOString().split('T')[0];
+    if (!fechaFromDB) return getLocalDateString();
     
     try {
+      // Si viene como string en formato YYYY-MM-DD, validar y retornar
+      if (typeof fechaFromDB === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaFromDB)) {
+        const fecha = new Date(fechaFromDB + 'T00:00:00'); // Agregar tiempo para evitar zona horaria
+        if (!isNaN(fecha.getTime())) {
+          return fechaFromDB; // Ya está en formato correcto
+        }
+      }
+      
+      // Si viene como Date object o string de fecha
       const fecha = new Date(fechaFromDB);
       if (isNaN(fecha.getTime())) {
-        return new Date().toISOString().split('T')[0];
+        return getLocalDateString();
       }
-      return fecha.toISOString().split('T')[0];
+      
+      // Convertir a fecha local sin problemas de zona horaria
+      const year = fecha.getFullYear();
+      const month = String(fecha.getMonth() + 1).padStart(2, '0');
+      const day = String(fecha.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
     } catch (error) {
-      return new Date().toISOString().split('T')[0];
+      console.warn('Error normalizando fecha:', fechaFromDB, error);
+      return getLocalDateString();
     }
-  }, []);
+  }, [getLocalDateString]);
+
+  // ⚡ OPTIMIZACIÓN CRÍTICA: Cargar datos iniciales de forma asíncrona
+  useEffect(() => {
+    // ⚡ Early return si no hay datos iniciales
+    if (!initialData) return;
+    
+    // ⚡ Usar requestAnimationFrame para diferir el procesamiento pesado
+    const processInitialData = () => {
+      const startTime = performance.now();
+      
+      // Detectar si es un suministro individual o múltiple
+      let suministrosParaProcesar = [];
+      
+      if (initialData.suministros && Array.isArray(initialData.suministros)) {
+        // Es la estructura de múltiples (recibo con array de suministros)
+        suministrosParaProcesar = initialData.suministros;
+      } else if (initialData.id_suministro || initialData.nombre) {
+        // Es un suministro individual, convertirlo a estructura de array
+        suministrosParaProcesar = [initialData];
+      }
+
+      // ⚡ Early return si no hay suministros para procesar
+      if (suministrosParaProcesar.length === 0) return;
+
+      // Cargar información del recibo del primer suministro
+      const primerSuministro = suministrosParaProcesar[0];
+      
+      // ⚡ BATCH: Actualizar reciboInfo una sola vez
+      setReciboInfo(prevState => ({
+        ...prevState,
+        folio_proveedor: primerSuministro.folio_proveedor || '',
+        id_proyecto: primerSuministro.id_proyecto?.toString() || '',
+        proveedor_info: primerSuministro.proveedorInfo || primerSuministro.proveedor_info || null,
+        fecha: normalizeFecha(primerSuministro.fecha),
+        numero_factura: primerSuministro.numero_factura || '',
+        metodo_pago: primerSuministro.metodo_pago || 'Efectivo',
+        observaciones: primerSuministro.observaciones || '',
+        vehiculo_transporte: primerSuministro.vehiculo_transporte || '',
+        operador_responsable: primerSuministro.operador_responsable || '',
+        hora_salida: primerSuministro.hora_salida || '',
+        hora_llegada: primerSuministro.hora_llegada || '',
+        hora_inicio_descarga: primerSuministro.hora_inicio_descarga || '',
+        hora_fin_descarga: primerSuministro.hora_fin_descarga || ''
+      }));
+
+      // ⚡ OPTIMIZACIÓN: Procesar suministros usando reduce para una sola pasada
+      const timestamp = Date.now();
+      const suministrosCargados = suministrosParaProcesar.reduce((acc, suministro, index) => {
+        // ⚡ Cache normalizaciones para evitar recálculos
+        const unidadNormalizada = normalizeUnidadMedida(suministro.unidad_medida);
+        const categoriaNormalizada = normalizeCategoria(suministro.tipo_suministro || suministro.categoria);
+        const fechaNormalizada = normalizeFecha(suministro.fecha_necesaria || suministro.fecha || initialData?.fecha);
+        
+        acc.push({
+          id_temp: timestamp + index,
+          id_suministro: suministro.id_suministro,
+          tipo_suministro: categoriaNormalizada,
+          nombre: suministro.nombre || '',
+          codigo_producto: suministro.codigo_producto || '',
+          descripcion_detallada: suministro.descripcion_detallada || '',
+          cantidad: suministro.cantidad?.toString() || '',
+          unidad_medida: unidadNormalizada,
+          precio_unitario: suministro.precio_unitario?.toString() || '',
+          estado: suministro.estado || 'Entregado',
+          fecha_necesaria: fechaNormalizada,
+          observaciones: suministro.observaciones || '',
+          m3_perdidos: suministro.m3_perdidos?.toString() || '',
+          m3_entregados: suministro.m3_entregados?.toString() || '',
+          m3_por_entregar: suministro.m3_por_entregar?.toString() || ''
+        });
+        
+        return acc;
+      }, []);
+
+      // ⚡ BATCH: Actualizar suministros una sola vez
+      setSuministros(suministrosCargados);
+      
+      const processingTime = performance.now() - startTime;
+      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+        console.log(`✅ InitialData procesado: ${suministrosCargados.length} suministros en ${processingTime.toFixed(2)}ms`);
+      }
+    };
+    
+    // ⚡ Diferir el procesamiento para no bloquear el render inicial
+    const frameId = requestAnimationFrame(processInitialData);
+    
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [initialData, normalizeUnidadMedida, normalizeCategoria, normalizeFecha]);
 
   // =================== FUNCIONES DE VALIDACIÓN Y AUTOCOMPLETADO OPTIMIZADAS ===================
   
@@ -600,7 +642,7 @@ export default function FormularioSuministros({
     unidad_medida: 'pz',
     precio_unitario: '',
     estado: 'Entregado',
-    fecha_necesaria: new Date().toISOString().split('T')[0],
+    fecha_necesaria: getLocalDateString(),
     observaciones: '',
     m3_perdidos: '',
     m3_entregados: '',
@@ -612,7 +654,7 @@ export default function FormularioSuministros({
     const nuevoSuministro = {
       ...nuevoSuministroTemplate,
       id_temp: Date.now() + Math.random(),
-      fecha_necesaria: new Date().toISOString().split('T')[0] // Fecha actual
+      fecha_necesaria: getLocalDateString() // Fecha actual local
     };
     
     if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
@@ -904,6 +946,7 @@ export default function FormularioSuministros({
           unidad_medida: s.unidad_medida,
           precio_unitario: parseFloat(s.precio_unitario),
           estado: s.estado,
+          fecha_necesaria: s.fecha_necesaria || reciboInfo.fecha, // ✅ Usar fecha individual o del recibo
           observaciones: s.observaciones,
           m3_perdidos: parseFloat(s.m3_perdidos) || 0,
           m3_entregados: parseFloat(s.m3_entregados) || 0,
@@ -1094,7 +1137,8 @@ export default function FormularioSuministros({
                   fecha: value
                 }));
               }}
-              className="w-full"
+              className="w-full min-w-[120px]"
+              placeholder="Seleccionar fecha"
             />
           </div>
 
@@ -1293,7 +1337,7 @@ export default function FormularioSuministros({
                 </div>
 
                 {/* Segunda fila - Cantidades y precios */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+                <div className={`grid grid-cols-2 gap-3 mb-3 ${initialData ? 'md:grid-cols-6' : 'md:grid-cols-5'}`}>
                   {/* Cantidad */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1371,6 +1415,27 @@ export default function FormularioSuministros({
                       <option value="Parcial">Parcial</option>
                     </select>
                   </div>
+
+                  {/* Fecha Necesaria - Solo en modo edición */}
+                  {initialData && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Fecha Necesaria
+                      </label>
+                      <DateInput
+                        value={suministro.fecha_necesaria || reciboInfo.fecha}
+                        onChange={(value) => {
+                          if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+                            console.log('📅 Cambio de fecha suministro - valor anterior:', suministro.fecha_necesaria);
+                            console.log('📅 Cambio de fecha suministro - valor nuevo:', value);
+                          }
+                          actualizarSuministro(suministro.id_temp, 'fecha_necesaria', value);
+                        }}
+                        className="w-full min-w-[120px]"
+                        placeholder="Seleccionar fecha"
+                      />
+                    </div>
+                  )}
 
                   {/* Subtotal */}
                   <div>
