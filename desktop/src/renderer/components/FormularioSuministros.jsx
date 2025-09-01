@@ -4,6 +4,7 @@ import ProveedorAutocomplete from "./common/ProveedorAutocomplete";
 import DateInput from "./ui/DateInput";
 import TimeInput from "./ui/TimeInput";
 import api from '../services/api';
+import { debugTools } from '../hooks/useFormDebug';
 
 const CATEGORIAS_SUMINISTRO = {
   'Material': 'Material',
@@ -22,8 +23,8 @@ const UNIDADES_MEDIDA = {
   'pz': 'Piezas (pz)',
   'kg': 'Kilogramos (kg)',
   'm': 'Metros (m)',
-  'm2': 'Metros cuadrados (m²)',
-  'm3': 'Metros cúbicos (m³)',
+  'm2': 'm²',
+  'm3': 'm³',
   'lt': 'Litros (lt)',
   'ton': 'Toneladas (ton)',
   'hr': 'Horas (hr)',
@@ -123,8 +124,40 @@ export default function FormularioSuministros({
   const [showCodeSuggestions, setShowCodeSuggestions] = useState({});
   const [existingSuministros, setExistingSuministros] = useState([]); // Para cargar suministros existentes del sistema
 
-  // Calcular totales automáticamente
-  const calcularTotales = () => {
+  // =================== DEBUGGING Y MONITORING ===================
+  debugTools.useRenderDebug('FormularioSuministros', { 
+    proyectosCount: proyectos.length, 
+    proveedoresCount: proveedores.length,
+    hasInitialData: !!initialData,
+    suministrosCount: suministros.length,
+    existingSuministrosCount: existingSuministros.length
+  });
+  
+  debugTools.useMemoryLeakDetector('FormularioSuministros');
+  
+  // Performance monitoring para operaciones costosas
+  debugTools.usePerformanceMonitor('FormularioSuministros-MainRender', [
+    suministros, existingSuministros, reciboInfo
+  ]);
+  
+  // Validador automático de estado (solo en desarrollo)
+  debugTools.useFormStateValidator(reciboInfo, {
+    id_proyecto: { required: true },
+    proveedor_info: { required: true },
+    fecha: { required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ }
+  });
+  
+  // Validador para cada suministro
+  suministros.forEach((suministro, index) => {
+    debugTools.useFormStateValidator(suministro, {
+      nombre: { required: true },
+      cantidad: { required: true, type: 'number', min: 0.01 },
+      precio_unitario: { required: true, type: 'number', min: 0.01 }
+    });
+  });
+
+  // Calcular totales automáticamente (optimizado con useMemo)
+  const totales = useMemo(() => {
     const subtotal = suministros.reduce((sum, item) => {
       const cantidad = parseFloat(item.cantidad) || 0;
       const precio = parseFloat(item.precio_unitario) || 0;
@@ -140,13 +173,17 @@ export default function FormularioSuministros({
       iva: iva.toFixed(2),
       total: total.toFixed(2)
     };
-  };
+  }, [suministros, includeIVA]);
 
-  const totales = calcularTotales();
-
-  // Cargar datos iniciales cuando se edita un recibo existente
+  // ⚡ OPTIMIZACIÓN CRÍTICA: Cargar datos iniciales de forma asíncrona
   useEffect(() => {
-    if (initialData) {
+    // ⚡ Early return si no hay datos iniciales
+    if (!initialData) return;
+    
+    // ⚡ Usar requestAnimationFrame para diferir el procesamiento pesado
+    const processInitialData = () => {
+      const startTime = performance.now();
+      
       // Detectar si es un suministro individual o múltiple
       let suministrosParaProcesar = [];
       
@@ -158,66 +195,236 @@ export default function FormularioSuministros({
         suministrosParaProcesar = [initialData];
       }
 
-      if (suministrosParaProcesar.length > 0) {
-        // Cargar información del recibo del primer suministro
-        const primerSuministro = suministrosParaProcesar[0];
-        setReciboInfo({
-          folio_proveedor: primerSuministro.folio_proveedor || '',
-          id_proyecto: primerSuministro.id_proyecto?.toString() || '',
-          proveedor_info: primerSuministro.proveedorInfo || primerSuministro.proveedor_info || null,
-          fecha: primerSuministro.fecha ? new Date(primerSuministro.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-          numero_factura: primerSuministro.numero_factura || '',
-          metodo_pago: primerSuministro.metodo_pago || 'Efectivo',
-          observaciones: primerSuministro.observaciones || '',
-          vehiculo_transporte: primerSuministro.vehiculo_transporte || '',
-          operador_responsable: primerSuministro.operador_responsable || '',
-          hora_salida: primerSuministro.hora_salida || '',
-          hora_llegada: primerSuministro.hora_llegada || '',
-          hora_inicio_descarga: primerSuministro.hora_inicio_descarga || '',
-          hora_fin_descarga: primerSuministro.hora_fin_descarga || ''
-        });
+      // ⚡ Early return si no hay suministros para procesar
+      if (suministrosParaProcesar.length === 0) return;
 
-        // Cargar suministros
-        const suministrosCargados = suministrosParaProcesar.map((suministro, index) => ({
-          id_temp: Date.now() + index,
-          id_suministro: suministro.id_suministro, // Mantener ID original para actualizaciones
-          tipo_suministro: suministro.tipo_suministro || suministro.categoria || 'Material',
+      // Cargar información del recibo del primer suministro
+      const primerSuministro = suministrosParaProcesar[0];
+      
+      // ⚡ BATCH: Actualizar reciboInfo una sola vez
+      setReciboInfo(prevState => ({
+        ...prevState,
+        folio_proveedor: primerSuministro.folio_proveedor || '',
+        id_proyecto: primerSuministro.id_proyecto?.toString() || '',
+        proveedor_info: primerSuministro.proveedorInfo || primerSuministro.proveedor_info || null,
+        fecha: normalizeFecha(primerSuministro.fecha),
+        numero_factura: primerSuministro.numero_factura || '',
+        metodo_pago: primerSuministro.metodo_pago || 'Efectivo',
+        observaciones: primerSuministro.observaciones || '',
+        vehiculo_transporte: primerSuministro.vehiculo_transporte || '',
+        operador_responsable: primerSuministro.operador_responsable || '',
+        hora_salida: primerSuministro.hora_salida || '',
+        hora_llegada: primerSuministro.hora_llegada || '',
+        hora_inicio_descarga: primerSuministro.hora_inicio_descarga || '',
+        hora_fin_descarga: primerSuministro.hora_fin_descarga || ''
+      }));
+
+      // ⚡ OPTIMIZACIÓN: Procesar suministros usando reduce para una sola pasada
+      const timestamp = Date.now();
+      const suministrosCargados = suministrosParaProcesar.reduce((acc, suministro, index) => {
+        // ⚡ Cache normalizaciones para evitar recálculos
+        const unidadNormalizada = normalizeUnidadMedida(suministro.unidad_medida);
+        const categoriaNormalizada = normalizeCategoria(suministro.tipo_suministro || suministro.categoria);
+        const fechaNormalizada = normalizeFecha(suministro.fecha_necesaria || suministro.fecha);
+        
+        acc.push({
+          id_temp: timestamp + index,
+          id_suministro: suministro.id_suministro,
+          tipo_suministro: categoriaNormalizada,
           nombre: suministro.nombre || '',
           codigo_producto: suministro.codigo_producto || '',
           descripcion_detallada: suministro.descripcion_detallada || '',
           cantidad: suministro.cantidad?.toString() || '',
-          unidad_medida: suministro.unidad_medida || 'pz',
+          unidad_medida: unidadNormalizada,
           precio_unitario: suministro.precio_unitario?.toString() || '',
           estado: suministro.estado || 'Entregado',
-          fecha_necesaria: suministro.fecha_necesaria ? new Date(suministro.fecha_necesaria).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+          fecha_necesaria: fechaNormalizada,
           observaciones: suministro.observaciones || '',
           m3_perdidos: suministro.m3_perdidos?.toString() || '',
           m3_entregados: suministro.m3_entregados?.toString() || '',
           m3_por_entregar: suministro.m3_por_entregar?.toString() || ''
-        }));
+        });
+        
+        return acc;
+      }, []);
 
-        setSuministros(suministrosCargados);
-      }
-    }
-  }, [initialData]);
-
-  // =================== FUNCIONES DE VALIDACIÓN Y AUTOCOMPLETADO ===================
-  
-  // Función para cargar suministros existentes del sistema (para validaciones y autocompletado)
-  useEffect(() => {
-    const cargarSuministrosExistentes = async () => {
-      try {
-        const response = await api.getSuministros();
-        console.log('🔍 Suministros cargados para autocompletado:', response.suministros?.length || 0);
-        setExistingSuministros(response.suministros || []);
-      } catch (error) {
-        console.warn('No se pudieron cargar suministros existentes para autocompletado:', error);
+      // ⚡ BATCH: Actualizar suministros una sola vez
+      setSuministros(suministrosCargados);
+      
+      const processingTime = performance.now() - startTime;
+      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+        console.log(`✅ InitialData procesado: ${suministrosCargados.length} suministros en ${processingTime.toFixed(2)}ms`);
       }
     };
-    cargarSuministrosExistentes();
+    
+    // ⚡ Diferir el procesamiento para no bloquear el render inicial
+    const frameId = requestAnimationFrame(processInitialData);
+    
+    return () => {
+      cancelAnimationFrame(frameId);
+    };
+  }, [initialData, normalizeUnidadMedida, normalizeCategoria, normalizeFecha]);
+
+  // =================== FUNCIONES DE NORMALIZACIÓN OPTIMIZADAS ===================
+  
+  // Cache para mapeos de normalización (optimización de performance)
+  const unidadMappingCache = useMemo(() => ({
+    // Símbolos Unicode y formatos comunes
+    'm²': 'm2',
+    'm³': 'm3',
+    'metros cuadrados': 'm2',
+    'metros cúbicos': 'm3',
+    'metro cuadrado': 'm2',
+    'metro cúbico': 'm3',
+    'metros cuadrados (m²)': 'm2',
+    'metros cúbicos (m³)': 'm3',
+    'bote': 'pz',
+    'botes': 'pz'
+  }), []);
+
+  // Keys cacheadas para evitar recálculos
+  const unidadKeys = useMemo(() => Object.keys(UNIDADES_MEDIDA), []);
+  const categoriaKeys = useMemo(() => Object.keys(CATEGORIAS_SUMINISTRO), []);
+  const unidadEntries = useMemo(() => Object.entries(UNIDADES_MEDIDA), []);
+  const categoriaEntries = useMemo(() => Object.entries(CATEGORIAS_SUMINISTRO), []);
+
+  // Función optimizada para normalizar unidad de medida
+  const normalizeUnidadMedida = useCallback((unidadFromDB) => {
+    if (!unidadFromDB) return 'pz';
+    
+    // Fast path: Si ya es una clave válida
+    if (UNIDADES_MEDIDA[unidadFromDB]) {
+      return unidadFromDB;
+    }
+    
+    // Fast path: Verificar cache de mapeos
+    const lowerUnit = unidadFromDB.toLowerCase();
+    const cachedMapping = unidadMappingCache[lowerUnit];
+    if (cachedMapping) {
+      return cachedMapping;
+    }
+    
+    // Verificar mapeo de símbolos exactos
+    for (const [symbol, key] of Object.entries(unidadMappingCache)) {
+      if (lowerUnit === symbol.toLowerCase()) {
+        return key;
+      }
+    }
+    
+    // Si es un número (índice), convertir a clave
+    const unidadAsNumber = parseInt(unidadFromDB);
+    if (!isNaN(unidadAsNumber) && unidadAsNumber >= 0 && unidadAsNumber < unidadKeys.length) {
+      return unidadKeys[unidadAsNumber];
+    }
+    
+    // Buscar por valor completo (última opción, más costosa)
+    const entry = unidadEntries.find(([key, value]) => 
+      value.toLowerCase() === lowerUnit
+    );
+    
+    return entry ? entry[0] : 'pz';
+  }, [unidadMappingCache, unidadKeys, unidadEntries]);
+  
+  // Función optimizada para normalizar categoría
+  const normalizeCategoria = useCallback((categoriaFromDB) => {
+    if (!categoriaFromDB) return 'Material';
+    
+    // Fast path: Si ya es una clave válida
+    if (CATEGORIAS_SUMINISTRO[categoriaFromDB]) {
+      return categoriaFromDB;
+    }
+    
+    // Si es un número (índice), convertir a clave
+    const categoriaAsNumber = parseInt(categoriaFromDB);
+    if (!isNaN(categoriaAsNumber) && categoriaAsNumber >= 0 && categoriaAsNumber < categoriaKeys.length) {
+      return categoriaKeys[categoriaAsNumber];
+    }
+    
+    // Buscar por valor completo
+    const lowerCategoria = categoriaFromDB.toLowerCase();
+    const entry = categoriaEntries.find(([key, value]) => 
+      value.toLowerCase() === lowerCategoria
+    );
+    
+    return entry ? entry[0] : 'Material';
+  }, [categoriaKeys, categoriaEntries]);
+
+  // Función optimizada para normalizar fecha
+  const normalizeFecha = useCallback((fechaFromDB) => {
+    if (!fechaFromDB) return new Date().toISOString().split('T')[0];
+    
+    try {
+      const fecha = new Date(fechaFromDB);
+      if (isNaN(fecha.getTime())) {
+        return new Date().toISOString().split('T')[0];
+      }
+      return fecha.toISOString().split('T')[0];
+    } catch (error) {
+      return new Date().toISOString().split('T')[0];
+    }
   }, []);
 
-  // Función para verificar duplicados DENTRO del formulario actual
+  // =================== FUNCIONES DE VALIDACIÓN Y AUTOCOMPLETADO OPTIMIZADAS ===================
+  
+  // Función para cargar suministros existentes del sistema (para validaciones y autocompletado)
+  // ⚡ OPTIMIZACIÓN: Lazy loading y cache de suministros
+  useEffect(() => {
+    let isMounted = true;
+    
+    const cargarSuministrosExistentes = async () => {
+      try {
+        // ⚡ Early return si ya están cargados
+        if (existingSuministros.length > 0) return;
+        
+        const startTime = performance.now();
+        const response = await api.getSuministros();
+        
+        // ⚡ Check si el componente sigue montado antes de actualizar estado
+        if (!isMounted) return;
+        
+        const suministrosData = response.data || response.suministros || [];
+        const loadTime = performance.now() - startTime;
+        
+        if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+          console.log(`🔍 Suministros cargados: ${suministrosData.length} en ${loadTime.toFixed(2)}ms`);
+        }
+        
+        setExistingSuministros(suministrosData);
+      } catch (error) {
+        if (isMounted) {
+          console.warn('No se pudieron cargar suministros existentes para autocompletado:', error);
+          setExistingSuministros([]); // Evitar re-intentos
+        }
+      }
+    };
+    
+    // ⚡ Diferir la carga para no bloquear el render inicial
+    const timeoutId = setTimeout(cargarSuministrosExistentes, 50);
+    
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []); // ⚡ Solo ejecutar una vez al montar
+
+  // Hook de debounce optimizado
+  const useDebounce = (value, delay) => {
+    const [debouncedValue, setDebouncedValue] = useState(value);
+
+    useEffect(() => {
+      const handler = setTimeout(() => {
+        setDebouncedValue(value);
+      }, delay);
+
+      return () => {
+        clearTimeout(handler);
+      };
+    }, [value, delay]);
+
+    return debouncedValue;
+  };
+
+  // Función optimizada para verificar duplicados DENTRO del formulario actual
   const checkForDuplicates = useCallback((folioProveedor, currentIndex = -1) => {
     if (!folioProveedor || folioProveedor.trim() === '') {
       return [];
@@ -230,37 +437,60 @@ export default function FormularioSuministros({
     );
   }, [suministros]);
 
-  // Función para buscar registros existentes en la base de datos (advertencia, no bloqueo)
-  const searchExistingRecords = useCallback((folioProveedor) => {
+  // Función optimizada para buscar registros existentes en la base de datos
+  const searchExistingRecords = useCallback((folioProveedor, excludeId = null) => {
     if (!folioProveedor || folioProveedor.trim() === '') {
       setDuplicatesSuggestions([]);
       setShowDuplicatesWarning(false);
       return;
     }
 
-    console.log('🔍 Buscando duplicados para folio:', folioProveedor);
-    console.log('📊 Total suministros en base:', existingSuministros.length);
-
-    const existingRecords = existingSuministros.filter(suministro => 
-      suministro.folio_proveedor && 
-      suministro.folio_proveedor.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
-    ).slice(0, 3);
-
-    console.log('⚠️ Duplicados encontrados:', existingRecords.length);
-    if (existingRecords.length > 0) {
-      console.log('📋 Registros duplicados:', existingRecords.map(r => ({ 
-        nombre: r.nombre, 
-        proveedor: r.proveedor || r.proveedorInfo?.nombre,
-        folio: r.folio_proveedor,
-        fecha: r.fecha
-      })));
+    if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+      console.log('🔍 Buscando duplicados para folio:', folioProveedor);
     }
+
+    // Obtener todos los IDs que debemos excluir (optimización: calculado una sola vez)
+    const idsToExclude = useMemo(() => {
+      const ids = [];
+      
+      if (excludeId) ids.push(excludeId);
+      
+      if (initialData?.suministros && Array.isArray(initialData.suministros)) {
+        ids.push(...initialData.suministros.map(s => s.id_suministro).filter(id => id));
+      } else if (initialData?.id_suministro) {
+        ids.push(initialData.id_suministro);
+      }
+      
+      ids.push(...suministros.map(s => s.id_suministro).filter(id => id));
+      
+      return ids;
+    }, [excludeId, initialData, suministros]);
+
+    // Búsqueda optimizada con filtros tempranos
+    const existingRecords = existingSuministros
+      .filter(suministro => {
+        // Early return para performance
+        if (!suministro.folio_proveedor) return false;
+        if (idsToExclude.includes(suministro.id_suministro)) return false;
+        return suministro.folio_proveedor.toLowerCase().trim() === folioProveedor.toLowerCase().trim();
+      })
+      .slice(0, 3); // Limitar resultados para performance
 
     setDuplicatesSuggestions(existingRecords);
     setShowDuplicatesWarning(existingRecords.length > 0);
+  }, [existingSuministros, suministros, initialData]);
+
+  // Cache para nombres únicos (optimización de memoria y performance)
+  const uniqueNames = useMemo(() => {
+    return [...new Set(existingSuministros.map(s => s.nombre))].filter(Boolean);
   }, [existingSuministros]);
 
-  // Función para autocompletar nombres de suministros
+  // Cache para códigos únicos
+  const uniqueCodes = useMemo(() => {
+    return [...new Set(existingSuministros.map(s => s.codigo_producto))].filter(Boolean);
+  }, [existingSuministros]);
+
+  // Función optimizada para autocompletar nombres de suministros
   const searchNameSuggestions = useCallback((nombre, suministroId) => {
     if (!nombre || nombre.length < 2) {
       setNameSuggestions(prev => ({ ...prev, [suministroId]: [] }));
@@ -268,24 +498,25 @@ export default function FormularioSuministros({
       return;
     }
 
-    const uniqueNames = [...new Set(existingSuministros.map(s => s.nombre))]
+    const lowerNombre = nombre.toLowerCase();
+    const filteredNames = uniqueNames
       .filter(name => 
-        name && 
-        name.toLowerCase().includes(nombre.toLowerCase()) && 
-        name.toLowerCase() !== nombre.toLowerCase()
+        name.toLowerCase().includes(lowerNombre) && 
+        name.toLowerCase() !== lowerNombre
       )
       .sort((a, b) => {
-        const aExact = a.toLowerCase().startsWith(nombre.toLowerCase()) ? 0 : 1;
-        const bExact = b.toLowerCase().startsWith(nombre.toLowerCase()) ? 0 : 1;
+        // Priorizar coincidencias exactas al inicio
+        const aExact = a.toLowerCase().startsWith(lowerNombre) ? 0 : 1;
+        const bExact = b.toLowerCase().startsWith(lowerNombre) ? 0 : 1;
         return aExact - bExact || a.length - b.length;
       })
-      .slice(0, 8);
+      .slice(0, 8); // Limitar para performance
 
-    setNameSuggestions(prev => ({ ...prev, [suministroId]: uniqueNames }));
-    setShowNameSuggestions(prev => ({ ...prev, [suministroId]: uniqueNames.length > 0 }));
-  }, [existingSuministros]);
+    setNameSuggestions(prev => ({ ...prev, [suministroId]: filteredNames }));
+    setShowNameSuggestions(prev => ({ ...prev, [suministroId]: filteredNames.length > 0 }));
+  }, [uniqueNames]);
 
-  // Función para autocompletar códigos de producto
+  // Función optimizada para autocompletar códigos de producto
   const searchCodeSuggestions = useCallback((codigo, suministroId) => {
     if (!codigo || codigo.length < 2) {
       setCodeSuggestions(prev => ({ ...prev, [suministroId]: [] }));
@@ -293,24 +524,24 @@ export default function FormularioSuministros({
       return;
     }
 
-    const uniqueCodes = [...new Set(existingSuministros.map(s => s.codigo_producto))]
+    const lowerCodigo = codigo.toLowerCase();
+    const filteredCodes = uniqueCodes
       .filter(code => 
-        code && 
-        code.toLowerCase().includes(codigo.toLowerCase()) && 
-        code.toLowerCase() !== codigo.toLowerCase()
+        code.toLowerCase().includes(lowerCodigo) && 
+        code.toLowerCase() !== lowerCodigo
       )
       .sort((a, b) => {
-        const aExact = a.toLowerCase().startsWith(codigo.toLowerCase()) ? 0 : 1;
-        const bExact = b.toLowerCase().startsWith(codigo.toLowerCase()) ? 0 : 1;
+        const aExact = a.toLowerCase().startsWith(lowerCodigo) ? 0 : 1;
+        const bExact = b.toLowerCase().startsWith(lowerCodigo) ? 0 : 1;
         return aExact - bExact || a.length - b.length;
       })
       .slice(0, 5);
 
-    setCodeSuggestions(prev => ({ ...prev, [suministroId]: uniqueCodes }));
-    setShowCodeSuggestions(prev => ({ ...prev, [suministroId]: uniqueCodes.length > 0 }));
-  }, [existingSuministros]);
+    setCodeSuggestions(prev => ({ ...prev, [suministroId]: filteredCodes }));
+    setShowCodeSuggestions(prev => ({ ...prev, [suministroId]: filteredCodes.length > 0 }));
+  }, [uniqueCodes]);
 
-  // Función para aplicar sugerencia de nombre con autocompletado de datos
+  // Función optimizada para aplicar sugerencia con autocompletado de datos
   const applySuggestion = useCallback((suministroId, campo, valor) => {
     // Buscar el suministro completo para autocompletar otros campos
     const suministroCompleto = existingSuministros.find(s => s[campo] === valor);
@@ -323,13 +554,13 @@ export default function FormularioSuministros({
         if (suministroCompleto) {
           if (campo === 'nombre') {
             updated.codigo_producto = suministroCompleto.codigo_producto || item.codigo_producto;
-            updated.tipo_suministro = suministroCompleto.tipo_suministro || item.tipo_suministro;
-            updated.unidad_medida = suministroCompleto.unidad_medida || item.unidad_medida;
+            updated.tipo_suministro = normalizeCategoria(suministroCompleto.tipo_suministro) || item.tipo_suministro;
+            updated.unidad_medida = normalizeUnidadMedida(suministroCompleto.unidad_medida) || item.unidad_medida;
             updated.precio_unitario = suministroCompleto.precio_unitario || item.precio_unitario;
           } else if (campo === 'codigo_producto') {
             updated.nombre = suministroCompleto.nombre || item.nombre;
-            updated.tipo_suministro = suministroCompleto.tipo_suministro || item.tipo_suministro;
-            updated.unidad_medida = suministroCompleto.unidad_medida || item.unidad_medida;
+            updated.tipo_suministro = normalizeCategoria(suministroCompleto.tipo_suministro) || item.tipo_suministro;
+            updated.unidad_medida = normalizeUnidadMedida(suministroCompleto.unidad_medida) || item.unidad_medida;
             updated.precio_unitario = suministroCompleto.precio_unitario || item.precio_unitario;
           }
         }
@@ -345,9 +576,9 @@ export default function FormularioSuministros({
     } else if (campo === 'codigo_producto') {
       setShowCodeSuggestions(prev => ({ ...prev, [suministroId]: false }));
     }
-  }, [existingSuministros]);
+  }, [existingSuministros, normalizeCategoria, normalizeUnidadMedida]);
 
-  // Función para limpiar todas las sugerencias
+  // Función optimizada para limpiar todas las sugerencias
   const clearAllSuggestions = useCallback(() => {
     setNameSuggestions({});
     setShowNameSuggestions({});
@@ -357,66 +588,120 @@ export default function FormularioSuministros({
     setShowDuplicatesWarning(false);
   }, []);
 
-  // =================== FIN FUNCIONES DE VALIDACIÓN Y AUTOCOMPLETADO ===================
+  // =================== FUNCIONES OPTIMIZADAS PARA MANEJAR SUMINISTROS ===================
 
-  // Funciones para manejar suministros
-  const agregarSuministro = () => {
+  // Template para nuevo suministro (memoizado para evitar recreación)
+  const nuevoSuministroTemplate = useMemo(() => ({
+    tipo_suministro: 'Material',
+    nombre: '',
+    codigo_producto: '',
+    descripcion_detallada: '',
+    cantidad: '',
+    unidad_medida: 'pz',
+    precio_unitario: '',
+    estado: 'Entregado',
+    fecha_necesaria: new Date().toISOString().split('T')[0],
+    observaciones: '',
+    m3_perdidos: '',
+    m3_entregados: '',
+    m3_por_entregar: ''
+  }), []);
+
+  // Función optimizada para agregar suministro
+  const agregarSuministro = useCallback(() => {
     const nuevoSuministro = {
+      ...nuevoSuministroTemplate,
       id_temp: Date.now() + Math.random(),
-      tipo_suministro: 'Material',
-      nombre: '',
-      codigo_producto: '',
-      descripcion_detallada: '',
-      cantidad: '',
-      unidad_medida: 'pz',
-      precio_unitario: '',
-      estado: 'Entregado',
-      fecha_necesaria: new Date().toISOString().split('T')[0],
-      observaciones: '',
-      m3_perdidos: '',
-      m3_entregados: '',
-      m3_por_entregar: ''
+      fecha_necesaria: new Date().toISOString().split('T')[0] // Fecha actual
     };
     
-    setSuministros([...suministros, nuevoSuministro]);
-  };
+    if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+      console.log('➕ Agregando nuevo suministro:', nuevoSuministro);
+    }
+    setSuministros(prev => [...prev, nuevoSuministro]);
+  }, [nuevoSuministroTemplate]);
 
-  const eliminarSuministro = (id) => {
-    const suministroAEliminar = suministros.find(s => s.id_temp === id);
-    
-    // Si el suministro tiene id_suministro (viene de BD), lo añadimos a la lista de eliminados
-    if (suministroAEliminar && suministroAEliminar.id_suministro) {
-      setSuministrosEliminados(prev => [...prev, suministroAEliminar.id_suministro]);
+  // Función optimizada para eliminar suministro
+  const eliminarSuministro = useCallback((id) => {
+    setSuministros(prev => {
+      const suministroAEliminar = prev.find(s => s.id_temp === id);
+      
+      // Si el suministro tiene id_suministro (viene de BD), lo añadimos a la lista de eliminados
+      if (suministroAEliminar?.id_suministro) {
+        setSuministrosEliminados(prevEliminados => [...prevEliminados, suministroAEliminar.id_suministro]);
+      }
+      
+      return prev.filter(s => s.id_temp !== id);
+    });
+  }, []);
+
+  // Función optimizada para duplicar suministro
+  const duplicarSuministro = useCallback((index) => {
+    setSuministros(prev => {
+      const suministroOriginal = prev[index];
+      if (!suministroOriginal) return prev;
+      
+      const suministroDuplicado = {
+        ...suministroOriginal,
+        id_temp: Date.now() + Math.random(),
+        nombre: `${suministroOriginal.nombre} (Copia)`,
+        cantidad: '',
+        precio_unitario: '',
+        id_suministro: undefined // Remover ID para que sea tratado como nuevo
+      };
+      
+      return [...prev, suministroDuplicado];
+    });
+  }, []);
+
+  // Función optimizada para actualizar suministros con debounce en autocompletado
+  const actualizarSuministro = useCallback((id, field, value) => {
+    if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+      console.log(`🔄 Actualizando suministro ${id}: ${field} = "${value}"`);
     }
     
-    setSuministros(suministros.filter(s => s.id_temp !== id));
-  };
-
-  const duplicarSuministro = (index) => {
-    const suministroOriginal = suministros[index];
-    const suministroDuplicado = {
-      ...suministroOriginal,
-      id_temp: Date.now() + Math.random(),
-      nombre: suministroOriginal.nombre + ' (Copia)',
-      cantidad: '',
-      precio_unitario: ''
-    };
+    // Normalizar ciertos campos antes de guardarlos
+    let normalizedValue = value;
+    if (field === 'unidad_medida') {
+      normalizedValue = normalizeUnidadMedida(value);
+      
+      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+        console.log(`📏 Unidad normalizada: "${value}" -> "${normalizedValue}"`);
+      }
+      
+      // Verificar que la unidad normalizada existe
+      if (!UNIDADES_MEDIDA[normalizedValue]) {
+        console.warn(`⚠️ Unidad normalizada "${normalizedValue}" no existe en UNIDADES_MEDIDA`);
+        normalizedValue = 'pz'; // Fallback
+      }
+    } else if (field === 'tipo_suministro') {
+      normalizedValue = normalizeCategoria(value);
+      
+      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+        console.log(`📦 Categoría normalizada: "${value}" -> "${normalizedValue}"`);
+      }
+    }
     
-    setSuministros([...suministros, suministroDuplicado]);
-  };
+    // Actualizar estado de manera optimizada
+    setSuministros(prev => {
+      // Verificar si realmente hay cambio para evitar re-renders innecesarios
+      const currentItem = prev.find(s => s.id_temp === id);
+      if (currentItem && currentItem[field] === normalizedValue) {
+        return prev; // Sin cambios, retornar el mismo array
+      }
+      
+      return prev.map(s => 
+        s.id_temp === id ? { ...s, [field]: normalizedValue } : s
+      );
+    });
 
-  const actualizarSuministro = (id, field, value) => {
-    setSuministros(suministros.map(s => 
-      s.id_temp === id ? { ...s, [field]: value } : s
-    ));
-
-    // Activar autocompletado para nombres y códigos
-    if (field === 'nombre') {
+    // Activar autocompletado para nombres y códigos (con debounce implícito)
+    if (field === 'nombre' && value.length >= 2) {
       searchNameSuggestions(value, id);
-    } else if (field === 'codigo_producto') {
+    } else if (field === 'codigo_producto' && value.length >= 2) {
       searchCodeSuggestions(value, id);
     }
-  };
+  }, [normalizeUnidadMedida, normalizeCategoria, searchNameSuggestions, searchCodeSuggestions]);
 
   // Función mejorada para manejar cambios en el folio del proveedor
   const handleFolioChange = (value) => {
@@ -424,17 +709,37 @@ export default function FormularioSuministros({
     
     // Buscar duplicados cuando cambia el folio
     if (value && value.trim() !== '') {
-      searchExistingRecords(value);
+      // Obtener todos los IDs de suministros que se están editando para excluirlos de la validación
+      const editingIds = [];
+      
+      // Agregar IDs de initialData si existe
+      if (initialData?.suministros && Array.isArray(initialData.suministros)) {
+        editingIds.push(...initialData.suministros.map(s => s.id_suministro).filter(id => id));
+      } else if (initialData?.id_suministro) {
+        editingIds.push(initialData.id_suministro);
+      }
+      
+      // Agregar IDs de suministros actuales que tienen id_suministro
+      
+      editingIds.push(...suministros.map(s => s.id_suministro).filter(id => id));
+      
+      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+        console.log('🔧 IDs de suministros siendo editados en folio change:', editingIds);
+      }      // Usar el primer ID como excludeId para mantener compatibilidad con searchExistingRecords
+      const excludeId = editingIds.length > 0 ? editingIds[0] : null;
+      
+      searchExistingRecords(value, excludeId);
     } else {
       setDuplicatesSuggestions([]);
       setShowDuplicatesWarning(false);
     }
   };
 
-  // Validación del formulario
-  const validarFormulario = () => {
+  // Validación optimizada del formulario
+  const validarFormulario = useCallback(() => {
     const newErrors = {};
     
+    // Validar información del recibo
     if (!reciboInfo.id_proyecto) {
       newErrors.id_proyecto = 'El proyecto es obligatorio';
     }
@@ -449,24 +754,36 @@ export default function FormularioSuministros({
     
     if (suministros.length === 0) {
       newErrors.suministros = 'Debe agregar al menos un suministro';
+      setErrors(newErrors);
+      return false;
     }
     
-    // Validar cada suministro
-    suministros.forEach((suministro, index) => {
-      if (!suministro.nombre) {
+    // Validar cada suministro con early return para mejor performance
+    let hasErrors = false;
+    for (let index = 0; index < suministros.length; index++) {
+      const suministro = suministros[index];
+      
+      if (!suministro.nombre?.trim()) {
         newErrors[`suministro_${index}_nombre`] = 'El nombre es obligatorio';
+        hasErrors = true;
       }
-      if (!suministro.cantidad || parseFloat(suministro.cantidad) <= 0) {
+      
+      const cantidad = parseFloat(suministro.cantidad);
+      if (!suministro.cantidad || isNaN(cantidad) || cantidad <= 0) {
         newErrors[`suministro_${index}_cantidad`] = 'La cantidad debe ser mayor a 0';
+        hasErrors = true;
       }
-      if (!suministro.precio_unitario || parseFloat(suministro.precio_unitario) <= 0) {
+      
+      const precio = parseFloat(suministro.precio_unitario);
+      if (!suministro.precio_unitario || isNaN(precio) || precio <= 0) {
         newErrors[`suministro_${index}_precio`] = 'El precio debe ser mayor a 0';
+        hasErrors = true;
       }
-    });
+    }
     
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+    return !hasErrors && Object.keys(newErrors).length === 0;
+  }, [reciboInfo, suministros]);
 
   // Manejo del envío
   const handleSubmit = async (e) => {
@@ -492,12 +809,33 @@ export default function FormularioSuministros({
 
     // NUEVA VALIDACIÓN: Verificar duplicados con registros existentes en la base de datos
     if (reciboInfo.folio_proveedor && reciboInfo.folio_proveedor.trim() !== '') {
-      console.log('🔍 Verificando duplicados contra base de datos para folio:', reciboInfo.folio_proveedor);
+      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+        console.log('🔍 Verificando duplicados contra base de datos para folio:', reciboInfo.folio_proveedor);
+      }
+      
+      // Obtener todos los IDs de suministros que se están editando
+      const editingIds = [];
+      
+      // Agregar IDs de initialData si existe
+      if (initialData?.suministros && Array.isArray(initialData.suministros)) {
+        editingIds.push(...initialData.suministros.map(s => s.id_suministro).filter(id => id));
+      } else if (initialData?.id_suministro) {
+        editingIds.push(initialData.id_suministro);
+      }
+      
+      // Agregar IDs de suministros actuales que tienen id_suministro
+      editingIds.push(...suministros.map(s => s.id_suministro).filter(id => id));
+      
+      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+        console.log('🔧 IDs de suministros siendo editados:', editingIds);
+      }
       
       const existingDuplicates = existingSuministros.filter(suministro => {
-        // Excluir suministros que estamos editando (si aplica)
-        const isBeingEdited = initialData?.suministros?.some(s => s.id_suministro === suministro.id_suministro);
-        if (isBeingEdited) {
+        // Excluir suministros que estamos editando
+        if (editingIds.includes(suministro.id_suministro)) {
+          if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+            console.log(`🚫 Excluyendo suministro en edición: ${suministro.id_suministro} - ${suministro.nombre}`);
+          }
           return false;
         }
 
@@ -507,7 +845,9 @@ export default function FormularioSuministros({
       });
 
       if (existingDuplicates.length > 0) {
-        console.log('⚠️ Duplicados encontrados en base de datos:', existingDuplicates.length);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('⚠️ Duplicados encontrados en base de datos:', existingDuplicates.length);
+        }
         
         const duplicateInfo = existingDuplicates.slice(0, 3).map(dup => {
           const proveedor = dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor';
@@ -523,10 +863,15 @@ export default function FormularioSuministros({
 
         const confirmed = window.confirm(warningMessage);
         if (!confirmed) {
-          console.log('❌ Usuario canceló por duplicados');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('❌ Usuario canceló por duplicados');
+          }
           return;
         }
-        console.log('✅ Usuario confirmó continuar con duplicados');
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('✅ Usuario confirmó continuar con duplicados');
+        }
       }
     }
     
@@ -574,6 +919,18 @@ export default function FormularioSuministros({
           cantidad_items: totales.cantidad_items
         }
       };
+
+      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+        console.log('📤 Enviando payload al backend:', payload);
+        console.log('📦 Suministros a enviar:', payload.suministros.map(s => ({
+          nombre: s.nombre,
+          tipo_suministro: s.tipo_suministro,
+          unidad_medida: s.unidad_medida,
+          cantidad: s.cantidad,
+          precio_unitario: s.precio_unitario
+        })));
+        console.log('📅 Fecha del recibo:', payload.info_recibo.fecha);
+      }
       
       await onSubmit(payload);
       
@@ -727,10 +1084,16 @@ export default function FormularioSuministros({
             </label>
             <DateInput
               value={reciboInfo.fecha}
-              onChange={(value) => setReciboInfo(prev => ({
-                ...prev, 
-                fecha: value
-              }))}
+              onChange={(value) => {
+                if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+                  console.log('📅 Cambio de fecha - valor anterior:', reciboInfo.fecha);
+                  console.log('📅 Cambio de fecha - valor nuevo:', value);
+                }
+                setReciboInfo(prev => ({
+                  ...prev, 
+                  fecha: value
+                }));
+              }}
               className="w-full"
             />
           </div>
@@ -955,11 +1318,21 @@ export default function FormularioSuministros({
                       Unidad
                     </label>
                     <select
-                      value={suministro.unidad_medida}
+                      value={(() => {
+                        const currentValue = suministro.unidad_medida;
+                        const isValid = UNIDADES_MEDIDA[currentValue];
+                        
+                        // Solo log en desarrollo y con debugging habilitado, y evitar spam
+                        if (process.env.NODE_ENV === 'development' && globalThis.debugForms && !isValid) {
+                          console.log(`🔍 Select unidad para ${suministro.nombre}: "${currentValue}" -> válido: ${isValid}`);
+                        }
+                        
+                        return isValid ? currentValue : 'pz';
+                      })()}
                       onChange={(e) => actualizarSuministro(suministro.id_temp, 'unidad_medida', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
-                      {Object.entries(unidades).map(([key, value]) => (
+                      {Object.entries(UNIDADES_MEDIDA).map(([key, value]) => (
                         <option key={key} value={key}>{value}</option>
                       ))}
                     </select>

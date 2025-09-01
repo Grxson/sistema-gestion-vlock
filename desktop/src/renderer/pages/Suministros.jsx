@@ -47,6 +47,14 @@ import TimeInput from '../components/ui/TimeInput';
 import FormularioSuministros from '../components/FormularioSuministros';
 import { useToast } from '../contexts/ToastContext';
 
+// Importar testing suite para desarrollo
+if (process.env.NODE_ENV === 'development') {
+  import('../utils/testingSuite').then(module => {
+    // El script se carga automáticamente
+    console.log('🧪 Testing suite para suministros cargado');
+  });
+}
+
 // Registrar componentes de Chart.js
 ChartJS.register(
   CategoryScale,
@@ -102,12 +110,21 @@ const ESTADOS_SUMINISTRO = {
   'Cancelado': { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' }
 };
 
+// Helper functions for display
+const getDisplayUnidadMedida = (key) => {
+  return UNIDADES_MEDIDA[key] || key;
+};
+
+const getDisplayCategoria = (key) => {
+  return CATEGORIAS_SUMINISTRO[key] || key;
+};
+
 const Suministros = () => {
   const [suministros, setSuministros] = useState([]);
   const [proyectos, setProyectos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
-  const [categorias, setCategorias] = useState(Object.keys(CATEGORIAS_SUMINISTRO));
-  const [unidadesMedida, setUnidadesMedida] = useState(Object.keys(UNIDADES_MEDIDA));
+  const [categorias, setCategorias] = useState(CATEGORIAS_SUMINISTRO);
+  const [unidadesMedida, setUnidadesMedida] = useState(UNIDADES_MEDIDA);
   const [loading, setLoading] = useState(true);
   const [showMultipleModal, setShowMultipleModal] = useState(false);
   const [editingSuministro, setEditingSuministro] = useState(null);
@@ -5009,7 +5026,7 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                                  {suministro.tipo_suministro || suministro.categoria}
+                                  {getDisplayCategoria(suministro.tipo_suministro || suministro.categoria)}
                                 </span>
                               </td>
                               <td className="px-6 py-4">
@@ -5024,13 +5041,13 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <div className="text-sm text-gray-900 dark:text-white">
-                                  {formatQuantityDisplay(suministro.cantidad)} {suministro.unidad_medida}
+                                  {formatQuantityDisplay(suministro.cantidad)} {getDisplayUnidadMedida(suministro.unidad_medida)}
                                 </div>
                               </td>
                               <td className="px-6 py-4">
                                 <div>
                                   <div className="text-sm text-gray-900 dark:text-white">
-                                    {formatPriceDisplay(suministro.precio_unitario)} / {suministro.unidad_medida}
+                                    {formatPriceDisplay(suministro.precio_unitario)} / {getDisplayUnidadMedida(suministro.unidad_medida)}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
                                     Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -5094,7 +5111,7 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                              {suministro.tipo_suministro || suministro.categoria}
+                              {getDisplayCategoria(suministro.tipo_suministro || suministro.categoria)}
                             </span>
                           </td>
                           <td className="px-6 py-4">
@@ -5119,13 +5136,13 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {formatQuantityDisplay(suministro.cantidad)} {suministro.unidad_medida}
+                              {formatQuantityDisplay(suministro.cantidad)} {getDisplayUnidadMedida(suministro.unidad_medida)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm text-gray-900 dark:text-white">
-                                {formatPriceDisplay(suministro.precio_unitario)} / {suministro.unidad_medida}
+                                {formatPriceDisplay(suministro.precio_unitario)} / {getDisplayUnidadMedida(suministro.unidad_medida)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 Total: {formatPriceDisplay(calculateTotal(suministro))}
