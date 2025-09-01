@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
@@ -26,6 +26,26 @@ function MainApp() {
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { hasModuleAccess, loading: permissionsLoading } = usePermissions();
+
+  // Actualizar el título del documento basado en la ruta actual
+  useEffect(() => {
+    const appName = import.meta.env.VITE_APP_FULL_NAME || 'Sistema de Gestión VLock';
+    const routeTitles = {
+      '/': 'Dashboard',
+      '/empleados': 'Empleados',
+      '/nomina': 'Nómina',
+      '/contratos': 'Contratos',
+      '/oficios': 'Oficios',
+      '/usuarios': 'Usuarios',
+      '/roles': 'Roles',
+      '/reportes': 'Reportes',
+      '/suministros': 'Suministros',
+      '/diagnostico': 'Diagnóstico'
+    };
+    
+    const currentTitle = routeTitles[currentPath] || 'Sistema';
+    document.title = `${currentTitle} - ${appName}`;
+  }, [currentPath]);
 
   const handleNavigate = (path) => {
     setCurrentPath(path);
