@@ -1,0 +1,22 @@
+{
+  "name": "vlock-tests",
+  "version": "1.0.0",
+  "description": "Scripts de pruebas automatizadas para Sistema de Gestión Vlock",
+  "scripts": {
+    "test": "node suministros-test.js",
+    "test:auth": "node auth-test.js",
+    "test:crud": "node crud-test.js",
+    "test:all": "npm run test:auth && npm run test:crud"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "puppeteer": "^24.18.0"
+  },
+  "keywords": [
+    "testing",
+    "automation",
+    "vlock"
+  ],
+  "author": "Sistema Vlock",
+  "license": "ISC"
+}

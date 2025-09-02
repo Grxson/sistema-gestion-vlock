@@ -170,7 +170,7 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
             <img
               className="h-10 w-auto transition-transform duration-300 hover:scale-110"
               src="/images/vlock_logo.png"
-              alt={import.meta.env.VITE_APP_NAME || 'VLock'}
+              alt={import.meta.env.VITE_APP_NAME || 'Vlock'}
               onError={(e) => {
                 e.target.style.display = 'none';
               }}
@@ -178,7 +178,7 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
             <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
           </div>
           <span className="ml-3 text-gray-900 dark:text-white font-bold text-xl bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
-            {import.meta.env.VITE_APP_NAME || 'VLock'}
+            {import.meta.env.VITE_APP_NAME}
           </span>
         </div>
         

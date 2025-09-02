@@ -1337,7 +1337,7 @@ export default function FormularioSuministros({
                 </div>
 
                 {/* Segunda fila - Cantidades y precios */}
-                <div className={`grid grid-cols-2 gap-3 mb-3 ${initialData ? 'md:grid-cols-6' : 'md:grid-cols-5'}`}>
+                <div className={`grid grid-cols-2 gap-3 mb-3 ${initialData ? 'md:grid-cols-5' : 'md:grid-cols-5'}`}>
                   {/* Cantidad */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1415,28 +1415,6 @@ export default function FormularioSuministros({
                       <option value="Parcial">Parcial</option>
                     </select>
                   </div>
-
-                  {/* Fecha Necesaria - Solo en modo edición */}
-                  {initialData && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Fecha Necesaria
-                      </label>
-                      <DateInput
-                        value={suministro.fecha_necesaria || reciboInfo.fecha}
-                        onChange={(value) => {
-                          if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-                            console.log('📅 Cambio de fecha suministro - valor anterior:', suministro.fecha_necesaria);
-                            console.log('📅 Cambio de fecha suministro - valor nuevo:', value);
-                          }
-                          actualizarSuministro(suministro.id_temp, 'fecha_necesaria', value);
-                        }}
-                        className="w-full min-w-[120px]"
-                        placeholder="Seleccionar fecha"
-                      />
-                    </div>
-                  )}
-
                   {/* Subtotal */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
