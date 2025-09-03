@@ -394,7 +394,6 @@ export default function FormularioSuministros({
       
       const processingTime = performance.now() - startTime;
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log(`✅ InitialData procesado: ${suministrosCargados.length} suministros en ${processingTime.toFixed(2)}ms`);
       }
     };
     
@@ -428,7 +427,6 @@ export default function FormularioSuministros({
         const loadTime = performance.now() - startTime;
         
         if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-          console.log(`🔍 Suministros cargados: ${suministrosData.length} en ${loadTime.toFixed(2)}ms`);
         }
         
         setExistingSuministros(suministrosData);
@@ -488,7 +486,6 @@ export default function FormularioSuministros({
     }
 
     if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-      console.log('🔍 Buscando duplicados para folio:', folioProveedor);
     }
 
     // Obtener todos los IDs que debemos excluir
@@ -654,7 +651,6 @@ export default function FormularioSuministros({
     };
     
     if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-      console.log('➕ Agregando nuevo suministro:', nuevoSuministro);
     }
     setSuministros(prev => [...prev, nuevoSuministro]);
   }, [nuevoSuministroTemplate]);
@@ -695,7 +691,6 @@ export default function FormularioSuministros({
   // Función optimizada para actualizar suministros con debounce en autocompletado
   const actualizarSuministro = useCallback((id, field, value) => {
     if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-      console.log(`🔄 Actualizando suministro ${id}: ${field} = "${value}"`);
     }
     
     // Normalizar ciertos campos antes de guardarlos
@@ -704,7 +699,6 @@ export default function FormularioSuministros({
       normalizedValue = normalizeUnidadMedida(value);
       
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log(`📏 Unidad normalizada: "${value}" -> "${normalizedValue}"`);
       }
       
       // Verificar que la unidad normalizada existe
@@ -716,7 +710,6 @@ export default function FormularioSuministros({
       normalizedValue = normalizeCategoria(value);
       
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log(`📦 Categoría normalizada: "${value}" -> "${normalizedValue}"`);
       }
     }
     
@@ -762,7 +755,6 @@ export default function FormularioSuministros({
       editingIds.push(...suministros.map(s => s.id_suministro).filter(id => id));
       
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log('🔧 IDs de suministros siendo editados en folio change:', editingIds);
       }      // Usar el primer ID como excludeId para mantener compatibilidad con searchExistingRecords
       const excludeId = editingIds.length > 0 ? editingIds[0] : null;
       
@@ -848,7 +840,6 @@ export default function FormularioSuministros({
     // NUEVA VALIDACIÓN: Verificar duplicados con registros existentes en la base de datos
     if (reciboInfo.folio && reciboInfo.folio.trim() !== '') {
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log('🔍 Verificando duplicados contra base de datos para folio:', reciboInfo.folio);
       }
       
       // Obtener todos los IDs de suministros que se están editando
@@ -865,14 +856,12 @@ export default function FormularioSuministros({
       editingIds.push(...suministros.map(s => s.id_suministro).filter(id => id));
       
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log('🔧 IDs de suministros siendo editados:', editingIds);
       }
       
       const existingDuplicates = existingSuministros.filter(suministro => {
         // Excluir suministros que estamos editando
         if (editingIds.includes(suministro.id_suministro)) {
           if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-            console.log(`🚫 Excluyendo suministro en edición: ${suministro.id_suministro} - ${suministro.nombre}`);
           }
           return false;
         }
@@ -884,7 +873,6 @@ export default function FormularioSuministros({
 
       if (existingDuplicates.length > 0) {
         if (process.env.NODE_ENV === 'development') {
-          console.log('⚠️ Duplicados encontrados en base de datos:', existingDuplicates.length);
         }
         
         const duplicateInfo = existingDuplicates.slice(0, 3).map(dup => {
@@ -902,13 +890,11 @@ export default function FormularioSuministros({
         const confirmed = window.confirm(warningMessage);
         if (!confirmed) {
           if (process.env.NODE_ENV === 'development') {
-            console.log('❌ Usuario canceló por duplicados');
           }
           return;
         }
         
         if (process.env.NODE_ENV === 'development') {
-          console.log('✅ Usuario confirmó continuar con duplicados');
         }
       }
     }
@@ -959,18 +945,7 @@ export default function FormularioSuministros({
         }
       };
 
-      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log('📤 Enviando payload al backend:', payload);
-        console.log('📦 Suministros a enviar:', payload.suministros.map(s => ({
-          nombre: s.nombre,
-          tipo_suministro: s.tipo_suministro,
-          unidad_medida: s.unidad_medida,
-          cantidad: s.cantidad,
-          precio_unitario: s.precio_unitario
-        })));
-        console.log('📅 Fecha del recibo:', payload.info_recibo.fecha);
-      }
-      
+      // Enviar al servidor
       await onSubmit(payload);
       
     } catch (error) {
@@ -1125,8 +1100,6 @@ export default function FormularioSuministros({
               value={reciboInfo.fecha}
               onChange={(value) => {
                 if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-                  console.log('📅 Cambio de fecha - valor anterior:', reciboInfo.fecha);
-                  console.log('📅 Cambio de fecha - valor nuevo:', value);
                 }
                 setReciboInfo(prev => ({
                   ...prev, 
@@ -1364,7 +1337,6 @@ export default function FormularioSuministros({
                         
                         // Solo log en desarrollo y con debugging habilitado, y evitar spam
                         if (process.env.NODE_ENV === 'development' && globalThis.debugForms && !isValid) {
-                          console.log(`🔍 Select unidad para ${suministro.nombre}: "${currentValue}" -> válido: ${isValid}`);
                         }
                         
                         return isValid ? currentValue : 'pz';

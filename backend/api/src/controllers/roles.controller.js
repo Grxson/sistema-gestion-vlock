@@ -4,7 +4,6 @@ const PermisosRol = models.Permisos_rol;
 const AccionesPermiso = models.Acciones_permiso;
 
 // Registro de modelos disponibles para depuración
-console.log("Modelos disponibles:", Object.keys(models));
 
 /**
  * Obtener todos los roles
@@ -256,7 +255,6 @@ const asignarPermisosRol = async (req, res) => {
                 // Asegurarse de que permitido sea un booleano y no use el operador ||
                 const esPermitido = permiso.permitido === true || permiso.permitido === 'true';
                 
-                console.log(`Creando permiso para acción ${permiso.id_accion} con permitido=${esPermitido}`);
                 
                 return await PermisosRol.create({
                     id_rol,
@@ -377,7 +375,6 @@ const getPermisosRol = async (req, res) => {
             }]
         });
 
-        console.log(`Permisos encontrados para rol ${id_rol}:`, permisos.map(p => ({
             id_accion: p.id_accion,
             permitido: p.permitido
         })));

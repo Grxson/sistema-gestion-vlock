@@ -199,8 +199,6 @@ const deleteProyecto = async (req, res) => {
 // Obtener proyectos activos (para selectores)
 const getProyectosActivos = async (req, res) => {
     try {
-        console.log('🔍 Intentando obtener proyectos activos...');
-        console.log('Modelos disponibles:', Object.keys(models));
         
         const proyectos = await models.Proyectos.findAll({
             where: {
@@ -210,7 +208,6 @@ const getProyectosActivos = async (req, res) => {
             order: [['nombre', 'ASC']]
         });
 
-        console.log('✅ Proyectos encontrados:', proyectos.length);
 
         res.json({
             success: true,

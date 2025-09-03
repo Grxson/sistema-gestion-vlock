@@ -161,7 +161,7 @@ function MainApp() {
             <div className="flex items-center justify-between">
               <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {import.meta.env.VITE_APP_FULL_NAME}
-                {console.log(import.meta.env.VITE_APP_FULL_NAME)}
+                {import.meta.env.VITE_APP_FULL_NAME}
               </h1>
               <div className="flex items-center space-x-4">
                 <div className="text-sm text-gray-500 dark:text-gray-400">

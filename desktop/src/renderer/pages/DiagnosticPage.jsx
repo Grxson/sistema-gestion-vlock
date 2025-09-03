@@ -98,11 +98,6 @@ const DiagnosticPage = () => {
             className="p-3 bg-blue-100 hover:bg-blue-200 rounded-lg text-blue-800 text-left"
             onClick={() => {
               console.clear();
-              console.log('======= DIAGNÓSTICO VLOCK =======');
-              console.log('Usuario:', user);
-              console.log('Permisos:', permissions);
-              console.log('Sistema:', systemInfo);
-              console.log('================================');
               alert('Información de diagnóstico enviada a la consola');
             }}
           >

@@ -438,7 +438,6 @@ const generarReciboPDF = async (req, res) => {
             const absoluteLogoPath = '/home/grxson/Documentos/Github/sistema-gestion-vlock/backend/api/src/public/images/vlock_logo.png';
             
             // Verificar si el archivo existe
-            console.log('Buscando logo en:', logoPath);
             
             // Calculamos posición para el logo más arriba y a la derecha para evitar sobreposiciones
             const logoWidth = 80;
@@ -1049,7 +1048,6 @@ const cambiarEstadoNomina = async (req, res) => {
             });
         }
 
-        console.log(`Cambiando estado de nómina ${id_nomina} de '${estadoActual}' a '${estado}'`);
         
         // Actualizar estado
         await nomina.update({ estado });

@@ -137,7 +137,6 @@ const getSuministroById = async (req, res) => {
 
 // Función auxiliar para verificar duplicados
 const checkForDuplicates = async (data, excludeId = null) => {
-    console.log('🔍 Verificando duplicados para:', data);
     
     // Solo verificar duplicados por folio
     if (data.folio && data.folio.trim() !== '') {

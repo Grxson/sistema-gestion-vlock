@@ -22,7 +22,6 @@ modelFiles.forEach(file => {
 
     // Verifica si el archivo usa export default
     if (content.includes('export default')) {
-        console.log(`Convirtiendo ${file} a CommonJS...`);
 
         // Reemplaza el patrón export default con la sintaxis de CommonJS
         const newContent = content.replace(
@@ -36,4 +35,3 @@ modelFiles.forEach(file => {
     }
 });
 
-console.log(`Conversión completada. ${convertedCount} archivos convertidos a CommonJS.`);
