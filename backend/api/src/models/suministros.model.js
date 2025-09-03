@@ -17,27 +17,22 @@ module.exports = (sequelize) => {
     },
     id_proveedor: {
       type: DataTypes.INTEGER,
-      allowNull: true,
+      allowNull: false,
       references: {
         model: 'proveedores',
         key: 'id_proveedor'
       },
       comment: 'ID del proveedor (relación con tabla proveedores)'
     },
-    proveedor: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
-      comment: 'Nombre del proveedor (campo temporal para compatibilidad)'
-    },
     folio: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-      comment: 'Folio interno del sistema'
-    },
-    folio_proveedor: {
       type: DataTypes.STRING(100),
       allowNull: true,
-      comment: 'Folio del proveedor que aparece en el recibo físico'
+      comment: 'Folio del suministro que aparece en el recibo'
+    },
+    metodo_pago: {
+      type: DataTypes.ENUM('Efectivo', 'Transferencia', 'Cheque', 'Tarjeta'),
+      defaultValue: 'Efectivo',
+      comment: 'Método de pago utilizado'
     },
     fecha: {
       type: DataTypes.DATEONLY,
@@ -74,71 +69,18 @@ module.exports = (sequelize) => {
       comment: 'Unidad de medida del suministro (pz, kg, m, m2, m3, ton, etc.)'
     },
     
-    // Campos específicos para materiales
-    m3_perdidos: {
-      type: DataTypes.DECIMAL(10,3),
-      allowNull: true,
-      defaultValue: 0
-    },
-    m3_entregados: {
-      type: DataTypes.DECIMAL(10,3),
-      allowNull: true,
-      defaultValue: 0
-    },
-    m3_por_entregar: {
-      type: DataTypes.DECIMAL(10,3),
-      allowNull: true,
-      defaultValue: 0
-    },
-    
-    // Campos de logística
-    vehiculo_transporte: {
-      type: DataTypes.STRING(50),
-      allowNull: true,
-      comment: 'Placas o identificador del vehículo de transporte'
-    },
-    operador_responsable: {
-      type: DataTypes.STRING(100),
-      allowNull: true,
-      comment: 'Nombre del operador responsable'
-    },
-    hora_salida: {
-      type: DataTypes.TIME,
-      allowNull: true,
-      comment: 'Hora de salida de la planta'
-    },
-    hora_llegada: {
-      type: DataTypes.TIME,
-      allowNull: true,
-      comment: 'Hora de llegada a la obra'
-    },
-    hora_inicio_descarga: {
-      type: DataTypes.TIME,
-      allowNull: true,
-      comment: 'Hora de inicio de descarga'
-    },
-    hora_fin_descarga: {
-      type: DataTypes.TIME,
-      allowNull: true,
-      comment: 'Hora de finalización de descarga'
-    },
-    hora_salida_obra: {
-      type: DataTypes.TIME,
-      allowNull: true,
-      comment: 'Hora de salida de la obra'
-    },
-    total_horas: {
-      type: DataTypes.DECIMAL(4,2),
-      allowNull: true,
-      comment: 'Total de horas calculadas automáticamente'
-    },
-    
-    // Campos financieros (para futuro)
+    // Campos financieros
     precio_unitario: {
       type: DataTypes.DECIMAL(10,2),
       allowNull: true,
       defaultValue: 0,
       comment: 'Precio por unidad de medida'
+    },
+    subtotal: {
+      type: DataTypes.DECIMAL(12,2),
+      allowNull: true,
+      defaultValue: 0,
+      comment: 'Subtotal del suministro (antes de IVA)'
     },
     costo_total: {
       type: DataTypes.DECIMAL(12,2),
@@ -157,7 +99,12 @@ module.exports = (sequelize) => {
     observaciones: {
       type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Observaciones adicionales'
+      comment: 'Observaciones adicionales del suministro'
+    },
+    observaciones_finales: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Observaciones finales después de la entrega'
     },
     estado: {
       type: DataTypes.ENUM('Solicitado', 'Aprobado', 'Pedido', 'En_Transito', 'Entregado', 'Cancelado'),
@@ -171,13 +118,16 @@ module.exports = (sequelize) => {
         fields: ['id_proyecto']
       },
       {
-        fields: ['proveedor']
+        fields: ['id_proveedor']
       },
       {
         fields: ['fecha']
       },
       {
         fields: ['tipo_suministro']
+      },
+      {
+        fields: ['folio']
       }
     ]
   });
@@ -191,7 +141,7 @@ module.exports = (sequelize) => {
     // Relación con proveedores
     Suministro.belongsTo(models.Proveedores, {
       foreignKey: 'id_proveedor',
-      as: 'proveedorInfo'
+      as: 'proveedor'
     });
   };
 

@@ -82,7 +82,7 @@ export default function FormularioSuministros({
 
   // Estado del recibo/folio principal
   const [reciboInfo, setReciboInfo] = useState({
-    folio_proveedor: '',
+    folio: '',
     id_proyecto: '',
     proveedor_info: null,
     fecha: getLocalDateString(),
@@ -345,9 +345,9 @@ export default function FormularioSuministros({
       // ⚡ BATCH: Actualizar reciboInfo una sola vez
       setReciboInfo(prevState => ({
         ...prevState,
-        folio_proveedor: primerSuministro.folio_proveedor || '',
+        folio: primerSuministro.folio || '',
         id_proyecto: primerSuministro.id_proyecto?.toString() || '',
-        proveedor_info: primerSuministro.proveedorInfo || primerSuministro.proveedor_info || null,
+        proveedor_info: primerSuministro.proveedor || primerSuministro.proveedor_info || null,
         fecha: normalizeFecha(primerSuministro.fecha),
         numero_factura: primerSuministro.numero_factura || '',
         metodo_pago: primerSuministro.metodo_pago || 'Efectivo',
@@ -474,8 +474,8 @@ export default function FormularioSuministros({
 
     return suministros.filter((suministro, index) => 
       index !== currentIndex &&
-      suministro.folio_proveedor && 
-      suministro.folio_proveedor.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
+      suministro.folio && 
+      suministro.folio.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
     );
   }, [suministros]);
 
@@ -491,30 +491,26 @@ export default function FormularioSuministros({
       console.log('🔍 Buscando duplicados para folio:', folioProveedor);
     }
 
-    // Obtener todos los IDs que debemos excluir (optimización: calculado una sola vez)
-    const idsToExclude = useMemo(() => {
-      const ids = [];
-      
-      if (excludeId) ids.push(excludeId);
-      
-      if (initialData?.suministros && Array.isArray(initialData.suministros)) {
-        ids.push(...initialData.suministros.map(s => s.id_suministro).filter(id => id));
-      } else if (initialData?.id_suministro) {
-        ids.push(initialData.id_suministro);
-      }
-      
-      ids.push(...suministros.map(s => s.id_suministro).filter(id => id));
-      
-      return ids;
-    }, [excludeId, initialData, suministros]);
+    // Obtener todos los IDs que debemos excluir
+    const idsToExclude = [];
+    
+    if (excludeId) idsToExclude.push(excludeId);
+    
+    if (initialData?.suministros && Array.isArray(initialData.suministros)) {
+      idsToExclude.push(...initialData.suministros.map(s => s.id_suministro).filter(id => id));
+    } else if (initialData?.id_suministro) {
+      idsToExclude.push(initialData.id_suministro);
+    }
+    
+    idsToExclude.push(...suministros.map(s => s.id_suministro).filter(id => id));
 
     // Búsqueda optimizada con filtros tempranos
     const existingRecords = existingSuministros
       .filter(suministro => {
         // Early return para performance
-        if (!suministro.folio_proveedor) return false;
+        if (!suministro.folio) return false;
         if (idsToExclude.includes(suministro.id_suministro)) return false;
-        return suministro.folio_proveedor.toLowerCase().trim() === folioProveedor.toLowerCase().trim();
+        return suministro.folio.toLowerCase().trim() === folioProveedor.toLowerCase().trim();
       })
       .slice(0, 3); // Limitar resultados para performance
 
@@ -747,7 +743,7 @@ export default function FormularioSuministros({
 
   // Función mejorada para manejar cambios en el folio del proveedor
   const handleFolioChange = (value) => {
-    setReciboInfo(prev => ({ ...prev, folio_proveedor: value }));
+    setReciboInfo(prev => ({ ...prev, folio: value }));
     
     // Buscar duplicados cuando cambia el folio
     if (value && value.trim() !== '') {
@@ -836,12 +832,12 @@ export default function FormularioSuministros({
     }
 
     // Validar duplicados por folio de proveedor (solo dentro del mismo registro)
-    if (reciboInfo.folio_proveedor && suministros.length > 1) {
+    if (reciboInfo.folio && suministros.length > 1) {
       // Solo validamos duplicados si hay múltiples suministros en el mismo registro
-      const duplicates = checkForDuplicates(reciboInfo.folio_proveedor);
+      const duplicates = checkForDuplicates(reciboInfo.folio);
       if (duplicates.length > 0) {
         const confirmar = window.confirm(
-          `Está registrando ${suministros.length} suministros con el mismo folio "${reciboInfo.folio_proveedor}". ¿Desea continuar de todas formas?`
+          `Está registrando ${suministros.length} suministros con el mismo folio "${reciboInfo.folio}". ¿Desea continuar de todas formas?`
         );
         if (!confirmar) {
           return;
@@ -850,9 +846,9 @@ export default function FormularioSuministros({
     }
 
     // NUEVA VALIDACIÓN: Verificar duplicados con registros existentes en la base de datos
-    if (reciboInfo.folio_proveedor && reciboInfo.folio_proveedor.trim() !== '') {
+    if (reciboInfo.folio && reciboInfo.folio.trim() !== '') {
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-        console.log('🔍 Verificando duplicados contra base de datos para folio:', reciboInfo.folio_proveedor);
+        console.log('🔍 Verificando duplicados contra base de datos para folio:', reciboInfo.folio);
       }
       
       // Obtener todos los IDs de suministros que se están editando
@@ -882,8 +878,8 @@ export default function FormularioSuministros({
         }
 
         // Verificar folio exacto
-        return suministro.folio_proveedor && 
-               suministro.folio_proveedor.toLowerCase().trim() === reciboInfo.folio_proveedor.toLowerCase().trim();
+        return suministro.folio && 
+               suministro.folio.toLowerCase().trim() === reciboInfo.folio.toLowerCase().trim();
       });
 
       if (existingDuplicates.length > 0) {
@@ -892,7 +888,7 @@ export default function FormularioSuministros({
         }
         
         const duplicateInfo = existingDuplicates.slice(0, 3).map(dup => {
-          const proveedor = dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor';
+          const proveedor = dup.proveedor || dup.proveedor?.nombre || 'Sin proveedor';
           const fecha = dup.fecha ? new Date(dup.fecha).toLocaleDateString('es-MX') : 'Sin fecha';
           return `• ${dup.nombre} (${proveedor} - ${fecha})`;
         }).join('\n');
@@ -900,7 +896,7 @@ export default function FormularioSuministros({
         const moreMessage = existingDuplicates.length > 3 ? `\n... y ${existingDuplicates.length - 3} más` : '';
         
         const warningTitle = "🚫 FOLIO DUPLICADO DETECTADO";
-        const warningMessage = `¡ATENCIÓN! El folio "${reciboInfo.folio_proveedor}" ya existe en:\n\n${duplicateInfo}${moreMessage}\n\n` +
+        const warningMessage = `¡ATENCIÓN! El folio "${reciboInfo.folio}" ya existe en:\n\n${duplicateInfo}${moreMessage}\n\n` +
                          `Los folios deben ser únicos. ¿Está seguro de que desea continuar?`;
 
         const confirmed = window.confirm(warningMessage);
@@ -924,10 +920,10 @@ export default function FormularioSuministros({
         info_recibo: {
           proveedor: reciboInfo.proveedor_info?.nombre || '',
           id_proveedor: reciboInfo.proveedor_info?.id_proveedor || null,
-          folio: reciboInfo.folio_proveedor,
-          folio_proveedor: reciboInfo.folio_proveedor,
+          folio: reciboInfo.folio,
           fecha: reciboInfo.fecha,
           id_proyecto: parseInt(reciboInfo.id_proyecto),
+          metodo_pago: reciboInfo.metodo_pago || 'Efectivo',
           vehiculo_transporte: reciboInfo.vehiculo_transporte || '',
           operador_responsable: reciboInfo.operador_responsable || '',
           hora_salida: reciboInfo.hora_salida || '',
@@ -1083,7 +1079,7 @@ export default function FormularioSuministros({
             </label>
             <input
               type="text"
-              value={reciboInfo.folio_proveedor}
+              value={reciboInfo.folio}
               onChange={(e) => handleFolioChange(e.target.value)}
               className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 ${
                 showDuplicatesWarning 
@@ -1107,7 +1103,7 @@ export default function FormularioSuministros({
                       Posible duplicado detectado
                     </h3>
                     <p className="mt-1 text-sm text-orange-700 dark:text-orange-400">
-                      Ya existe(n) {duplicatesSuggestions.length} suministro(s) con el folio "{reciboInfo.folio_proveedor}".
+                      Ya existe(n) {duplicatesSuggestions.length} suministro(s) con el folio "{reciboInfo.folio}".
                     </p>
                     {duplicatesSuggestions.slice(0, 3).map((dup, idx) => (
                       <div key={idx} className="mt-1 text-xs text-orange-600 dark:text-orange-400">

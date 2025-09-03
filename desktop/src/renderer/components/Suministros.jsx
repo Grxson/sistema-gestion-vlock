@@ -179,7 +179,7 @@ export default function Suministros() {
       item.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.proveedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       item.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.folio_proveedor?.toLowerCase().includes(searchTerm.toLowerCase())
+      item.folio?.toLowerCase().includes(searchTerm.toLowerCase())
     );
     const matchesProyecto = !filtroProyecto || item.id_proyecto?.toString() === filtroProyecto;
     const matchesCategoria = !filtroCategoria || item.categoria === filtroCategoria;

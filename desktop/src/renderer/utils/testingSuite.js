@@ -203,14 +203,14 @@ window.runSuministrosTests = () => {
   
   runTest('Detección de Duplicados - Folio Proveedor', () => {
     const existingSuministros = [
-      { id_suministro: 1, folio_proveedor: 'FOLIO123', nombre: 'Cemento' },
-      { id_suministro: 2, folio_proveedor: 'FOLIO456', nombre: 'Arena' },
-      { id_suministro: 3, folio_proveedor: 'FOLIO123', nombre: 'Grava' }
+      { id_suministro: 1, folio: 'FOLIO123', nombre: 'Cemento' },
+      { id_suministro: 2, folio: 'FOLIO456', nombre: 'Arena' },
+      { id_suministro: 3, folio: 'FOLIO123', nombre: 'Grava' }
     ];
     
     const checkDuplicates = (folio, excludeIds = []) => {
       return existingSuministros.filter(s => 
-        s.folio_proveedor === folio && !excludeIds.includes(s.id_suministro)
+        s.folio === folio && !excludeIds.includes(s.id_suministro)
       );
     };
     

@@ -9,17 +9,17 @@ export default function TablaSuministrosJerarquica({
 }) {
   const [expandedFolios, setExpandedFolios] = useState(new Set());
 
-  // Agrupar suministros por folio_proveedor
+  // Agrupar suministros por folio
   const agruparPorFolio = (suministros) => {
     const grupos = {};
     
     suministros.forEach(suministro => {
-      const folio = suministro.folio_proveedor || 'sin_folio';
+      const folio = suministro.folio || 'sin_folio';
       
       if (!grupos[folio]) {
         grupos[folio] = {
-          folio_proveedor: suministro.folio_proveedor,
-          proveedor: suministro.proveedor || suministro.proveedorInfo?.nombre_empresa || 'Sin asignar',
+          folio: suministro.folio,
+          proveedor: suministro.proveedor || suministro.proveedor?.nombre_empresa || 'Sin asignar',
           fecha: suministro.fecha || suministro.fecha_necesaria,
           numero_factura: suministro.numero_factura,
           metodo_pago: suministro.metodo_pago,
@@ -201,7 +201,7 @@ export default function TablaSuministrosJerarquica({
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900 dark:text-white">
-                        {grupo.folio_proveedor || '-'}
+                        {grupo.folio || '-'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -285,9 +285,9 @@ export default function TablaSuministrosJerarquica({
                       <td className="px-6 py-3">
                         <div className="text-sm text-gray-600 dark:text-gray-400">
                           {/* Mostrar tipo de proveedor si está disponible */}
-                          {suministro.proveedorInfo?.tipo_proveedor && (
+                          {suministro.proveedor?.tipo_proveedor && (
                             <div className="text-xs text-gray-500 dark:text-gray-400">
-                              {suministro.proveedorInfo.tipo_proveedor}
+                              {suministro.proveedor.tipo_proveedor}
                             </div>
                           )}
                         </div>

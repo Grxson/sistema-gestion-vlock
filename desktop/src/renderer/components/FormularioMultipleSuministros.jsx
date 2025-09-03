@@ -71,7 +71,7 @@ export default function FormularioMultipleSuministros({
 
   // Estado del recibo/folio principal
   const [reciboInfo, setReciboInfo] = useState({
-    folio_proveedor: '',
+    folio: '',
     id_proyecto: '',
     proveedor_info: null,
     fecha: new Date().toISOString().split('T')[0],
@@ -149,9 +149,9 @@ export default function FormularioMultipleSuministros({
       // Cargar información del recibo
       const primerSuministro = initialData.suministros[0];
       setReciboInfo({
-        folio_proveedor: primerSuministro.folio_proveedor || '',
+        folio: primerSuministro.folio || '',
         id_proyecto: primerSuministro.id_proyecto?.toString() || '',
-        proveedor_info: primerSuministro.proveedorInfo || null,
+        proveedor_info: primerSuministro.proveedor || null,
         fecha: primerSuministro.fecha ? new Date(primerSuministro.fecha).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
         numero_factura: primerSuministro.numero_factura || '',
         metodo_pago: primerSuministro.metodo_pago || 'Efectivo',
@@ -212,8 +212,8 @@ export default function FormularioMultipleSuministros({
     }
 
     return existingSuministros.filter(suministro => 
-      suministro.folio_proveedor && 
-      suministro.folio_proveedor.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
+      suministro.folio && 
+      suministro.folio.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
     );
   }, [existingSuministros]);
 
@@ -226,8 +226,8 @@ export default function FormularioMultipleSuministros({
     }
 
     const suggestions = existingSuministros.filter(suministro => 
-      suministro.folio_proveedor && 
-      suministro.folio_proveedor.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
+      suministro.folio && 
+      suministro.folio.toLowerCase().trim() === folioProveedor.toLowerCase().trim()
     ).slice(0, 5);
 
     setDuplicatesSuggestions(suggestions);
@@ -394,7 +394,7 @@ export default function FormularioMultipleSuministros({
 
   // Función mejorada para manejar cambios en el folio del proveedor
   const handleFolioChange = (value) => {
-    setReciboInfo(prev => ({ ...prev, folio_proveedor: value }));
+    setReciboInfo(prev => ({ ...prev, folio: value }));
     
     // Buscar duplicados cuando cambia el folio
     if (value && value.trim() !== '') {
@@ -451,11 +451,11 @@ export default function FormularioMultipleSuministros({
     }
 
     // Validar duplicados por folio de proveedor (solo si no estamos editando)
-    if (!initialData && reciboInfo.folio_proveedor) {
-      const duplicates = checkForDuplicates(reciboInfo.folio_proveedor);
+    if (!initialData && reciboInfo.folio) {
+      const duplicates = checkForDuplicates(reciboInfo.folio);
       if (duplicates.length > 0) {
         const confirmar = window.confirm(
-          `Se encontraron ${duplicates.length} suministro(s) con el mismo folio "${reciboInfo.folio_proveedor}". ¿Desea continuar de todas formas?`
+          `Se encontraron ${duplicates.length} suministro(s) con el mismo folio "${reciboInfo.folio}". ¿Desea continuar de todas formas?`
         );
         if (!confirmar) {
           return;
@@ -470,10 +470,10 @@ export default function FormularioMultipleSuministros({
         info_recibo: {
           proveedor: reciboInfo.proveedor_info?.nombre || '',
           id_proveedor: reciboInfo.proveedor_info?.id_proveedor || null,
-          folio: reciboInfo.folio_proveedor,
-          folio_proveedor: reciboInfo.folio_proveedor,
+          folio: reciboInfo.folio,
           fecha: reciboInfo.fecha,
           id_proyecto: parseInt(reciboInfo.id_proyecto),
+          metodo_pago: reciboInfo.metodo_pago || 'Efectivo',
           vehiculo_transporte: reciboInfo.vehiculo_transporte || '',
           operador_responsable: reciboInfo.operador_responsable || '',
           hora_salida: reciboInfo.hora_salida || '',
@@ -616,7 +616,7 @@ export default function FormularioMultipleSuministros({
             </label>
             <input
               type="text"
-              value={reciboInfo.folio_proveedor}
+              value={reciboInfo.folio}
               onChange={(e) => handleFolioChange(e.target.value)}
               className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 ${
                 showDuplicatesWarning 
@@ -640,7 +640,7 @@ export default function FormularioMultipleSuministros({
                       Posible duplicado detectado
                     </h3>
                     <p className="mt-1 text-sm text-orange-700 dark:text-orange-400">
-                      Ya existe(n) {duplicatesSuggestions.length} suministro(s) con el folio "{reciboInfo.folio_proveedor}".
+                      Ya existe(n) {duplicatesSuggestions.length} suministro(s) con el folio "{reciboInfo.folio}".
                     </p>
                     {duplicatesSuggestions.slice(0, 3).map((dup, idx) => (
                       <div key={idx} className="mt-1 text-xs text-orange-600 dark:text-orange-400">

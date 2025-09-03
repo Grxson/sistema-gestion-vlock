@@ -4,7 +4,7 @@ const { verifyToken } = require('../middlewares/auth');
 // Obtener todos los suministros
 const getSuministros = async (req, res) => {
     try {
-        const { id_proyecto, fecha_inicio, fecha_fin, proveedor, nombre } = req.query;
+        const { id_proyecto, proveedor, nombre, fecha_inicio, fecha_fin } = req.query;
         
         let whereClause = {};
         
@@ -48,7 +48,7 @@ const getSuministros = async (req, res) => {
                 },
                 {
                     model: models.Proveedores,
-                    as: 'proveedorInfo',
+                    as: 'proveedor',
                     attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
                 }
             ],
@@ -97,7 +97,7 @@ const getSuministroById = async (req, res) => {
                 },
                 {
                     model: models.Proveedores,
-                    as: 'proveedorInfo',
+                    as: 'proveedor',
                     attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
                 }
             ]
@@ -139,10 +139,10 @@ const getSuministroById = async (req, res) => {
 const checkForDuplicates = async (data, excludeId = null) => {
     console.log('🔍 Verificando duplicados para:', data);
     
-    // Solo verificar duplicados por folio_proveedor
-    if (data.folio_proveedor && data.folio_proveedor.trim() !== '') {
+    // Solo verificar duplicados por folio
+    if (data.folio && data.folio.trim() !== '') {
         const whereConditionFolio = {
-            folio_proveedor: data.folio_proveedor.trim()
+            folio: data.folio.trim()
         };
         
         if (excludeId) {
@@ -158,7 +158,7 @@ const checkForDuplicates = async (data, excludeId = null) => {
                 isDuplicate: true,
                 type: 'folio',
                 existing: duplicateByFolio,
-                message: `Ya existe un suministro con el folio "${data.folio_proveedor}"`
+                message: `Ya existe un suministro con el folio "${data.folio}"`
             };
         }
     }
@@ -170,12 +170,11 @@ const checkForDuplicates = async (data, excludeId = null) => {
 const createSuministro = async (req, res) => {
     try {
         const {
-            proveedor,
-            id_proveedor,
             folio,
-            folio_proveedor,
             fecha,
             id_proyecto,
+            id_proveedor,
+            metodo_pago,
             tipo_suministro,
             nombre,
             codigo_producto,
@@ -198,10 +197,9 @@ const createSuministro = async (req, res) => {
         } = req.body;
 
         // Validaciones básicas
-        if (!proveedor || !fecha || !id_proyecto || !nombre) {
+        if (!id_proveedor || !fecha || !id_proyecto || !nombre) {
             return res.status(400).json({
                 success: false,
-                message: 'Los campos proveedor, fecha, proyecto y nombre son obligatorios'
             });
         }
 
@@ -218,10 +216,9 @@ const createSuministro = async (req, res) => {
         const duplicates = await checkForDuplicates({
             nombre,
             codigo_producto,
-            folio_proveedor,
+            folio,
             id_proyecto,
             tipo_suministro,
-            id_proveedor,
             proveedor
         });
 
@@ -230,9 +227,9 @@ const createSuministro = async (req, res) => {
                 id: dup.id_suministro,
                 nombre: dup.nombre,
                 proyecto: dup.proyecto?.nombre || 'Sin proyecto',
-                proveedor: dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor',
+                proveedor: dup.proveedor?.nombre || 'Sin proveedor',
                 codigo_producto: dup.codigo_producto,
-                folio_proveedor: dup.folio_proveedor
+                folio: dup.folio
             }));
 
             return res.status(409).json({
@@ -244,12 +241,11 @@ const createSuministro = async (req, res) => {
         }
 
         const nuevoSuministro = await models.Suministros.create({
-            proveedor,
-            id_proveedor,
             folio,
-            folio_proveedor,
             fecha,
             id_proyecto,
+            id_proveedor,
+            metodo_pago: metodo_pago || 'Efectivo',
             tipo_suministro: tipo_suministro || 'Material',
             nombre,
             codigo_producto,
@@ -267,6 +263,7 @@ const createSuministro = async (req, res) => {
             hora_fin_descarga,
             observaciones,
             precio_unitario: precio_unitario ? Math.round(parseFloat(precio_unitario) * 100) / 100 : null,
+            subtotal: (cantidad && precio_unitario) ? parseFloat(cantidad) * Math.round(parseFloat(precio_unitario) * 100) / 100 : null,
             costo_total: costo_total ? parseFloat(costo_total) : null,
             estado: estado || 'Pendiente'
         });
@@ -302,12 +299,11 @@ const createMultipleSuministros = async (req, res) => {
         const {
             // Información común del recibo
             info_recibo: {
-                proveedor,
-                id_proveedor,
                 folio,
-                folio_proveedor,
                 fecha,
                 id_proyecto,
+                id_proveedor,
+                metodo_pago,
                 vehiculo_transporte,
                 operador_responsable,
                 hora_salida,
@@ -331,10 +327,9 @@ const createMultipleSuministros = async (req, res) => {
         };
 
         // Validaciones básicas
-        if (!proveedor || !fecha || !id_proyecto) {
+        if (!id_proveedor || !fecha || !id_proyecto) {
             return res.status(400).json({
                 success: false,
-                message: 'Los campos proveedor, fecha y proyecto son obligatorios'
             });
         }
 
@@ -407,6 +402,7 @@ const createMultipleSuministros = async (req, res) => {
                         }
 
                         const updatePayload = {
+                            metodo_pago: metodo_pago || existente.metodo_pago,
                             tipo_suministro: san.tipo_suministro !== undefined ? san.tipo_suministro : existente.tipo_suministro,
                             nombre: san.nombre !== undefined ? san.nombre : existente.nombre,
                             codigo_producto: san.codigo_producto !== undefined ? san.codigo_producto : existente.codigo_producto,
@@ -417,6 +413,13 @@ const createMultipleSuministros = async (req, res) => {
                             m3_entregados: Object.prototype.hasOwnProperty.call(san, 'm3_entregados') ? san.m3_entregados : existente.m3_entregados,
                             m3_por_entregar: Object.prototype.hasOwnProperty.call(san, 'm3_por_entregar') ? san.m3_por_entregar : existente.m3_por_entregar,
                             precio_unitario: Object.prototype.hasOwnProperty.call(san, 'precio_unitario') ? san.precio_unitario : existente.precio_unitario,
+                            subtotal: (Object.prototype.hasOwnProperty.call(san, 'cantidad') && Object.prototype.hasOwnProperty.call(san, 'precio_unitario')) ? 
+                                san.cantidad * san.precio_unitario : 
+                                ((Object.prototype.hasOwnProperty.call(san, 'cantidad') || Object.prototype.hasOwnProperty.call(san, 'precio_unitario')) ? 
+                                    ((Object.prototype.hasOwnProperty.call(san, 'cantidad') ? san.cantidad : existente.cantidad) * 
+                                     (Object.prototype.hasOwnProperty.call(san, 'precio_unitario') ? san.precio_unitario : existente.precio_unitario)) : 
+                                    existente.subtotal
+                                ),
                             costo_total: Object.prototype.hasOwnProperty.call(san, 'costo_total') ? san.costo_total : (
                                 (Object.prototype.hasOwnProperty.call(san, 'cantidad') && Object.prototype.hasOwnProperty.call(san, 'precio_unitario')) ? 
                                 calcularCostoTotal(san.cantidad, san.precio_unitario, include_iva) : existente.costo_total
@@ -431,12 +434,11 @@ const createMultipleSuministros = async (req, res) => {
                     } else {
                         // No existe el id, crear nuevo
                         const creado = await models.Suministros.create({
-                            proveedor,
-                            id_proveedor,
                             folio,
-                            folio_proveedor,
                             fecha,
                             id_proyecto,
+                            id_proveedor,
+                            metodo_pago: metodo_pago || 'Efectivo',
                             vehiculo_transporte,
                             operador_responsable,
                             hora_salida,
@@ -454,6 +456,7 @@ const createMultipleSuministros = async (req, res) => {
                             m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
                             m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
                             precio_unitario: suministroData.precio_unitario ? Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100 : null,
+                            subtotal: (suministroData.cantidad && suministroData.precio_unitario) ? parseFloat(suministroData.cantidad) * Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100 : null,
                             costo_total: calcularCostoTotal(suministroData.cantidad, suministroData.precio_unitario, include_iva),
                             include_iva: include_iva, // Guardar estado del IVA
                             estado: suministroData.estado || 'Pendiente'
@@ -465,12 +468,11 @@ const createMultipleSuministros = async (req, res) => {
                 } else {
                     // Crear nuevo suministro
                     const creado = await models.Suministros.create({
-                        proveedor,
-                        id_proveedor,
                         folio,
-                        folio_proveedor,
                         fecha,
                         id_proyecto,
+                        id_proveedor,
+                        metodo_pago: metodo_pago || 'Efectivo',
                         vehiculo_transporte,
                         operador_responsable,
                         hora_salida,
@@ -488,6 +490,7 @@ const createMultipleSuministros = async (req, res) => {
                         m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
                         m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
                         precio_unitario: suministroData.precio_unitario ? Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100 : null,
+                        subtotal: (suministroData.cantidad && suministroData.precio_unitario) ? parseFloat(suministroData.cantidad) * Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100 : null,
                         costo_total: calcularCostoTotal(suministroData.cantidad, suministroData.precio_unitario, include_iva),
                         include_iva: include_iva, // Guardar estado del IVA
                         estado: suministroData.estado || 'Pendiente'
@@ -514,7 +517,7 @@ const createMultipleSuministros = async (req, res) => {
                     },
                     {
                         model: models.Proveedores,
-                        as: 'proveedorInfo',
+                        as: 'proveedor',
                         attributes: ['nombre', 'tipo_proveedor', 'telefono']
                     }
                 ]
@@ -526,7 +529,7 @@ const createMultipleSuministros = async (req, res) => {
                 data: {
                     results,
                     created: suministrosCompletos,
-                    folio_proveedor
+                    folio
                 }
             });
 
@@ -581,15 +584,14 @@ const updateSuministro = async (req, res) => {
         }
 
         // Verificar duplicados si se están actualizando campos clave
-        if (updateData.nombre || updateData.codigo_producto || updateData.folio_proveedor) {
+        if (updateData.nombre || updateData.codigo_producto || updateData.folio) {
             const dataToCheck = {
                 nombre: updateData.nombre || suministro.nombre,
                 codigo_producto: updateData.codigo_producto || suministro.codigo_producto,
-                folio_proveedor: updateData.folio_proveedor || suministro.folio_proveedor,
+                folio: updateData.folio || suministro.folio,
                 id_proyecto: updateData.id_proyecto || suministro.id_proyecto,
                 tipo_suministro: updateData.tipo_suministro || suministro.tipo_suministro,
-                id_proveedor: updateData.id_proveedor || suministro.id_proveedor,
-                proveedor: updateData.proveedor || suministro.proveedor
+                id_proveedor: updateData.id_proveedor || suministro.id_proveedor
             };
 
             const duplicates = await checkForDuplicates(dataToCheck, id);
@@ -599,9 +601,9 @@ const updateSuministro = async (req, res) => {
                     id: dup.id_suministro,
                     nombre: dup.nombre,
                     proyecto: dup.proyecto?.nombre || 'Sin proyecto',
-                    proveedor: dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor',
+                    proveedor: dup.proveedor?.nombre || 'Sin proveedor',
                     codigo_producto: dup.codigo_producto,
-                    folio_proveedor: dup.folio_proveedor
+                    folio: dup.folio
                 }));
 
                 return res.status(409).json({
@@ -648,6 +650,11 @@ const updateSuministro = async (req, res) => {
         // Calcular costo_total automáticamente si no viene en la petición pero se tienen cantidad y precio_unitario
         const cantidadFinal = updateData.cantidad !== undefined ? updateData.cantidad : suministro.cantidad;
         const precioFinal = updateData.precio_unitario !== undefined ? updateData.precio_unitario : suministro.precio_unitario;
+        
+        // Calcular subtotal automáticamente
+        if (cantidadFinal && precioFinal) {
+            updateData.subtotal = cantidadFinal * precioFinal;
+        }
         
         if (!Object.prototype.hasOwnProperty.call(updateData, 'costo_total') && cantidadFinal && precioFinal) {
             updateData.costo_total = calcularCostoTotal(cantidadFinal, precioFinal, include_iva);
