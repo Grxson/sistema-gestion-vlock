@@ -375,9 +375,12 @@ const getPermisosRol = async (req, res) => {
             }]
         });
 
-            id_accion: p.id_accion,
-            permitido: p.permitido
-        })));
+        // Verificar que se encontraron permisos
+        if (!permisos || permisos.length === 0) {
+            return res.status(404).json({
+                message: 'No se encontraron permisos para este rol'
+            });
+        }
 
         // Formatear la respuesta
         const permisosFormateados = permisos.map(permiso => ({
