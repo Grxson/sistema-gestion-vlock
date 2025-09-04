@@ -2739,7 +2739,7 @@ const Suministros = () => {
   // Funciones para exportar/importar
   const handleDownloadTemplate = async () => {
     try {
-      await generateImportTemplate();
+      await generateImportTemplate(proyectos, proveedores);
       showSuccess('Plantilla descargada', 'La plantilla Excel ha sido descargada correctamente');
     } catch (error) {
       console.error('Error descargando plantilla:', error);
@@ -2845,21 +2845,24 @@ const Suministros = () => {
               folio: item.folio,
               fecha: item.fecha,
               metodo_pago: item.metodo_pago,
-              proveedor: item.proveedor_nombre
+              proveedor: item.proveedor_nombre,
+              observaciones_generales: item.observaciones_generales
             },
             suministros: []
           };
         }
         
         groupedByRecibo[key].suministros.push({
+          // === CAMPOS DEL FORMULARIO REAL ===
           nombre: item.nombre,
-          codigo_producto: item.codigo_producto,
-          descripcion_detallada: item.descripcion_detallada,
           tipo_suministro: item.tipo_suministro,
+          codigo_producto: item.codigo_producto,
           cantidad: item.cantidad,
           unidad_medida: item.unidad_medida,
           precio_unitario: item.precio_unitario,
-          estado: item.estado
+          estado: item.estado,
+          descripcion_detallada: item.descripcion_detallada,
+          include_iva: item.include_iva
         });
       });
 
@@ -2868,23 +2871,41 @@ const Suministros = () => {
         const group = groupedByRecibo[key];
         
         try {
-          const response = await fetch('http://localhost:5000/api/suministros', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              suministros: group.suministros,
-              recibo: group.recibo
-            }),
-          });
-
-          if (response.ok) {
-            successCount += group.suministros.length;
-          } else {
-            console.error('Error en respuesta:', await response.text());
+          // Buscar proveedor por nombre
+          const proveedor = proveedores.find(p => 
+            p.nombre.toLowerCase().trim() === group.recibo.proveedor.toLowerCase().trim()
+          );
+          
+          if (!proveedor) {
+            console.error(`Proveedor "${group.recibo.proveedor}" no encontrado`);
             errorCount += group.suministros.length;
+            continue;
           }
+
+          // Buscar proyecto por nombre (usar el primer proyecto si no se especifica)
+          let proyecto = proyectos[0]; // Por defecto usar el primer proyecto
+          
+          // Formatear datos para el endpoint múltiple correcto
+          const payload = {
+            info_recibo: {
+              folio: group.recibo.folio,
+              fecha: group.recibo.fecha,
+              id_proyecto: proyecto.id_proyecto,
+              id_proveedor: proveedor.id_proveedor,
+              metodo_pago: group.recibo.metodo_pago,
+              observaciones_generales: group.recibo.observaciones_generales || ''
+            },
+            suministros: group.suministros,
+            include_iva: group.suministros[0]?.include_iva !== undefined ? group.suministros[0].include_iva : true
+          };
+
+          const response = await api.request('/suministros/multiple', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+          
+          // Si llegamos aquí, la petición fue exitosa
+          successCount += group.suministros.length;
         } catch (error) {
           console.error('Error creando suministros del recibo:', error);
           errorCount += group.suministros.length;

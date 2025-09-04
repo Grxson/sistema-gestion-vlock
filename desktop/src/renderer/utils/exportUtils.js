@@ -3,27 +3,35 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { format } from 'date-fns';
 
-// Configuración de columnas para suministros (solo las necesarias)
+// Configuración de columnas para suministros - AJUSTADA AL FORMULARIO REAL
 export const SUMINISTROS_COLUMNS = {
+  // === INFORMACIÓN DEL RECIBO ===
   id_suministro: 'ID',
+  proveedor: 'Proveedor',
+  proyecto: 'Proyecto', 
+  folio: 'Folio del Proveedor',
+  fecha: 'Fecha',
+  metodo_pago: 'Método de Pago',
+  observaciones_generales: 'Observaciones Generales',
+  
+  // === INFORMACIÓN DEL SUMINISTRO ===
   nombre: 'Nombre del Suministro',
-  codigo_producto: 'Código',
-  descripcion_detallada: 'Descripción',
   tipo_suministro: 'Categoría',
+  codigo_producto: 'Código',
   cantidad: 'Cantidad',
   unidad_medida: 'Unidad',
   precio_unitario: 'Precio Unitario',
-  subtotal: 'Subtotal',
   estado: 'Estado',
-  proyecto: 'Proyecto',
-  proveedor: 'Proveedor',
-  fecha: 'Fecha Recibo',
-  folio: 'Número Recibo',
-  metodo_pago: 'Método de Pago'
+  subtotal: 'Subtotal',
+  descripcion_detallada: 'Descripción Detallada',
+  
+  // === CONFIGURACIÓN FINANCIERA ===
+  include_iva: 'Incluir IVA'
 };
 
-// Valores válidos para validación
+// Valores válidos para validación - CORREGIDOS para coincidir con el formulario oficial
 export const VALID_VALUES = {
+  // Categorías exactas del modelo de base de datos
   categorias: [
     'Material',
     'Herramienta', 
@@ -36,123 +44,168 @@ export const VALID_VALUES = {
     'Maquinaria',
     'Concreto'
   ],
+  // Unidades COMPLETAS del formulario oficial (claves internas)
   unidades: [
-    'Unidad',
-    'Metro',
-    'Metro cuadrado',
-    'Metro cúbico', 
-    'Kilogramo',
-    'Litro',
-    'Caja',
-    'Paquete',
-    'Rollo',
-    'Saco',
-    'Galón',
-    'Pieza',
-    'Par',
-    'Docena',
-    'Tonelada'
+    'pz', 'kg', 'm', 'm2', 'm3', 'lt', 'ton', 'hr', 'día', 'viaje',
+    'ml', 'cm', 'mm', 'global', 'lote', 'caja', 'costal', 'tambor',
+    'galón', 'rollo', 'bulto', 'par', 'docena', 'paquete', 'set'
   ],
+  // Estados exactos del modelo de base de datos
   estados: ['Solicitado', 'Aprobado', 'Pedido', 'En_Transito', 'Entregado', 'Cancelado'],
+  // Métodos de pago exactos del modelo
   metodos_pago: ['Efectivo', 'Transferencia', 'Cheque', 'Tarjeta']
 };
 
-// Función para generar plantilla de importación
-export const generateImportTemplate = async () => {
+// Función para generar plantilla de importación - CON DATOS REALES DEL SISTEMA
+export const generateImportTemplate = async (proyectos = [], proveedores = []) => {
   try {
+    // Usar datos reales si están disponibles
+    const proyectoEjemplo = proyectos.length > 0 ? proyectos[0].nombre : 'Proyecto Real';
+    const proveedorEjemplo = proveedores.length > 0 ? proveedores[0].nombre : 'Proveedor Real';
+    
     const templateData = [
       {
+        // === INFORMACIÓN DEL RECIBO ===
+        'Proveedor': proveedorEjemplo,
+        'Proyecto': proyectoEjemplo,
+        'Folio del Proveedor': '37946',
+        'Fecha': '2025-09-04',
+        'Método de Pago': 'Efectivo',
+        'Observaciones Generales': 'Entrega matutina',
+        
+        // === INFORMACIÓN DEL SUMINISTRO ===
         'Nombre del Suministro': 'Cemento Portland',
-        'Código': 'CEM001',
-        'Descripción': 'Cemento Portland tipo I de 50kg',
         'Categoría': 'Material',
-        'Cantidad': 10,
-        'Unidad': 'Saco',
-        'Precio Unitario': 15.50,
+        'Código': 'CEM001',
+        'Cantidad': 50,
+        'Unidad': 'pz',
+        'Precio Unitario': 185.50,
         'Estado': 'Entregado',
-        'Proyecto': 'Proyecto Ejemplo',
-        'Proveedor': 'Proveedor Ejemplo',
-        'Fecha Recibo': '2024-01-15',
-        'Número Recibo': 'REC001',
-        'Método de Pago': 'Transferencia'
+        'Descripción Detallada': 'Cemento Portland CPO 30R de 50kg',
+        
+        // === CONFIGURACIÓN FINANCIERA ===
+        'Incluir IVA': 'Sí'
       },
       {
-        'Nombre del Suministro': 'Cable Eléctrico',
-        'Código': 'CAB002',
-        'Descripción': 'Cable THW 12 AWG',
+        // === SEGUNDO EJEMPLO CON DIFERENTES VALORES ===
+        'Proveedor': proveedorEjemplo,
+        'Proyecto': proyectoEjemplo,
+        'Folio del Proveedor': '37947',
+        'Fecha': '2025-09-04',
+        'Método de Pago': 'Transferencia',
+        'Observaciones Generales': 'Entrega tarde',
+        
+        'Nombre del Suministro': 'Varilla Corrugada',
+        'Categoría': 'Acero',
+        'Código': 'VAR12',
+        'Cantidad': 20,
+        'Unidad': 'pz',
+        'Precio Unitario': 450.00,
+        'Estado': 'Solicitado',
+        'Descripción Detallada': 'Varilla corrugada #4 de 12m',
+        
+        'Incluir IVA': 'Sí'
+      },
+      {
+        // === FILA TEMPLATE PARA EL USUARIO ===
+        'Proveedor': '[ESCRIBA_NOMBRE_PROVEEDOR]',
+        'Proyecto': '[ESCRIBA_NOMBRE_PROYECTO]',
+        'Folio del Proveedor': '[ESCRIBA_FOLIO]',
+        'Fecha': '2025-09-04',
+        'Método de Pago': 'Efectivo',
+        'Observaciones Generales': '',
+        
+        'Nombre del Suministro': '[ESCRIBA_NOMBRE_SUMINISTRO]',
         'Categoría': 'Material',
-        'Cantidad': 100,
-        'Unidad': 'Metro',
-        'Precio Unitario': 2.75,
+        'Código': '',
+        'Cantidad': 1,
+        'Unidad': 'pz',
+        'Precio Unitario': 0.01,
         'Estado': 'Entregado',
-        'Proyecto': 'Proyecto Ejemplo',
-        'Proveedor': 'Proveedor Ejemplo',
-        'Fecha Recibo': '2024-01-15',
-        'Número Recibo': 'REC001',
-        'Método de Pago': 'Efectivo'
+        'Descripción Detallada': '',
+        
+        'Incluir IVA': 'Sí'
       }
     ];
 
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(templateData);
 
-    // Configurar ancho de columnas
+    // Configurar ancho de columnas optimizado para el formulario real
     const colWidths = [
-      { wch: 25 }, // Nombre del Suministro
+      { wch: 25 }, // Proveedor
+      { wch: 20 }, // Proyecto
+      { wch: 18 }, // Folio del Proveedor
+      { wch: 12 }, // Fecha
+      { wch: 15 }, // Método de Pago
+      { wch: 30 }, // Observaciones Generales
+      { wch: 30 }, // Nombre del Suministro
+      { wch: 15 }, // Categoría
       { wch: 12 }, // Código
-      { wch: 30 }, // Descripción
-      { wch: 20 }, // Categoría
       { wch: 10 }, // Cantidad
-      { wch: 12 }, // Unidad
+      { wch: 15 }, // Unidad
       { wch: 15 }, // Precio Unitario
       { wch: 12 }, // Estado
-      { wch: 20 }, // Proyecto
-      { wch: 20 }, // Proveedor
-      { wch: 12 }, // Fecha Recibo
-      { wch: 15 }, // Número Recibo
-      { wch: 15 }  // Método de Pago
+      { wch: 40 }, // Descripción Detallada
+      { wch: 12 }  // Incluir IVA
     ];
     ws['!cols'] = colWidths;
 
     XLSX.utils.book_append_sheet(wb, ws, 'Plantilla Suministros');
 
-    // Agregar hoja de instrucciones
+    // Agregar hoja de instrucciones actualizada
     const instrucciones = [
-      { Campo: 'Nombre del Suministro', Descripción: 'Nombre descriptivo del suministro (máximo 255 caracteres)', Obligatorio: 'Sí', Ejemplo: 'Cemento Portland' },
-      { Campo: 'Código', Descripción: 'Código único del suministro (máximo 50 caracteres)', Obligatorio: 'Sí', Ejemplo: 'CEM001' },
-      { Campo: 'Descripción', Descripción: 'Descripción detallada del suministro', Obligatorio: 'No', Ejemplo: 'Cemento Portland tipo I de 50kg' },
-      { Campo: 'Categoría', Descripción: 'Categoría del suministro', Obligatorio: 'Sí', Ejemplo: 'Material' },
-      { Campo: 'Cantidad', Descripción: 'Cantidad numérica (mayor a 0)', Obligatorio: 'Sí', Ejemplo: '10' },
-      { Campo: 'Unidad', Descripción: 'Unidad de medida', Obligatorio: 'Sí', Ejemplo: 'Saco' },
-      { Campo: 'Precio Unitario', Descripción: 'Precio por unidad (mayor a 0)', Obligatorio: 'Sí', Ejemplo: '15.50' },
-      { Campo: 'Estado', Descripción: 'Estado del suministro', Obligatorio: 'Sí', Ejemplo: 'Entregado' },
-      { Campo: 'Proyecto', Descripción: 'Nombre del proyecto (debe existir)', Obligatorio: 'Sí', Ejemplo: 'Proyecto Ejemplo' },
-      { Campo: 'Proveedor', Descripción: 'Nombre del proveedor (debe existir)', Obligatorio: 'Sí', Ejemplo: 'Proveedor Ejemplo' },
-      { Campo: 'Fecha Recibo', Descripción: 'Fecha del recibo (formato YYYY-MM-DD)', Obligatorio: 'Sí', Ejemplo: '2024-01-15' },
-      { Campo: 'Número Recibo', Descripción: 'Número de recibo único', Obligatorio: 'Sí', Ejemplo: 'REC001' },
-      { Campo: 'Método de Pago', Descripción: 'Método de pago utilizado', Obligatorio: 'Sí', Ejemplo: 'Transferencia' }
+      // === NOTA IMPORTANTE ===
+      { Campo: '� IMPORTANTE', Descripción: 'DEBES usar nombres EXACTOS de Proveedores y Proyectos que ya existen en tu sistema. Los ejemplos pueden no funcionar si no existen esos nombres.', Obligatorio: '⚠️', Ejemplo: 'Verifica nombres en tu sistema' },
+      { Campo: '📋 ESTRUCTURA', Descripción: 'Fila 2 y 3: Ejemplos con datos del sistema. Fila 4: Template para completar. Reemplaza [ESCRIBA_...] con datos reales.', Obligatorio: '⚠️', Ejemplo: 'Usa datos reales de tu BD' },
+      { Campo: '', Descripción: '', Obligatorio: '', Ejemplo: '' }, // Fila separadora
+      
+      // === INFORMACIÓN DEL RECIBO (OBLIGATORIA) ===
+      { Campo: 'Proveedor', Descripción: 'Nombre EXACTO del proveedor (debe existir en el sistema)', Obligatorio: 'Sí', Ejemplo: 'Busca en tu lista de proveedores' },
+      { Campo: 'Proyecto', Descripción: 'Nombre EXACTO del proyecto (debe existir en el sistema)', Obligatorio: 'Sí', Ejemplo: 'Busca en tu lista de proyectos' },
+      { Campo: 'Folio del Proveedor', Descripción: 'Número de folio del proveedor (ej: 37946)', Obligatorio: 'Sí', Ejemplo: '37946' },
+      { Campo: 'Fecha', Descripción: 'Fecha del recibo (formato YYYY-MM-DD)', Obligatorio: 'Sí', Ejemplo: '2025-09-04' },
+      { Campo: 'Método de Pago', Descripción: 'Debe ser: Efectivo, Transferencia, Cheque o Tarjeta', Obligatorio: 'Sí', Ejemplo: 'Efectivo' },
+      { Campo: 'Observaciones Generales', Descripción: 'Observaciones del recibo (opcional)', Obligatorio: 'No', Ejemplo: 'Entrega matutina' },
+      
+      // === INFORMACIÓN DEL SUMINISTRO (OBLIGATORIA) ===
+      { Campo: 'Nombre del Suministro', Descripción: 'Nombre descriptivo del suministro', Obligatorio: 'Sí', Ejemplo: 'Cemento Portland' },
+      { Campo: 'Categoría', Descripción: 'Debe ser una categoría válida (ver Valores Válidos)', Obligatorio: 'Sí', Ejemplo: 'Material' },
+      { Campo: 'Código', Descripción: 'Código del producto (opcional)', Obligatorio: 'No', Ejemplo: 'CEM001' },
+      { Campo: 'Cantidad', Descripción: 'Cantidad numérica (mayor a 0)', Obligatorio: 'Sí', Ejemplo: '50' },
+      { Campo: 'Unidad', Descripción: 'Clave de unidad (usar pz, kg, m, etc. - ver Valores Válidos)', Obligatorio: 'Sí', Ejemplo: 'pz' },
+      { Campo: 'Precio Unitario', Descripción: 'Precio por unidad (usar punto decimal: 185.50)', Obligatorio: 'Sí', Ejemplo: '185.50' },
+      { Campo: 'Estado', Descripción: 'Debe ser un estado válido (ver Valores Válidos)', Obligatorio: 'Sí', Ejemplo: 'Entregado' },
+      { Campo: 'Descripción Detallada', Descripción: 'Descripción detallada del suministro (opcional)', Obligatorio: 'No', Ejemplo: 'Cemento Portland CPO 30R' },
+      
+      // === CONFIGURACIÓN FINANCIERA ===
+      { Campo: 'Incluir IVA', Descripción: 'Escribir: Sí o No (por defecto: Sí)', Obligatorio: 'No', Ejemplo: 'Sí' }
     ];
 
     const wsInstrucciones = XLSX.utils.json_to_sheet(instrucciones);
     wsInstrucciones['!cols'] = [
-      { wch: 20 }, // Campo
+      { wch: 25 }, // Campo
       { wch: 50 }, // Descripción
       { wch: 12 }, // Obligatorio
-      { wch: 20 }  // Ejemplo
+      { wch: 25 }  // Ejemplo
     ];
     XLSX.utils.book_append_sheet(wb, wsInstrucciones, 'Instrucciones');
 
     // Agregar hoja de valores válidos
     const valoresValidos = [
+      { Tipo: '🏢 Proveedores del Sistema', Valores: proveedores.length > 0 ? proveedores.map(p => p.nombre).join(', ') : 'Carga la página de Suministros para ver la lista actualizada' },
+      { Tipo: '🏗️ Proyectos del Sistema', Valores: proyectos.length > 0 ? proyectos.map(p => p.nombre).join(', ') : 'Carga la página de Suministros para ver la lista actualizada' },
+      { Tipo: '', Valores: '' }, // Separador
       { Tipo: 'Categorías', Valores: VALID_VALUES.categorias.join(', ') },
-      { Tipo: 'Unidades', Valores: VALID_VALUES.unidades.join(', ') },
+      { Tipo: 'Unidades (Claves)', Valores: VALID_VALUES.unidades.join(', ') },
       { Tipo: 'Estados', Valores: VALID_VALUES.estados.join(', ') },
-      { Tipo: 'Métodos de Pago', Valores: VALID_VALUES.metodos_pago.join(', ') }
+      { Tipo: 'Métodos de Pago', Valores: VALID_VALUES.metodos_pago.join(', ') },
+      { Tipo: 'Incluir IVA', Valores: 'Sí, No (por defecto: Sí)' }
     ];
 
     const wsValores = XLSX.utils.json_to_sheet(valoresValidos);
     wsValores['!cols'] = [
-      { wch: 15 }, // Tipo
+      { wch: 20 }, // Tipo
       { wch: 80 }  // Valores
     ];
     XLSX.utils.book_append_sheet(wb, wsValores, 'Valores Válidos');
@@ -168,22 +221,62 @@ export const generateImportTemplate = async () => {
   }
 };
 
-// Función para validar datos de importación
+// Función para validar datos de importación - AJUSTADA AL FORMULARIO REAL
 export const validateImportData = (data, proyectos = [], proveedores = []) => {
   const errors = [];
   const validData = [];
 
-  data.forEach((row, index) => {
+  // Filtrar filas que contienen placeholders de template
+  const filteredData = data.filter(row => {
+    // Excluir filas que contienen placeholders del template
+    const proveedor = String(row['Proveedor'] || '').trim();
+    const proyecto = String(row['Proyecto'] || '').trim();
+    const folio = String(row['Folio del Proveedor'] || '').trim();
+    
+    // Si contiene placeholders, excluir esta fila
+    if (proveedor.includes('[ESCRIBA_') || 
+        proyecto.includes('[ESCRIBA_') || 
+        folio.includes('[ESCRIBA_') ||
+        proveedor === '' && proyecto === '' && folio === '') {
+      return false;
+    }
+    
+    return true;
+  });
+
+  filteredData.forEach((row, index) => {
     const rowNumber = index + 2; // +2 porque Excel empieza en 1 y tenemos header
     const rowErrors = [];
 
-    // Validar campos obligatorios
-    if (!row['Nombre del Suministro'] || String(row['Nombre del Suministro']).trim() === '') {
-      rowErrors.push('Nombre del Suministro es obligatorio');
+    // ===== VALIDACIONES DEL RECIBO (OBLIGATORIAS) =====
+    if (!row['Proveedor']) {
+      rowErrors.push('Proveedor es obligatorio');
     }
 
-    if (!row['Código'] || String(row['Código']).trim() === '') {
-      rowErrors.push('Código es obligatorio');
+    if (!row['Proyecto']) {
+      rowErrors.push('Proyecto es obligatorio');
+    }
+
+    if (!row['Folio del Proveedor'] || String(row['Folio del Proveedor']).trim() === '') {
+      rowErrors.push('Folio del Proveedor es obligatorio');
+    }
+
+    if (!row['Fecha']) {
+      rowErrors.push('Fecha es obligatoria');
+    } else {
+      const fecha = new Date(row['Fecha']);
+      if (isNaN(fecha.getTime())) {
+        rowErrors.push('Fecha debe tener formato válido (YYYY-MM-DD o DD/MM/YYYY)');
+      }
+    }
+
+    if (!row['Método de Pago'] || !VALID_VALUES.metodos_pago.includes(row['Método de Pago'])) {
+      rowErrors.push(`Método de Pago debe ser uno de: ${VALID_VALUES.metodos_pago.join(', ')}`);
+    }
+
+    // ===== VALIDACIONES DEL SUMINISTRO (OBLIGATORIAS) =====
+    if (!row['Nombre del Suministro'] || String(row['Nombre del Suministro']).trim() === '') {
+      rowErrors.push('Nombre del Suministro es obligatorio');
     }
 
     if (!row['Categoría'] || !VALID_VALUES.categorias.includes(row['Categoría'])) {
@@ -206,31 +299,6 @@ export const validateImportData = (data, proyectos = [], proveedores = []) => {
       rowErrors.push(`Estado debe ser uno de: ${VALID_VALUES.estados.join(', ')}`);
     }
 
-    if (!row['Proyecto']) {
-      rowErrors.push('Proyecto es obligatorio');
-    }
-
-    if (!row['Proveedor']) {
-      rowErrors.push('Proveedor es obligatorio');
-    }
-
-    if (!row['Fecha Recibo']) {
-      rowErrors.push('Fecha Recibo es obligatoria');
-    } else {
-      const fecha = new Date(row['Fecha Recibo']);
-      if (isNaN(fecha.getTime())) {
-        rowErrors.push('Fecha Recibo debe tener formato válido (YYYY-MM-DD)');
-      }
-    }
-
-    if (!row['Número Recibo'] || String(row['Número Recibo']).trim() === '') {
-      rowErrors.push('Número Recibo es obligatorio');
-    }
-
-    if (!row['Método de Pago'] || !VALID_VALUES.metodos_pago.includes(row['Método de Pago'])) {
-      rowErrors.push(`Método de Pago debe ser uno de: ${VALID_VALUES.metodos_pago.join(', ')}`);
-    }
-
     // Si hay errores, agregarlos a la lista
     if (rowErrors.length > 0) {
       errors.push({
@@ -240,19 +308,26 @@ export const validateImportData = (data, proyectos = [], proveedores = []) => {
     } else {
       // Si no hay errores, agregar a datos válidos
       validData.push({
+        // === Datos del Recibo ===
+        proveedor_nombre: String(row['Proveedor']).trim(),
+        proyecto_nombre: String(row['Proyecto']).trim(),
+        folio: String(row['Folio del Proveedor']).trim(),
+        fecha: row['Fecha'],
+        metodo_pago: row['Método de Pago'],
+        observaciones_generales: row['Observaciones Generales'] ? String(row['Observaciones Generales']).trim() : '',
+
+        // === Datos del Suministro ===
         nombre: String(row['Nombre del Suministro']).trim(),
-        codigo_producto: String(row['Código']).trim(),
-        descripcion_detallada: row['Descripción'] ? String(row['Descripción']).trim() : '',
         tipo_suministro: row['Categoría'],
+        codigo_producto: row['Código'] ? String(row['Código']).trim() : '',
         cantidad: Number(row['Cantidad']),
         unidad_medida: row['Unidad'],
         precio_unitario: Number(row['Precio Unitario']),
         estado: row['Estado'],
-        proyecto_nombre: String(row['Proyecto']).trim(),
-        proveedor_nombre: String(row['Proveedor']).trim(),
-        fecha: row['Fecha Recibo'],
-        folio: String(row['Número Recibo']).trim(),
-        metodo_pago: row['Método de Pago']
+        descripcion_detallada: row['Descripción Detallada'] ? String(row['Descripción Detallada']).trim() : '',
+
+        // === Configuración Financiera ===
+        include_iva: row['Incluir IVA'] ? (String(row['Incluir IVA']).toLowerCase() === 'true' || String(row['Incluir IVA']).toLowerCase() === 'sí') : true
       });
     }
   });
