@@ -210,13 +210,23 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
         </button>
       </div>
 
-      {/* Navigation mejorada */}
-      <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-hidden hover:overflow-y-auto custom-scrollbar"
+      {/* Navigation minimalista con indicador conectado */}
+      <nav className="flex-1 px-2 py-6 space-y-2 overflow-y-hidden hover:overflow-y-auto custom-scrollbar relative"
            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {navigation.map((item, index) => {
           const isActive = currentPath === item.href;
           return (
-            <div key={item.name} className="relative group">
+            <div key={item.name} className="relative">
+              {/* Indicador - solo visible cuando está activo */}
+              {isActive && (
+                <>
+                  {/* Línea principal del indicador */}
+                  <div className="absolute -left-2 top-0 bottom-0 w-1 bg-gradient-to-b from-primary-500 to-primary-600 rounded-r-full animate-slideInLeft"></div>
+                  
+
+                </>
+              )}
+              
               <button
                 onClick={() => onNavigate(item.href)}
                 onMouseEnter={() => {
@@ -231,49 +241,44 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
                 }}
                 className={classNames(
                   isActive
-                    ? 'bg-gradient-to-r from-primary-500 to-primary-600 text-white shadow-lg scale-105'
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gradient-to-r hover:from-primary-50 hover:to-primary-100 dark:hover:from-primary-900/30 dark:hover:to-primary-800/30 hover:text-primary-700 dark:hover:text-primary-300',
-                  'group/item flex items-center px-4 py-3.5 text-sm font-medium rounded-xl w-full transition-all duration-300 transform hover:scale-105 hover:shadow-md relative overflow-hidden'
+                    ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 font-semibold'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700/50',
+                  'group/item flex items-center px-4 py-3 text-sm rounded-lg w-full transition-all duration-300 relative'
                 )}
                 style={{
                   animationDelay: `${index * 50}ms`
                 }}
               >
-                {/* Efecto de hover background */}
+                {/* Hover effect sutil */}
                 <div className={`
-                  absolute inset-0 bg-gradient-to-r from-primary-400/10 to-primary-600/10 
-                  transform transition-transform duration-300 
-                  ${hoveredItem === item.name ? 'translate-x-0' : '-translate-x-full'}
-                  ${isActive ? 'opacity-0' : 'opacity-100'}
+                  absolute inset-0 bg-gradient-to-r from-transparent via-gray-50/50 to-transparent dark:via-gray-700/30
+                  transform transition-transform duration-500 rounded-lg
+                  ${hoveredItem === item.name ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
+                  ${isActive ? 'hidden' : 'block'}
                 `}></div>
                 
                 <item.icon
                   className={classNames(
                     isActive 
-                      ? 'text-white' 
-                      : 'text-gray-500 dark:text-gray-400 group-hover/item:text-primary-600 dark:group-hover/item:text-primary-400',
-                    'flex-shrink-0 h-6 w-6 transition-all duration-300 transform group-hover/item:scale-110 relative z-10'
+                      ? 'text-primary-600 dark:text-primary-400' 
+                      : 'text-gray-500 dark:text-gray-400 group-hover/item:text-gray-700 dark:group-hover/item:text-gray-300',
+                    'flex-shrink-0 h-5 w-5 transition-all duration-300 relative z-10'
                   )}
                   aria-hidden="true"
                 />
                 
                 <span className={`
-                  ml-4 transition-all duration-300 relative z-10
+                  ml-3 transition-all duration-300 relative z-10
                   ${isCollapsed ? 'opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0' : 'opacity-100 translate-x-0'}
                   ${isActive ? 'font-semibold' : 'font-medium'}
                 `}>
                   {item.name}
                 </span>
                 
-                {/* Indicador activo mejorado */}
-                {isActive && (
-                  <div className="absolute right-0 top-0 bottom-0 w-1 bg-white rounded-l-full"></div>
-                )}
-                
                 {/* Tooltip para modo colapsado */}
                 {isCollapsed && showTooltip && hoveredItem === item.name && (
                   <div className="
-                    absolute left-full ml-2 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-lg 
+                    absolute left-full ml-4 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-sm rounded-lg 
                     shadow-xl z-50 whitespace-nowrap animate-fadeIn
                     before:content-[''] before:absolute before:top-1/2 before:-left-1 before:-translate-y-1/2
                     before:border-4 before:border-transparent before:border-r-gray-900 dark:before:border-r-gray-800
@@ -287,55 +292,79 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
         })}
       </nav>
 
-      {/* Sección de diagnóstico y utilidades mejorada */}
-      <div className="px-3 py-4 border-t border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-white dark:from-dark-200 dark:to-dark-100">
+      {/* Sección de utilidades minimalista */}
+      <div className="px-2 py-4 border-t border-gray-200 dark:border-gray-700/50">
         {/* Diagnóstico */}
-        <button
-          onClick={() => onNavigate('/diagnostico')}
-          onMouseEnter={() => setHoveredItem('diagnostico')}
-          onMouseLeave={() => setHoveredItem(null)}
-          className={classNames(
-            currentPath === '/diagnostico'
-              ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg'
-              : 'text-gray-600 dark:text-gray-300 hover:bg-gradient-to-r hover:from-orange-50 hover:to-orange-100 dark:hover:from-orange-900/30 dark:hover:to-orange-800/30 hover:text-orange-700 dark:hover:text-orange-300',
-            'w-full flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-300 transform hover:scale-105 mb-2 relative overflow-hidden group'
+        <div className="relative mb-2">
+          {/* Indicador para diagnóstico */}
+          {currentPath === '/diagnostico' && (
+            <>
+              <div className="absolute -left-2 top-0 bottom-0 w-1 bg-gradient-to-b from-orange-500 to-orange-600 rounded-r-full animate-slideInLeft"></div>
+              <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-0.5 bg-gradient-to-r from-orange-500 to-transparent animate-slideInRight"></div>
+              <div className="absolute -right-1 top-1/2 -translate-y-1/2 w-2 h-2 bg-orange-500 rounded-full animate-pulse-soft"></div>
+            </>
           )}
-        >
-          <WrenchScrewdriverIcon 
+          
+          <button
+            onClick={() => onNavigate('/diagnostico')}
+            onMouseEnter={() => setHoveredItem('diagnostico')}
+            onMouseLeave={() => setHoveredItem(null)}
             className={classNames(
               currentPath === '/diagnostico'
-                ? 'text-white'
-                : 'text-gray-500 dark:text-gray-400 group-hover:text-orange-600 dark:group-hover:text-orange-400',
-              'flex-shrink-0 h-5 w-5 transition-all duration-300 transform group-hover:rotate-12'
+                ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-300 font-semibold'
+                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700/50',
+              'w-full flex items-center px-4 py-3 text-sm rounded-lg transition-all duration-300 relative'
             )}
-          />
-          <span className={`
-            ml-3 transition-all duration-300
-            ${isCollapsed ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}
-          `}>
-            Diagnóstico
-          </span>
-        </button>
+          >
+            {/* Hover effect sutil */}
+            <div className={`
+              absolute inset-0 bg-gradient-to-r from-transparent via-orange-50/50 to-transparent dark:via-orange-700/20
+              transform transition-transform duration-500 rounded-lg
+              ${hoveredItem === 'diagnostico' ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
+              ${currentPath === '/diagnostico' ? 'hidden' : 'block'}
+            `}></div>
+            
+            <WrenchScrewdriverIcon 
+              className={classNames(
+                currentPath === '/diagnostico'
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-gray-500 dark:text-gray-400 group-hover:text-gray-700 dark:group-hover:text-gray-300',
+                'flex-shrink-0 h-5 w-5 transition-all duration-300'
+              )}
+            />
+            <span className={`
+              ml-3 transition-all duration-300
+              ${isCollapsed ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}
+            `}>
+              Diagnóstico
+            </span>
+          </button>
+        </div>
         
-        {/* Theme Toggle mejorado */}
+        {/* Theme Toggle */}
         <button
           onClick={toggleTheme}
           onMouseEnter={() => setHoveredItem('theme')}
           onMouseLeave={() => setHoveredItem(null)}
           className="
-            w-full flex items-center px-4 py-3 text-sm font-medium 
-            text-gray-600 dark:text-gray-300 
-            hover:bg-gradient-to-r hover:from-yellow-50 hover:to-yellow-100 dark:hover:from-yellow-900/30 dark:hover:to-yellow-800/30 
-            hover:text-yellow-700 dark:hover:text-yellow-300
-            rounded-xl transition-all duration-300 transform hover:scale-105
-            group relative overflow-hidden
+            w-full flex items-center px-4 py-3 text-sm rounded-lg
+            text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white 
+            hover:bg-gray-50 dark:hover:bg-gray-700/50
+            transition-all duration-300 relative
           "
         >
+          {/* Hover effect sutil */}
+          <div className={`
+            absolute inset-0 bg-gradient-to-r from-transparent via-yellow-50/50 to-transparent dark:via-yellow-700/20
+            transform transition-transform duration-500 rounded-lg
+            ${hoveredItem === 'theme' ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
+          `}></div>
+          
           <div className="relative">
             {isDarkMode ? (
-              <SunIcon className="flex-shrink-0 h-5 w-5 text-yellow-500 transform group-hover:rotate-180 transition-transform duration-500" />
+              <SunIcon className="flex-shrink-0 h-5 w-5 text-yellow-500 transform transition-transform duration-500" />
             ) : (
-              <MoonIcon className="flex-shrink-0 h-5 w-5 text-gray-500 group-hover:text-indigo-500 transform group-hover:-rotate-12 transition-all duration-300" />
+              <MoonIcon className="flex-shrink-0 h-5 w-5 text-gray-500 transition-all duration-300" />
             )}
           </div>
           <span className={`
