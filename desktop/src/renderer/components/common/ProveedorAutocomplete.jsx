@@ -3,10 +3,18 @@ import { FaSearch, FaPlus, FaBuilding, FaTimes } from 'react-icons/fa';
 import api from '../../services/api';
 
 const TIPOS_PROVEEDOR = {
-  'Material': 'Material',
-  'Servicio': 'Servicio', 
-  'Equipo': 'Equipo',
-  'Mixto': 'Mixto'
+  'MATERIALES': 'Materiales',
+  'SERVICIOS': 'Servicios',
+  'EQUIPOS': 'Equipos',
+  'MIXTO': 'Mixto',
+  'TRANSPORTE': 'Transporte',
+  'CONSTRUCCION': 'Construcción',
+  'MANTENIMIENTO': 'Mantenimiento',
+  'CONSULTORIA': 'Consultoría',
+  'SUBCONTRATISTA': 'Subcontratista',
+  'HERRAMIENTAS': 'Herramientas',
+  'COMBUSTIBLE': 'Combustible',
+  'ALIMENTACION': 'Alimentación'
 };
 
 const ProveedorAutocomplete = ({ 
@@ -15,7 +23,9 @@ const ProveedorAutocomplete = ({
   placeholder = "Buscar o crear proveedor...",
   required = false,
   className = "",
-  tipoSugerido = "Material" // Tipo sugerido basado en el contexto
+  tipoSugerido = "MATERIALES", // Tipo sugerido basado en el contexto (clave del enum del backend)
+  onProveedorCreated = null, // Callback cuando se crea un proveedor
+  showCreateModal = false // Mostrar modal de creación en lugar del form integrado
 }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
@@ -125,14 +135,21 @@ const ProveedorAutocomplete = ({
   }, [onChange]);
 
   const handleCreateNew = useCallback(() => {
-    setNewProviderData({
-      ...newProviderData,
-      nombre: query,
-      tipo_proveedor: tipoSugerido
-    });
-    setShowCreateForm(true);
-    setShowDropdown(false);
-  }, [newProviderData, query, tipoSugerido]);
+    if (showCreateModal && onProveedorCreated) {
+      // Si se especifica usar modal externo, llamar el callback
+      onProveedorCreated(query, tipoSugerido);
+      setShowDropdown(false);
+    } else {
+      // Usar el formulario integrado
+      setNewProviderData({
+        ...newProviderData,
+        nombre: query,
+        tipo_proveedor: tipoSugerido
+      });
+      setShowCreateForm(true);
+      setShowDropdown(false);
+    }
+  }, [showCreateModal, onProveedorCreated, query, tipoSugerido, newProviderData]);
 
   const handleCreateProvider = useCallback(async () => {
     if (!newProviderData.nombre.trim()) {

@@ -14,6 +14,7 @@ import Usuarios from './components/Usuarios';
 import Roles from './components/Roles';
 import Reportes from './components/Reportes';
 import Suministros from './pages/Suministros';
+import Proveedores from './pages/Proveedores';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 
@@ -39,6 +40,7 @@ function MainApp() {
     '/roles': 'Roles',
     '/reportes': 'Reportes',
     '/suministros': 'Suministros',
+    '/proveedores': 'Proveedores',
     '/diagnostico': 'Diagnóstico'
   };
 
@@ -125,6 +127,8 @@ function MainApp() {
         return <Reportes />;
       case '/suministros':
         return <Suministros />;
+      case '/proveedores':
+        return <Proveedores />;
       case '/configuracion':
         return (
           <div className="text-center py-20">

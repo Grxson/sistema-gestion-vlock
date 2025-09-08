@@ -56,6 +56,8 @@ import ProveedorAutocomplete from '../components/common/ProveedorAutocomplete';
 import DateInput from '../components/ui/DateInput';
 import TimeInput from '../components/ui/TimeInput';
 import FormularioSuministros from '../components/FormularioSuministros';
+import SuministroDeleteConfirmModal from '../components/SuministroDeleteConfirmModal';
+import SuministroNotificationModal from '../components/SuministroNotificationModal';
 import { useToast } from '../contexts/ToastContext';
 
 // Importar testing suite para desarrollo
@@ -175,6 +177,16 @@ const Suministros = () => {
 
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
+
+  // Estados para modales de confirmación mejorados
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleteType, setDeleteType] = useState('suministro'); // 'suministro' o 'recibo'
+  const [notificationModal, setNotificationModal] = useState({
+    open: false,
+    message: '',
+    type: 'success'
+  });
 
   // Estados para gráficas
   const [showCharts, setShowCharts] = useState(false);
@@ -2623,30 +2635,35 @@ const Suministros = () => {
 
   // Función para eliminar un grupo completo de suministros
   const handleDeleteRecibo = async (recibo) => {
-    if (!confirm(`¿Está seguro de que desea eliminar el grupo de ${recibo.suministros.length} suministros? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+    setItemToDelete(recibo);
+    setDeleteType('recibo');
+    setDeleteModalOpen(true);
+  };
 
+  // Función para confirmar eliminación de recibo
+  const confirmDeleteRecibo = async (recibo) => {
     try {
       // Eliminar todos los suministros del grupo
       for (const suministro of recibo.suministros) {
         await api.deleteSuministro(suministro.id_suministro);
       }
 
-      showSuccess(
-        'Grupo eliminado',
-        `Se han eliminado ${recibo.suministros.length} suministros correctamente`,
-        { duration: 4000 }
-      );
+      // Mostrar notificación personalizada
+      setNotificationModal({
+        open: true,
+        message: `✅ Recibo eliminado exitosamente. Se eliminaron ${recibo.suministros.length} suministros del sistema.`,
+        type: 'success'
+      });
       
       await loadData();
     } catch (error) {
       console.error('Error eliminando grupo:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
-      showError(
-        'Error al eliminar',
-        `No se pudo eliminar el grupo: ${errorMessage}`
-      );
+      setNotificationModal({
+        open: true,
+        message: `❌ Error al eliminar el recibo: ${errorMessage}`,
+        type: 'error'
+      });
     }
   };
 
@@ -2711,28 +2728,51 @@ const Suministros = () => {
   };
 
   const handleDelete = async (id) => {
-    // Encontrar el suministro para mostrar su nombre en la notificación
+    // Encontrar el suministro para el modal
     const suministro = suministros.find(s => s.id_suministro === id);
-    const nombreSuministro = suministro?.nombre || 'el suministro';
+    if (!suministro) {
+      setNotificationModal({
+        open: true,
+        message: '❌ Error: No se encontró el suministro a eliminar.',
+        type: 'error'
+      });
+      return;
+    }
 
-    if (window.confirm(`¿Estás seguro de que deseas eliminar "${nombreSuministro}"?`)) {
-      try {
-        const response = await api.deleteSuministro(id);
-        if (response.success) {
-          showSuccess(
-            'Suministro eliminado',
-            `${nombreSuministro} ha sido eliminado correctamente`
-          );
-          await loadData();
-        }
-      } catch (error) {
-        console.error('Error eliminando suministro:', error);
-        const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
-        showError(
-          'Error al eliminar',
-          `No se pudo eliminar ${nombreSuministro}: ${errorMessage}`
-        );
+    setItemToDelete(suministro);
+    setDeleteType('suministro');
+    setDeleteModalOpen(true);
+  };
+
+  // Función para confirmar eliminación de suministro individual
+  const confirmDeleteSuministro = async (suministro) => {
+    try {
+      const response = await api.deleteSuministro(suministro.id_suministro);
+      if (response.success) {
+        setNotificationModal({
+          open: true,
+          message: `✅ "${suministro.descripcion || suministro.nombre || 'Suministro'}" ha sido eliminado exitosamente del sistema.`,
+          type: 'success'
+        });
+        await loadData();
       }
+    } catch (error) {
+      console.error('Error eliminando suministro:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
+      setNotificationModal({
+        open: true,
+        message: `❌ Error al eliminar "${suministro.descripcion || suministro.nombre || 'el suministro'}": ${errorMessage}`,
+        type: 'error'
+      });
+    }
+  };
+
+  // Función unificada para manejar confirmaciones de eliminación
+  const handleConfirmDelete = async (item) => {
+    if (deleteType === 'recibo') {
+      await confirmDeleteRecibo(item);
+    } else {
+      await confirmDeleteSuministro(item);
     }
   };
 
@@ -5760,6 +5800,28 @@ const Suministros = () => {
           </div>
         </div>
       )}
+
+      {/* Modales de confirmación mejorados */}
+      <SuministroDeleteConfirmModal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setItemToDelete(null);
+          setDeleteType('suministro');
+        }}
+        onConfirm={handleConfirmDelete}
+        suministro={itemToDelete}
+        type={deleteType}
+      />
+
+      <SuministroNotificationModal
+        isOpen={notificationModal.open}
+        onClose={() => setNotificationModal({ open: false, message: '', type: 'success' })}
+        message={notificationModal.message}
+        type={notificationModal.type}
+        autoClose={true}
+        duration={4000}
+      />
     </div>
   );
 };

@@ -96,7 +96,9 @@ const createProveedor = async (req, res) => {
             direccion,
             contacto_principal,
             tipo_proveedor,
-            observaciones
+            observaciones,
+            banco,
+            cuentaBancaria
         } = req.body;
 
         // Validación básica
@@ -104,6 +106,13 @@ const createProveedor = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'El nombre del proveedor es obligatorio'
+            });
+        }
+
+        if (!telefono) {
+            return res.status(400).json({
+                success: false,
+                message: 'Al menos un teléfono es obligatorio'
             });
         }
 
@@ -127,8 +136,10 @@ const createProveedor = async (req, res) => {
             email,
             direccion,
             contacto_principal,
-            tipo_proveedor: tipo_proveedor || 'Material',
-            observaciones
+            tipo_proveedor: tipo_proveedor || 'SERVICIOS',
+            observaciones,
+            banco,
+            cuentaBancaria
         });
 
         res.status(201).json({
@@ -223,6 +234,44 @@ const deleteProveedor = async (req, res) => {
     }
 };
 
+// Eliminar permanentemente un proveedor (hard delete)
+const deletePermanentProveedor = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const proveedor = await models.Proveedores.findByPk(id);
+        
+        if (!proveedor) {
+            return res.status(404).json({
+                success: false,
+                message: 'Proveedor no encontrado'
+            });
+        }
+
+        // Verificar que el proveedor esté inactivo antes de eliminar definitivamente
+        if (proveedor.activo) {
+            return res.status(400).json({
+                success: false,
+                message: 'Solo se pueden eliminar definitivamente proveedores inactivos'
+            });
+        }
+
+        // Eliminar definitivamente de la base de datos
+        await proveedor.destroy();
+
+        res.json({
+            success: true,
+            message: 'Proveedor eliminado definitivamente'
+        });
+    } catch (error) {
+        console.error('Error al eliminar proveedor permanentemente:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
 // Buscar proveedores (para autocomplete)
 const searchProveedores = async (req, res) => {
     try {
@@ -310,12 +359,67 @@ const createOrGetProveedor = async (req, res) => {
     }
 };
 
+// Obtener estadísticas de proveedores
+const getProveedoresStats = async (req, res) => {
+    try {
+        const stats = {};
+        
+        // Total de proveedores
+        stats.total = await models.Proveedores.count();
+        
+        // Proveedores activos e inactivos
+        stats.activos = await models.Proveedores.count({ where: { activo: true } });
+        stats.inactivos = await models.Proveedores.count({ where: { activo: false } });
+        
+        // Distribución por tipo
+        const porTipo = await models.Proveedores.findAll({
+            attributes: [
+                'tipo_proveedor',
+                [models.sequelize.fn('COUNT', models.sequelize.col('id_proveedor')), 'cantidad']
+            ],
+            group: ['tipo_proveedor'],
+            raw: true
+        });
+        
+        stats.porTipo = {};
+        porTipo.forEach(item => {
+            stats.porTipo[item.tipo_proveedor] = parseInt(item.cantidad);
+        });
+        
+        // Número de tipos diferentes
+        stats.tipos = Object.keys(stats.porTipo).length;
+        
+        // Último proveedor creado
+        const ultimoProveedor = await models.Proveedores.findOne({
+            order: [['createdAt', 'DESC']],
+            attributes: ['createdAt']
+        });
+        
+        if (ultimoProveedor) {
+            stats.ultimoCreado = ultimoProveedor.createdAt;
+        }
+        
+        res.json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        console.error('Error obteniendo estadísticas de proveedores:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
 module.exports = {
     getProveedores,
     getProveedorById,
     createProveedor,
     updateProveedor,
     deleteProveedor,
+    deletePermanentProveedor,
     searchProveedores,
-    createOrGetProveedor
+    createOrGetProveedor,
+    getProveedoresStats
 };

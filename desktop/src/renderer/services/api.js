@@ -413,7 +413,15 @@ class ApiService {
   }
 
   async createProveedor(proveedorData) {
-    return this.post('/proveedores', proveedorData);
+    console.log('🚀 [API] createProveedor llamado con:', proveedorData);
+    try {
+      const response = await this.post('/proveedores', proveedorData);
+      console.log('📡 [API] Respuesta de createProveedor:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ [API] Error en createProveedor:', error);
+      throw error;
+    }
   }
 
   async createOrGetProveedor(proveedorData) {
@@ -426,6 +434,18 @@ class ApiService {
 
   async deleteProveedor(id) {
     return this.delete(`/proveedores/${id}`);
+  }
+
+  async deletePermanentProveedor(id) {
+    return this.delete(`/proveedores/${id}/permanent`);
+  }
+
+  async getProveedorById(id) {
+    return this.get(`/proveedores/${id}`);
+  }
+
+  async getProveedoresStats() {
+    return this.get('/proveedores/stats');
   }
 
   // Métodos para suministros y reportes

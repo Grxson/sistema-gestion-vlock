@@ -19,11 +19,13 @@ import {
 } from 'react-icons/fa';
 import { formatCurrency } from '../utils/currency';
 import { useToast } from '../contexts/ToastContext';
-import { usePermissions } from '../contexts/PermissionContext';
+import { usePermissions } from '../contexts/PermissionsContext';
 import api from '../services/api';
 
 // Componentes
 import ProveedorModal from '../components/proveedores/ProveedorModal';
+import ProveedorDetailsModal from '../components/proveedores/ProveedorDetailsModal';
+import DeleteConfirmModal from '../components/proveedores/DeleteConfirmModal';
 import ProveedorFilters from '../components/proveedores/ProveedorFilters';
 import ProveedorCard from '../components/proveedores/ProveedorCard';
 import ProveedorStats from '../components/proveedores/ProveedorStats';
@@ -33,10 +35,18 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import EmptyState from '../components/ui/EmptyState';
 
 const TIPOS_PROVEEDOR = {
-  'Material': 'Material',
-  'Servicio': 'Servicio',
-  'Equipo': 'Equipo',
-  'Mixto': 'Mixto'
+  'MATERIALES': 'Materiales',
+  'SERVICIOS': 'Servicios',
+  'EQUIPOS': 'Equipos',
+  'MIXTO': 'Mixto',
+  'TRANSPORTE': 'Transporte',
+  'CONSTRUCCION': 'Construcción',
+  'MANTENIMIENTO': 'Mantenimiento',
+  'CONSULTORIA': 'Consultoría',
+  'SUBCONTRATISTA': 'Subcontratista',
+  'HERRAMIENTAS': 'Herramientas',
+  'COMBUSTIBLE': 'Combustible',
+  'ALIMENTACION': 'Alimentación'
 };
 
 const ESTADOS_PROVEEDOR = {
@@ -54,7 +64,12 @@ const Proveedores = () => {
   
   // Estados del modal
   const [showModal, setShowModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [editingProveedor, setEditingProveedor] = useState(null);
+  const [viewingProveedor, setViewingProveedor] = useState(null);
+  const [deletingProveedor, setDeletingProveedor] = useState(null);
+  const [deleteType, setDeleteType] = useState('deactivate'); // 'deactivate', 'activate', 'delete'
   const [isModalLoading, setIsModalLoading] = useState(false);
   
   // Estados de filtros
@@ -156,66 +171,121 @@ const Proveedores = () => {
     setIsModalLoading(false);
   }, []);
 
+  // Handler para abrir modal de vista detallada (solo lectura)
+  const handleOpenDetailsModal = useCallback((proveedor) => {
+    setViewingProveedor(proveedor);
+    setShowDetailsModal(true);
+  }, []);
+
+  // Handler para cerrar modal de vista detallada
+  const handleCloseDetailsModal = useCallback(() => {
+    setShowDetailsModal(false);
+    setViewingProveedor(null);
+  }, []);
+
+  // Handler para abrir modal de confirmación de eliminación
+  const handleOpenDeleteModal = useCallback((proveedor, type = 'deactivate') => {
+    setDeletingProveedor(proveedor);
+    setDeleteType(type);
+    setShowDeleteModal(true);
+  }, []);
+
+  // Handler para cerrar modal de eliminación
+  const handleCloseDeleteModal = useCallback(() => {
+    setShowDeleteModal(false);
+    setDeletingProveedor(null);
+    setDeleteType('deactivate');
+  }, []);
+
+  // Handler para desactivar/reactivar proveedor
+  const handleToggleProveedor = useCallback((proveedor) => {
+    const type = proveedor.activo ? 'deactivate' : 'activate';
+    handleOpenDeleteModal(proveedor, type);
+  }, [handleOpenDeleteModal]);
+
+  // Handler para eliminación definitiva
+  const handlePermanentDelete = useCallback((proveedor) => {
+    handleOpenDeleteModal(proveedor, 'delete');
+  }, [handleOpenDeleteModal]);
+
   const handleSubmitProveedor = useCallback(async (proveedorData) => {
+    console.log('🚀 [Proveedores] handleSubmitProveedor iniciado con datos:', proveedorData);
     try {
       setIsModalLoading(true);
       
       let response;
       if (editingProveedor) {
+        console.log('✏️ [Proveedores] Actualizando proveedor existente:', editingProveedor.id_proveedor);
         // Actualizar proveedor
         response = await api.updateProveedor(editingProveedor.id_proveedor, proveedorData);
         if (response.success) {
           showSuccess('Éxito', 'Proveedor actualizado correctamente');
         }
       } else {
+        console.log('➕ [Proveedores] Creando nuevo proveedor');
         // Crear proveedor
         response = await api.createProveedor(proveedorData);
+        console.log('📡 [Proveedores] Respuesta de createProveedor:', response);
         if (response.success) {
           showSuccess('Éxito', 'Proveedor creado correctamente');
         }
       }
       
       if (response.success) {
+        console.log('✅ [Proveedores] Operación exitosa, cerrando modal y recargando');
         handleCloseModal();
         cargarProveedores();
       } else {
+        console.log('❌ [Proveedores] Respuesta no exitosa:', response.message);
         throw new Error(response.message || 'Error en la operación');
       }
     } catch (error) {
-      console.error('Error guardando proveedor:', error);
+      console.error('❌ [Proveedores] Error guardando proveedor:', error);
       showError('Error', error.response?.data?.message || error.message || 'Error al guardar proveedor');
     } finally {
       setIsModalLoading(false);
     }
   }, [editingProveedor, showSuccess, showError, handleCloseModal, cargarProveedores]);
 
-  // Handler para eliminar/desactivar proveedor
-  const handleDeleteProveedor = useCallback(async (proveedor) => {
-    const action = proveedor.activo ? 'desactivar' : 'reactivar';
-    const confirmMessage = `¿Está seguro de que desea ${action} el proveedor "${proveedor.nombre}"?`;
-    
-    if (window.confirm(confirmMessage)) {
-      try {
-        let response;
-        if (proveedor.activo) {
-          response = await api.deleteProveedor(proveedor.id_proveedor);
-        } else {
-          // Para reactivar, actualizamos el estado activo
+  // Handler para eliminar/desactivar proveedor (nueva versión)
+  const handleConfirmAction = useCallback(async (proveedor) => {
+    try {
+      setIsModalLoading(true);
+      let response;
+      let message = '';
+      
+      switch (deleteType) {
+        case 'delete':
+          // Eliminación definitiva
+          response = await api.deletePermanentProveedor(proveedor.id_proveedor);
+          message = 'Proveedor eliminado definitivamente';
+          break;
+        case 'activate':
+          // Reactivar proveedor
           response = await api.updateProveedor(proveedor.id_proveedor, { activo: true });
-        }
-        
-        if (response.success) {
-          showSuccess('Éxito', `Proveedor ${action === 'desactivar' ? 'desactivado' : 'reactivado'} correctamente`);
-          cargarProveedores();
-        } else {
-          throw new Error(response.message);
-        }
-      } catch (error) {
-        console.error(`Error al ${action} proveedor:`, error);
-        showError('Error', `No se pudo ${action} el proveedor`);
+          message = 'Proveedor reactivado correctamente';
+          break;
+        default: // 'deactivate'
+          // Desactivar proveedor
+          response = await api.deleteProveedor(proveedor.id_proveedor);
+          message = 'Proveedor desactivado correctamente';
+          break;
       }
+      
+      if (response.success) {
+        showSuccess('Éxito', message);
+        handleCloseDeleteModal();
+        cargarProveedores();
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (error) {
+      console.error('Error en acción del proveedor:', error);
+      showError('Error', error.response?.data?.message || error.message || 'Error en la operación');
+    } finally {
+      setIsModalLoading(false);
     }
-  }, [showSuccess, showError, cargarProveedores]);
+  }, [deleteType, showSuccess, showError, handleCloseDeleteModal, cargarProveedores]);
 
   // Handlers de filtros
   const handleFilterChange = useCallback((newFilters) => {
@@ -421,7 +491,9 @@ const Proveedores = () => {
             <ProveedorTable
               proveedores={proveedoresPaginados}
               onEdit={canEdit ? handleOpenModal : null}
-              onDelete={canDelete ? handleDeleteProveedor : null}
+              onDelete={canDelete ? handleToggleProveedor : null}
+              onDeletePermanent={canDelete ? handlePermanentDelete : null}
+              onViewDetails={handleOpenDetailsModal}
               onView={handleOpenModal}
               loading={loading}
               estados={ESTADOS_PROVEEDOR}
@@ -433,7 +505,9 @@ const Proveedores = () => {
                   key={proveedor.id_proveedor}
                   proveedor={proveedor}
                   onEdit={canEdit ? handleOpenModal : null}
-                  onDelete={canDelete ? handleDeleteProveedor : null}
+                  onDelete={canDelete ? handleToggleProveedor : null}
+                  onDeletePermanent={canDelete ? handlePermanentDelete : null}
+                  onViewDetails={handleOpenDetailsModal}
                   onView={handleOpenModal}
                   estados={ESTADOS_PROVEEDOR}
                 />
@@ -455,15 +529,34 @@ const Proveedores = () => {
         </>
       )}
 
-      {/* Modal */}
+      {/* Modal de Edición */}
       {showModal && (
         <ProveedorModal
           proveedor={editingProveedor}
           isOpen={showModal}
           onClose={handleCloseModal}
-          onSubmit={handleSubmitProveedor}
+          onSave={handleSubmitProveedor}
           loading={isModalLoading}
           tipos={TIPOS_PROVEEDOR}
+        />
+      )}
+
+      {/* Modal de Vista Detallada */}
+      {showDetailsModal && (
+        <ProveedorDetailsModal
+          proveedor={viewingProveedor}
+          onClose={handleCloseDetailsModal}
+        />
+      )}
+
+      {/* Modal de Confirmación de Eliminación */}
+      {showDeleteModal && (
+        <DeleteConfirmModal
+          proveedor={deletingProveedor}
+          type={deleteType}
+          onClose={handleCloseDeleteModal}
+          onConfirm={handleConfirmAction}
+          loading={isModalLoading}
         />
       )}
     </div>
