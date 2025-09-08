@@ -62,6 +62,13 @@
       "src/preload.js",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "build",
+        "to": "app",
+        "filter": ["**/*"]
+      }
+    ],
     "win": {
       "target": [
         {
