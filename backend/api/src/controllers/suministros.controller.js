@@ -4,7 +4,7 @@ const { verifyToken } = require('../middlewares/auth');
 // Obtener todos los suministros
 const getSuministros = async (req, res) => {
     try {
-        const { id_proyecto, fecha_inicio, fecha_fin, proveedor, nombre } = req.query;
+        const { id_proyecto, proveedor, nombre, fecha_inicio, fecha_fin } = req.query;
         
         let whereClause = {};
         
@@ -48,7 +48,7 @@ const getSuministros = async (req, res) => {
                 },
                 {
                     model: models.Proveedores,
-                    as: 'proveedorInfo',
+                    as: 'proveedor',
                     attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
                 }
             ],
@@ -97,7 +97,7 @@ const getSuministroById = async (req, res) => {
                 },
                 {
                     model: models.Proveedores,
-                    as: 'proveedorInfo',
+                    as: 'proveedor',
                     attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
                 }
             ]
@@ -137,12 +137,11 @@ const getSuministroById = async (req, res) => {
 
 // Función auxiliar para verificar duplicados
 const checkForDuplicates = async (data, excludeId = null) => {
-    console.log('🔍 Verificando duplicados para:', data);
     
-    // Solo verificar duplicados por folio_proveedor
-    if (data.folio_proveedor && data.folio_proveedor.trim() !== '') {
+    // Solo verificar duplicados por folio
+    if (data.folio && data.folio.trim() !== '') {
         const whereConditionFolio = {
-            folio_proveedor: data.folio_proveedor.trim()
+            folio: data.folio.trim()
         };
         
         if (excludeId) {
@@ -158,7 +157,7 @@ const checkForDuplicates = async (data, excludeId = null) => {
                 isDuplicate: true,
                 type: 'folio',
                 existing: duplicateByFolio,
-                message: `Ya existe un suministro con el folio "${data.folio_proveedor}"`
+                message: `Ya existe un suministro con el folio "${data.folio}"`
             };
         }
     }
@@ -170,12 +169,11 @@ const checkForDuplicates = async (data, excludeId = null) => {
 const createSuministro = async (req, res) => {
     try {
         const {
-            proveedor,
-            id_proveedor,
             folio,
-            folio_proveedor,
             fecha,
             id_proyecto,
+            id_proveedor,
+            metodo_pago,
             tipo_suministro,
             nombre,
             codigo_producto,
@@ -198,10 +196,9 @@ const createSuministro = async (req, res) => {
         } = req.body;
 
         // Validaciones básicas
-        if (!proveedor || !fecha || !id_proyecto || !nombre) {
+        if (!id_proveedor || !fecha || !id_proyecto || !nombre) {
             return res.status(400).json({
                 success: false,
-                message: 'Los campos proveedor, fecha, proyecto y nombre son obligatorios'
             });
         }
 
@@ -218,10 +215,9 @@ const createSuministro = async (req, res) => {
         const duplicates = await checkForDuplicates({
             nombre,
             codigo_producto,
-            folio_proveedor,
+            folio,
             id_proyecto,
             tipo_suministro,
-            id_proveedor,
             proveedor
         });
 
@@ -230,9 +226,9 @@ const createSuministro = async (req, res) => {
                 id: dup.id_suministro,
                 nombre: dup.nombre,
                 proyecto: dup.proyecto?.nombre || 'Sin proyecto',
-                proveedor: dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor',
+                proveedor: dup.proveedor?.nombre || 'Sin proveedor',
                 codigo_producto: dup.codigo_producto,
-                folio_proveedor: dup.folio_proveedor
+                folio: dup.folio
             }));
 
             return res.status(409).json({
@@ -244,12 +240,11 @@ const createSuministro = async (req, res) => {
         }
 
         const nuevoSuministro = await models.Suministros.create({
-            proveedor,
-            id_proveedor,
             folio,
-            folio_proveedor,
             fecha,
             id_proyecto,
+            id_proveedor,
+            metodo_pago: metodo_pago || 'Efectivo',
             tipo_suministro: tipo_suministro || 'Material',
             nombre,
             codigo_producto,
@@ -267,6 +262,7 @@ const createSuministro = async (req, res) => {
             hora_fin_descarga,
             observaciones,
             precio_unitario: precio_unitario ? Math.round(parseFloat(precio_unitario) * 100) / 100 : null,
+            subtotal: (cantidad && precio_unitario) ? parseFloat(cantidad) * Math.round(parseFloat(precio_unitario) * 100) / 100 : null,
             costo_total: costo_total ? parseFloat(costo_total) : null,
             estado: estado || 'Pendiente'
         });
@@ -302,12 +298,11 @@ const createMultipleSuministros = async (req, res) => {
         const {
             // Información común del recibo
             info_recibo: {
-                proveedor,
-                id_proveedor,
                 folio,
-                folio_proveedor,
                 fecha,
                 id_proyecto,
+                id_proveedor,
+                metodo_pago,
                 vehiculo_transporte,
                 operador_responsable,
                 hora_salida,
@@ -317,14 +312,23 @@ const createMultipleSuministros = async (req, res) => {
                 observaciones_generales
             },
             // Array de suministros
-            suministros
+            suministros,
+            // Información del IVA y totales
+            include_iva = true,
+            totales = null
         } = req.body;
 
+        // Función helper para calcular costo total con o sin IVA
+        const calcularCostoTotal = (cantidad, precioUnitario, incluirIva = true) => {
+            if (!cantidad || !precioUnitario) return null;
+            const subtotal = parseFloat(cantidad) * parseFloat(precioUnitario);
+            return incluirIva ? subtotal * 1.16 : subtotal;
+        };
+
         // Validaciones básicas
-        if (!proveedor || !fecha || !id_proyecto) {
+        if (!id_proveedor || !fecha || !id_proyecto) {
             return res.status(400).json({
                 success: false,
-                message: 'Los campos proveedor, fecha y proyecto son obligatorios'
             });
         }
 
@@ -359,50 +363,150 @@ const createMultipleSuministros = async (req, res) => {
         const transaction = await models.sequelize.transaction();
         
         try {
-            const suministrosCreados = [];
-            
-            for (const suministroData of suministros) {
-                const nuevoSuministro = await models.Suministros.create({
-                    // Información común del recibo
-                    proveedor,
-                    id_proveedor,
-                    folio,
-                    folio_proveedor,
-                    fecha,
-                    id_proyecto,
-                    vehiculo_transporte,
-                    operador_responsable,
-                    hora_salida,
-                    hora_llegada,
-                    hora_inicio_descarga,
-                    hora_fin_descarga,
-                    observaciones: observaciones_generales,
-                    
-                    // Información específica del suministro
-                    tipo_suministro: suministroData.tipo_suministro || 'Material',
-                    nombre: suministroData.nombre,
-                    codigo_producto: suministroData.codigo_producto,
-                    descripcion_detallada: suministroData.descripcion_detallada,
-                    cantidad: parseFloat(suministroData.cantidad),
-                    unidad_medida: suministroData.unidad_medida,
-                    m3_perdidos: suministroData.m3_perdidos ? parseFloat(suministroData.m3_perdidos) : null,
-                    m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
-                    m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
-                    precio_unitario: Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100,
-                    costo_total: parseFloat(suministroData.cantidad) * parseFloat(suministroData.precio_unitario),
-                    estado: suministroData.estado || 'Pendiente'
-                }, { transaction });
+            const results = [];
+            const createdIds = [];
 
-                suministrosCreados.push(nuevoSuministro);
+            for (const suministroData of suministros) {
+                // Si se proporciona id_suministro, intentamos actualizar; si no, creamos
+                if (suministroData.id_suministro) {
+                    const existente = await models.Suministros.findByPk(suministroData.id_suministro, { transaction });
+                    if (existente) {
+                        // Sanear entrada para evitar sobreescrituras con strings vacíos
+                        const san = { ...suministroData };
+                        Object.keys(san).forEach(key => {
+                            const val = san[key];
+                            if (typeof val === 'string' && val.trim() === '') {
+                                delete san[key];
+                            }
+                        });
+
+                        // Parsear valores numéricos solo si están presentes
+                        if (Object.prototype.hasOwnProperty.call(san, 'cantidad')) {
+                            san.cantidad = san.cantidad === null || san.cantidad === undefined ? null : parseFloat(san.cantidad);
+                        }
+                        if (Object.prototype.hasOwnProperty.call(san, 'm3_perdidos')) {
+                            san.m3_perdidos = san.m3_perdidos === null || san.m3_perdidos === undefined ? null : parseFloat(san.m3_perdidos);
+                        }
+                        if (Object.prototype.hasOwnProperty.call(san, 'm3_entregados')) {
+                            san.m3_entregados = san.m3_entregados === null || san.m3_entregados === undefined ? null : parseFloat(san.m3_entregados);
+                        }
+                        if (Object.prototype.hasOwnProperty.call(san, 'm3_por_entregar')) {
+                            san.m3_por_entregar = san.m3_por_entregar === null || san.m3_por_entregar === undefined ? null : parseFloat(san.m3_por_entregar);
+                        }
+                        if (Object.prototype.hasOwnProperty.call(san, 'precio_unitario')) {
+                            san.precio_unitario = san.precio_unitario === null || san.precio_unitario === undefined ? null : Math.round(parseFloat(san.precio_unitario) * 100) / 100;
+                        }
+                        if (Object.prototype.hasOwnProperty.call(san, 'costo_total')) {
+                            san.costo_total = san.costo_total === null || san.costo_total === undefined ? null : parseFloat(san.costo_total);
+                        }
+
+                        const updatePayload = {
+                            metodo_pago: metodo_pago || existente.metodo_pago,
+                            tipo_suministro: san.tipo_suministro !== undefined ? san.tipo_suministro : existente.tipo_suministro,
+                            nombre: san.nombre !== undefined ? san.nombre : existente.nombre,
+                            codigo_producto: san.codigo_producto !== undefined ? san.codigo_producto : existente.codigo_producto,
+                            descripcion_detallada: san.descripcion_detallada !== undefined ? san.descripcion_detallada : existente.descripcion_detallada,
+                            cantidad: Object.prototype.hasOwnProperty.call(san, 'cantidad') ? san.cantidad : existente.cantidad,
+                            unidad_medida: san.unidad_medida !== undefined ? san.unidad_medida : existente.unidad_medida,
+                            m3_perdidos: Object.prototype.hasOwnProperty.call(san, 'm3_perdidos') ? san.m3_perdidos : existente.m3_perdidos,
+                            m3_entregados: Object.prototype.hasOwnProperty.call(san, 'm3_entregados') ? san.m3_entregados : existente.m3_entregados,
+                            m3_por_entregar: Object.prototype.hasOwnProperty.call(san, 'm3_por_entregar') ? san.m3_por_entregar : existente.m3_por_entregar,
+                            precio_unitario: Object.prototype.hasOwnProperty.call(san, 'precio_unitario') ? san.precio_unitario : existente.precio_unitario,
+                            subtotal: (Object.prototype.hasOwnProperty.call(san, 'cantidad') && Object.prototype.hasOwnProperty.call(san, 'precio_unitario')) ? 
+                                san.cantidad * san.precio_unitario : 
+                                ((Object.prototype.hasOwnProperty.call(san, 'cantidad') || Object.prototype.hasOwnProperty.call(san, 'precio_unitario')) ? 
+                                    ((Object.prototype.hasOwnProperty.call(san, 'cantidad') ? san.cantidad : existente.cantidad) * 
+                                     (Object.prototype.hasOwnProperty.call(san, 'precio_unitario') ? san.precio_unitario : existente.precio_unitario)) : 
+                                    existente.subtotal
+                                ),
+                            costo_total: Object.prototype.hasOwnProperty.call(san, 'costo_total') ? san.costo_total : (
+                                (Object.prototype.hasOwnProperty.call(san, 'cantidad') && Object.prototype.hasOwnProperty.call(san, 'precio_unitario')) ? 
+                                calcularCostoTotal(san.cantidad, san.precio_unitario, include_iva) : existente.costo_total
+                            ),
+                            include_iva: include_iva, // Guardar estado del IVA
+                            estado: san.estado !== undefined ? san.estado : existente.estado,
+                            observaciones: Object.prototype.hasOwnProperty.call(san, 'observaciones') ? san.observaciones : existente.observaciones
+                        };
+
+                        await existente.update(updatePayload, { transaction });
+                        results.push({ id_suministro: existente.id_suministro, action: 'updated', ok: true });
+                    } else {
+                        // No existe el id, crear nuevo
+                        const creado = await models.Suministros.create({
+                            folio,
+                            fecha,
+                            id_proyecto,
+                            id_proveedor,
+                            metodo_pago: metodo_pago || 'Efectivo',
+                            vehiculo_transporte,
+                            operador_responsable,
+                            hora_salida,
+                            hora_llegada,
+                            hora_inicio_descarga,
+                            hora_fin_descarga,
+                            observaciones: observaciones_generales,
+                            tipo_suministro: suministroData.tipo_suministro || 'Material',
+                            nombre: suministroData.nombre,
+                            codigo_producto: suministroData.codigo_producto,
+                            descripcion_detallada: suministroData.descripcion_detallada,
+                            cantidad: parseFloat(suministroData.cantidad),
+                            unidad_medida: suministroData.unidad_medida,
+                            m3_perdidos: suministroData.m3_perdidos ? parseFloat(suministroData.m3_perdidos) : null,
+                            m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
+                            m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
+                            precio_unitario: suministroData.precio_unitario ? Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100 : null,
+                            subtotal: (suministroData.cantidad && suministroData.precio_unitario) ? parseFloat(suministroData.cantidad) * Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100 : null,
+                            costo_total: calcularCostoTotal(suministroData.cantidad, suministroData.precio_unitario, include_iva),
+                            include_iva: include_iva, // Guardar estado del IVA
+                            estado: suministroData.estado || 'Pendiente'
+                        }, { transaction });
+
+                        createdIds.push(creado.id_suministro);
+                        results.push({ id_suministro: creado.id_suministro, action: 'created', ok: true });
+                    }
+                } else {
+                    // Crear nuevo suministro
+                    const creado = await models.Suministros.create({
+                        folio,
+                        fecha,
+                        id_proyecto,
+                        id_proveedor,
+                        metodo_pago: metodo_pago || 'Efectivo',
+                        vehiculo_transporte,
+                        operador_responsable,
+                        hora_salida,
+                        hora_llegada,
+                        hora_inicio_descarga,
+                        hora_fin_descarga,
+                        observaciones: observaciones_generales,
+                        tipo_suministro: suministroData.tipo_suministro || 'Material',
+                        nombre: suministroData.nombre,
+                        codigo_producto: suministroData.codigo_producto,
+                        descripcion_detallada: suministroData.descripcion_detallada,
+                        cantidad: parseFloat(suministroData.cantidad),
+                        unidad_medida: suministroData.unidad_medida,
+                        m3_perdidos: suministroData.m3_perdidos ? parseFloat(suministroData.m3_perdidos) : null,
+                        m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
+                        m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
+                        precio_unitario: suministroData.precio_unitario ? Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100 : null,
+                        subtotal: (suministroData.cantidad && suministroData.precio_unitario) ? parseFloat(suministroData.cantidad) * Math.round(parseFloat(suministroData.precio_unitario) * 100) / 100 : null,
+                        costo_total: calcularCostoTotal(suministroData.cantidad, suministroData.precio_unitario, include_iva),
+                        include_iva: include_iva, // Guardar estado del IVA
+                        estado: suministroData.estado || 'Pendiente'
+                    }, { transaction });
+
+                    createdIds.push(creado.id_suministro);
+                    results.push({ id_suministro: creado.id_suministro, action: 'created', ok: true });
+                }
             }
 
             // Confirmar la transacción
             await transaction.commit();
 
-            // Obtener los suministros creados con relaciones
+            // Obtener los suministros involucrados con relaciones
             const suministrosCompletos = await models.Suministros.findAll({
                 where: {
-                    id_suministro: suministrosCreados.map(s => s.id_suministro)
+                    id_suministro: createdIds.length > 0 ? createdIds : []
                 },
                 include: [
                     {
@@ -412,19 +516,19 @@ const createMultipleSuministros = async (req, res) => {
                     },
                     {
                         model: models.Proveedores,
-                        as: 'proveedorInfo',
+                        as: 'proveedor',
                         attributes: ['nombre', 'tipo_proveedor', 'telefono']
                     }
                 ]
             });
 
-            res.status(201).json({
+            res.status(200).json({
                 success: true,
-                message: `${suministrosCreados.length} suministros creados exitosamente`,
+                message: `Operación completada`,
                 data: {
-                    cantidad_creados: suministrosCreados.length,
-                    folio_proveedor,
-                    suministros: suministrosCompletos
+                    results,
+                    created: suministrosCompletos,
+                    folio
                 }
             });
 
@@ -449,6 +553,14 @@ const updateSuministro = async (req, res) => {
     try {
         const { id } = req.params;
         const updateData = req.body;
+        const { include_iva = true } = updateData; // Extraer include_iva del body
+        
+        // Función helper para calcular costo total con o sin IVA
+        const calcularCostoTotal = (cantidad, precioUnitario, incluirIva = true) => {
+            if (!cantidad || !precioUnitario) return null;
+            const subtotal = parseFloat(cantidad) * parseFloat(precioUnitario);
+            return incluirIva ? subtotal * 1.16 : subtotal;
+        };
 
         const suministro = await models.Suministros.findByPk(id);
         
@@ -471,15 +583,14 @@ const updateSuministro = async (req, res) => {
         }
 
         // Verificar duplicados si se están actualizando campos clave
-        if (updateData.nombre || updateData.codigo_producto || updateData.folio_proveedor) {
+        if (updateData.nombre || updateData.codigo_producto || updateData.folio) {
             const dataToCheck = {
                 nombre: updateData.nombre || suministro.nombre,
                 codigo_producto: updateData.codigo_producto || suministro.codigo_producto,
-                folio_proveedor: updateData.folio_proveedor || suministro.folio_proveedor,
+                folio: updateData.folio || suministro.folio,
                 id_proyecto: updateData.id_proyecto || suministro.id_proyecto,
                 tipo_suministro: updateData.tipo_suministro || suministro.tipo_suministro,
-                id_proveedor: updateData.id_proveedor || suministro.id_proveedor,
-                proveedor: updateData.proveedor || suministro.proveedor
+                id_proveedor: updateData.id_proveedor || suministro.id_proveedor
             };
 
             const duplicates = await checkForDuplicates(dataToCheck, id);
@@ -489,9 +600,9 @@ const updateSuministro = async (req, res) => {
                     id: dup.id_suministro,
                     nombre: dup.nombre,
                     proyecto: dup.proyecto?.nombre || 'Sin proyecto',
-                    proveedor: dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor',
+                    proveedor: dup.proveedor?.nombre || 'Sin proveedor',
                     codigo_producto: dup.codigo_producto,
-                    folio_proveedor: dup.folio_proveedor
+                    folio: dup.folio
                 }));
 
                 return res.status(409).json({
@@ -503,13 +614,58 @@ const updateSuministro = async (req, res) => {
             }
         }
 
-        // Procesar campos numéricos
-        if (updateData.cantidad) updateData.cantidad = parseFloat(updateData.cantidad);
-        if (updateData.m3_perdidos) updateData.m3_perdidos = parseFloat(updateData.m3_perdidos);
-        if (updateData.m3_entregados) updateData.m3_entregados = parseFloat(updateData.m3_entregados);
-        if (updateData.m3_por_entregar) updateData.m3_por_entregar = parseFloat(updateData.m3_por_entregar);
-        if (updateData.precio_unitario) updateData.precio_unitario = Math.round(parseFloat(updateData.precio_unitario) * 100) / 100;
-        if (updateData.costo_total) updateData.costo_total = parseFloat(updateData.costo_total);
+        // Sanear datos: eliminar campos vacíos que puedan sobrescribir valores existentes
+        Object.keys(updateData).forEach(key => {
+            const val = updateData[key];
+            if (typeof val === 'string' && val.trim() === '') {
+                // eliminar campos enviados como cadena vacía
+                delete updateData[key];
+            }
+        });
+        
+        // Eliminar include_iva del updateData ya que no es un campo de la tabla
+        delete updateData.include_iva;
+
+        // Procesar campos numéricos solo si están presentes
+        if (Object.prototype.hasOwnProperty.call(updateData, 'cantidad')) {
+            updateData.cantidad = updateData.cantidad === null || updateData.cantidad === undefined ? null : parseFloat(updateData.cantidad);
+        }
+        if (Object.prototype.hasOwnProperty.call(updateData, 'm3_perdidos')) {
+            updateData.m3_perdidos = updateData.m3_perdidos === null || updateData.m3_perdidos === undefined ? null : parseFloat(updateData.m3_perdidos);
+        }
+        if (Object.prototype.hasOwnProperty.call(updateData, 'm3_entregados')) {
+            updateData.m3_entregados = updateData.m3_entregados === null || updateData.m3_entregados === undefined ? null : parseFloat(updateData.m3_entregados);
+        }
+        if (Object.prototype.hasOwnProperty.call(updateData, 'm3_por_entregar')) {
+            updateData.m3_por_entregar = updateData.m3_por_entregar === null || updateData.m3_por_entregar === undefined ? null : parseFloat(updateData.m3_por_entregar);
+        }
+        if (Object.prototype.hasOwnProperty.call(updateData, 'precio_unitario')) {
+            updateData.precio_unitario = updateData.precio_unitario === null || updateData.precio_unitario === undefined ? null : Math.round(parseFloat(updateData.precio_unitario) * 100) / 100;
+        }
+        if (Object.prototype.hasOwnProperty.call(updateData, 'costo_total')) {
+            updateData.costo_total = updateData.costo_total === null || updateData.costo_total === undefined ? null : parseFloat(updateData.costo_total);
+        }
+
+        // Calcular costo_total automáticamente si no viene en la petición pero se tienen cantidad y precio_unitario
+        const cantidadFinal = updateData.cantidad !== undefined ? updateData.cantidad : suministro.cantidad;
+        const precioFinal = updateData.precio_unitario !== undefined ? updateData.precio_unitario : suministro.precio_unitario;
+        
+        // Calcular subtotal automáticamente
+        if (cantidadFinal && precioFinal) {
+            updateData.subtotal = cantidadFinal * precioFinal;
+        }
+        
+        if (!Object.prototype.hasOwnProperty.call(updateData, 'costo_total') && cantidadFinal && precioFinal) {
+            updateData.costo_total = calcularCostoTotal(cantidadFinal, precioFinal, include_iva);
+        } else if (Object.prototype.hasOwnProperty.call(updateData, 'cantidad') || Object.prototype.hasOwnProperty.call(updateData, 'precio_unitario')) {
+            // Si se actualizan cantidad o precio_unitario, recalcular costo_total
+            if (cantidadFinal && precioFinal) {
+                updateData.costo_total = calcularCostoTotal(cantidadFinal, precioFinal, include_iva);
+            }
+        }
+        
+        // Guardar el estado del IVA
+        updateData.include_iva = include_iva;
 
         await suministro.update(updateData);
 

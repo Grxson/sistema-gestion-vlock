@@ -23,9 +23,20 @@ import {
   FaTimes,
   FaRuler,
   FaCalculator,
-  FaReceipt
+  FaReceipt,
+  FaFileExcel,
+  FaFilePdf,
+  FaUpload,
+  FaFileDownload
 } from 'react-icons/fa';
 import { formatCurrency } from '../utils/currency';
+import { 
+  generateImportTemplate, 
+  validateImportData, 
+  exportToExcel, 
+  exportToPDF, 
+  processImportFile 
+} from '../utils/exportUtils';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -44,8 +55,15 @@ import api from '../services/api';
 import ProveedorAutocomplete from '../components/common/ProveedorAutocomplete';
 import DateInput from '../components/ui/DateInput';
 import TimeInput from '../components/ui/TimeInput';
-import FormularioMultipleSuministros from '../components/FormularioMultipleSuministros';
+import FormularioSuministros from '../components/FormularioSuministros';
 import { useToast } from '../contexts/ToastContext';
+
+// Importar testing suite para desarrollo
+if (process.env.NODE_ENV === 'development') {
+  import('../utils/testingSuite').then(module => {
+    // El script se carga automáticamente
+  });
+}
 
 // Registrar componentes de Chart.js
 ChartJS.register(
@@ -102,14 +120,22 @@ const ESTADOS_SUMINISTRO = {
   'Cancelado': { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' }
 };
 
+// Helper functions for display
+const getDisplayUnidadMedida = (key) => {
+  return UNIDADES_MEDIDA[key] || key;
+};
+
+const getDisplayCategoria = (key) => {
+  return CATEGORIAS_SUMINISTRO[key] || key;
+};
+
 const Suministros = () => {
   const [suministros, setSuministros] = useState([]);
   const [proyectos, setProyectos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
-  const [categorias, setCategorias] = useState(Object.keys(CATEGORIAS_SUMINISTRO));
-  const [unidadesMedida, setUnidadesMedida] = useState(Object.keys(UNIDADES_MEDIDA));
+  const [categorias, setCategorias] = useState(CATEGORIAS_SUMINISTRO);
+  const [unidadesMedida, setUnidadesMedida] = useState(UNIDADES_MEDIDA);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
   const [showMultipleModal, setShowMultipleModal] = useState(false);
   const [editingSuministro, setEditingSuministro] = useState(null);
   const [editingRecibo, setEditingRecibo] = useState(null);
@@ -138,6 +164,14 @@ const Suministros = () => {
   const [showCodeSuggestions, setShowCodeSuggestions] = useState(false);
   const [proveedorSuministros, setProveedorSuministros] = useState([]);
   const [selectedSuggestion, setSelectedSuggestion] = useState(null);
+
+  // Estados para exportar/importar
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importErrors, setImportErrors] = useState([]);
+  const [validImportData, setValidImportData] = useState([]);
+  const [showExportDropdown, setShowExportDropdown] = useState(false);
+  const [isProcessingImport, setIsProcessingImport] = useState(false);
 
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
@@ -215,7 +249,7 @@ const Suministros = () => {
     observaciones: '',
     codigo_producto: '',
     // Nuevos campos para recibos
-    folio_proveedor: '',
+    folio: '',
     operador_responsable: '',
     vehiculo_transporte: '',
     hora_salida: '',
@@ -227,6 +261,20 @@ const Suministros = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Efecto para cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showExportDropdown && !event.target.closest('.export-dropdown')) {
+        setShowExportDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showExportDropdown]);
 
   // Efecto para detectar cambios de tema
   useEffect(() => {
@@ -291,11 +339,9 @@ const Suministros = () => {
   const loadChartData = async () => {
     setLoadingCharts(true);
     try {
-      console.log('🔍 Cargando datos de gráficas con filtros:', chartFilters);
       const response = await api.getSuministros();
       if (response.success) {
         const suministrosData = response.data || [];
-        console.log('📊 Datos recibidos:', suministrosData.length, 'suministros');
         
         // Aplicar todos los filtros
         const filteredData = suministrosData.filter(suministro => {
@@ -311,8 +357,7 @@ const Suministros = () => {
           
           // Filtro por proveedor
           const matchesProveedor = !chartFilters.proveedorNombre || 
-                                  suministro.proveedor === chartFilters.proveedorNombre ||
-                                  suministro.proveedorInfo?.nombre === chartFilters.proveedorNombre;
+                                  suministro.proveedor?.nombre === chartFilters.proveedorNombre;
           
           // Filtro por tipo de suministro
           const matchesTipo = !chartFilters.tipoSuministro || 
@@ -324,14 +369,12 @@ const Suministros = () => {
           return matchesFecha && matchesProyecto && matchesProveedor && matchesTipo && matchesEstado;
         });
 
-        console.log('🔍 Datos filtrados:', filteredData.length, 'suministros');
 
         // Procesar datos para todas las gráficas con manejo de errores individual
         const chartDataProcessed = {};
         
         try {
           chartDataProcessed.gastosPorMes = processGastosPorMes(filteredData);
-          console.log('✅ gastosPorMes procesado');
         } catch (error) {
           console.error('❌ Error en gastosPorMes:', error);
           chartDataProcessed.gastosPorMes = null;
@@ -339,7 +382,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.valorPorCategoria = processValorPorCategoria(filteredData);
-          console.log('✅ valorPorCategoria procesado');
         } catch (error) {
           console.error('❌ Error en valorPorCategoria:', error);
           chartDataProcessed.valorPorCategoria = null;
@@ -347,7 +389,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.suministrosPorMes = processSuministrosPorMes(filteredData);
-          console.log('✅ suministrosPorMes procesado');
         } catch (error) {
           console.error('❌ Error en suministrosPorMes:', error);
           chartDataProcessed.suministrosPorMes = null;
@@ -355,7 +396,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.gastosPorProyecto = processGastosPorProyecto(filteredData);
-          console.log('✅ gastosPorProyecto procesado');
         } catch (error) {
           console.error('❌ Error en gastosPorProyecto:', error);
           chartDataProcessed.gastosPorProyecto = null;
@@ -363,7 +403,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.gastosPorProveedor = processGastosPorProveedor(filteredData);
-          console.log('✅ gastosPorProveedor procesado');
         } catch (error) {
           console.error('❌ Error en gastosPorProveedor:', error);
           chartDataProcessed.gastosPorProveedor = null;
@@ -371,7 +410,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.cantidadPorEstado = processCantidadPorEstado(filteredData);
-          console.log('✅ cantidadPorEstado procesado');
         } catch (error) {
           console.error('❌ Error en cantidadPorEstado:', error);
           chartDataProcessed.cantidadPorEstado = null;
@@ -379,7 +417,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.distribucionTipos = processDistribucionTipos(filteredData);
-          console.log('✅ distribucionTipos procesado');
         } catch (error) {
           console.error('❌ Error en distribucionTipos:', error);
           chartDataProcessed.distribucionTipos = null;
@@ -387,7 +424,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.tendenciaEntregas = processTendenciaEntregas(filteredData);
-          console.log('✅ tendenciaEntregas procesado');
         } catch (error) {
           console.error('❌ Error en tendenciaEntregas:', error);
           chartDataProcessed.tendenciaEntregas = null;
@@ -395,7 +431,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.codigosProducto = processCodigosProducto(filteredData);
-          console.log('✅ codigosProducto procesado');
         } catch (error) {
           console.error('❌ Error en codigosProducto:', error);
           chartDataProcessed.codigosProducto = null;
@@ -403,7 +438,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.analisisTecnicoConcreto = processAnalisisTecnicoInteligente(filteredData);
-          console.log('✅ analisisTecnicoConcreto procesado');
         } catch (error) {
           console.error('❌ Error en analisisTecnicoConcreto:', error);
           chartDataProcessed.analisisTecnicoConcreto = null;
@@ -411,7 +445,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.concretoDetallado = processConcretoDetallado(filteredData);
-          console.log('✅ concretoDetallado procesado');
         } catch (error) {
           console.error('❌ Error en concretoDetallado:', error);
           chartDataProcessed.concretoDetallado = null;
@@ -419,7 +452,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.horasPorMes = processHorasPorMes(filteredData);
-          console.log('✅ horasPorMes procesado');
         } catch (error) {
           console.error('❌ Error en horasPorMes:', error);
           chartDataProcessed.horasPorMes = null;
@@ -427,7 +459,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.horasPorProyecto = processHorasPorProyecto(filteredData);
-          console.log('✅ horasPorProyecto procesado');
         } catch (error) {
           console.error('❌ Error en horasPorProyecto:', error);
           chartDataProcessed.horasPorProyecto = null;
@@ -435,7 +466,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.horasPorEquipo = processHorasPorEquipo(filteredData);
-          console.log('✅ horasPorEquipo procesado');
         } catch (error) {
           console.error('❌ Error en horasPorEquipo:', error);
           chartDataProcessed.horasPorEquipo = null;
@@ -443,7 +473,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.comparativoHorasVsCosto = processComparativoHorasVsCosto(filteredData);
-          console.log('✅ comparativoHorasVsCosto procesado');
         } catch (error) {
           console.error('❌ Error en comparativoHorasVsCosto:', error);
           chartDataProcessed.comparativoHorasVsCosto = null;
@@ -451,7 +480,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.distribucionUnidades = processDistribucionUnidades(filteredData);
-          console.log('✅ distribucionUnidades procesado');
         } catch (error) {
           console.error('❌ Error en distribucionUnidades:', error);
           chartDataProcessed.distribucionUnidades = null;
@@ -459,7 +487,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.cantidadPorUnidad = processCantidadPorUnidad(filteredData);
-          console.log('✅ cantidadPorUnidad procesado');
         } catch (error) {
           console.error('❌ Error en cantidadPorUnidad:', error);
           chartDataProcessed.cantidadPorUnidad = null;
@@ -467,7 +494,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.valorPorUnidad = processValorPorUnidad(filteredData);
-          console.log('✅ valorPorUnidad procesado');
         } catch (error) {
           console.error('❌ Error en valorPorUnidad:', error);
           chartDataProcessed.valorPorUnidad = null;
@@ -475,7 +501,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.comparativoUnidades = processComparativoUnidades(filteredData);
-          console.log('✅ comparativoUnidades procesado');
         } catch (error) {
           console.error('❌ Error en comparativoUnidades:', error);
           chartDataProcessed.comparativoUnidades = null;
@@ -483,7 +508,6 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.totalMetrosCubicos = processTotalMetrosCubicos(filteredData);
-          console.log('✅ totalMetrosCubicos procesado');
         } catch (error) {
           console.error('❌ Error en totalMetrosCubicos:', error);
           chartDataProcessed.totalMetrosCubicos = null;
@@ -491,14 +515,12 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.analisisUnidadesMedida = processAnalisisUnidadesMedida(filteredData);
-          console.log('✅ analisisUnidadesMedida procesado');
         } catch (error) {
           console.error('❌ Error en analisisUnidadesMedida:', error);
           chartDataProcessed.analisisUnidadesMedida = null;
         }
 
         setChartData(chartDataProcessed);
-        console.log('📊 Datos de gráficas cargados exitosamente');
       }
     } catch (error) {
       console.error('Error cargando datos de gráficas:', error);
@@ -530,10 +552,7 @@ const Suministros = () => {
     });
 
     const meses = Object.keys(gastosPorMes).sort();
-    const valores = meses.map(mes => {
-      const valor = gastosPorMes[mes];
-      return Math.round(valor * 100) / 100; // Redondear a 2 decimales
-    });
+    const valores = meses.map(mes => Math.round(gastosPorMes[mes] * 100) / 100);
     const cantidades = meses.map(mes => cantidadPorMes[mes]);
     
     // Calcular métricas para insights
@@ -746,7 +765,7 @@ const Suministros = () => {
       
       data.forEach(suministro => {
         try {
-          const proveedorNombre = suministro.proveedor || suministro.proveedorInfo?.nombre || 'Sin proveedor';
+          const proveedorNombre = suministro.proveedor?.nombre || 'Sin proveedor';
           
           const cantidad = parseFloat(suministro.cantidad) || 0;
           const precio = parseFloat(suministro.precio_unitario) || 0;
@@ -1306,7 +1325,7 @@ const Suministros = () => {
     const proveedores = {};
     
     concretoData.forEach(suministro => {
-      const proveedor = suministro.proveedor || suministro.proveedorInfo?.nombre || 'Sin proveedor';
+      const proveedor = suministro.proveedor?.nombre || 'Sin proveedor';
       const codigo = suministro.codigo_producto || 'Sin código';
       
       if (!proveedores[proveedor]) {
@@ -1399,26 +1418,19 @@ const Suministros = () => {
     };
   };
 
-  // Procesar horas de maquinaria por proyecto
+  // Procesar horas por proyecto
   const processHorasPorProyecto = (data) => {
     const horasPorProyecto = {};
     
-    // Filtrar solo suministros de maquinaria/equipos con unidad de medida en horas
+    // Filtrar solo suministros con unidad de medida en horas
     const datosHoras = data.filter(suministro => 
-      (suministro.unidad_medida === 'hr' || 
-       suministro.unidad_medida === 'hora' ||
-       suministro.unidad_medida === 'Hora (hr)') &&
-      (suministro.tipo_suministro === 'Maquinaria' || 
-       suministro.tipo_suministro === 'Equipo Ligero' ||
-       suministro.categoria === 'Maquinaria' ||
-       suministro.categoria === 'Equipo Ligero')
+      suministro.unidad_medida === 'hr' || 
+      suministro.unidad_medida === 'hora' ||
+      suministro.unidad_medida === 'Hora (hr)'
     );
     
     datosHoras.forEach(suministro => {
-      const proyecto = suministro.proyecto?.nombre || 
-                      suministro.proyectoInfo?.nombre || 
-                      suministro.proyecto_nombre || 
-                      'Sin proyecto asignado';
+      const proyecto = suministro.proyecto_nombre || suministro.proyectoInfo?.nombre || 'Sin proyecto';
       const horas = parseFloat(suministro.cantidad) || 0;
       
       if (!horasPorProyecto[proyecto]) {
@@ -1867,20 +1879,6 @@ const Suministros = () => {
           title: function(context) {
             return `${title} - ${context[0].label}`;
           },
-          label: function(context) {
-            const value = context.parsed.y;
-            if (title.includes('Gastos') || title.includes('Valor')) {
-              return `${context.dataset.label}: ${new Intl.NumberFormat('es-MX', {
-                style: 'currency',
-                currency: 'MXN',
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2
-              }).format(value)}`;
-            } else if (title.includes('Horas')) {
-              return `${context.dataset.label}: ${value.toFixed(1)} horas`;
-            }
-            return `${context.dataset.label}: ${value.toLocaleString('es-MX')}`;
-          },
           afterBody: function(context) {
             if (metrics.total) {
               const percentage = ((context[0].parsed.y / metrics.total) * 100).toFixed(1);
@@ -1913,8 +1911,8 @@ const Suministros = () => {
             return new Intl.NumberFormat('es-MX', {
               style: 'currency',
               currency: 'MXN',
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0
             }).format(value);
           }
         },
@@ -2176,8 +2174,8 @@ const Suministros = () => {
 
   // Función para verificar duplicados - SOLO POR FOLIO
   const checkForDuplicates = (newSuministro) => {
-    // Solo verificar duplicados si hay folio_proveedor
-    if (!newSuministro.folio_proveedor || newSuministro.folio_proveedor.trim() === '') {
+    // Solo verificar duplicados si hay folio
+    if (!newSuministro.folio || newSuministro.folio.trim() === '') {
       return []; // Sin folio, no hay duplicados que verificar
     }
 
@@ -2188,17 +2186,17 @@ const Suministros = () => {
       }
 
       // ÚNICO CRITERIO: Folio del proveedor
-      return suministro.folio_proveedor && 
-             suministro.folio_proveedor.toLowerCase().trim() === newSuministro.folio_proveedor.toLowerCase().trim();
+      return suministro.folio && 
+             suministro.folio.toLowerCase().trim() === newSuministro.folio.toLowerCase().trim();
     });
 
     return duplicates;
   };
 
   // Función para buscar sugerencias de duplicados en tiempo real - SOLO POR FOLIO
-  const searchDuplicateSuggestions = useCallback((nombre, codigo_producto, folio_proveedor) => {
+  const searchDuplicateSuggestions = useCallback((nombre, codigo_producto, folio) => {
     // Solo mostrar advertencias para folios duplicados EXACTOS
-    if (!folio_proveedor || folio_proveedor.trim() === '') {
+    if (!folio || folio.trim() === '') {
       setDuplicatesSuggestions([]);
       setShowDuplicatesWarning(false);
       return;
@@ -2211,8 +2209,8 @@ const Suministros = () => {
       }
 
       // CRITERIO MÁS ESTRICTO: Solo folios que coincidan exactamente o sean muy similares
-      return suministro.folio_proveedor && 
-             suministro.folio_proveedor.toLowerCase().trim() === folio_proveedor.toLowerCase().trim();
+      return suministro.folio && 
+             suministro.folio.toLowerCase().trim() === folio.toLowerCase().trim();
     }).slice(0, 5); // Limitar a 5 sugerencias
 
     setDuplicatesSuggestions(suggestions);
@@ -2302,7 +2300,7 @@ const Suministros = () => {
       codigo_producto: templateSuministro.codigo_producto || '',
       precio_unitario: templateSuministro.precio_unitario || '',
       // Mantener los campos específicos del nuevo registro
-      folio_proveedor: prev.folio_proveedor,
+      folio: prev.folio,
       fecha_necesaria: prev.fecha_necesaria,
       cantidad: prev.cantidad,
       observaciones: prev.observaciones
@@ -2319,11 +2317,11 @@ const Suministros = () => {
   // Efecto para buscar duplicados cuando cambia el nombre, código o folio
   useEffect(() => {
     const delayedSearch = setTimeout(() => {
-      searchDuplicateSuggestions(formData.nombre, formData.codigo_producto, formData.folio_proveedor);
+      searchDuplicateSuggestions(formData.nombre, formData.codigo_producto, formData.folio);
     }, 300); // Debounce de 300ms
 
     return () => clearTimeout(delayedSearch);
-  }, [formData.nombre, formData.codigo_producto, formData.folio_proveedor, searchDuplicateSuggestions]);
+  }, [formData.nombre, formData.codigo_producto, formData.folio, searchDuplicateSuggestions]);
 
   // Efecto para autocompletar nombres
   useEffect(() => {
@@ -2365,9 +2363,9 @@ const Suministros = () => {
     
     suministrosList.forEach(suministro => {
       // Crear clave única para el recibo basada en proveedor, fecha y folio
-      const proveedor = suministro.proveedorInfo?.nombre || suministro.proveedor || 'Sin proveedor';
+      const proveedor = suministro.proveedor?.nombre || 'Sin proveedor';
       const fecha = suministro.fecha || 'Sin fecha';
-      const folio = suministro.folio_proveedor || '';
+      const folio = suministro.folio || '';
       const proyecto = suministro.proyecto?.nombre || 'Sin proyecto';
       
       const claveRecibo = `${proveedor}_${fecha}_${folio}_${proyecto}`;
@@ -2377,7 +2375,7 @@ const Suministros = () => {
           id: claveRecibo,
           proveedor,
           fecha,
-          folio_proveedor: folio,
+          folio: folio,
           proyecto,
           suministros: [],
           total: 0,
@@ -2387,7 +2385,7 @@ const Suministros = () => {
       }
       
       grupos[claveRecibo].suministros.push(suministro);
-      grupos[claveRecibo].total += parseFloat(suministro.costo_total) || 0;
+      grupos[claveRecibo].total += calculateTotal(suministro);
       grupos[claveRecibo].cantidad_items += 1;
     });
     
@@ -2405,15 +2403,21 @@ const Suministros = () => {
     e.preventDefault();
     
     try {
+      // Calcular costo total
+      const cantidad = parseFloat(formData.cantidad) || 0;
+      const precioUnitario = parseFloat(formData.precio_unitario) || 0;
+      const costoTotal = cantidad * precioUnitario;
+
       const submitData = {
         // Campos básicos mapeados correctamente
         nombre: formData.nombre,
         descripcion_detallada: formData.descripcion,
         tipo_suministro: formData.tipo_suministro,
         codigo_producto: formData.codigo_producto,
-        cantidad: parseFloat(formData.cantidad) || 0,
+        cantidad: cantidad,
         unidad_medida: formData.unidad_medida,
-        precio_unitario: parseFloat(formData.precio_unitario) || 0,
+        precio_unitario: precioUnitario,
+        costo_total: costoTotal, // Añadir el costo total calculado
         fecha: formData.fecha_necesaria,
         estado: formData.estado,
         id_proyecto: formData.id_proyecto,
@@ -2422,7 +2426,7 @@ const Suministros = () => {
         // Campos de proveedor
         id_proveedor: formData.proveedor_info?.id_proveedor || null,
         proveedor: formData.proveedor_info?.nombre || '', // Campo legacy
-        folio_proveedor: formData.folio_proveedor,
+        folio: formData.folio,
         
         // Campos de logística
         operador_responsable: formData.operador_responsable,
@@ -2440,13 +2444,13 @@ const Suministros = () => {
         if (duplicates.length > 0) {
           const duplicateInfo = duplicates.map(dup => {
             const proyecto = proyectos.find(p => p.id_proyecto === dup.id_proyecto)?.nombre || 'Sin proyecto';
-            const proveedor = dup.proveedor || dup.proveedorInfo?.nombre || 'Sin proveedor';
-            const folioInfo = dup.folio_proveedor ? ` - Folio: ${dup.folio_proveedor}` : '';
+            const proveedor = dup.proveedor?.nombre || 'Sin proveedor';
+            const folioInfo = dup.folio ? ` - Folio: ${dup.folio}` : '';
             return `• ${dup.nombre} (${proyecto} - ${proveedor}${folioInfo})`;
           }).join('\n');
 
           const warningTitle = "🚫 DUPLICADO DE FOLIO DETECTADO";
-          const warningMessage = `¡ATENCIÓN! El folio "${submitData.folio_proveedor}" ya existe:\n\n${duplicateInfo}\n\n` +
+          const warningMessage = `¡ATENCIÓN! El folio "${submitData.folio}" ya existe:\n\n${duplicateInfo}\n\n` +
                          `Los folios deben ser únicos. ¿Está seguro de que desea continuar?`;
 
           const confirmed = await showConfirmDialog(warningTitle, warningMessage);
@@ -2458,7 +2462,12 @@ const Suministros = () => {
 
       let response;
       if (editingSuministro) {
-        response = await api.updateSuministro(editingSuministro.id_suministro, submitData);
+        // Agregar estado del IVA por defecto para actualizaciones individuales
+        const updatePayload = {
+          ...submitData,
+          include_iva: true // Por defecto incluir IVA en actualizaciones individuales
+        };
+        response = await api.updateSuministro(editingSuministro.id_suministro, updatePayload);
         if (response.success) {
           showSuccess(
             'Suministro actualizado',
@@ -2494,22 +2503,100 @@ const Suministros = () => {
     try {
       if (editingRecibo) {
         // Modo edición: actualizar suministros existentes
-        const updatePromises = suministrosData.suministros.map((suministroData) => {
-          // Si el suministro tiene id_suministro, actualizarlo; si no, crearlo
-          if (suministroData.id_suministro) {
-            return api.updateSuministro(suministroData.id_suministro, suministroData);
-          } else {
-            return api.createSuministro(suministroData);
-          }
-        });
+        const infoRecibo = suministrosData.info_recibo || {};
+        const updates = [];
+        const creations = [];
 
-        await Promise.all(updatePromises);
+        // Primero eliminar suministros marcados para eliminar
+        if (suministrosData.suministros_eliminados && suministrosData.suministros_eliminados.length > 0) {
+          const deletePromises = suministrosData.suministros_eliminados.map(id => 
+            api.deleteSuministro(id)
+          );
+          await Promise.all(deletePromises);
+        }
+
+        for (const suministroData of suministrosData.suministros) {
+          if (suministroData.id_suministro) {
+            // Incluir información del IVA y metodo_pago en cada actualización
+            const updatePayload = {
+              ...suministroData,
+              include_iva: suministrosData.include_iva,
+              metodo_pago: infoRecibo.metodo_pago || suministroData.metodo_pago || 'Efectivo'
+            };
+            updates.push(api.updateSuministro(suministroData.id_suministro, updatePayload));
+          } else {
+            // construir objeto de suministro para creación (sin duplicar campos de recibo)
+            const newItem = {
+              tipo_suministro: suministroData.tipo_suministro,
+              nombre: suministroData.nombre,
+              codigo_producto: suministroData.codigo_producto,
+              descripcion_detallada: suministroData.descripcion_detallada,
+              estado: suministroData.estado,
+              observaciones: suministroData.observaciones
+            };
+
+            // Función helper para normalizar números
+            const normalizeNumber = (value) => {
+              if (value === '' || value === null || value === undefined) return undefined;
+              return parseFloat(String(value).replace(/,/g, '')) || undefined;
+            };
+
+            if (suministroData.cantidad !== '' && suministroData.cantidad !== null && suministroData.cantidad !== undefined) {
+              newItem.cantidad = normalizeNumber(suministroData.cantidad);
+            }
+            if (suministroData.precio_unitario !== '' && suministroData.precio_unitario !== null && suministroData.precio_unitario !== undefined) {
+              newItem.precio_unitario = normalizeNumber(suministroData.precio_unitario);
+            }
+            if (suministroData.unidad_medida) {
+              newItem.unidad_medida = suministroData.unidad_medida;
+            }
+            if (suministroData.m3_perdidos !== '' && suministroData.m3_perdidos !== null && suministroData.m3_perdidos !== undefined) {
+              newItem.m3_perdidos = normalizeNumber(suministroData.m3_perdidos);
+            }
+            if (suministroData.m3_entregados !== '' && suministroData.m3_entregados !== null && suministroData.m3_entregados !== undefined) {
+              newItem.m3_entregados = normalizeNumber(suministroData.m3_entregados);
+            }
+            if (suministroData.m3_por_entregar !== '' && suministroData.m3_por_entregar !== null && suministroData.m3_por_entregar !== undefined) {
+              newItem.m3_por_entregar = normalizeNumber(suministroData.m3_por_entregar);
+            }
+
+            creations.push(newItem);
+          }
+        }
+
+        // Ejecutar actualizaciones primero
+        await Promise.all(updates);
+
+        // Si hay nuevas filas, crear en lote usando el endpoint de múltiple con info_recibo
+        if (creations.length > 0) {
+          const createPayload = {
+            info_recibo: {
+              proveedor: infoRecibo.proveedor || infoRecibo.proveedor_info?.nombre || '',
+              id_proveedor: infoRecibo.id_proveedor || infoRecibo.proveedor_info?.id_proveedor || null,
+              folio: infoRecibo.folio || null,
+              fecha: infoRecibo.fecha || null,
+              id_proyecto: infoRecibo.id_proyecto ? parseInt(infoRecibo.id_proyecto) : null,
+              vehiculo_transporte: infoRecibo.vehiculo_transporte || null,
+              operador_responsable: infoRecibo.operador_responsable || null,
+              hora_salida: infoRecibo.hora_salida || null,
+              hora_llegada: infoRecibo.hora_llegada || null,
+              hora_inicio_descarga: infoRecibo.hora_inicio_descarga || null,
+              hora_fin_descarga: infoRecibo.hora_fin_descarga || null,
+              observaciones_generales: infoRecibo.observaciones_generales || infoRecibo.observaciones || '',
+              metodo_pago: infoRecibo.metodo_pago || 'Efectivo'
+            },
+            suministros: creations
+          };
+
+          await api.createMultipleSuministros(createPayload);
+        }
         
         showSuccess(
           'Suministros actualizados',
           `Se han actualizado/creado ${suministrosData.suministros.length} suministros correctamente`,
           { duration: 4000 }
         );
+        
       } else {
         // Modo creación: crear nuevos suministros
         const response = await api.createMultipleSuministros(suministrosData);
@@ -2564,17 +2651,7 @@ const Suministros = () => {
   };
 
   const handleEdit = (suministro) => {
-    console.log('Editando suministro:', suministro); // Para debug
-    console.log('proveedorInfo:', suministro.proveedorInfo); // Para debug específico del proveedor
-    setEditingSuministro(suministro);
     
-    // Formatear cantidad para evitar decimales innecesarios
-    const formatQuantityForEdit = (qty) => {
-      if (!qty) return '';
-      const num = parseFloat(qty);
-      return num % 1 === 0 ? num.toString() : num.toString();
-    };
-
     // Función para limpiar horas - convertir 00:00:00 o null a cadena vacía
     const cleanTimeField = (timeValue) => {
       if (!timeValue || timeValue === '00:00:00' || timeValue === '00:00') {
@@ -2584,34 +2661,21 @@ const Suministros = () => {
     };
     
     // Procesar información del proveedor
-    const proveedorInfo = suministro.proveedorInfo || suministro.proveedor_info || null;
-    console.log('Proveedor procesado:', proveedorInfo); // Debug
+    const proveedorInfo = suministro.proveedor || null;
     
-    setFormData({
-      nombre: suministro.nombre || suministro.descripcion || '',
-      descripcion: suministro.descripcion_detallada || '',
-      categoria: suministro.tipo_suministro || suministro.categoria || 'Material',
-      cantidad: formatQuantityForEdit(suministro.cantidad),
-      unidad_medida: suministro.unidad_medida || '',
-      precio_unitario: suministro.precio_unitario ? 
-        (Math.round(parseFloat(suministro.precio_unitario) * 100) / 100).toFixed(2) : '',
-      fecha_necesaria: suministro.fecha || suministro.fecha_necesaria ? 
-        new Date(suministro.fecha || suministro.fecha_necesaria).toISOString().split('T')[0] : '',
-      estado: suministro.estado || 'Solicitado',
-      id_proyecto: suministro.id_proyecto?.toString() || '',
+    // Limpiar campos de hora antes de pasar al formulario
+    const suministroLimpio = {
+      ...suministro,
       proveedor_info: proveedorInfo,
-      observaciones: suministro.observaciones || '',
-      codigo_producto: suministro.codigo_producto || '',
-      // Campos de recibo - limpiar valores de hora
-      folio_proveedor: suministro.folio_proveedor || '',
-      operador_responsable: suministro.operador_responsable || '',
-      vehiculo_transporte: suministro.vehiculo_transporte || '',
       hora_salida: cleanTimeField(suministro.hora_salida),
       hora_llegada: cleanTimeField(suministro.hora_llegada),
       hora_inicio_descarga: cleanTimeField(suministro.hora_inicio_descarga),
       hora_fin_descarga: cleanTimeField(suministro.hora_fin_descarga)
-    });
-    setShowModal(true);
+    };
+    
+    // Pasar el suministro individual directamente - FormularioSuministros ahora puede manejarlo
+    setEditingRecibo(suministroLimpio);
+    setShowMultipleModal(true);
   };
 
   // Funciones helper para formatear precios y cantidades (mostrar 0 en lugar de NaN)
@@ -2642,8 +2706,6 @@ const Suministros = () => {
 
   // Función para editar recibo (abrir modal múltiple con datos pre-cargados)
   const handleEditRecibo = (recibo) => {
-    console.log('Editando recibo:', recibo); // Debug
-    console.log('Suministros del recibo:', recibo.suministros); // Debug
     setEditingRecibo(recibo);
     setShowMultipleModal(true);
   };
@@ -2674,8 +2736,208 @@ const Suministros = () => {
     }
   };
 
+  // Funciones para exportar/importar
+  const handleDownloadTemplate = async () => {
+    try {
+      await generateImportTemplate(proyectos, proveedores);
+      showSuccess('Plantilla descargada', 'La plantilla Excel ha sido descargada correctamente');
+    } catch (error) {
+      console.error('Error descargando plantilla:', error);
+      showError('Error', 'No se pudo descargar la plantilla');
+    }
+  };
+
+  const handleExportToExcel = async () => {
+    try {
+      const dataToExport = filteredSuministros.map(suministro => ({
+        ...suministro,
+        proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || '',
+        proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || ''
+      }));
+      
+      await exportToExcel(dataToExport);
+      showSuccess('Exportación exitosa', 'Los suministros han sido exportados a Excel');
+    } catch (error) {
+      console.error('Error exportando a Excel:', error);
+      showError('Error', 'No se pudo exportar a Excel');
+    }
+  };
+
+  const handleExportToPDF = async () => {
+    try {
+      const dataToExport = filteredSuministros.map(suministro => ({
+        ...suministro,
+        proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || '',
+        proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || ''
+      }));
+      
+      // Información de filtros aplicados
+      const filtrosInfo = {
+        totalRegistros: suministros.length,
+        registrosFiltrados: filteredSuministros.length,
+        filtros: {
+          busqueda: searchTerm,
+          proyecto: filters.proyecto,
+          proveedor: filters.proveedor,
+          estado: filters.estado,
+          fechaInicio: filters.fechaInicio,
+          fechaFin: filters.fechaFin
+        }
+      };
+      
+      await exportToPDF(dataToExport, filtrosInfo);
+      showSuccess('Exportación exitosa', 'Los suministros han sido exportados a PDF');
+    } catch (error) {
+      console.error('Error exportando a PDF:', error);
+      showError('Error', 'No se pudo exportar a PDF');
+    }
+  };
+
+  const handleFileImport = async (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    setImportFile(file);
+    setIsProcessingImport(true);
+    
+    try {
+      const { validData, errors } = await processImportFile(file);
+      
+      setValidImportData(validData);
+      setImportErrors(errors);
+      
+      if (errors.length > 0) {
+        showWarning(
+          'Errores de validación',
+          `Se encontraron ${errors.length} errores en el archivo. Revisa la lista de errores.`
+        );
+      } else {
+        showInfo(
+          'Archivo validado',
+          `${validData.length} registros válidos listos para importar`
+        );
+      }
+    } catch (error) {
+      console.error('Error procesando archivo:', error);
+      showError('Error', 'No se pudo procesar el archivo');
+      setImportErrors([{ row: 0, message: 'Error al leer el archivo' }]);
+    } finally {
+      setIsProcessingImport(false);
+    }
+  };
+
+  const handleConfirmImport = async () => {
+    if (validImportData.length === 0) return;
+
+    setIsProcessingImport(true);
+    let successCount = 0;
+    let errorCount = 0;
+
+    try {
+      // Agrupar suministros por recibo (folio y fecha)
+      const groupedByRecibo = {};
+      
+      validImportData.forEach(item => {
+        const key = `${item.folio}-${item.fecha}`;
+        if (!groupedByRecibo[key]) {
+          groupedByRecibo[key] = {
+            recibo: {
+              folio: item.folio,
+              fecha: item.fecha,
+              metodo_pago: item.metodo_pago,
+              proveedor: item.proveedor_nombre,
+              observaciones_generales: item.observaciones_generales
+            },
+            suministros: []
+          };
+        }
+        
+        groupedByRecibo[key].suministros.push({
+          // === CAMPOS DEL FORMULARIO REAL ===
+          nombre: item.nombre,
+          tipo_suministro: item.tipo_suministro,
+          codigo_producto: item.codigo_producto,
+          cantidad: item.cantidad,
+          unidad_medida: item.unidad_medida,
+          precio_unitario: item.precio_unitario,
+          estado: item.estado,
+          descripcion_detallada: item.descripcion_detallada,
+          include_iva: item.include_iva
+        });
+      });
+
+      // Procesar cada grupo de recibo
+      for (const key in groupedByRecibo) {
+        const group = groupedByRecibo[key];
+        
+        try {
+          // Buscar proveedor por nombre
+          const proveedor = proveedores.find(p => 
+            p.nombre.toLowerCase().trim() === group.recibo.proveedor.toLowerCase().trim()
+          );
+          
+          if (!proveedor) {
+            console.error(`Proveedor "${group.recibo.proveedor}" no encontrado`);
+            errorCount += group.suministros.length;
+            continue;
+          }
+
+          // Buscar proyecto por nombre (usar el primer proyecto si no se especifica)
+          let proyecto = proyectos[0]; // Por defecto usar el primer proyecto
+          
+          // Formatear datos para el endpoint múltiple correcto
+          const payload = {
+            info_recibo: {
+              folio: group.recibo.folio,
+              fecha: group.recibo.fecha,
+              id_proyecto: proyecto.id_proyecto,
+              id_proveedor: proveedor.id_proveedor,
+              metodo_pago: group.recibo.metodo_pago,
+              observaciones_generales: group.recibo.observaciones_generales || ''
+            },
+            suministros: group.suministros,
+            include_iva: group.suministros[0]?.include_iva !== undefined ? group.suministros[0].include_iva : true
+          };
+
+          const response = await api.request('/suministros/multiple', {
+            method: 'POST',
+            body: JSON.stringify(payload)
+          });
+          
+          // Si llegamos aquí, la petición fue exitosa
+          successCount += group.suministros.length;
+        } catch (error) {
+          console.error('Error creando suministros del recibo:', error);
+          errorCount += group.suministros.length;
+        }
+      }
+
+      if (successCount > 0) {
+        showSuccess(
+          'Importación completada',
+          `${successCount} suministros importados correctamente${errorCount > 0 ? `. ${errorCount} errores.` : ''}`
+        );
+        await loadData();
+      }
+
+      if (errorCount > 0 && successCount === 0) {
+        showError('Error en importación', `No se pudieron importar los suministros`);
+      }
+
+    } catch (error) {
+      console.error('Error en importación:', error);
+      showError('Error', 'Error durante la importación');
+    } finally {
+      setIsProcessingImport(false);
+      setShowImportModal(false);
+      setImportFile(null);
+      setValidImportData([]);
+      setImportErrors([]);
+    }
+  };
+
   const handleCloseModal = () => {
-    setShowModal(false);
+    setShowMultipleModal(false);
     setEditingSuministro(null);
     
     // Limpiar todas las sugerencias
@@ -2699,7 +2961,7 @@ const Suministros = () => {
       observaciones: '',
       codigo_producto: '',
       // Resetear nuevos campos
-      folio_proveedor: '',
+      folio: '',
       operador_responsable: '',
       vehiculo_transporte: '',
       hora_salida: '',
@@ -2718,14 +2980,14 @@ const Suministros = () => {
                          suministro.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.descripcion_detallada?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         suministro.folio_proveedor?.toLowerCase().includes(searchTerm.toLowerCase());
+                         suministro.folio?.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesCategoria = !filters.categoria || (suministro.tipo_suministro || suministro.categoria) === filters.categoria;
     const matchesEstado = !filters.estado || suministro.estado === filters.estado;
     const matchesProyecto = !filters.proyecto || suministro.id_proyecto?.toString() === filters.proyecto;
     const matchesProveedor = !filters.proveedor || 
                             suministro.proveedor === filters.proveedor ||
-                            suministro.proveedorInfo?.nombre === filters.proveedor;
+                            suministro.proveedor?.nombre === filters.proveedor;
 
     return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto && matchesProveedor;
   });
@@ -2778,7 +3040,7 @@ const Suministros = () => {
     
     const proyectosUnicos = new Set(suministros.map(s => s.id_proyecto).filter(id => id)).size;
     
-    const proveedoresUnicos = new Set(suministros.map(s => s.proveedor).filter(p => p)).size;
+    const proveedoresUnicos = new Set(suministros.map(s => s.id_proveedor).filter(id => id)).size;
 
     return {
       totalGastado: Math.round(totalGastado * 100) / 100,
@@ -2868,7 +3130,23 @@ const Suministros = () => {
 
   const formatDate = (dateString) => {
     if (!dateString) return 'No especificada';
-    return new Date(dateString).toLocaleDateString('es-MX');
+    
+    // Si ya está en formato YYYY-MM-DD, formatearlo directamente sin crear Date object
+    if (typeof dateString === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+    }
+    
+    // Fallback para otros formatos, crear fecha local
+    try {
+      const fecha = new Date(dateString + 'T00:00:00'); // Agregar tiempo para evitar zona horaria
+      const day = String(fecha.getDate()).padStart(2, '0');
+      const month = String(fecha.getMonth() + 1).padStart(2, '0');
+      const year = fecha.getFullYear();
+      return `${day}/${month}/${year}`;
+    } catch (error) {
+      return 'Fecha inválida';
+    }
   };
 
   const getEstadoStyle = (estado) => {
@@ -2887,7 +3165,7 @@ const Suministros = () => {
     <div className="p-6">
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Gestión de Suministros</h1>
-        <p className="text-gray-600 dark:text-gray-400">Administra materiales, herramientas y equipos para proyectos</p>
+        <p className="text-gray-600 dark:text-gray-400">{import.meta.env.VITE_APP_DESCRIPTION || 'Administra materiales, herramientas y equipos para proyectos'}</p>
       </div>
 
       {/* Tarjetas de estadísticas */}
@@ -3044,18 +3322,11 @@ const Suministros = () => {
               {showCharts ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
             </button>
             <button
-              onClick={() => setShowModal(true)}
-              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
-            >
-              <FaPlus className="w-4 h-4" />
-              Individual
-            </button>
-            <button
               onClick={() => setShowMultipleModal(true)}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
             >
-              <FaBoxes className="w-4 h-4" />
-              Múltiple
+              <FaPlus className="w-4 h-4" />
+              Nuevo Suministro
             </button>
           </div>
         </div>
@@ -3415,7 +3686,7 @@ const Suministros = () => {
                           onChange={(e) => setSelectedCharts({...selectedCharts, horasPorProyecto: e.target.checked})}
                           className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Horas de Maquinaria por Proyecto</span>
+                        <span className="text-gray-700 dark:text-gray-300">Horas por Proyecto</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
@@ -3529,6 +3800,14 @@ const Suministros = () => {
                         <FaChartBar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
                       </div>
                     </div>
+                    
+                    {/* Métricas */}
+                    <MetricsDisplay 
+                      title="Gastos Mensuales"
+                      metrics={chartData.gastosPorMes.metrics}
+                      icon={FaChartBar}
+                      color="blue"
+                    />
                     
                     <div className="h-80">
                       <Line 
@@ -4153,9 +4432,9 @@ const Suministros = () => {
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
                     <div className="flex items-center justify-between mb-6">
                       <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Horas de Maquinaria por Proyecto</h3>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Horas por Proyecto</h3>
                         <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Distribución de horas de maquinaria y equipos por proyecto
+                          Distribución de horas de trabajo por proyecto
                         </p>
                       </div>
                       <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
@@ -4836,7 +5115,7 @@ const Suministros = () => {
                   Estado
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Fecha Necesaria
+                  Fecha
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Acciones
@@ -4880,7 +5159,7 @@ const Suministros = () => {
                                 </div>
                                 <div className="text-sm text-gray-600 dark:text-gray-400">
                                   {recibo.proyecto} • {new Date(recibo.fecha).toLocaleDateString()}
-                                  {recibo.folio_proveedor && ` • Folio: ${recibo.folio_proveedor}`}
+                                  {recibo.folio && ` • Folio: ${recibo.folio}`}
                                 </div>
                               </div>
                             </div>
@@ -4900,7 +5179,7 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {recibo.folio_proveedor || '-'}
+                              {recibo.folio || '-'}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -4964,7 +5243,7 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                                  {suministro.tipo_suministro || suministro.categoria}
+                                  {getDisplayCategoria(suministro.tipo_suministro || suministro.categoria)}
                                 </span>
                               </td>
                               <td className="px-6 py-4">
@@ -4979,13 +5258,13 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <div className="text-sm text-gray-900 dark:text-white">
-                                  {formatQuantityDisplay(suministro.cantidad)} {suministro.unidad_medida}
+                                  {formatQuantityDisplay(suministro.cantidad)} {getDisplayUnidadMedida(suministro.unidad_medida)}
                                 </div>
                               </td>
                               <td className="px-6 py-4">
                                 <div>
                                   <div className="text-sm text-gray-900 dark:text-white">
-                                    {formatPriceDisplay(suministro.precio_unitario)} / {suministro.unidad_medida}
+                                    {formatPriceDisplay(suministro.precio_unitario)} / {getDisplayUnidadMedida(suministro.unidad_medida)}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
                                     Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -5040,16 +5319,16 @@ const Suministros = () => {
                                   Código: {suministro.codigo_producto}
                                 </div>
                               )}
-                              {suministro.folio_proveedor && (
+                              {suministro.folio && (
                                 <div className="text-xs text-blue-600 dark:text-blue-400">
-                                  Folio: {suministro.folio_proveedor}
+                                  Folio: {suministro.folio}
                                 </div>
                               )}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                              {suministro.tipo_suministro || suministro.categoria}
+                              {getDisplayCategoria(suministro.tipo_suministro || suministro.categoria)}
                             </span>
                           </td>
                           <td className="px-6 py-4">
@@ -5057,11 +5336,11 @@ const Suministros = () => {
                               <FaBuilding className="text-gray-400 dark:text-gray-500 w-4 h-4" />
                               <div>
                                 <div className="font-medium text-gray-900 dark:text-white">
-                                  {suministro.proveedorInfo?.nombre || suministro.proveedor || 'Sin asignar'}
+                                  {suministro.proveedor?.nombre || 'Sin asignar'}
                                 </div>
-                                {suministro.proveedorInfo?.tipo_proveedor && (
+                                {suministro.proveedor?.tipo_proveedor && (
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
-                                    {suministro.proveedorInfo.tipo_proveedor}
+                                    {suministro.proveedor.tipo_proveedor}
                                   </div>
                                 )}
                               </div>
@@ -5069,18 +5348,18 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {suministro.folio_proveedor || '-'}
+                              {suministro.folio || '-'}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {formatQuantityDisplay(suministro.cantidad)} {suministro.unidad_medida}
+                              {formatQuantityDisplay(suministro.cantidad)} {getDisplayUnidadMedida(suministro.unidad_medida)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm text-gray-900 dark:text-white">
-                                {formatPriceDisplay(suministro.precio_unitario)} / {suministro.unidad_medida}
+                                {formatPriceDisplay(suministro.precio_unitario)} / {getDisplayUnidadMedida(suministro.unidad_medida)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -5226,524 +5505,75 @@ const Suministros = () => {
             </div>
           </div>
         )}
-      </div>
 
-      {/* Modal de formulario */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-                {editingSuministro ? 'Editar Suministro' : 'Nuevo Suministro'}
-              </h2>
+        {/* Botones de Exportar e Importar */}
+        <div className="bg-white dark:bg-gray-800 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-wrap gap-3 justify-center">
+          {/* Botón Descargar Plantilla */}
+          <button
+            onClick={handleDownloadTemplate}
+            className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+            title="Descargar plantilla Excel para importar"
+          >
+            <FaFileDownload className="w-4 h-4" />
+            Descargar Plantilla
+          </button>
 
-              {/* Texto explicativo */}
-              <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <div className="flex items-start">
-                  <div className="flex-shrink-0">
-                    <svg className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
-                      Guía de llenado
-                    </h3>
-                    <div className="mt-2 text-sm text-red-700 dark:text-red-400">
-                      <p className="mb-2">
-                        <strong>Campos obligatorios (*):</strong> Nombre, Categoría, Proveedor, Cantidad, Unidad de Medida y Precio.
-                      </p>
-                      <p className="mb-2">
-                        <strong>Información de Recibo:</strong> Completa según los datos del recibo físico. El folio del proveedor aparece usualmente en la parte superior del documento.
-                      </p>
-                      <p>
-                        <strong>Horarios y Transporte:</strong> Información opcional para seguimiento detallado de entregas y logística.
-                      </p>
-                    </div>
-                  </div>
-                </div>
+          {/* Botón Importar */}
+          <button
+            onClick={() => setShowImportModal(true)}
+            className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+            title="Importar suministros desde Excel"
+          >
+            <FaUpload className="w-4 h-4" />
+            Importar Excel
+          </button>
+
+          {/* Botón Exportar con dropdown */}
+          <div className="relative export-dropdown">
+            <button
+              onClick={() => setShowExportDropdown(!showExportDropdown)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+            >
+              <FaDownload className="w-4 h-4" />
+              Exportar
+              <FaChevronDown className="w-3 h-3" />
+            </button>
+            
+            {showExportDropdown && (
+              <div className="absolute bottom-full mb-2 right-0 w-48 bg-white dark:bg-dark-100 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-50">
+                <button
+                  onClick={() => {
+                    handleExportToExcel();
+                    setShowExportDropdown(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300 rounded-t-lg"
+                >
+                  <FaFileExcel className="w-4 h-4 text-green-600" />
+                  Exportar a Excel
+                </button>
+                <button
+                  onClick={() => {
+                    handleExportToPDF();
+                    setShowExportDropdown(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300 rounded-b-lg"
+                >
+                  <FaFilePdf className="w-4 h-4 text-red-600" />
+                  Exportar a PDF
+                </button>
               </div>
-
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Información básica */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Información Básica</h3>
-                    
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Nombre del Suministro *
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={formData.nombre}
-                            onChange={(e) => {
-                              setFormData({...formData, nombre: e.target.value});
-                              setSelectedSuggestion(null);
-                            }}
-                            onFocus={() => formData.nombre.length >= 2 && setShowNameSuggestions(nameSuggestions.length > 0)}
-                            onBlur={() => setTimeout(() => setShowNameSuggestions(false), 200)}
-                            className={`w-full px-3 py-2 border rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 ${
-                              showDuplicatesWarning 
-                                ? 'border-yellow-500 dark:border-yellow-400 focus:ring-yellow-500' 
-                                : 'border-gray-300 dark:border-gray-600 focus:ring-red-500'
-                            }`}
-                            placeholder="Ej: Grava 1 1/2, Retroexcavadora 415F"
-                            required
-                          />
-                          {showDuplicatesWarning && (
-                            <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                              <span className="text-yellow-500 text-sm">⚠️</span>
-                            </div>
-                          )}
-
-                          {/* Dropdown de sugerencias de nombres */}
-                          {showNameSuggestions && nameSuggestions.length > 0 && (
-                            <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                              <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 border-b">
-                                Sugerencias de nombres similares
-                              </div>
-                              {nameSuggestions.map((suggestion, index) => (
-                                <div
-                                  key={index}
-                                  onClick={() => {
-                                    setFormData(prev => ({...prev, nombre: suggestion}));
-                                    setShowNameSuggestions(false);
-                                  }}
-                                  className="px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 flex items-center justify-between"
-                                >
-                                  <span>{suggestion}</span>
-                                  <FaSearch className="h-3 w-3 text-gray-400" />
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        
-                        {/* Sugerencias de duplicados */}
-                        {showDuplicatesWarning && duplicatesSuggestions.length > 0 && (
-                          <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-md">
-                            <div className="flex items-center mb-2">
-                              <span className="text-yellow-600 dark:text-yellow-400 text-sm font-medium">
-                                ⚠️ Posibles duplicados encontrados:
-                              </span>
-                            </div>
-                            <div className="space-y-1 max-h-32 overflow-y-auto">
-                              {duplicatesSuggestions.map((suggestion, index) => {
-                                const proyecto = proyectos.find(p => p.id_proyecto === suggestion.id_proyecto)?.nombre || 'Sin proyecto';
-                                const proveedor = suggestion.proveedor || suggestion.proveedorInfo?.nombre || 'Sin proveedor';
-                                return (
-                                  <div key={index} className="text-xs text-yellow-700 dark:text-yellow-300 bg-yellow-100 dark:bg-yellow-800/30 p-2 rounded">
-                                    <div className="font-medium">{suggestion.nombre}</div>
-                                    <div className="text-yellow-600 dark:text-yellow-400">
-                                      {proyecto} • {proveedor} • {suggestion.estado}
-                                      {suggestion.codigo_producto && ` • Código: ${suggestion.codigo_producto}`}
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                            <div className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">
-                              💡 Verifica si alguno de estos coincide con lo que intentas crear
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Folio del Proveedor
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.folio_proveedor}
-                          onChange={(e) => setFormData({...formData, folio_proveedor: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          placeholder="Ej: 37946, 62289"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Descripción
-                      </label>
-                      <textarea
-                        value={formData.descripcion}
-                        onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Categoría *
-                        </label>
-                        <select
-                          value={formData.tipo_suministro}
-                          onChange={(e) => setFormData({...formData, tipo_suministro: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          required
-                        >
-                          {Object.entries(CATEGORIAS_SUMINISTRO).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Proyecto *
-                        </label>
-                        <select
-                          value={formData.id_proyecto}
-                          onChange={(e) => setFormData({...formData, id_proyecto: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          required
-                        >
-                          <option value="">Seleccionar proyecto</option>
-                          {proyectos.map((proyecto) => (
-                            <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
-                              {proyecto.nombre}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Código de Producto
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={formData.codigo_producto}
-                          onChange={(e) => setFormData({...formData, codigo_producto: e.target.value})}
-                          onFocus={() => formData.codigo_producto.length >= 2 && setShowCodeSuggestions(codeSuggestions.length > 0)}
-                          onBlur={() => setTimeout(() => setShowCodeSuggestions(false), 200)}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-                          placeholder="SKU, código interno, etc."
-                        />
-
-                        {/* Dropdown de sugerencias de códigos */}
-                        {showCodeSuggestions && codeSuggestions.length > 0 && (
-                          <div className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-40 overflow-y-auto">
-                            <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700 border-b">
-                              Códigos similares
-                            </div>
-                            {codeSuggestions.map((suggestion, index) => (
-                              <div
-                                key={index}
-                                onClick={() => {
-                                  setFormData(prev => ({...prev, codigo_producto: suggestion}));
-                                  setShowCodeSuggestions(false);
-                                }}
-                                className="px-3 py-2 text-sm text-gray-900 dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                              >
-                                {suggestion}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Información comercial */}
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Información Comercial</h3>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Proveedor *
-                      </label>
-                      <ProveedorAutocomplete
-                        value={formData.proveedor_info}
-                        onChange={(proveedor) => setFormData({...formData, proveedor_info: proveedor})}
-                        tipoSugerido={
-                          formData.categoria === 'Material' ? 'Material' :
-                          formData.categoria === 'Servicio' ? 'Servicio' :
-                          formData.categoria === 'Equipo' ? 'Equipo' : 'Mixto'
-                        }
-                        required
-                      />
-                    </div>
-
-                    {/* Plantillas de Proveedor */}
-                    {formData.proveedor_info && proveedorSuministros.length > 0 && (
-                      <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                        <h4 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center">
-                          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
-                          Suministros comunes de {formData.proveedor_info.nombre}
-                        </h4>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
-                          {proveedorSuministros.slice(0, 6).map((suministro, index) => (
-                            <button
-                              key={index}
-                              type="button"
-                              onClick={() => {
-                                setFormData({
-                                  ...formData,
-                                  // Información básica
-                                  nombre: suministro.nombre,
-                                  descripcion: suministro.descripcion_detallada || suministro.descripcion || '',
-                                  tipo_suministro: suministro.tipo_suministro || suministro.categoria || 'Material',
-                                  codigo_producto: suministro.codigo_producto || suministro.codigo || '',
-                                  
-                                  // Información comercial (mantener proveedor actual)
-                                  cantidad: suministro.cantidad || '',
-                                  unidad_medida: suministro.unidad_medida || 'pz',
-                                  precio_unitario: suministro.precio_unitario || '',
-                                  
-                                  // Estado y proyecto (usar valores por defecto)
-                                  estado: 'Solicitado', // Nuevo estado por defecto
-                                  // NO copiamos el folio_proveedor para que sea único
-                                  
-                                  // Observaciones si existen
-                                  observaciones: suministro.observaciones || ''
-                                });
-                                // Ocultar todas las sugerencias después de seleccionar
-                                setShowNameSuggestions(false);
-                                setShowCodeSuggestions(false);
-                              }}
-                              className="text-left p-2 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors text-xs"
-                            >
-                              <div className="font-medium text-gray-900 dark:text-white truncate">
-                                {suministro.nombre}
-                              </div>
-                              <div className="text-gray-500 dark:text-gray-400 truncate text-xs">
-                                {suministro.codigo_producto || suministro.codigo} • {suministro.tipo_suministro || suministro.categoria}
-                              </div>
-                              <div className="text-gray-500 dark:text-gray-400 truncate text-xs">
-                                {suministro.unidad_medida} • {suministro.precio_unitario ? `$${parseFloat(suministro.precio_unitario).toFixed(2)}` : 'Sin precio'}
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                        {proveedorSuministros.length > 6 && (
-                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-2">
-                            +{proveedorSuministros.length - 6} suministros más
-                          </div>
-                        )}
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Cantidad *
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.cantidad}
-                          onChange={(e) => setFormData({...formData, cantidad: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          required
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Unidad de Medida *
-                        </label>
-                        <select
-                          value={formData.unidad_medida}
-                          onChange={(e) => setFormData({...formData, unidad_medida: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          required
-                        >
-                          {Object.entries(UNIDADES_MEDIDA).map(([key, label]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Precio Unitario *
-                      </label>
-                      <div className="relative">
-                        <FaDollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={formData.precio_unitario}
-                          onChange={(e) => {
-                            const formattedValue = handlePriceChange(e.target.value);
-                            setFormData({...formData, precio_unitario: formattedValue});
-                          }}
-                          onBlur={(e) => {
-                            // Al perder el foco, redondear a 2 decimales si es necesario
-                            const value = e.target.value;
-                            if (value && !isNaN(value)) {
-                              const rounded = Math.round(parseFloat(value) * 100) / 100;
-                              setFormData({...formData, precio_unitario: rounded.toFixed(2)});
-                            }
-                          }}
-                          className="w-full pl-10 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                          placeholder="Ej: 520.75"
-                          required
-                        />
-                      </div>
-                      {formData.cantidad && formData.precio_unitario && (
-                        <div className="text-sm mt-1 space-y-1">
-                          <p className="text-green-600 dark:text-green-400 font-medium">
-                            Total: {formatCurrency(parseFloat(formData.cantidad) * parseFloat(formData.precio_unitario))}
-                          </p>
-                          <p className="text-gray-500 dark:text-gray-400 text-xs">
-                            Precio unitario: {formatCurrency(parseFloat(formData.precio_unitario || 0))}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Estado
-                        </label>
-                        <select
-                          value={formData.estado}
-                          onChange={(e) => setFormData({...formData, estado: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                        >
-                          {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
-                            <option key={key} value={key}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <DateInput
-                          label="Fecha"
-                          value={formData.fecha_necesaria}
-                          onChange={(date) => setFormData({...formData, fecha_necesaria: date})}
-                          placeholder="Seleccionar fecha"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Observaciones
-                      </label>
-                      <textarea
-                        value={formData.observaciones}
-                        onChange={(e) => setFormData({...formData, observaciones: e.target.value})}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                        placeholder="Notas adicionales, especificaciones técnicas, etc."
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sección de Información de Recibo */}
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2 flex items-center">
-                    <FaTruck className="mr-2 text-red-600" />
-                    Información de Recibo
-                  </h3>
-                  
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Complete esta sección con la información del recibo físico. Los horarios son opcionales y útiles para el seguimiento logístico.
-                  </p>
-                      
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Operador/Responsable
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.operador_responsable}
-                            onChange={(e) => setFormData({...formData, operador_responsable: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                            placeholder="Ej: Ramiro Leyva López"
-                          />
-                        </div>
-
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                            Vehículo/Camión
-                          </label>
-                          <input
-                            type="text"
-                            value={formData.vehiculo_transporte}
-                            onChange={(e) => setFormData({...formData, vehiculo_transporte: e.target.value})}
-                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                            placeholder="Ej: 19-AV-8P, 22-AM-6R"
-                          />
-                        </div>
-
-                        <TimeInput
-                          label="Hora de Salida"
-                          value={formData.hora_salida}
-                          onChange={(time) => setFormData({...formData, hora_salida: time})}
-                          placeholder="Seleccionar hora de salida"
-                        />
-
-                        <TimeInput
-                          label="Hora de Llegada"
-                          value={formData.hora_llegada}
-                          onChange={(time) => setFormData({...formData, hora_llegada: time})}
-                          placeholder="Seleccionar hora de llegada"
-                        />
-
-                        <TimeInput
-                          label="Inicio de Descarga"
-                          value={formData.hora_inicio_descarga}
-                          onChange={(time) => setFormData({...formData, hora_inicio_descarga: time})}
-                          placeholder="Seleccionar hora de inicio"
-                        />
-
-                        <TimeInput
-                          label="Fin de Descarga"
-                          value={formData.hora_fin_descarga}
-                          onChange={(time) => setFormData({...formData, hora_fin_descarga: time})}
-                          placeholder="Seleccionar hora de fin"
-                        />
-                      </div>
-                </div>
-
-                {/* Botones */}
-                <div className="flex justify-end gap-4 pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-dark-200 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-300 transition-colors duration-200"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200"
-                  >
-                    {editingSuministro ? 'Actualizar' : 'Crear'} Suministro
-                  </button>
-                </div>
-              </form>
-            </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Modal Formulario Múltiple */}
+
+      {/* Modal Formulario Unificado */}
       {showMultipleModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-7xl max-h-[90vh] overflow-y-auto">
-            <FormularioMultipleSuministros
+          <div className="flex items-center justify-center w-full h-full">
+            <FormularioSuministros
+              key={editingRecibo ? `edit-${editingRecibo.id}` : 'new'}
               onSubmit={handleMultipleSubmit}
               onCancel={() => {
                 setShowMultipleModal(false);
@@ -5755,6 +5585,178 @@ const Suministros = () => {
               unidades={unidadesMedida}
               initialData={editingRecibo}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Importación */}
+      {(showImportModal || importFile) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  Importar Suministros
+                </h2>
+                <button
+                  onClick={() => {
+                    setShowImportModal(false);
+                    setImportFile(null);
+                    setValidImportData([]);
+                    setImportErrors([]);
+                  }}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                >
+                  <FaTimes className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6 max-h-[calc(90vh-200px)] overflow-y-auto">
+              {!importFile ? (
+                <div className="text-center py-8">
+                  <FaUpload className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    Selecciona un archivo Excel para importar suministros
+                  </p>
+                  <label className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg inline-flex items-center gap-2 cursor-pointer transition-colors duration-200">
+                    <FaFileExcel className="w-5 h-5" />
+                    Seleccionar Archivo
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleFileImport}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FaFileExcel className="w-5 h-5 text-blue-600" />
+                      <span className="font-medium text-blue-900 dark:text-blue-100">
+                        {importFile.name}
+                      </span>
+                    </div>
+                    <div className="text-sm text-blue-700 dark:text-blue-300">
+                      {validImportData.length} registros válidos, {importErrors.length} errores
+                    </div>
+                  </div>
+
+                  {/* Errores de validación */}
+                  {importErrors.length > 0 && (
+                    <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                      <h3 className="font-medium text-red-900 dark:text-red-100 mb-3 flex items-center gap-2">
+                        <FaTimes className="w-4 h-4" />
+                        Errores de Validación ({importErrors.length})
+                      </h3>
+                      <div className="max-h-40 overflow-y-auto space-y-2">
+                        {importErrors.slice(0, 20).map((error, index) => (
+                          <div key={index} className="text-sm text-red-700 dark:text-red-300">
+                            <span className="font-medium">Fila {error.row}:</span> {error.message}
+                          </div>
+                        ))}
+                        {importErrors.length > 20 && (
+                          <div className="text-sm text-red-600 dark:text-red-400 font-medium">
+                            ... y {importErrors.length - 20} errores más
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vista previa de datos válidos */}
+                  {validImportData.length > 0 && (
+                    <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                      <h3 className="font-medium text-green-900 dark:text-green-100 mb-3 flex items-center gap-2">
+                        <FaFileExcel className="w-4 h-4" />
+                        Datos Válidos ({validImportData.length})
+                      </h3>
+                      <div className="max-h-60 overflow-y-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-green-200 dark:border-green-800">
+                              <th className="text-left py-2 text-green-800 dark:text-green-200">Nombre</th>
+                              <th className="text-left py-2 text-green-800 dark:text-green-200">Código</th>
+                              <th className="text-left py-2 text-green-800 dark:text-green-200">Cantidad</th>
+                              <th className="text-left py-2 text-green-800 dark:text-green-200">Precio</th>
+                              <th className="text-left py-2 text-green-800 dark:text-green-200">Proveedor</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {validImportData.slice(0, 10).map((item, index) => (
+                              <tr key={index} className="border-b border-green-100 dark:border-green-900">
+                                <td className="py-1 text-green-700 dark:text-green-300">{item.nombre}</td>
+                                <td className="py-1 text-green-700 dark:text-green-300">{item.codigo}</td>
+                                <td className="py-1 text-green-700 dark:text-green-300">{item.cantidad}</td>
+                                <td className="py-1 text-green-700 dark:text-green-300">${item.precio_unitario}</td>
+                                <td className="py-1 text-green-700 dark:text-green-300">{item.proveedor_nombre}</td>
+                              </tr>
+                            ))}
+                            {validImportData.length > 10 && (
+                              <tr>
+                                <td colSpan="5" className="py-2 text-center text-green-600 dark:text-green-400 font-medium">
+                                  ... y {validImportData.length - 10} registros más
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Botones del modal */}
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setImportFile(null);
+                  setValidImportData([]);
+                  setImportErrors([]);
+                }}
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-200 rounded-lg transition-colors duration-200"
+              >
+                Cancelar
+              </button>
+              
+              {importFile && (
+                <button
+                  onClick={() => {
+                    setImportFile(null);
+                    setValidImportData([]);
+                    setImportErrors([]);
+                  }}
+                  className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition-colors duration-200"
+                >
+                  Seleccionar Otro Archivo
+                </button>
+              )}
+
+              {validImportData.length > 0 && importErrors.length === 0 && (
+                <button
+                  onClick={handleConfirmImport}
+                  disabled={isProcessingImport}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-green-300 text-white rounded-lg transition-colors duration-200 flex items-center gap-2"
+                >
+                  {isProcessingImport ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      Importando...
+                    </>
+                  ) : (
+                    <>
+                      <FaUpload className="w-4 h-4" />
+                      Importar {validImportData.length} Suministros
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}

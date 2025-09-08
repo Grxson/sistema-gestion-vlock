@@ -93,7 +93,6 @@ export default function Empleados() {
   const fetchContratos = async () => {
     try {
       const response = await apiService.getContratos();
-      console.log('Contratos cargados:', response.contratos); // Debug
       setContratos(response.contratos || []);
     } catch (error) {
       console.error('Error fetching contratos:', error);

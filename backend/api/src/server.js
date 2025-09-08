@@ -8,7 +8,7 @@ const sequelize = require('./config/db');
 
 const startServer = async () => {
   try {
-    console.log('🚀 Iniciando servidor VLock Backend...');
+    console.log('🚀 Iniciando servidor...');
     
     // Intentar conexión a la base de datos con reintentos
     let dbConnected = false;

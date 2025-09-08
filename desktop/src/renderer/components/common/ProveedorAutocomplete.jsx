@@ -172,6 +172,29 @@ const ProveedorAutocomplete = ({
 
   const handleFocus = useCallback(() => {
     setShowDropdown(true);
+    // Si hay query pero no hay sugerencias, buscar inmediatamente
+    if (query.trim() && suggestions.length === 0) {
+      searchProviders(query);
+    }
+    // Si no hay query, mostrar todos los proveedores
+    else if (!query.trim()) {
+      loadAllProviders();
+    }
+  }, [query, suggestions.length, searchProviders]);
+
+  // Función para cargar todos los proveedores
+  const loadAllProviders = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await api.getProveedores();
+      if (response.success && Array.isArray(response.data)) {
+        setSuggestions(response.data.slice(0, 10)); // Mostrar solo los primeros 10
+      }
+    } catch (error) {
+      console.error('Error al cargar proveedores:', error);
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
   return (

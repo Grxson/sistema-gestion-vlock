@@ -6,7 +6,6 @@ const { DataTypes } = require('sequelize');
 // Objeto que contendrá todos los modelos
 const models = {};
 
-console.log("===== FASE 1: INICIALIZACIÓN DE MODELOS =====");
 // Cargar todos los modelos primero
 fs.readdirSync(__dirname)
     .filter(file => file !== 'index.js' && file.endsWith('.model.js'))
@@ -20,10 +19,8 @@ fs.readdirSync(__dirname)
         // Registrar el modelo bajo un nombre estándar
         models[modelName] = model;
 
-        console.log(`Registrando modelo ${file} como: ${modelName} (tabla: ${model.name})`);
     });
 
-console.log("\n===== FASE 2: ESTABLECIMIENTO DE ASOCIACIONES =====");
 // Crear una función segura para establecer las asociaciones
 function safeAssociate(model, modelName) {
     if (!model || typeof model.associate !== 'function') return;
@@ -35,7 +32,6 @@ function safeAssociate(model, modelName) {
         model.associate = function (allModels) {
             try {
                 originalAssociate.call(this, allModels);
-                console.log(`Asociaciones establecidas para: ${modelName}`);
             } catch (error) {
                 console.error(`Error en asociación de ${modelName}: ${error.message}`);
                 // Opcional: implementar corrección específica según el error

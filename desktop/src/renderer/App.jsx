@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
@@ -15,6 +15,7 @@ import Roles from './components/Roles';
 import Reportes from './components/Reportes';
 import Suministros from './pages/Suministros';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
+import { useDocumentTitle } from './hooks/useDocumentTitle';
 
 // Importar componente AccessDenied
 import AccessDenied from './components/AccessDenied';
@@ -26,6 +27,24 @@ function MainApp() {
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const { hasModuleAccess, loading: permissionsLoading } = usePermissions();
+
+  // Mapeo de rutas a títulos
+  const routeTitles = {
+    '/': 'Dashboard',
+    '/empleados': 'Empleados',
+    '/nomina': 'Nómina',
+    '/contratos': 'Contratos',
+    '/oficios': 'Oficios',
+    '/usuarios': 'Usuarios',
+    '/roles': 'Roles',
+    '/reportes': 'Reportes',
+    '/suministros': 'Suministros',
+    '/diagnostico': 'Diagnóstico'
+  };
+
+  // Usar el hook para actualizar el título dinámicamente
+  const currentPageTitle = routeTitles[currentPath] || 'Sistema';
+  useDocumentTitle(currentPageTitle);
 
   const handleNavigate = (path) => {
     setCurrentPath(path);
@@ -141,8 +160,8 @@ function MainApp() {
           <div className="px-6 py-4">
             <div className="flex items-center justify-between">
               <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Sistema de Gestión VLock
-              </h1>
+                {import.meta.env.VITE_APP_FULL_NAME}
+                </h1>
               <div className="flex items-center space-x-4">
                 <div className="text-sm text-gray-500 dark:text-gray-400">
                   {new Date().toLocaleDateString('es-ES', {
