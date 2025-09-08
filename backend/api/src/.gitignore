@@ -12,7 +12,9 @@ yarn-error.log*
 
 # Logs
 logs
+.gitignore
 *.log
+.log
 server.log
 
 # Runtime data

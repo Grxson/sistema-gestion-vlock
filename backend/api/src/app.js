@@ -14,7 +14,7 @@ app.use(morgan('dev'));
 // Ruta de salud para Railway
 app.get('/', (req, res) => {
   res.json({
-    message: 'VLock Backend API está funcionando correctamente',
+    message: 'Backend funcionando correctamente',
     status: 'OK',
     timestamp: new Date().toISOString(),
     version: '1.0.0'
