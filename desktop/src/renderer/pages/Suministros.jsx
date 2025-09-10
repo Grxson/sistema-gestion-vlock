@@ -37,6 +37,8 @@ import {
   exportToPDF, 
   processImportFile 
 } from '../utils/exportUtils';
+import ReportePersonalizadoModal from '../components/ReportePersonalizado/ReportePersonalizadoModal';
+import useReportePersonalizado from '../hooks/useReportePersonalizado';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -174,6 +176,15 @@ const Suministros = () => {
   const [validImportData, setValidImportData] = useState([]);
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [isProcessingImport, setIsProcessingImport] = useState(false);
+
+  // Hook para reporte personalizado
+  const {
+    showReportModal,
+    setShowReportModal,
+    reportConfig,
+    setReportConfig,
+    handleCustomExport
+  } = useReportePersonalizado();
 
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
@@ -5596,10 +5607,21 @@ const Suministros = () => {
                     handleExportToPDF();
                     setShowExportDropdown(false);
                   }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300 rounded-b-lg"
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300"
                 >
                   <FaFilePdf className="w-4 h-4 text-red-600" />
                   Exportar a PDF
+                </button>
+                <hr className="border-gray-200 dark:border-gray-600 mx-2" />
+                <button
+                  onClick={() => {
+                    setShowReportModal(true);
+                    setShowExportDropdown(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300 rounded-b-lg"
+                >
+                  <FaChartBar className="w-4 h-4 text-blue-600" />
+                  Reporte Personalizado
                 </button>
               </div>
             )}
@@ -5800,6 +5822,46 @@ const Suministros = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Configuración de Reporte Personalizado */}
+      <ReportePersonalizadoModal
+        showModal={showReportModal}
+        setShowModal={setShowReportModal}
+        reportConfig={reportConfig}
+        setReportConfig={setReportConfig}
+        handleCustomExport={(format) => handleCustomExport(format, filteredSuministros, {
+          busqueda: searchTerm,
+          proyecto: filters.proyecto,
+          proveedor: filters.proveedor,
+          estado: filters.estado,
+          fechaInicio: filters.fechaInicio,
+          fechaFin: filters.fechaFin
+        }, proyectos, proveedores)}
+        availableCharts={[
+          // Análisis Financiero
+          { key: 'gastosPorMes', label: 'Gastos por Mes' },
+          { key: 'valorPorCategoria', label: 'Valor por Categoría' },
+          { key: 'gastosPorProyecto', label: 'Gastos por Proyecto' },
+          { key: 'gastosPorProveedor', label: 'Gastos por Proveedor' },
+          // Análisis de Cantidad y Estado
+          { key: 'suministrosPorMes', label: 'Cantidad por Mes' },
+          { key: 'cantidadPorEstado', label: 'Cantidad por Estado' },
+          { key: 'distribucionTipos', label: 'Distribución de Tipos' },
+          { key: 'tendenciaEntregas', label: 'Tendencia de Entregas' },
+          // Análisis Técnico
+          { key: 'codigosProducto', label: 'Códigos de Producto' },
+          { key: 'analisisTecnicoConcreto', label: 'Análisis Técnico' },
+          { key: 'concretoDetallado', label: 'Concreto Detallado' },
+          // Análisis por Unidades de Medida
+          { key: 'totalM3Concreto', label: 'Total m³ (Concreto)' },
+          { key: 'distribucionPorUnidades', label: 'Distribución por Unidades' },
+          // Análisis de Horas (Maquinaria y Equipos)
+          { key: 'horasPorMes', label: 'Horas por Mes' },
+          { key: 'horasPorProyecto', label: 'Horas por Proyecto' },
+          { key: 'topEquiposPorHoras', label: 'Top Equipos por Horas' },
+          { key: 'horasVsCosto', label: 'Horas vs Costo' }
+        ]}
+      />
 
       {/* Modales de confirmación mejorados */}
       <SuministroDeleteConfirmModal

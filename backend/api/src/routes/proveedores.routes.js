@@ -9,6 +9,9 @@ router.use(verifyToken);
 // Obtener estadísticas de proveedores
 router.get('/stats', proveedoresController.getProveedoresStats);
 
+// Obtener solo proveedores activos (para desplegables)
+router.get('/active', proveedoresController.getActiveProveedores);
+
 // Buscar proveedores (para autocomplete)
 router.get('/search', proveedoresController.searchProveedores);
 

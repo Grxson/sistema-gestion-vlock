@@ -304,7 +304,7 @@ const exportDashboardCustomToPDF = async (req, res) => {
     try {
         console.log('Recibiendo datos para PDF personalizado:', JSON.stringify(req.body, null, 2));
         
-        const requestData = req.body;
+        const data = req.body;
         
         // Crear documento PDF en formato horizontal
         const doc = new PDFDocument({ 
@@ -329,12 +329,12 @@ const exportDashboardCustomToPDF = async (req, res) => {
         // Header del documento
         doc.fontSize(24)
            .fillColor(colors.primary)
-           .text(requestData.title || 'Reporte de Suministros y Materiales', 40, 40);
+           .text(data.title || 'Reporte de Suministros y Materiales', 40, 40);
            
-        if (requestData.subtitle) {
+        if (data.subtitle) {
             doc.fontSize(14)
                .fillColor(colors.secondary)
-               .text(requestData.subtitle, 40, 75);
+               .text(data.subtitle, 40, 75);
         }
 
         // Fecha de generación
@@ -345,7 +345,7 @@ const exportDashboardCustomToPDF = async (req, res) => {
         let currentY = 130;
 
         // Información de filtros aplicados
-        if (requestData.filters && Object.keys(requestData.filters).some(key => requestData.filters[key])) {
+        if (data.filters && Object.keys(data.filters).some(key => data.filters[key])) {
             doc.fontSize(14)
                .fillColor(colors.primary)
                .text('Filtros Aplicados:', 40, currentY);
@@ -354,9 +354,9 @@ const exportDashboardCustomToPDF = async (req, res) => {
             doc.fontSize(10)
                .fillColor(colors.secondary);
 
-            const filtros = requestData.filters;
-            if (filtros.busqueda) {
-                doc.text(`Búsqueda: ${filtros.busqueda}`, 60, currentY);
+            const filtros = data.filters;
+            if (filtros.fechaInicio || filtros.fechaFin) {
+                doc.text(`Período: ${filtros.fechaInicio || 'Sin fecha inicial'} - ${filtros.fechaFin || 'Sin fecha final'}`, 60, currentY);
                 currentY += 15;
             }
             if (filtros.proyecto) {
@@ -367,74 +367,57 @@ const exportDashboardCustomToPDF = async (req, res) => {
                 doc.text(`Proveedor: ${filtros.proveedor}`, 60, currentY);
                 currentY += 15;
             }
-            if (filtros.estado) {
-                doc.text(`Estado: ${filtros.estado}`, 60, currentY);
+            if (filtros.busqueda) {
+                doc.text(`Búsqueda: ${filtros.busqueda}`, 60, currentY);
                 currentY += 15;
             }
             currentY += 20;
         }
 
         // Estadísticas generales
-        if (requestData.statistics) {
-            // Verificar si hay espacio suficiente, si no, nueva página
-            if (currentY > 400) {
-                doc.addPage();
-                currentY = 40;
-            }
-
+        if (data.includeStatistics && data.statistics) {
             doc.fontSize(16)
                .fillColor(colors.primary)
                .text('Estadísticas Generales', 40, currentY);
             currentY += 30;
 
-            const stats = requestData.statistics;
+            const stats = data.statistics;
             
-            // Crear una caja con fondo para las estadísticas principales
-            doc.rect(40, currentY, 720, 80)
-               .fillAndStroke('#f8f9fa', '#e9ecef');
-            
-            // Estadísticas principales en línea
-            const boxY = currentY + 15;
-            const statWidth = 180;
-            
-            // Total de registros
-            doc.fontSize(14)
-               .fillColor(colors.primary)
-               .text(stats.total?.toLocaleString() || '0', 50, boxY)
-               .fontSize(9)
-               .fillColor(colors.secondary)
-               .text('Total Registros', 50, boxY + 20);
-            
-            // Valor total
-            const valorTotal = stats.totalValue || 0;
-            doc.fontSize(14)
-               .fillColor(colors.primary)
-               .text(`$${valorTotal.toLocaleString('es-CO', { minimumFractionDigits: 0 })}`, 230, boxY)
-               .fontSize(9)
-               .fillColor(colors.secondary)
-               .text('Valor Total', 230, boxY + 20);
-            
-            // Stock bajo
-            doc.fontSize(14)
-               .fillColor('#dc3545')
-               .text((stats.lowStock || 0).toString(), 410, boxY)
-               .fontSize(9)
-               .fillColor(colors.secondary)
-               .text('Stock Bajo', 410, boxY + 20);
-            
-            // Alto valor
-            doc.fontSize(14)
-               .fillColor('#28a745')
-               .text((stats.highValue || 0).toString(), 590, boxY)
-               .fontSize(9)
-               .fillColor(colors.secondary)
-               .text('Alto Valor (>$1M)', 590, boxY + 20);
+            // Crear dos columnas para las estadísticas
+            const col1X = 60;
+            const col2X = 400;
+            const startY = currentY;
 
-            currentY += 100;
+            // Columna 1
+            doc.fontSize(11)
+               .fillColor(colors.secondary)
+               .text('Total de Registros:', col1X, currentY)
+               .fillColor(colors.primary)
+               .text(stats.total?.toLocaleString() || '0', col1X + 120, currentY);
+            currentY += 20;
 
-            // Mostrar categorías si existen
+            doc.fillColor(colors.secondary)
+               .text('Valor Total:', col1X, currentY)
+               .fillColor(colors.primary)
+               .text(`$${stats.totalValue?.toLocaleString() || '0'}`, col1X + 120, currentY);
+            currentY += 20;
+
+            doc.fillColor(colors.secondary)
+               .text('Stock Bajo:', col1X, currentY)
+               .fillColor(colors.primary)
+               .text(stats.lowStock?.toString() || '0', col1X + 120, currentY);
+
+            // Columna 2
+            currentY = startY;
+            doc.fillColor(colors.secondary)
+               .text('Valores Altos:', col2X, currentY)
+               .fillColor(colors.primary)
+               .text(stats.highValue?.toString() || '0', col2X + 120, currentY);
+            currentY += 20;
+
+            // Categorías
             if (stats.byCategory && Object.keys(stats.byCategory).length > 0) {
-                currentY += 20; // Usar currentY actual en lugar de startY indefinido
+                currentY = startY + 60;
                 doc.fontSize(12)
                    .fillColor(colors.primary)
                    .text('Por Categorías:', 60, currentY);
@@ -454,7 +437,7 @@ const exportDashboardCustomToPDF = async (req, res) => {
         }
 
         // Tabla de datos
-        if (requestData.data && requestData.data.length > 0) {
+        if (data.includeTable && data.data && data.data.length > 0) {
             // Verificar si hay espacio suficiente, si no, nueva página
             if (currentY > 400) {
                 doc.addPage();
@@ -467,7 +450,7 @@ const exportDashboardCustomToPDF = async (req, res) => {
             currentY += 30;
 
             // Headers de la tabla
-            const tableHeaders = requestData.tableFormat === 'enumerated' 
+            const tableHeaders = data.tableFormat === 'enumerated' 
                 ? ['#', 'Descripción', 'Cantidad', 'Precio Unit.', 'Total', 'Proyecto', 'Proveedor']
                 : ['ID', 'Descripción', 'Cantidad', 'Precio Unit.', 'Total', 'Proyecto', 'Proveedor'];
             
@@ -488,13 +471,13 @@ const exportDashboardCustomToPDF = async (req, res) => {
             currentY += 20;
 
             // Datos de la tabla (limitados por espacio)
-            const maxRows = Math.min(requestData.data.length, 15); // Limitar filas para que quepa
+            const maxRows = Math.min(data.data.length, 15); // Limitar filas para que quepa
             for (let i = 0; i < maxRows; i++) {
-                const row = requestData.data[i];
+                const row = data.data[i];
                 tableX = tableStartX;
                 
                 const rowData = [
-                    requestData.tableFormat === 'enumerated' ? (i + 1).toString() : row.id_suministro?.toString() || '',
+                    data.tableFormat === 'enumerated' ? (i + 1).toString() : row.id_suministro?.toString() || '',
                     row.descripcion || '',
                     row.cantidad?.toString() || '',
                     `$${parseFloat(row.precio_unitario || 0).toFixed(2)}`,
@@ -525,16 +508,16 @@ const exportDashboardCustomToPDF = async (req, res) => {
                 }
             }
 
-            if (requestData.data.length > maxRows) {
+            if (data.data.length > maxRows) {
                 currentY += 10;
                 doc.fontSize(10)
                    .fillColor(colors.secondary)
-                   .text(`... y ${requestData.data.length - maxRows} registros más`, tableStartX, currentY);
+                   .text(`... y ${data.data.length - maxRows} registros más`, tableStartX, currentY);
             }
         }
 
         // Gráficos (información textual)
-        if (requestData.includeCharts && requestData.charts) {
+        if (data.includeCharts && data.charts) {
             if (currentY > 450) {
                 doc.addPage();
                 currentY = 40;
@@ -545,7 +528,7 @@ const exportDashboardCustomToPDF = async (req, res) => {
                .text('Gráficos Incluidos', 40, currentY);
             currentY += 30;
 
-            const selectedCharts = Object.entries(requestData.charts)
+            const selectedCharts = Object.entries(data.charts)
                 .filter(([key, value]) => value === true)
                 .map(([key]) => key);
 
@@ -618,198 +601,7 @@ const exportDashboardCustomToPDF = async (req, res) => {
     }
 };
 
-/**
- * Exportar dashboard de suministros a PDF (básico)
- */
-const exportDashboardToPDF = async (req, res) => {
-    try {
-        // Obtener datos del dashboard
-        const dashboardData = await getDashboardData(req.query);
-        
-        // Crear configuración básica
-        const config = {
-            title: 'Reporte de Suministros y Materiales',
-            subtitle: 'Dashboard Estándar',
-            includeFilters: true,
-            includeStats: true,
-            includeData: true
-        };
-        
-        // Gráficos activos por defecto
-        const activeCharts = {
-            consumoPorObra: { enabled: true },
-            distribucionProveedores: { enabled: true },
-            categorias: { enabled: true },
-            consumoMensual: { enabled: true }
-        };
-        
-        // Reutilizar la función personalizada
-        req.body = { config, activeCharts, dashboardData, ...req.query };
-        return await exportDashboardCustomToPDF(req, res);
-        
-    } catch (error) {
-        console.error('Error exportando a PDF:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al generar el reporte PDF',
-            error: error.message
-        });
-    }
-};
-
-/**
- * Exportar dashboard de suministros a Excel (básico)
- */
-const exportDashboardToExcel = async (req, res) => {
-    try {
-        // Obtener datos del dashboard
-        const dashboardData = await getDashboardData(req.query);
-        
-        // Crear configuración básica
-        const config = {
-            title: 'Reporte de Suministros y Materiales',
-            subtitle: 'Dashboard Estándar',
-            includeFilters: true,
-            includeStats: true,
-            includeData: true
-        };
-        
-        // Gráficos activos por defecto
-        const activeCharts = {
-            consumoPorObra: { enabled: true },
-            distribucionProveedores: { enabled: true },
-            categorias: { enabled: true },
-            consumoMensual: { enabled: true }
-        };
-        
-        // Reutilizar la función personalizada
-        req.body = { config, activeCharts, dashboardData, ...req.query };
-        return await exportDashboardCustomToExcel(req, res);
-        
-    } catch (error) {
-        console.error('Error exportando a Excel:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al generar el reporte Excel',
-            error: error.message
-        });
-    }
-};
-
-/**
- * Exportar dashboard personalizado a Excel
- */
-const exportDashboardCustomToExcel = async (req, res) => {
-    try {
-        const { config, activeCharts, dashboardData, ...filtros } = req.body;
-        
-        // Crear workbook
-        const workbook = new ExcelJS.Workbook();
-        workbook.creator = 'Sistema VLock';
-        workbook.created = new Date();
-
-        // Hoja principal con resumen
-        const summarySheet = workbook.addWorksheet('Resumen');
-        
-        // Configurar columnas
-        summarySheet.columns = [
-            { header: 'Concepto', key: 'concepto', width: 30 },
-            { header: 'Valor', key: 'valor', width: 20 }
-        ];
-
-        // Título
-        summarySheet.mergeCells('A1:B1');
-        summarySheet.getCell('A1').value = config.title || 'Reporte de Suministros y Materiales';
-        summarySheet.getCell('A1').style = {
-            font: { size: 16, bold: true },
-            alignment: { horizontal: 'center' }
-        };
-
-        let currentRow = 3;
-
-        // Información básica
-        summarySheet.getCell(`A${currentRow}`).value = 'Fecha de Generación:';
-        summarySheet.getCell(`B${currentRow}`).value = new Date().toLocaleDateString('es-MX');
-        currentRow++;
-
-        if (config.subtitle) {
-            summarySheet.getCell(`A${currentRow}`).value = 'Subtítulo:';
-            summarySheet.getCell(`B${currentRow}`).value = config.subtitle;
-            currentRow++;
-        }
-
-        // Generar buffer del archivo Excel
-        const buffer = await workbook.xlsx.writeBuffer();
-        
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${config.title?.replace(/\s+/g, '_') || 'reporte'}.xlsx"`);
-        res.send(buffer);
-
-    } catch (error) {
-        console.error('Error exportando Excel personalizado:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al generar el reporte Excel personalizado',
-            error: error.message
-        });
-    }
-};
-
-/**
- * Obtener reporte comparativo entre obras (funcionalidad legacy)
- */
-const getReporteComparativo = async (req, res) => {
-    try {
-        const { obras, fecha_inicio, fecha_fin } = req.body;
-        
-        // Por ahora devolvemos datos de ejemplo para mantener compatibilidad
-        const comparativo = [
-            {
-                obra: 'Flex Park',
-                descripcion: 'Retroexcavadora 415F',
-                total_cantidad: 25.0,
-                total_entregas: 15,
-                promedio_entrega: 1.67
-            }
-        ];
-
-        res.json({
-            success: true,
-            data: comparativo
-        });
-        
-    } catch (error) {
-        console.error('Error en reporte comparativo:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error al generar reporte comparativo',
-            error: error.message
-        });
-    }
-};
-
-// Función auxiliar para obtener datos del dashboard
-const getDashboardData = async (filtros) => {
-    // Retornar datos básicos para compatibilidad
-    return {
-        estadisticasGenerales: {
-            total_registros: 0,
-            total_gastado: 0,
-            total_proveedores: 0,
-            total_obras: 0
-        },
-        consumoPorObra: [],
-        distribicionProveedores: [],
-        analisisCategorias: [],
-        consumoMensual: []
-    };
-};
-
 module.exports = {
     getDashboardSuministros,
-    exportDashboardToPDF,
-    exportDashboardToExcel,
-    exportDashboardCustomToPDF,
-    exportDashboardCustomToExcel,
-    getReporteComparativo
+    exportDashboardCustomToPDF
 };

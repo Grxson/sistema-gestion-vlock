@@ -24,9 +24,9 @@ module.exports = (sequelize) => {
       comment: 'Razón social completa'
     },
     telefono: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(100),
       allowNull: true,
-      comment: 'Teléfono de contacto'
+      comment: 'Teléfonos de contacto (separados por comas si son múltiples)'
     },
     email: {
       type: DataTypes.STRING(100),

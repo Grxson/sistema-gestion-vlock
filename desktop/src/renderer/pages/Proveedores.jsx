@@ -26,6 +26,7 @@ import api from '../services/api';
 import ProveedorModal from '../components/proveedores/ProveedorModal';
 import ProveedorDetailsModal from '../components/proveedores/ProveedorDetailsModal';
 import DeleteConfirmModal from '../components/proveedores/DeleteConfirmModal';
+import ProveedorDeactivateModal from '../components/proveedores/ProveedorDeactivateModal';
 import ProveedorFilters from '../components/proveedores/ProveedorFilters';
 import ProveedorCard from '../components/proveedores/ProveedorCard';
 import ProveedorStats from '../components/proveedores/ProveedorStats';
@@ -66,9 +67,12 @@ const Proveedores = () => {
   const [showModal, setShowModal] = useState(false);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
   const [editingProveedor, setEditingProveedor] = useState(null);
   const [viewingProveedor, setViewingProveedor] = useState(null);
   const [deletingProveedor, setDeletingProveedor] = useState(null);
+  const [deactivatingProveedor, setDeactivatingProveedor] = useState(null);
+  const [suministrosData, setSuministrosData] = useState(null);
   const [deleteType, setDeleteType] = useState('deactivate'); // 'deactivate', 'activate', 'delete'
   const [isModalLoading, setIsModalLoading] = useState(false);
   
@@ -208,6 +212,34 @@ const Proveedores = () => {
     handleOpenDeleteModal(proveedor, 'delete');
   }, [handleOpenDeleteModal]);
 
+  // Handlers para el modal de desactivación con suministros
+  const handleCloseDeactivateModal = useCallback(() => {
+    setShowDeactivateModal(false);
+    setDeactivatingProveedor(null);
+    setSuministrosData(null);
+  }, []);
+
+  const handleConfirmDeactivate = useCallback(async (proveedor, force = false) => {
+    try {
+      setIsModalLoading(true);
+      
+      const response = await api.deleteProveedor(proveedor.id_proveedor, { force });
+      
+      if (response.success) {
+        showSuccess('Éxito', response.message);
+        handleCloseDeactivateModal();
+        cargarProveedores();
+      } else {
+        throw new Error(response.message);
+      }
+    } catch (error) {
+      console.error('Error al desactivar proveedor:', error);
+      showError('Error', error.response?.data?.message || error.message || 'Error al desactivar proveedor');
+    } finally {
+      setIsModalLoading(false);
+    }
+  }, [showSuccess, showError, handleCloseDeactivateModal, cargarProveedores]);
+
   const handleSubmitProveedor = useCallback(async (proveedorData) => {
     console.log('🚀 [Proveedores] handleSubmitProveedor iniciado con datos:', proveedorData);
     try {
@@ -247,7 +279,7 @@ const Proveedores = () => {
     }
   }, [editingProveedor, showSuccess, showError, handleCloseModal, cargarProveedores]);
 
-  // Handler para eliminar/desactivar proveedor (nueva versión)
+  // Handler para eliminar/desactivar proveedor (nueva versión mejorada)
   const handleConfirmAction = useCallback(async (proveedor) => {
     try {
       setIsModalLoading(true);
@@ -281,7 +313,35 @@ const Proveedores = () => {
       }
     } catch (error) {
       console.error('Error en acción del proveedor:', error);
-      showError('Error', error.response?.data?.message || error.message || 'Error en la operación');
+      
+      // Manejar específicamente el caso de conflicto con suministros asociados
+      const errorResponse = error.response?.data;
+      if (error.response?.status === 409 && errorResponse?.hasAssociatedData) {
+        // Cerrar modal actual y abrir modal especializado
+        handleCloseDeleteModal();
+        setSuministrosData(errorResponse);
+        setDeactivatingProveedor(proveedor);
+        setShowDeactivateModal(true);
+        return;
+      }
+      
+      // Manejar otros tipos de errores de suministros asociados
+      if (errorResponse?.hasAssociatedData) {
+        const suministrosCount = errorResponse.suministrosCount;
+        showError(
+          'No se puede proceder', 
+          `🚫 El proveedor "${proveedor.nombre}" tiene ${suministrosCount} suministros registrados. 
+          
+          📋 Para continuar, debe:
+          • Eliminar los suministros asociados
+          • O transferirlos a otro proveedor
+          
+          ⚠️ Esta validación protege la integridad de los datos.`
+        );
+      } else {
+        // Error genérico
+        showError('Error', errorResponse?.message || error.message || 'Error en la operación');
+      }
     } finally {
       setIsModalLoading(false);
     }
@@ -556,6 +616,17 @@ const Proveedores = () => {
           type={deleteType}
           onClose={handleCloseDeleteModal}
           onConfirm={handleConfirmAction}
+          loading={isModalLoading}
+        />
+      )}
+
+      {/* Modal de Desactivación con Suministros */}
+      {showDeactivateModal && (
+        <ProveedorDeactivateModal
+          proveedor={deactivatingProveedor}
+          suministrosData={suministrosData}
+          onClose={handleCloseDeactivateModal}
+          onConfirm={handleConfirmDeactivate}
           loading={isModalLoading}
         />
       )}

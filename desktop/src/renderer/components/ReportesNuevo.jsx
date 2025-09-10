@@ -173,7 +173,7 @@ export default function Reportes() {
             </h3>
             <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
               {activeTab === 'suministros' && 
-                'Análisis completo con datos reales de suministros. Incluye filtros avanzados y exportación personalizada a PDF/Excel.'
+                'Análisis completo con datos reales de suministros. Incluye filtros avanzados y exportación a PDF/Excel.'
               }
               {activeTab === 'nomina' && 
                 'Próximamente: análisis detallado de costos laborales y rendimiento de empleados.'

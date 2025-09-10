@@ -59,12 +59,12 @@ const ProveedorAutocomplete = ({
 
     setIsLoading(true);
     try {
-      const response = await api.searchProveedores(searchQuery);
+      const response = await api.getActiveProveedores(searchQuery);
       if (response.success) {
         setSuggestions(response.data || []);
       }
     } catch (error) {
-      console.error('Error buscando proveedores:', error);
+      console.error('Error buscando proveedores activos:', error);
       setSuggestions([]);
     } finally {
       setIsLoading(false);
@@ -199,16 +199,16 @@ const ProveedorAutocomplete = ({
     }
   }, [query, suggestions.length, searchProviders]);
 
-  // Función para cargar todos los proveedores
+  // Función para cargar todos los proveedores ACTIVOS
   const loadAllProviders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await api.getProveedores();
+      const response = await api.getActiveProveedores(''); // Usar proveedores activos solamente
       if (response.success && Array.isArray(response.data)) {
         setSuggestions(response.data.slice(0, 10)); // Mostrar solo los primeros 10
       }
     } catch (error) {
-      console.error('Error al cargar proveedores:', error);
+      console.error('Error al cargar proveedores activos:', error);
     } finally {
       setIsLoading(false);
     }
