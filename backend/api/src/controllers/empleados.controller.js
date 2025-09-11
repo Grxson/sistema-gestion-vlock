@@ -3,6 +3,7 @@ const sequelize = require('../config/db');
 const Empleado = models.Empleados;
 const Contrato = models.Contratos;
 const Oficio = models.Oficios;
+const Proyecto = models.Proyectos;
 const { Op } = require('sequelize');
 
 /**
@@ -12,17 +13,34 @@ const { Op } = require('sequelize');
  */
 const getAllEmpleados = async (req, res) => {
     try {
+        const { proyecto, oficio, activo } = req.query;
+        
+        // Construir filtros dinámicos
+        const whereClause = {};
+        if (proyecto) whereClause.id_proyecto = proyecto;
+        if (oficio) whereClause.id_oficio = oficio;
+        if (activo !== undefined) whereClause.activo = activo === 'true';
+
         const empleados = await Empleado.findAll({
+            where: whereClause,
             include: [
                 { 
                     model: Contrato, 
                     as: 'contrato',
+                    required: false,
                     attributes: { exclude: ['createdAt', 'updatedAt'] }
                 },
                 { 
                     model: Oficio, 
                     as: 'oficio',
+                    required: false,
                     attributes: { exclude: ['createdAt', 'updatedAt'] }
+                },
+                { 
+                    model: Proyecto, 
+                    as: 'proyecto',
+                    required: false,
+                    attributes: ['id_proyecto', 'nombre', 'descripcion']
                 }
             ],
             attributes: { exclude: ['createdAt', 'updatedAt'] }
@@ -55,12 +73,20 @@ const getEmpleadoById = async (req, res) => {
                 { 
                     model: Contrato, 
                     as: 'contrato',
+                    required: false,
                     attributes: { exclude: ['createdAt', 'updatedAt'] }
                 },
                 { 
                     model: Oficio, 
                     as: 'oficio',
+                    required: false,
                     attributes: { exclude: ['createdAt', 'updatedAt'] }
+                },
+                { 
+                    model: Proyecto, 
+                    as: 'proyecto',
+                    required: false,
+                    attributes: ['id_proyecto', 'nombre', 'descripcion']
                 }
             ],
             attributes: { exclude: ['createdAt', 'updatedAt'] }
@@ -92,40 +118,43 @@ const getEmpleadoById = async (req, res) => {
  */
 const createEmpleado = async (req, res) => {
     try {
-        const { 
-            nombre, apellido, nss, telefono, contacto_emergencia, 
-            telefono_emergencia, banco, cuenta_bancaria, id_contrato, 
-            id_oficio, fecha_alta
+        console.log('Datos recibidos para crear empleado:', req.body);
+        
+        const {
+            nombre,
+            apellido,
+            nss,
+            telefono,
+            contacto_emergencia,
+            telefono_emergencia,
+            banco,
+            cuenta_bancaria,
+            id_contrato,
+            id_oficio,
+            id_proyecto,
+            pago_diario
         } = req.body;
 
-        // Validación básica
-        if (!nombre || !apellido || !fecha_alta) {
+        // Validaciones básicas
+        if (!nombre || !apellido || !nss || !id_oficio) {
             return res.status(400).json({
-                message: 'Nombre, apellido y fecha de alta son campos obligatorios'
+                success: false,
+                message: 'Los campos nombre, apellido, NSS y oficio son obligatorios'
             });
         }
 
-        // Verificar si el contrato existe (si se proporciona id_contrato)
-        if (id_contrato) {
-            const contratoExiste = await Contrato.findByPk(id_contrato);
-            if (!contratoExiste) {
-                return res.status(400).json({
-                    message: `El contrato con ID ${id_contrato} no existe`
-                });
-            }
+        // Verificar que el NSS no esté duplicado
+        const empleadoExistente = await Empleado.findOne({
+            where: { nss }
+        });
+
+        if (empleadoExistente) {
+            return res.status(400).json({
+                success: false,
+                message: 'Ya existe un empleado con este NSS'
+            });
         }
 
-        // Verificar si el oficio existe (si se proporciona id_oficio)
-        if (id_oficio) {
-            const oficioExiste = await Oficio.findByPk(id_oficio);
-            if (!oficioExiste) {
-                return res.status(400).json({
-                    message: `El oficio con ID ${id_oficio} no existe`
-                });
-            }
-        }
-
-        // Crear el nuevo empleado
         const nuevoEmpleado = await Empleado.create({
             nombre,
             apellido,
@@ -136,19 +165,23 @@ const createEmpleado = async (req, res) => {
             banco,
             cuenta_bancaria,
             id_contrato: id_contrato || null,
-            id_oficio: id_oficio || null,
-            fecha_alta
+            id_oficio,
+            id_proyecto: id_proyecto || null,
+            pago_diario: pago_diario || null,
+            activo: true,
+            fecha_alta: new Date()
         });
 
         res.status(201).json({
+            success: true,
             message: 'Empleado creado exitosamente',
-            empleado: nuevoEmpleado
+            data: nuevoEmpleado
         });
     } catch (error) {
         console.error('Error al crear empleado:', error);
         res.status(500).json({
-            message: 'Error al crear empleado',
-            error: error.message
+            success: false,
+            message: 'Error interno del servidor al crear el empleado'
         });
     }
 };
@@ -164,13 +197,14 @@ const updateEmpleado = async (req, res) => {
         const { 
             nombre, apellido, nss, telefono, contacto_emergencia, 
             telefono_emergencia, banco, cuenta_bancaria, id_contrato, 
-            id_oficio, fecha_alta, fecha_baja
+            id_oficio, id_proyecto, pago_diario, activo, fecha_alta, fecha_baja
         } = req.body;
 
         // Verificar si existe el empleado
         const empleado = await Empleado.findByPk(id);
         if (!empleado) {
             return res.status(404).json({
+                success: false,
                 message: 'Empleado no encontrado'
             });
         }
@@ -187,17 +221,47 @@ const updateEmpleado = async (req, res) => {
             cuenta_bancaria: cuenta_bancaria !== undefined ? cuenta_bancaria : empleado.cuenta_bancaria,
             id_contrato: id_contrato === '' ? null : (id_contrato !== undefined ? id_contrato : empleado.id_contrato),
             id_oficio: id_oficio === '' ? null : (id_oficio !== undefined ? id_oficio : empleado.id_oficio),
+            id_proyecto: id_proyecto === '' ? null : (id_proyecto !== undefined ? id_proyecto : empleado.id_proyecto),
+            pago_diario: pago_diario === '' ? null : (pago_diario !== undefined ? pago_diario : empleado.pago_diario),
+            activo: activo !== undefined ? activo : empleado.activo,
             fecha_alta: fecha_alta || empleado.fecha_alta,
             fecha_baja: fecha_baja === '' ? null : (fecha_baja !== undefined ? fecha_baja : empleado.fecha_baja)
         });
 
+        // Obtener el empleado actualizado con todas las relaciones
+        const empleadoActualizado = await Empleado.findByPk(id, {
+            include: [
+                { 
+                    model: Contrato, 
+                    as: 'contrato',
+                    required: false,
+                    attributes: { exclude: ['createdAt', 'updatedAt'] }
+                },
+                { 
+                    model: Oficio, 
+                    as: 'oficio',
+                    required: false,
+                    attributes: { exclude: ['createdAt', 'updatedAt'] }
+                },
+                { 
+                    model: Proyecto, 
+                    as: 'proyecto',
+                    required: false,
+                    attributes: ['id_proyecto', 'nombre', 'descripcion']
+                }
+            ],
+            attributes: { exclude: ['createdAt', 'updatedAt'] }
+        });
+
         res.status(200).json({
+            success: true,
             message: 'Empleado actualizado exitosamente',
-            empleado
+            data: empleadoActualizado
         });
     } catch (error) {
         console.error('Error al actualizar empleado:', error);
         res.status(500).json({
+            success: false,
             message: 'Error al actualizar empleado',
             error: error.message
         });
@@ -217,23 +281,70 @@ const deleteEmpleado = async (req, res) => {
         const empleado = await Empleado.findByPk(id);
         if (!empleado) {
             return res.status(404).json({
+                success: false,
                 message: 'Empleado no encontrado'
             });
         }
 
-        // Realizar una baja lógica (establecer fecha de baja)
+        // Verificar si ya está dado de baja
+        if (empleado.fecha_baja) {
+            return res.status(400).json({
+                success: false,
+                message: 'El empleado ya se encuentra dado de baja'
+            });
+        }
+
+        // Realizar una baja lógica (establecer fecha de baja y desactivar)
         await empleado.update({
-            fecha_baja: new Date()
+            fecha_baja: new Date(),
+            activo: false
         });
 
         res.status(200).json({
-            message: 'Empleado dado de baja exitosamente'
+            success: true,
+            message: 'Empleado eliminado exitosamente',
+            data: empleado
         });
     } catch (error) {
         console.error('Error al dar de baja empleado:', error);
         res.status(500).json({
-            message: 'Error al dar de baja empleado',
-            error: error.message
+            success: false,
+            message: 'Error interno del servidor al eliminar el empleado'
+        });
+    }
+};
+
+/**
+ * Eliminar un empleado permanentemente (eliminación física)
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const deleteEmpleadoPermanente = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        // Verificar si existe el empleado
+        const empleado = await Empleado.findByPk(id);
+        if (!empleado) {
+            return res.status(404).json({
+                success: false,
+                message: 'Empleado no encontrado'
+            });
+        }
+
+        // Eliminar permanentemente de la base de datos
+        await empleado.destroy();
+
+        res.status(200).json({
+            success: true,
+            message: 'Empleado eliminado permanentemente del sistema',
+            data: { id: parseInt(id) }
+        });
+    } catch (error) {
+        console.error('Error al eliminar empleado permanentemente:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor al eliminar el empleado permanentemente'
         });
     }
 };
@@ -416,12 +527,101 @@ const getEmpleadosStats = async (req, res) => {
     }
 };
 
+/**
+ * Activar un empleado
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const activarEmpleado = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const empleado = await Empleado.findByPk(id);
+        if (!empleado) {
+            return res.status(404).json({
+                success: false,
+                message: 'Empleado no encontrado'
+            });
+        }
+
+        if (empleado.activo) {
+            return res.status(400).json({
+                success: false,
+                message: 'El empleado ya se encuentra activo'
+            });
+        }
+
+        await empleado.update({ 
+            activo: true,
+            fecha_baja: null
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Empleado activado exitosamente',
+            data: empleado
+        });
+    } catch (error) {
+        console.error('Error al activar empleado:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor al activar el empleado'
+        });
+    }
+};
+
+/**
+ * Desactivar un empleado
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const desactivarEmpleado = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const empleado = await Empleado.findByPk(id);
+        if (!empleado) {
+            return res.status(404).json({
+                success: false,
+                message: 'Empleado no encontrado'
+            });
+        }
+
+        if (!empleado.activo) {
+            return res.status(400).json({
+                success: false,
+                message: 'El empleado ya se encuentra inactivo'
+            });
+        }
+
+        await empleado.update({ 
+            activo: false,
+            fecha_baja: new Date()
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Empleado desactivado exitosamente',
+            data: empleado
+        });
+    } catch (error) {
+        console.error('Error al desactivar empleado:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor al desactivar el empleado'
+        });
+    }
+};
+
 module.exports = {
     getAllEmpleados,
     getEmpleadoById,
     createEmpleado,
     updateEmpleado,
     deleteEmpleado,
+    deleteEmpleadoPermanente,
     searchEmpleados,
-    getEmpleadosStats
+    getEmpleadosStats,
+    activarEmpleado,
+    desactivarEmpleado
 };

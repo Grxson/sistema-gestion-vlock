@@ -21,7 +21,8 @@ import {
   WrenchScrewdriverIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  BuildingStorefrontIcon
+  BuildingStorefrontIcon,
+  RectangleGroupIcon
 } from '@heroicons/react/24/outline';
 
 
@@ -30,6 +31,7 @@ import {
 const navigationItems = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, current: true, permissionModule: 'dashboard' },
   { name: 'Empleados', href: '/empleados', icon: UserGroupIcon, current: false, permissionModule: 'empleados' },
+  { name: 'Proyectos', href: '/proyectos', icon: RectangleGroupIcon, current: false, permissionModule: 'proyectos' },
   { name: 'Nómina', href: '/nomina', icon: CurrencyDollarIcon, current: false, permissionModule: 'nomina' },
   { name: 'Contratos', href: '/contratos', icon: DocumentTextIcon, current: false, permissionModule: 'contratos' },
   { name: 'Oficios', href: '/oficios', icon: BuildingOfficeIcon, current: false, permissionModule: 'oficios' },

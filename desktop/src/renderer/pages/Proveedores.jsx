@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { STANDARD_ICONS } from '../constants/icons';
 import { 
-  FaPlus, 
-  FaEdit, 
-  FaTrash, 
   FaSearch, 
   FaFilter,
   FaBuilding,
@@ -10,7 +8,6 @@ import {
   FaEnvelope,
   FaMapMarkerAlt,
   FaCog,
-  FaEye,
   FaChevronDown,
   FaChevronUp,
   FaTimes,
@@ -452,7 +449,7 @@ const Proveedores = () => {
                 onClick={() => handleOpenModal()}
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
               >
-                <FaPlus className="w-4 h-4 mr-2" />
+                <STANDARD_ICONS.CREATE className="w-4 h-4 mr-2" />
                 Nuevo Proveedor
               </button>
             )}

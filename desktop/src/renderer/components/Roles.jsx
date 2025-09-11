@@ -1,10 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
 import PermissionDenied from './PermissionDenied';
+import { STANDARD_ICONS } from '../constants/icons';
 import {
-  PlusIcon,
-  PencilIcon,
-  TrashIcon,
   MagnifyingGlassIcon,
   ShieldCheckIcon,
   CheckCircleIcon,
@@ -336,7 +334,7 @@ export default function Roles() {
           }}
           className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 hover:shadow-md"
         >
-          <PlusIcon className="h-4 w-4 mr-2" />
+          <STANDARD_ICONS.CREATE className="h-4 w-4 mr-2" />
           Nuevo Rol
         </button>
       </div>
@@ -392,14 +390,14 @@ export default function Roles() {
                       className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300 p-1"
                       title="Editar"
                     >
-                      <PencilIcon className="h-4 w-4" />
+                      <STANDARD_ICONS.EDIT className="h-4 w-4" />
                     </button>
                     <button
                       onClick={() => handleDelete(rol.id_rol)}
                       className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 p-1"
                       title="Eliminar"
                     >
-                      <TrashIcon className="h-4 w-4" />
+                      <STANDARD_ICONS.DELETE className="h-4 w-4" />
                     </button>
                   </div>
                 </div>

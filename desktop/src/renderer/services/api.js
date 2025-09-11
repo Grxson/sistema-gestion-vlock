@@ -218,6 +218,14 @@ class ApiService {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
 
+  async patch(endpoint, data = null, options = {}) {
+    return this.request(endpoint, { 
+      ...options, 
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : null
+    });
+  }
+
   // Métodos de autenticación
   async login(credentials) {
     // Adaptar el formato de credenciales si viene 'usuario' en lugar de 'email'
@@ -270,6 +278,10 @@ class ApiService {
 
   async deleteEmpleado(id) {
     return this.delete(`/empleados/${id}`);
+  }
+
+  async deleteEmpleadoPermanente(id) {
+    return this.delete(`/empleados/${id}/permanente`);
   }
 
   async getEmpleadosStats() {

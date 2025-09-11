@@ -39,12 +39,31 @@ module.exports = (sequelize) => {
     id_oficio: {
       type: DataTypes.INTEGER
     },
+    id_proyecto: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'proyectos',
+        key: 'id_proyecto'
+      }
+    },
+    pago_diario: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: true
+    },
+    activo: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true
+    },
     fecha_alta: {
-      type: DataTypes.DATEONLY,
-      allowNull: false
+      type: DataTypes.DATE,
+      allowNull: false,
+      defaultValue: DataTypes.NOW
     },
     fecha_baja: {
-      type: DataTypes.DATEONLY
+      type: DataTypes.DATE,
+      allowNull: true
     }
   }, {
     timestamps: false // Desactivamos createdAt y updatedAt
@@ -53,6 +72,7 @@ module.exports = (sequelize) => {
   Empleado.associate = models => {
     Empleado.belongsTo(models.Contratos, { foreignKey: 'id_contrato', as: 'contrato' });
     Empleado.belongsTo(models.Oficios, { foreignKey: 'id_oficio', as: 'oficio' });
+    Empleado.belongsTo(models.Proyectos, { foreignKey: 'id_proyecto', as: 'proyecto' });
     Empleado.hasMany(models.NominaEmpleados, { foreignKey: 'id_empleado' });
   };
 

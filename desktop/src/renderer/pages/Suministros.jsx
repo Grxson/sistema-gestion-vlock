@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { STANDARD_ICONS } from '../constants/icons';
 import { 
-  FaPlus, 
-  FaEdit, 
-  FaTrash, 
   FaSearch, 
   FaFilter,
   FaBox,
@@ -11,7 +9,6 @@ import {
   FaDollarSign,
   FaBuilding,
   FaDownload,
-  FaEye,
   FaChartBar,
   FaChevronDown,
   FaChevronUp,
@@ -3376,7 +3373,7 @@ const Suministros = () => {
               onClick={() => setShowMultipleModal(true)}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
             >
-              <FaPlus className="w-4 h-4" />
+              <STANDARD_ICONS.CREATE className="w-4 h-4" />
               Nuevo Suministro
             </button>
           </div>
@@ -5258,14 +5255,14 @@ const Suministros = () => {
                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
                                 title="Editar grupo"
                               >
-                                <FaEdit className="w-4 h-4" />
+                                <STANDARD_ICONS.EDIT className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDeleteRecibo(recibo)}
                                 className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
                                 title="Eliminar grupo"
                               >
-                                <FaTrash className="w-4 h-4" />
+                                <STANDARD_ICONS.DELETE className="w-4 h-4" />
                               </button>
                             </div>
                           </td>
@@ -5337,14 +5334,14 @@ const Suministros = () => {
                                     className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
                                     title="Editar individual"
                                   >
-                                    <FaEdit className="w-4 h-4" />
+                                    <STANDARD_ICONS.EDIT className="w-4 h-4" />
                                   </button>
                                   <button
                                     onClick={() => handleDelete(suministro.id_suministro)}
                                     className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
                                     title="Eliminar"
                                   >
-                                    <FaTrash className="w-4 h-4" />
+                                    <STANDARD_ICONS.DELETE className="w-4 h-4" />
                                   </button>
                                 </div>
                               </td>
@@ -5432,14 +5429,14 @@ const Suministros = () => {
                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
                                 title="Editar"
                               >
-                                <FaEdit className="w-4 h-4" />
+                                <STANDARD_ICONS.EDIT className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDelete(suministro.id_suministro)}
                                 className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
                                 title="Eliminar"
                               >
-                                <FaTrash className="w-4 h-4" />
+                                <STANDARD_ICONS.DELETE className="w-4 h-4" />
                               </button>
                             </div>
                           </td>

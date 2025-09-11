@@ -27,4 +27,13 @@ router.put('/:id', verifyRole([1]), empleadosController.updateEmpleado);
 // Eliminar empleado (baja lógica)
 router.delete('/:id', verifyRole([1]), empleadosController.deleteEmpleado);
 
+// Eliminar empleado permanentemente
+router.delete('/:id/permanente', verifyRole([1]), empleadosController.deleteEmpleadoPermanente);
+
+// Activar empleado
+router.patch('/:id/activar', verifyRole([1]), empleadosController.activarEmpleado);
+
+// Desactivar empleado
+router.patch('/:id/desactivar', verifyRole([1]), empleadosController.desactivarEmpleado);
+
 module.exports = router;

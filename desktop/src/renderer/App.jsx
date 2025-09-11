@@ -15,6 +15,7 @@ import Roles from './components/Roles';
 import Reportes from './components/Reportes';
 import Suministros from './pages/Suministros';
 import Proveedores from './pages/Proveedores';
+import Proyectos from './pages/Proyectos';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 
@@ -33,6 +34,7 @@ function MainApp() {
   const routeTitles = {
     '/': 'Dashboard',
     '/empleados': 'Empleados',
+    '/proyectos': 'Proyectos',
     '/nomina': 'Nómina',
     '/contratos': 'Contratos',
     '/oficios': 'Oficios',
@@ -90,6 +92,7 @@ function MainApp() {
       // Mostrar componente de acceso denegado con el nombre del módulo
       const moduleNames = {
         empleados: 'Empleados',
+        proyectos: 'Proyectos',
         nomina: 'Nómina',
         contratos: 'Contratos',
         oficios: 'Oficios',
@@ -108,6 +111,8 @@ function MainApp() {
     switch (currentPath) {
       case '/empleados':
         return <Empleados />;
+      case '/proyectos':
+        return <Proyectos />;
       case '/nomina':
         return <Nomina />;
       case '/contratos':
