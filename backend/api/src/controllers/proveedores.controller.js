@@ -48,6 +48,50 @@ const getProveedores = async (req, res) => {
     }
 };
 
+// Obtener solo proveedores activos (para desplegables y autocomplete)
+const getActiveProveedores = async (req, res) => {
+    try {
+        const { search } = req.query;
+
+        let whereClause = {
+            activo: true // Solo proveedores activos
+        };
+        
+        if (search) {
+            whereClause[models.sequelize.Sequelize.Op.or] = [
+                {
+                    nombre: {
+                        [models.sequelize.Sequelize.Op.like]: `%${search}%`
+                    }
+                },
+                {
+                    razon_social: {
+                        [models.sequelize.Sequelize.Op.like]: `%${search}%`
+                    }
+                }
+            ];
+        }
+        
+        const proveedores = await models.Proveedores.findAll({
+            where: whereClause,
+            order: [['nombre', 'ASC']],
+            attributes: ['id_proveedor', 'nombre', 'razon_social', 'contacto_principal', 'telefono', 'email'] // Solo campos necesarios
+        });
+
+        res.json({
+            success: true,
+            data: proveedores,
+            message: `${proveedores.length} proveedores activos encontrados`
+        });
+    } catch (error) {
+        console.error('Error al obtener proveedores activos:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
 // Obtener un proveedor por ID
 const getProveedorById = async (req, res) => {
     try {
@@ -96,7 +140,9 @@ const createProveedor = async (req, res) => {
             direccion,
             contacto_principal,
             tipo_proveedor,
-            observaciones
+            observaciones,
+            banco,
+            cuentaBancaria
         } = req.body;
 
         // Validación básica
@@ -104,6 +150,13 @@ const createProveedor = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'El nombre del proveedor es obligatorio'
+            });
+        }
+
+        if (!telefono) {
+            return res.status(400).json({
+                success: false,
+                message: 'Al menos un teléfono es obligatorio'
             });
         }
 
@@ -127,8 +180,10 @@ const createProveedor = async (req, res) => {
             email,
             direccion,
             contacto_principal,
-            tipo_proveedor: tipo_proveedor || 'Material',
-            observaciones
+            tipo_proveedor: tipo_proveedor || 'SERVICIOS',
+            observaciones,
+            banco,
+            cuentaBancaria
         });
 
         res.status(201).json({
@@ -197,6 +252,8 @@ const updateProveedor = async (req, res) => {
 const deleteProveedor = async (req, res) => {
     try {
         const { id } = req.params;
+        const { force = 'false' } = req.query; // Capturar desde query parameters
+        const forceDelete = force === 'true' || force === true; // Normalizar a boolean
         
         const proveedor = await models.Proveedores.findByPk(id);
         
@@ -207,15 +264,123 @@ const deleteProveedor = async (req, res) => {
             });
         }
 
-        // Soft delete - solo desactivar
+        // Verificar si el proveedor tiene suministros asociados
+        const suministrosCount = await models.Suministros.count({
+            where: { id_proveedor: id }
+        });
+
+        if (suministrosCount > 0) {
+            // Si no se fuerza la desactivación, mostrar advertencia con opciones
+            if (!forceDelete) {
+                // Obtener información detallada de los suministros afectados
+                const suministrosAfectados = await models.Suministros.findAll({
+                    where: { id_proveedor: id },
+                    include: [
+                        {
+                            model: models.Proyectos,
+                            as: 'proyecto',
+                            attributes: ['nombre', 'ubicacion']
+                        }
+                    ],
+                    attributes: ['id_suministro', 'nombre', 'descripcion_detallada', 'cantidad', 'estado', 'fecha'],
+                    order: [['createdAt', 'DESC']],
+                    limit: 10 // Limitar a los primeros 10 para no sobrecargar la respuesta
+                });
+
+                return res.status(409).json({
+                    success: false,
+                    message: `Este proveedor tiene ${suministrosCount} suministros registrados`,
+                    data: {
+                        suministrosCount,
+                        hasAssociatedData: true,
+                        suministrosAfectados: suministrosAfectados.map(s => ({
+                            id: s.id_suministro,
+                            nombre: s.nombre,
+                            descripcion: s.descripcion_detallada,
+                            cantidad: s.cantidad,
+                            estado: s.estado,
+                            fecha: s.fecha,
+                            proyecto: s.proyecto ? s.proyecto.nombre : 'Sin proyecto'
+                        })),
+                        options: {
+                            canForceDeactivate: true,
+                            warning: 'Si desactivas este proveedor, los suministros mantendrán la referencia pero el proveedor no aparecerá en las listas desplegables para nuevos suministros.'
+                        }
+                    }
+                });
+            }
+        }
+
+        // Proceder con la desactivación (con o sin fuerza)
         await proveedor.update({ activo: false });
+
+        const responseMessage = suministrosCount > 0 
+            ? `Proveedor desactivado exitosamente. ${suministrosCount} suministros mantienen la referencia a este proveedor.`
+            : 'Proveedor desactivado exitosamente';
 
         res.json({
             success: true,
-            message: 'Proveedor desactivado exitosamente'
+            message: responseMessage,
+            data: {
+                suministrosAfectados: suministrosCount
+            }
         });
     } catch (error) {
         console.error('Error al desactivar proveedor:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
+// Eliminar permanentemente un proveedor (hard delete)
+const deletePermanentProveedor = async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const proveedor = await models.Proveedores.findByPk(id);
+        
+        if (!proveedor) {
+            return res.status(404).json({
+                success: false,
+                message: 'Proveedor no encontrado'
+            });
+        }
+
+        // Verificar que el proveedor esté inactivo antes de eliminar definitivamente
+        if (proveedor.activo) {
+            return res.status(400).json({
+                success: false,
+                message: 'Solo se pueden eliminar definitivamente proveedores inactivos. Debe desactivar el proveedor primero.'
+            });
+        }
+
+        // Verificar si el proveedor tiene suministros asociados (doble verificación)
+        const suministrosCount = await models.Suministros.count({
+            where: { id_proveedor: id }
+        });
+
+        if (suministrosCount > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `No se puede eliminar el proveedor porque tiene ${suministrosCount} suministros registrados. Debe eliminar o transferir los suministros primero.`,
+                data: {
+                    suministrosCount,
+                    hasAssociatedData: true
+                }
+            });
+        }
+
+        // Eliminar definitivamente de la base de datos
+        await proveedor.destroy();
+
+        res.json({
+            success: true,
+            message: 'Proveedor eliminado definitivamente'
+        });
+    } catch (error) {
+        console.error('Error al eliminar proveedor permanentemente:', error);
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor'
@@ -310,12 +475,68 @@ const createOrGetProveedor = async (req, res) => {
     }
 };
 
+// Obtener estadísticas de proveedores
+const getProveedoresStats = async (req, res) => {
+    try {
+        const stats = {};
+        
+        // Total de proveedores
+        stats.total = await models.Proveedores.count();
+        
+        // Proveedores activos e inactivos
+        stats.activos = await models.Proveedores.count({ where: { activo: true } });
+        stats.inactivos = await models.Proveedores.count({ where: { activo: false } });
+        
+        // Distribución por tipo
+        const porTipo = await models.Proveedores.findAll({
+            attributes: [
+                'tipo_proveedor',
+                [models.sequelize.fn('COUNT', models.sequelize.col('id_proveedor')), 'cantidad']
+            ],
+            group: ['tipo_proveedor'],
+            raw: true
+        });
+        
+        stats.porTipo = {};
+        porTipo.forEach(item => {
+            stats.porTipo[item.tipo_proveedor] = parseInt(item.cantidad);
+        });
+        
+        // Número de tipos diferentes
+        stats.tipos = Object.keys(stats.porTipo).length;
+        
+        // Último proveedor creado
+        const ultimoProveedor = await models.Proveedores.findOne({
+            order: [['createdAt', 'DESC']],
+            attributes: ['createdAt']
+        });
+        
+        if (ultimoProveedor) {
+            stats.ultimoCreado = ultimoProveedor.createdAt;
+        }
+        
+        res.json({
+            success: true,
+            data: stats
+        });
+    } catch (error) {
+        console.error('Error obteniendo estadísticas de proveedores:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
 module.exports = {
     getProveedores,
+    getActiveProveedores,
     getProveedorById,
     createProveedor,
     updateProveedor,
     deleteProveedor,
+    deletePermanentProveedor,
     searchProveedores,
-    createOrGetProveedor
+    createOrGetProveedor,
+    getProveedoresStats
 };

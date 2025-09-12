@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChartBarIcon, DocumentChartBarIcon, TruckIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline';
-import DashboardSuministros from './DashboardSuministros';
+import DashboardSuministrosModerno from './DashboardSuministrosModerno';
 
 export default function Reportes() {
   const [activeTab, setActiveTab] = useState('suministros');
@@ -31,6 +31,21 @@ export default function Reportes() {
       description: 'Rendimiento de obras, tiempos y eficiencia'
     }
   ];
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'suministros':
+        return <DashboardSuministrosModerno />;
+      case 'nomina':
+        return renderNominaTab();
+      case 'financiero':
+        return renderFinancieroTab();
+      case 'operacional':
+        return renderOperacionalTab();
+      default:
+        return <DashboardSuministrosModerno />;
+    }
+  };
 
   const renderNominaTab = () => (
     <div className="text-center py-20">
@@ -143,10 +158,7 @@ export default function Reportes() {
 
       {/* Tab Content */}
       <div className="mt-6">
-        {activeTab === 'suministros' && <DashboardSuministros />}
-        {activeTab === 'nomina' && renderNominaTab()}
-        {activeTab === 'financiero' && renderFinancieroTab()}
-        {activeTab === 'operacional' && renderOperacionalTab()}
+        {renderContent()}
       </div>
 
       {/* Info Footer */}
@@ -157,20 +169,20 @@ export default function Reportes() {
           </div>
           <div className="ml-3">
             <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200">
-              Dashboard Interactivo con Chart.js
+              Dashboard Mejorado con Datos Reales
             </h3>
             <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
               {activeTab === 'suministros' && 
-                'Análisis completo de materiales, servicios y logística con gráficas interactivas en tiempo real.'
+                'Análisis completo con datos reales de suministros. Incluye filtros avanzados y exportación personalizada a PDF/Excel.'
               }
               {activeTab === 'nomina' && 
                 'Próximamente: análisis detallado de costos laborales y rendimiento de empleados.'
               }
               {activeTab === 'financiero' && 
-                'Se activará cuando se integren los precios y costos en el sistema de suministros.'
+                'Próximamente: control de presupuestos, gastos y rentabilidad por proyecto.'
               }
               {activeTab === 'operacional' && 
-                'Análisis de eficiencia basado en datos de horarios y entregas ya capturados.'
+                'Próximamente: eficiencia operativa y análisis de rendimiento.'
               }
             </p>
           </div>

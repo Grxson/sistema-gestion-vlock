@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { STANDARD_ICONS } from '../constants/icons';
 import { 
-  FaPlus, 
-  FaEdit, 
-  FaTrash, 
   FaSearch, 
   FaFilter,
   FaBox,
@@ -11,7 +9,6 @@ import {
   FaDollarSign,
   FaBuilding,
   FaDownload,
-  FaEye,
   FaChartBar,
   FaChevronDown,
   FaChevronUp,
@@ -37,6 +34,8 @@ import {
   exportToPDF, 
   processImportFile 
 } from '../utils/exportUtils';
+import ReportePersonalizadoModal from '../components/ReportePersonalizado/ReportePersonalizadoModal';
+import useReportePersonalizado from '../hooks/useReportePersonalizado';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -56,6 +55,8 @@ import ProveedorAutocomplete from '../components/common/ProveedorAutocomplete';
 import DateInput from '../components/ui/DateInput';
 import TimeInput from '../components/ui/TimeInput';
 import FormularioSuministros from '../components/FormularioSuministros';
+import SuministroDeleteConfirmModal from '../components/SuministroDeleteConfirmModal';
+import SuministroNotificationModal from '../components/SuministroNotificationModal';
 import { useToast } from '../contexts/ToastContext';
 
 // Importar testing suite para desarrollo
@@ -173,8 +174,27 @@ const Suministros = () => {
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [isProcessingImport, setIsProcessingImport] = useState(false);
 
+  // Hook para reporte personalizado
+  const {
+    showReportModal,
+    setShowReportModal,
+    reportConfig,
+    setReportConfig,
+    handleCustomExport
+  } = useReportePersonalizado();
+
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
+
+  // Estados para modales de confirmación mejorados
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState(null);
+  const [deleteType, setDeleteType] = useState('suministro'); // 'suministro' o 'recibo'
+  const [notificationModal, setNotificationModal] = useState({
+    open: false,
+    message: '',
+    type: 'success'
+  });
 
   // Estados para gráficas
   const [showCharts, setShowCharts] = useState(false);
@@ -2623,30 +2643,35 @@ const Suministros = () => {
 
   // Función para eliminar un grupo completo de suministros
   const handleDeleteRecibo = async (recibo) => {
-    if (!confirm(`¿Está seguro de que desea eliminar el grupo de ${recibo.suministros.length} suministros? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+    setItemToDelete(recibo);
+    setDeleteType('recibo');
+    setDeleteModalOpen(true);
+  };
 
+  // Función para confirmar eliminación de recibo
+  const confirmDeleteRecibo = async (recibo) => {
     try {
       // Eliminar todos los suministros del grupo
       for (const suministro of recibo.suministros) {
         await api.deleteSuministro(suministro.id_suministro);
       }
 
-      showSuccess(
-        'Grupo eliminado',
-        `Se han eliminado ${recibo.suministros.length} suministros correctamente`,
-        { duration: 4000 }
-      );
+      // Mostrar notificación personalizada
+      setNotificationModal({
+        open: true,
+        message: `✅ Recibo eliminado exitosamente. Se eliminaron ${recibo.suministros.length} suministros del sistema.`,
+        type: 'success'
+      });
       
       await loadData();
     } catch (error) {
       console.error('Error eliminando grupo:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
-      showError(
-        'Error al eliminar',
-        `No se pudo eliminar el grupo: ${errorMessage}`
-      );
+      setNotificationModal({
+        open: true,
+        message: `❌ Error al eliminar el recibo: ${errorMessage}`,
+        type: 'error'
+      });
     }
   };
 
@@ -2711,28 +2736,51 @@ const Suministros = () => {
   };
 
   const handleDelete = async (id) => {
-    // Encontrar el suministro para mostrar su nombre en la notificación
+    // Encontrar el suministro para el modal
     const suministro = suministros.find(s => s.id_suministro === id);
-    const nombreSuministro = suministro?.nombre || 'el suministro';
+    if (!suministro) {
+      setNotificationModal({
+        open: true,
+        message: '❌ Error: No se encontró el suministro a eliminar.',
+        type: 'error'
+      });
+      return;
+    }
 
-    if (window.confirm(`¿Estás seguro de que deseas eliminar "${nombreSuministro}"?`)) {
-      try {
-        const response = await api.deleteSuministro(id);
-        if (response.success) {
-          showSuccess(
-            'Suministro eliminado',
-            `${nombreSuministro} ha sido eliminado correctamente`
-          );
-          await loadData();
-        }
-      } catch (error) {
-        console.error('Error eliminando suministro:', error);
-        const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
-        showError(
-          'Error al eliminar',
-          `No se pudo eliminar ${nombreSuministro}: ${errorMessage}`
-        );
+    setItemToDelete(suministro);
+    setDeleteType('suministro');
+    setDeleteModalOpen(true);
+  };
+
+  // Función para confirmar eliminación de suministro individual
+  const confirmDeleteSuministro = async (suministro) => {
+    try {
+      const response = await api.deleteSuministro(suministro.id_suministro);
+      if (response.success) {
+        setNotificationModal({
+          open: true,
+          message: `✅ "${suministro.descripcion || suministro.nombre || 'Suministro'}" ha sido eliminado exitosamente del sistema.`,
+          type: 'success'
+        });
+        await loadData();
       }
+    } catch (error) {
+      console.error('Error eliminando suministro:', error);
+      const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
+      setNotificationModal({
+        open: true,
+        message: `❌ Error al eliminar "${suministro.descripcion || suministro.nombre || 'el suministro'}": ${errorMessage}`,
+        type: 'error'
+      });
+    }
+  };
+
+  // Función unificada para manejar confirmaciones de eliminación
+  const handleConfirmDelete = async (item) => {
+    if (deleteType === 'recibo') {
+      await confirmDeleteRecibo(item);
+    } else {
+      await confirmDeleteSuministro(item);
     }
   };
 
@@ -3325,7 +3373,7 @@ const Suministros = () => {
               onClick={() => setShowMultipleModal(true)}
               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
             >
-              <FaPlus className="w-4 h-4" />
+              <STANDARD_ICONS.CREATE className="w-4 h-4" />
               Nuevo Suministro
             </button>
           </div>
@@ -5207,14 +5255,14 @@ const Suministros = () => {
                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
                                 title="Editar grupo"
                               >
-                                <FaEdit className="w-4 h-4" />
+                                <STANDARD_ICONS.EDIT className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDeleteRecibo(recibo)}
                                 className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
                                 title="Eliminar grupo"
                               >
-                                <FaTrash className="w-4 h-4" />
+                                <STANDARD_ICONS.DELETE className="w-4 h-4" />
                               </button>
                             </div>
                           </td>
@@ -5286,14 +5334,14 @@ const Suministros = () => {
                                     className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
                                     title="Editar individual"
                                   >
-                                    <FaEdit className="w-4 h-4" />
+                                    <STANDARD_ICONS.EDIT className="w-4 h-4" />
                                   </button>
                                   <button
                                     onClick={() => handleDelete(suministro.id_suministro)}
                                     className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
                                     title="Eliminar"
                                   >
-                                    <FaTrash className="w-4 h-4" />
+                                    <STANDARD_ICONS.DELETE className="w-4 h-4" />
                                   </button>
                                 </div>
                               </td>
@@ -5381,14 +5429,14 @@ const Suministros = () => {
                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
                                 title="Editar"
                               >
-                                <FaEdit className="w-4 h-4" />
+                                <STANDARD_ICONS.EDIT className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => handleDelete(suministro.id_suministro)}
                                 className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
                                 title="Eliminar"
                               >
-                                <FaTrash className="w-4 h-4" />
+                                <STANDARD_ICONS.DELETE className="w-4 h-4" />
                               </button>
                             </div>
                           </td>
@@ -5556,10 +5604,21 @@ const Suministros = () => {
                     handleExportToPDF();
                     setShowExportDropdown(false);
                   }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300 rounded-b-lg"
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300"
                 >
                   <FaFilePdf className="w-4 h-4 text-red-600" />
                   Exportar a PDF
+                </button>
+                <hr className="border-gray-200 dark:border-gray-600 mx-2" />
+                <button
+                  onClick={() => {
+                    setShowReportModal(true);
+                    setShowExportDropdown(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300 rounded-b-lg"
+                >
+                  <FaChartBar className="w-4 h-4 text-blue-600" />
+                  Reporte Personalizado
                 </button>
               </div>
             )}
@@ -5760,6 +5819,68 @@ const Suministros = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Configuración de Reporte Personalizado */}
+      <ReportePersonalizadoModal
+        showModal={showReportModal}
+        setShowModal={setShowReportModal}
+        reportConfig={reportConfig}
+        setReportConfig={setReportConfig}
+        handleCustomExport={(format) => handleCustomExport(format, filteredSuministros, {
+          busqueda: searchTerm,
+          proyecto: filters.proyecto,
+          proveedor: filters.proveedor,
+          estado: filters.estado,
+          fechaInicio: filters.fechaInicio,
+          fechaFin: filters.fechaFin
+        }, proyectos, proveedores)}
+        availableCharts={[
+          // Análisis Financiero
+          { key: 'gastosPorMes', label: 'Gastos por Mes' },
+          { key: 'valorPorCategoria', label: 'Valor por Categoría' },
+          { key: 'gastosPorProyecto', label: 'Gastos por Proyecto' },
+          { key: 'gastosPorProveedor', label: 'Gastos por Proveedor' },
+          // Análisis de Cantidad y Estado
+          { key: 'suministrosPorMes', label: 'Cantidad por Mes' },
+          { key: 'cantidadPorEstado', label: 'Cantidad por Estado' },
+          { key: 'distribucionTipos', label: 'Distribución de Tipos' },
+          { key: 'tendenciaEntregas', label: 'Tendencia de Entregas' },
+          // Análisis Técnico
+          { key: 'codigosProducto', label: 'Códigos de Producto' },
+          { key: 'analisisTecnicoConcreto', label: 'Análisis Técnico' },
+          { key: 'concretoDetallado', label: 'Concreto Detallado' },
+          // Análisis por Unidades de Medida
+          { key: 'totalM3Concreto', label: 'Total m³ (Concreto)' },
+          { key: 'distribucionPorUnidades', label: 'Distribución por Unidades' },
+          // Análisis de Horas (Maquinaria y Equipos)
+          { key: 'horasPorMes', label: 'Horas por Mes' },
+          { key: 'horasPorProyecto', label: 'Horas por Proyecto' },
+          { key: 'topEquiposPorHoras', label: 'Top Equipos por Horas' },
+          { key: 'horasVsCosto', label: 'Horas vs Costo' }
+        ]}
+      />
+
+      {/* Modales de confirmación mejorados */}
+      <SuministroDeleteConfirmModal
+        isOpen={deleteModalOpen}
+        onClose={() => {
+          setDeleteModalOpen(false);
+          setItemToDelete(null);
+          setDeleteType('suministro');
+        }}
+        onConfirm={handleConfirmDelete}
+        suministro={itemToDelete}
+        type={deleteType}
+      />
+
+      <SuministroNotificationModal
+        isOpen={notificationModal.open}
+        onClose={() => setNotificationModal({ open: false, message: '', type: 'success' })}
+        message={notificationModal.message}
+        type={notificationModal.type}
+        autoClose={true}
+        duration={4000}
+      />
     </div>
   );
 };

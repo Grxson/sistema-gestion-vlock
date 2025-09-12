@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { FaPlus, FaTrash, FaCopy, FaSave, FaTimes, FaBoxes } from "react-icons/fa";
 import ProveedorAutocomplete from "./common/ProveedorAutocomplete";
+import ProveedorModal from "./proveedores/ProveedorModal";
 import DateInput from "./ui/DateInput";
 import TimeInput from "./ui/TimeInput";
 import api from '../services/api';
@@ -132,6 +133,10 @@ export default function FormularioSuministros({
   const [codeSuggestions, setCodeSuggestions] = useState({});
   const [showCodeSuggestions, setShowCodeSuggestions] = useState({});
   const [existingSuministros, setExistingSuministros] = useState([]); // Para cargar suministros existentes del sistema
+
+  // Estados para el modal de proveedores
+  const [showProveedorModal, setShowProveedorModal] = useState(false);
+  const [proveedorModalData, setProveedorModalData] = useState(null);
 
   // =================== DEBUGGING Y MONITORING ===================
   debugTools.useRenderDebug('FormularioSuministros', { 
@@ -955,6 +960,41 @@ export default function FormularioSuministros({
     }
   };
 
+  // Manejo del modal de proveedores
+  const handleOpenProveedorModal = (query = '', tipoSugerido = 'SERVICIOS') => {
+    setProveedorModalData({
+      id: null,
+      nombre: query,
+      direccion: '',
+      telefono: '',
+      cuentaBancaria: '',
+      banco: '',
+      tipoProveedor: tipoSugerido
+    });
+    setShowProveedorModal(true);
+  };
+
+  const handleCloseProveedorModal = () => {
+    setShowProveedorModal(false);
+    setProveedorModalData(null);
+  };
+
+  const handleProveedorSaved = async (proveedor) => {
+    // Cerrar modal
+    setShowProveedorModal(false);
+    
+    // Mostrar notificación de éxito
+    toast.success('Proveedor creado exitosamente');
+    
+    // Actualizar el proveedor seleccionado en el formulario
+    if (proveedor && proveedor.id) {
+      setReciboInfo(prev => ({
+        ...prev,
+        proveedor_info: proveedor
+      }));
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-dark-100 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
       <div className="p-6">
@@ -1015,6 +1055,8 @@ export default function FormularioSuministros({
               proveedores={proveedores}
               placeholder="Buscar o crear proveedor..."
               className="w-full"
+              showCreateModal={true}
+              onProveedorCreated={handleOpenProveedorModal}
             />
             {errors.proveedor_info && (
               <p className="mt-1 text-sm text-red-600">{errors.proveedor_info}</p>
@@ -1481,6 +1523,17 @@ export default function FormularioSuministros({
           </button>
         </div>
       </div>
+
+      {/* Modal de Proveedores */}
+      {showProveedorModal && (
+        <ProveedorModal
+          isOpen={showProveedorModal}
+          onClose={handleCloseProveedorModal}
+          onSave={handleProveedorSaved}
+          proveedorData={proveedorModalData}
+          title="Crear Proveedor"
+        />
+      )}
     </div>
   );
 }

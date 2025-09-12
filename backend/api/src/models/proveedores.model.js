@@ -24,9 +24,9 @@ module.exports = (sequelize) => {
       comment: 'Razón social completa'
     },
     telefono: {
-      type: DataTypes.STRING(20),
+      type: DataTypes.STRING(100),
       allowNull: true,
-      comment: 'Teléfono de contacto'
+      comment: 'Teléfonos de contacto (separados por comas si son múltiples)'
     },
     email: {
       type: DataTypes.STRING(100),
@@ -44,14 +44,24 @@ module.exports = (sequelize) => {
       comment: 'Nombre del contacto principal'
     },
     tipo_proveedor: {
-      type: DataTypes.ENUM('Material', 'Servicio', 'Equipo', 'Mixto'),
-      defaultValue: 'Material',
+      type: DataTypes.ENUM('MATERIALES', 'SERVICIOS', 'EQUIPOS', 'MIXTO', 'TRANSPORTE', 'CONSTRUCCION', 'MANTENIMIENTO', 'CONSULTORIA', 'SUBCONTRATISTA', 'HERRAMIENTAS', 'COMBUSTIBLE', 'ALIMENTACION'),
+      defaultValue: 'SERVICIOS',
       comment: 'Tipo de productos/servicios que ofrece'
     },
     activo: {
       type: DataTypes.BOOLEAN,
       defaultValue: true,
       comment: 'Estado del proveedor'
+    },
+    banco: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      comment: 'Banco del proveedor'
+    },
+    cuentaBancaria: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      comment: 'Número de cuenta bancaria'
     },
     observaciones: {
       type: DataTypes.TEXT,

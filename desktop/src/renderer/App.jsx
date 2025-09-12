@@ -14,6 +14,8 @@ import Usuarios from './components/Usuarios';
 import Roles from './components/Roles';
 import Reportes from './components/Reportes';
 import Suministros from './pages/Suministros';
+import Proveedores from './pages/Proveedores';
+import Proyectos from './pages/Proyectos';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 
@@ -32,13 +34,15 @@ function MainApp() {
   const routeTitles = {
     '/': 'Dashboard',
     '/empleados': 'Empleados',
-    '/nomina': 'Nómina',
+    '/proyectos': 'Proyectos',
+    '/nomina': 'Nomina',
     '/contratos': 'Contratos',
     '/oficios': 'Oficios',
     '/usuarios': 'Usuarios',
     '/roles': 'Roles',
     '/reportes': 'Reportes',
     '/suministros': 'Suministros',
+    '/proveedores': 'Proveedores',
     '/diagnostico': 'Diagnóstico'
   };
 
@@ -88,11 +92,12 @@ function MainApp() {
       // Mostrar componente de acceso denegado con el nombre del módulo
       const moduleNames = {
         empleados: 'Empleados',
-        nomina: 'Nómina',
+        proyectos: 'Proyectos',
+        nomina: 'Nomina',
         contratos: 'Contratos',
         oficios: 'Oficios',
         suministros: 'Suministros',
-        auditoria: 'Auditoría',
+        auditoria: 'Auditoria',
         reportes: 'Reportes',
         usuarios: 'Usuarios',
         roles: 'Roles',
@@ -106,6 +111,8 @@ function MainApp() {
     switch (currentPath) {
       case '/empleados':
         return <Empleados />;
+      case '/proyectos':
+        return <Proyectos />;
       case '/nomina':
         return <Nomina />;
       case '/contratos':
@@ -125,6 +132,8 @@ function MainApp() {
         return <Reportes />;
       case '/suministros':
         return <Suministros />;
+      case '/proveedores':
+        return <Proveedores />;
       case '/configuracion':
         return (
           <div className="text-center py-20">

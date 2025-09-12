@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { PlusIcon, PencilIcon, TrashIcon, EyeIcon, DocumentTextIcon, UsersIcon } from '@heroicons/react/24/outline';
+import { STANDARD_ICONS } from '../constants/icons';
+import { DocumentTextIcon, UsersIcon } from '@heroicons/react/24/outline';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { formatCurrency } from '../utils/currency';
 import apiService from '../services/api';
@@ -207,7 +208,7 @@ export default function Contratos() {
               onClick={() => setShowModal(true)}
               className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
             >
-              <PlusIcon className="h-4 w-4 mr-2" />
+              <STANDARD_ICONS.CREATE className="h-4 w-4 mr-2" />
               Nuevo Contrato
             </button>
           )}
@@ -384,7 +385,7 @@ export default function Contratos() {
                           onClick={() => handleEdit(contrato)}
                           className="text-primary-600 hover:text-primary-900 dark:text-primary-400 dark:hover:text-primary-300"
                         >
-                          <PencilIcon className="h-4 w-4" />
+                          <STANDARD_ICONS.EDIT className="h-4 w-4" />
                         </button>
                       )}
                       {hasPermission('contratos.eliminar') && (
@@ -392,7 +393,7 @@ export default function Contratos() {
                           onClick={() => handleDelete(contrato)}
                           className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                         >
-                          <TrashIcon className="h-4 w-4" />
+                          <STANDARD_ICONS.DELETE className="h-4 w-4" />
                         </button>
                       )}
                     </div>

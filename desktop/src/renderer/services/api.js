@@ -218,6 +218,14 @@ class ApiService {
     return this.request(endpoint, { ...options, method: 'DELETE' });
   }
 
+  async patch(endpoint, data = null, options = {}) {
+    return this.request(endpoint, { 
+      ...options, 
+      method: 'PATCH',
+      body: data ? JSON.stringify(data) : null
+    });
+  }
+
   // Métodos de autenticación
   async login(credentials) {
     // Adaptar el formato de credenciales si viene 'usuario' en lugar de 'email'
@@ -270,6 +278,10 @@ class ApiService {
 
   async deleteEmpleado(id) {
     return this.delete(`/empleados/${id}`);
+  }
+
+  async deleteEmpleadoPermanente(id) {
+    return this.delete(`/empleados/${id}/permanente`);
   }
 
   async getEmpleadosStats() {
@@ -408,12 +420,25 @@ class ApiService {
     return this.get(`/proveedores${queryString ? '?' + queryString : ''}`);
   }
 
+  async getActiveProveedores(search = '') {
+    const queryString = search ? `?search=${encodeURIComponent(search)}` : '';
+    return this.get(`/proveedores/active${queryString}`);
+  }
+
   async searchProveedores(query) {
     return this.get(`/proveedores/search?q=${encodeURIComponent(query)}`);
   }
 
   async createProveedor(proveedorData) {
-    return this.post('/proveedores', proveedorData);
+    console.log('🚀 [API] createProveedor llamado con:', proveedorData);
+    try {
+      const response = await this.post('/proveedores', proveedorData);
+      console.log('📡 [API] Respuesta de createProveedor:', response);
+      return response;
+    } catch (error) {
+      console.error('❌ [API] Error en createProveedor:', error);
+      throw error;
+    }
   }
 
   async createOrGetProveedor(proveedorData) {
@@ -424,19 +449,119 @@ class ApiService {
     return this.put(`/proveedores/${id}`, proveedorData);
   }
 
-  async deleteProveedor(id) {
-    return this.delete(`/proveedores/${id}`);
+  async deleteProveedor(id, options = {}) {
+    return this.delete(`/proveedores/${id}`, options);
+  }
+
+  async deletePermanentProveedor(id) {
+    return this.delete(`/proveedores/${id}/permanent`);
+  }
+
+  async getProveedorById(id) {
+    return this.get(`/proveedores/${id}`);
+  }
+
+  async getProveedoresStats() {
+    return this.get('/proveedores/stats');
   }
 
   // Métodos para suministros y reportes
   async getDashboardSuministros(filtros = {}) {
-    const params = new URLSearchParams();
-    if (filtros.fecha_inicio) params.append('fecha_inicio', filtros.fecha_inicio);
-    if (filtros.fecha_fin) params.append('fecha_fin', filtros.fecha_fin);
-    if (filtros.id_proyecto) params.append('id_proyecto', filtros.id_proyecto);
+    const queryParams = new URLSearchParams();
     
-    const queryString = params.toString();
+    Object.keys(filtros).forEach(key => {
+      if (filtros[key]) {
+        queryParams.append(key, filtros[key]);
+      }
+    });
+    
+    const queryString = queryParams.toString();
     return this.get(`/reportes/dashboard-suministros${queryString ? '?' + queryString : ''}`);
+  }
+
+  async exportDashboardSuministrosToPDF(filtros = {}) {
+    const queryParams = new URLSearchParams();
+    
+    Object.keys(filtros).forEach(key => {
+      if (filtros[key]) {
+        queryParams.append(key, filtros[key]);
+      }
+    });
+    
+    const queryString = queryParams.toString();
+    return this.downloadFile(`/reportes/dashboard-suministros/export/pdf${queryString ? '?' + queryString : ''}`);
+  }
+
+  async exportDashboardSuministrosToExcel(filtros = {}) {
+    const queryParams = new URLSearchParams();
+    
+    Object.keys(filtros).forEach(key => {
+      if (filtros[key]) {
+        queryParams.append(key, filtros[key]);
+      }
+    });
+    
+    const queryString = queryParams.toString();
+    return this.downloadFile(`/reportes/dashboard-suministros/export/excel${queryString ? '?' + queryString : ''}`);
+  }
+
+  // Exportaciones personalizadas de dashboard
+  async exportDashboardCustomToPDF(config, activeCharts, dashboardData, filtros = {}) {
+    const payload = {
+      config,
+      activeCharts,
+      dashboardData,
+      ...filtros
+    };
+    
+    return this.downloadFilePost('/reportes/dashboard-suministros/export/custom/pdf', payload);
+  }
+
+  async exportDashboardCustomToExcel(config, activeCharts, dashboardData, filtros = {}) {
+    const payload = {
+      config,
+      activeCharts,
+      dashboardData,
+      ...filtros
+    };
+    
+    return this.downloadFilePost('/reportes/dashboard-suministros/export/custom/excel', payload);
+  }
+
+  // Método auxiliar para descargar archivos
+  async downloadFile(endpoint) {
+    const token = this.getToken();
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
+  }
+
+  // Método auxiliar para descargar archivos via POST
+  async downloadFilePost(endpoint, data) {
+    const token = this.getToken();
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    return response.blob();
   }
 
   async getReporteComparativo(datos) {
