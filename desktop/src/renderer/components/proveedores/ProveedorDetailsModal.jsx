@@ -16,6 +16,8 @@ import {
   FaCalendar,
   FaInfoCircle
 } from 'react-icons/fa';
+import ProveedorName from '../ui/ProveedorName';
+import { formatTelefono } from '../../utils/formatters';
 
 const ProveedorDetailsModal = ({ proveedor, onClose }) => {
   if (!proveedor) return null;
@@ -100,20 +102,18 @@ const ProveedorDetailsModal = ({ proveedor, onClose }) => {
                 
                 <div className="space-y-3">
                   <div>
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Nombre</label>
-                    <p className="mt-1 text-sm text-gray-900 dark:text-white font-medium">
-                      {proveedor.nombre || 'No especificado'}
-                    </p>
-                  </div>
-
-                  {proveedor.razon_social && (
-                    <div>
-                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Razón Social</label>
-                      <p className="mt-1 text-sm text-gray-900 dark:text-white">
-                        {proveedor.razon_social}
-                      </p>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Información del Proveedor</label>
+                    <div className="mt-1">
+                      <ProveedorName 
+                        proveedor={proveedor}
+                        maxLength={100}
+                        size="normal"
+                        showRazonSocial={true}
+                        nameClassName="text-sm text-gray-900 dark:text-white font-medium"
+                        razonSocialClassName="text-sm text-gray-900 dark:text-white"
+                      />
                     </div>
-                  )}
+                  </div>
 
                   <div>
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">RFC</label>
@@ -184,7 +184,7 @@ const ProveedorDetailsModal = ({ proveedor, onClose }) => {
                       {phones.length > 0 ? phones.map((phone, index) => (
                         <p key={index} className="text-sm text-gray-900 dark:text-white flex items-center gap-2">
                           <FaPhone className="w-3 h-3 text-gray-400" />
-                          {phone}
+                          {formatTelefono(phone)}
                         </p>
                       )) : (
                         <p className="text-sm text-gray-500 dark:text-gray-400">No especificado</p>

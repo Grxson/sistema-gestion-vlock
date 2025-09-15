@@ -27,6 +27,9 @@ import {
   FaFileDownload
 } from 'react-icons/fa';
 import { formatCurrency } from '../utils/currency';
+import { formatNumber, formatNumberForChart, formatPercentage, formatUnidadMedida } from '../utils/formatters';
+import { validateFolioDuplicado } from '../utils/validationUtils';
+import ValidationModal from '../components/ui/ValidationModal';
 import { 
   generateImportTemplate, 
   validateImportData, 
@@ -36,6 +39,8 @@ import {
 } from '../utils/exportUtils';
 import ReportePersonalizadoModal from '../components/ReportePersonalizado/ReportePersonalizadoModal';
 import useReportePersonalizado from '../hooks/useReportePersonalizado';
+import ChartModal from '../components/ui/ChartModal';
+import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -190,10 +195,30 @@ const Suministros = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [deleteType, setDeleteType] = useState('suministro'); // 'suministro' o 'recibo'
+  
+  // Estado para modal de gráficas expandidas
+  const [chartModal, setChartModal] = useState({
+    isOpen: false,
+    chartData: null,
+    chartOptions: null,
+    chartType: 'line',
+    title: '',
+    subtitle: '',
+    color: 'blue',
+    metrics: null
+  });
+  
   const [notificationModal, setNotificationModal] = useState({
     open: false,
     message: '',
     type: 'success'
+  });
+  const [validationModal, setValidationModal] = useState({
+    open: false,
+    title: '',
+    message: '',
+    type: 'warning',
+    onConfirm: null
   });
 
   // Estados para gráficas
@@ -475,13 +500,6 @@ const Suministros = () => {
         } catch (error) {
           console.error('❌ Error en horasPorMes:', error);
           chartDataProcessed.horasPorMes = null;
-        }
-
-        try {
-          chartDataProcessed.horasPorProyecto = processHorasPorProyecto(filteredData);
-        } catch (error) {
-          console.error('❌ Error en horasPorProyecto:', error);
-          chartDataProcessed.horasPorProyecto = null;
         }
 
         try {
@@ -1438,47 +1456,6 @@ const Suministros = () => {
     };
   };
 
-  // Procesar horas por proyecto
-  const processHorasPorProyecto = (data) => {
-    const horasPorProyecto = {};
-    
-    // Filtrar solo suministros con unidad de medida en horas
-    const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
-    );
-    
-    datosHoras.forEach(suministro => {
-      const proyecto = suministro.proyecto_nombre || suministro.proyectoInfo?.nombre || 'Sin proyecto';
-      const horas = parseFloat(suministro.cantidad) || 0;
-      
-      if (!horasPorProyecto[proyecto]) {
-        horasPorProyecto[proyecto] = 0;
-      }
-      horasPorProyecto[proyecto] += horas;
-    });
-
-    const colores = [
-      'rgba(59, 130, 246, 0.8)',   // Blue
-      'rgba(16, 185, 129, 0.8)',   // Emerald
-      'rgba(245, 158, 11, 0.8)',   // Amber
-      'rgba(239, 68, 68, 0.8)',    // Red
-      'rgba(139, 92, 246, 0.8)',   // Violet
-      'rgba(249, 115, 22, 0.8)'    // Orange
-    ];
-
-    return {
-      labels: Object.keys(horasPorProyecto),
-      datasets: [{
-        data: Object.values(horasPorProyecto),
-        backgroundColor: colores,
-        borderColor: colores.map(color => color.replace('0.8', '1')),
-        borderWidth: 2
-      }]
-    };
-  };
-
   // Procesar horas por equipo/nombre de suministro
   const processHorasPorEquipo = (data) => {
     const horasPorEquipo = {};
@@ -1899,11 +1876,14 @@ const Suministros = () => {
           title: function(context) {
             return `${title} - ${context[0].label}`;
           },
+          label: function(context) {
+            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`;
+          },
           afterBody: function(context) {
             if (metrics.total) {
-              const percentage = ((context[0].parsed.y / metrics.total) * 100).toFixed(1);
+              const percentage = formatPercentage((context[0].parsed.y / metrics.total) * 100);
               return [
-                `Porcentaje del total: ${percentage}%`,
+                `Porcentaje del total: ${percentage}`,
                 metrics.tendencia ? `Tendencia: ${metrics.tendencia}` : ''
               ].filter(Boolean);
             }
@@ -1928,12 +1908,7 @@ const Suministros = () => {
           color: getChartColors().textColor,
           font: { size: 12 },
           callback: function(value) {
-            return new Intl.NumberFormat('es-MX', {
-              style: 'currency',
-              currency: 'MXN',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0
-            }).format(value);
+            return formatCurrency(value);
           }
         },
         grid: { color: getChartColors().gridColor }
@@ -1965,9 +1940,9 @@ const Suministros = () => {
               return data.labels.map((label, index) => {
                 const value = data.datasets[0].data[index];
                 const total = data.datasets[0].data.reduce((sum, val) => sum + val, 0);
-                const percentage = ((value / total) * 100).toFixed(1);
+                const percentage = formatPercentage((value / total) * 100);
                 return {
-                  text: `${label}: ${percentage}%`,
+                  text: `${label}: ${percentage}`,
                   fillStyle: data.datasets[0].backgroundColor[index],
                   fontColor: getChartColors().textColor,
                   index: index
@@ -2100,17 +2075,34 @@ const Suministros = () => {
             // Formatear etiquetas y valores
             switch (key) {
               case 'total':
-                label = 'Total';
-                displayValue = typeof value === 'number' ? 
-                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
-                  value;
+                label = 'TotalGasto';
+                displayValue = formatCurrency(value);
                 break;
               case 'promedio':
               case 'gastoPromedio':
-                label = 'Promedio';
-                displayValue = typeof value === 'number' ? 
-                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
-                  value;
+              case 'promedioMensual':
+                label = 'Promedio/Mes';
+                displayValue = formatCurrency(value);
+                break;
+              case 'cambioMensual':
+                label = 'CambioMensual';
+                displayValue = formatPercentage(value);
+                break;
+              case 'ultimoMes':
+                label = 'UltimoMes';
+                displayValue = formatCurrency(value);
+                break;
+              case 'totalItems':
+                label = 'TotalItems';
+                displayValue = formatNumber(value);
+                break;
+              case 'maximo':
+                label = 'Máximo';
+                displayValue = formatCurrency(value);
+                break;
+              case 'minimo':
+                label = 'Mínimo';
+                displayValue = formatCurrency(value);
                 break;
               case 'mesTop':
                 label = 'Mes Principal';
@@ -2129,46 +2121,58 @@ const Suministros = () => {
                 break;
               case 'porcentajeTop':
                 label = 'Porcentaje';
-                displayValue = `${value}%`;
+                displayValue = formatPercentage(value);
                 break;
               case 'totalCategorias':
                 label = 'Categorías';
+                displayValue = formatNumber(value);
                 break;
               case 'totalProveedores':
                 label = 'Proveedores';
+                displayValue = formatNumber(value);
                 break;
               case 'totalTipos':
                 label = 'Tipos';
+                displayValue = formatNumber(value);
                 break;
               case 'totalEstados':
                 label = 'Estados';
+                displayValue = formatNumber(value);
                 break;
               case 'mesesActivos':
                 label = 'Meses';
+                displayValue = formatNumber(value);
                 break;
               case 'totalEntregas':
                 label = 'Entregas';
-                break;
-              case 'promedioMensual':
-                label = 'Promedio/Mes';
+                displayValue = formatNumber(value);
                 break;
               case 'maxEntregas':
                 label = 'Máx/Mes';
+                displayValue = formatNumber(value);
                 break;
               case 'valorTotal':
                 label = 'Valor Total';
-                displayValue = typeof value === 'number' ? 
-                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
-                  `$${value}`;
+                displayValue = formatCurrency(value);
                 break;
               case 'cantidadItems':
                 label = 'Items';
+                displayValue = formatNumber(value);
                 break;
               case 'promedioXEstado':
                 label = 'Prom/Estado';
+                displayValue = formatNumber(value);
                 break;
               default:
                 label = key.charAt(0).toUpperCase() + key.slice(1);
+                // Si es un número, intentar formatear según el contexto
+                if (typeof value === 'number') {
+                  if (key.includes('gasto') || key.includes('valor') || key.includes('total') || key.includes('promedio')) {
+                    displayValue = formatCurrency(value);
+                  } else {
+                    displayValue = formatNumber(value);
+                  }
+                }
             }
 
             return (
@@ -2185,6 +2189,46 @@ const Suministros = () => {
     );
   };
 
+  // Función para abrir modal de gráfica expandida
+  const openChartModal = (chartConfig) => {
+    // Validar que los datos existan y tengan la estructura correcta
+    if (!chartConfig || !chartConfig.data) {
+      console.warn('ChartModal: No se proporcionaron datos válidos para la gráfica');
+      return;
+    }
+
+    // Validar que los datasets existan
+    if (!chartConfig.data.datasets || !Array.isArray(chartConfig.data.datasets)) {
+      console.warn('ChartModal: Los datasets no están definidos o no son un array');
+      return;
+    }
+
+    setChartModal({
+      isOpen: true,
+      chartData: chartConfig.data,
+      chartOptions: chartConfig.options,
+      chartType: chartConfig.type || 'line',
+      title: chartConfig.title || 'Gráfica',
+      subtitle: chartConfig.subtitle || '',
+      color: chartConfig.color || 'blue',
+      metrics: chartConfig.metrics || null
+    });
+  };
+
+  // Función para cerrar modal de gráfica
+  const closeChartModal = () => {
+    setChartModal({
+      isOpen: false,
+      chartData: null,
+      chartOptions: null,
+      chartType: 'line',
+      title: '',
+      subtitle: '',
+      color: 'blue',
+      metrics: null
+    });
+  };
+
   // Cargar gráficas cuando se cambian los filtros
   useEffect(() => {
     if (showCharts) {
@@ -2192,50 +2236,70 @@ const Suministros = () => {
     }
   }, [chartFilters, showCharts]);
 
-  // Función para verificar duplicados - SOLO POR FOLIO
+  // Función mejorada para verificar duplicados por folio y proveedor
   const checkForDuplicates = (newSuministro) => {
-    // Solo verificar duplicados si hay folio
-    if (!newSuministro.folio || newSuministro.folio.trim() === '') {
-      return []; // Sin folio, no hay duplicados que verificar
-    }
-
-    const duplicates = suministros.filter(suministro => {
-      // Si estamos editando, excluir el suministro actual de la verificación
-      if (editingSuministro && suministro.id_suministro === editingSuministro.id_suministro) {
-        return false;
+    try {
+      // Obtener ID del proveedor desde diferentes posibles ubicaciones
+      const proveedorId = newSuministro.proveedor_info?.id_proveedor || 
+                         newSuministro.id_proveedor || 
+                         newSuministro.proveedor_id;
+      
+      if (!proveedorId) {
+        return []; // Si no hay proveedor, no se puede validar
       }
 
-      // ÚNICO CRITERIO: Folio del proveedor
-      return suministro.folio && 
-             suministro.folio.toLowerCase().trim() === newSuministro.folio.toLowerCase().trim();
-    });
+      const validation = validateFolioDuplicado(
+        newSuministro.folio,
+        proveedorId,
+        suministros,
+        editingSuministro?.id_suministro
+      );
 
-    return duplicates;
+      return validation.duplicateItems;
+    } catch (error) {
+      console.error('Error en verificación de duplicados:', error);
+      // En caso de error, devolver array vacío para evitar crashes
+      return [];
+    }
   };
 
-  // Función para buscar sugerencias de duplicados en tiempo real - SOLO POR FOLIO
+  // Función mejorada para buscar sugerencias de duplicados por folio y proveedor
   const searchDuplicateSuggestions = useCallback((nombre, codigo_producto, folio) => {
-    // Solo mostrar advertencias para folios duplicados EXACTOS
-    if (!folio || folio.trim() === '') {
-      setDuplicatesSuggestions([]);
-      setShowDuplicatesWarning(false);
-      return;
-    }
-
-    const suggestions = suministros.filter(suministro => {
-      // Excluir el suministro actual si estamos editando
-      if (editingSuministro && suministro.id_suministro === editingSuministro.id_suministro) {
-        return false;
+    try {
+      if (!folio || folio.trim() === '') {
+        setDuplicatesSuggestions([]);
+        setShowDuplicatesWarning(false);
+        return;
       }
 
-      // CRITERIO MÁS ESTRICTO: Solo folios que coincidan exactamente o sean muy similares
-      return suministro.folio && 
-             suministro.folio.toLowerCase().trim() === folio.toLowerCase().trim();
-    }).slice(0, 5); // Limitar a 5 sugerencias
+      const proveedorId = formData.proveedor_info?.id_proveedor;
+      
+      if (!proveedorId) {
+        setDuplicatesSuggestions([]);
+        setShowDuplicatesWarning(false);
+        return;
+      }
 
-    setDuplicatesSuggestions(suggestions);
-    setShowDuplicatesWarning(suggestions.length > 0);
-  }, [suministros, editingSuministro]);
+      const validation = validateFolioDuplicado(
+        folio,
+        proveedorId,
+        suministros,
+        editingSuministro?.id_suministro
+      );
+
+      if (validation.isDuplicate) {
+        setDuplicatesSuggestions(validation.duplicateItems);
+        setShowDuplicatesWarning(true);
+      } else {
+        setDuplicatesSuggestions([]);
+        setShowDuplicatesWarning(false);
+      }
+    } catch (error) {
+      console.error('Error en búsqueda de duplicados:', error);
+      setDuplicatesSuggestions([]);
+      setShowDuplicatesWarning(false);
+    }
+  }, [suministros, editingSuministro, formData.proveedor_info]);
 
   // =================== FUNCIONES DE AUTOCOMPLETADO AVANZADO ===================
 
@@ -3348,12 +3412,19 @@ const Suministros = () => {
             <select
               value={filters.proveedor}
               onChange={(e) => setFilters({...filters, proveedor: e.target.value})}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500 max-w-64 truncate"
             >
               <option value="">Todos los proveedores</option>
               {proveedores.map((proveedor) => (
-                <option key={proveedor.id_proveedor} value={proveedor.nombre}>
-                  {proveedor.nombre}
+                <option 
+                  key={proveedor.id_proveedor} 
+                  value={proveedor.nombre}
+                  title={proveedor.nombre} // Tooltip con nombre completo
+                >
+                  {proveedor.nombre.length > 25 ? 
+                    `${proveedor.nombre.substring(0, 25)}` : 
+                    proveedor.nombre
+                  }
                 </option>
               ))}
             </select>
@@ -3433,12 +3504,19 @@ const Suministros = () => {
                   <select
                     value={chartFilters.proveedorNombre}
                     onChange={(e) => setChartFilters({...chartFilters, proveedorNombre: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500 truncate"
                   >
                     <option value="">Todos los proveedores</option>
                     {proveedores.map((proveedor) => (
-                      <option key={proveedor.id_proveedor} value={proveedor.nombre}>
-                        {proveedor.nombre}
+                      <option 
+                        key={proveedor.id_proveedor} 
+                        value={proveedor.nombre}
+                        title={proveedor.nombre} // Tooltip con nombre completo
+                      >
+                        {proveedor.nombre.length > 30 ? 
+                          `${proveedor.nombre.substring(0, 30)}...` : 
+                          proveedor.nombre
+                        }
                       </option>
                     ))}
                   </select>
@@ -3510,7 +3588,6 @@ const Suministros = () => {
                         analisisTecnicoConcreto: true,
                         concretoDetallado: true,
                         horasPorMes: true,
-                        horasPorProyecto: true,
                         horasPorEquipo: true,
                         comparativoHorasVsCosto: true,
                         distribucionUnidades: true,
@@ -3730,15 +3807,6 @@ const Suministros = () => {
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
-                          checked={selectedCharts.horasPorProyecto}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, horasPorProyecto: e.target.checked})}
-                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Horas por Proyecto</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
                           checked={selectedCharts.horasPorEquipo}
                           onChange={(e) => setSelectedCharts({...selectedCharts, horasPorEquipo: e.target.checked})}
                           className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
@@ -3844,8 +3912,25 @@ const Suministros = () => {
                           Evolución temporal de los gastos en suministros
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'line',
+                            data: chartData.gastosPorMes,
+                            title: 'Gastos por Mes',
+                            subtitle: 'Evolución temporal de los gastos en suministros',
+                            options: getLineChartOptions("Gastos por Mes", chartData.gastosPorMes?.metrics),
+                            color: 'blue',
+                            metrics: chartData.gastosPorMes?.metrics
+                          })}
+                          className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors duration-200"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5" />
+                        </button>
+                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                        </div>
                       </div>
                     </div>
                     
@@ -3877,8 +3962,23 @@ const Suministros = () => {
                           Distribución de inversión por categoría de suministros
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-green-600 dark:text-green-400" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'doughnut',
+                            data: chartData.valorPorCategoria,
+                            title: 'Valor Total por Categoría',
+                            options: getDoughnutChartOptions('Valor Total por Categoría', chartData.valorPorCategoria?.metrics),
+                            metrics: chartData.valorPorCategoria?.metrics
+                          })}
+                          className="p-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors group"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-green-600 dark:text-green-400" />
+                        </div>
                       </div>
                     </div>
                     
@@ -3910,8 +4010,23 @@ const Suministros = () => {
                           Número de suministros por período
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'bar',
+                            data: chartData.suministrosPorMes,
+                            title: 'Suministros Solicitados por Mes',
+                            options: getBarChartOptions('Suministros Solicitados por Mes', chartData.suministrosPorMes?.metrics),
+                            metrics: chartData.suministrosPorMes?.metrics
+                          })}
+                          className="p-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors group"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        </div>
                       </div>
                     </div>
                     <div className="h-80">
@@ -3981,8 +4096,23 @@ const Suministros = () => {
                           Inversión por proyecto
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'bar',
+                            data: chartData.gastosPorProyecto,
+                            title: 'Gastos por Proyecto',
+                            options: getBarChartOptions('Gastos por Proyecto', chartData.gastosPorProyecto?.metrics),
+                            metrics: chartData.gastosPorProyecto?.metrics
+                          })}
+                          className="p-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors group"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                        </div>
                       </div>
                     </div>
                     <div className="h-80">
@@ -4057,8 +4187,23 @@ const Suministros = () => {
                           Distribución de gastos por empresa proveedora
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'doughnut',
+                            data: chartData.gastosPorProveedor,
+                            title: 'Gastos por Proveedor',
+                            options: getDoughnutChartOptions('Gastos por Proveedor', chartData.gastosPorProveedor?.metrics),
+                            metrics: chartData.gastosPorProveedor?.metrics
+                          })}
+                          className="p-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors group"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        </div>
                       </div>
                     </div>
                     
@@ -4467,57 +4612,6 @@ const Suministros = () => {
                                 font: { size: 12, weight: '500' } 
                               },
                               grid: { color: getChartColors().gridColor }
-                            }
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Gráfica de Horas por Proyecto */}
-                {selectedCharts.horasPorProyecto && chartData.horasPorProyecto && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Horas por Proyecto</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Distribución de horas de trabajo por proyecto
-                        </p>
-                      </div>
-                      <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
-                        <FaBuilding className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                      </div>
-                    </div>
-                    <div className="h-80">
-                      <Doughnut 
-                        key={`horas-proyecto-${themeVersion}`}
-                        data={chartData.horasPorProyecto} 
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'bottom',
-                              labels: {
-                                color: getChartColors().textColor,
-                                padding: 20,
-                                font: { size: 13, weight: '600' },
-                                usePointStyle: true,
-                                pointStyle: 'circle'
-                              }
-                            },
-                            tooltip: {
-                              backgroundColor: getChartColors().tooltipBg,
-                              titleColor: getChartColors().tooltipText,
-                              bodyColor: getChartColors().tooltipText,
-                              callbacks: {
-                                label: function(context) {
-                                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                  const percentage = ((context.parsed * 100) / total).toFixed(1);
-                                  return `${context.label}: ${context.parsed.toFixed(1)} horas (${percentage}%)`;
-                                }
-                              }
                             }
                           }
                         }}
@@ -5151,9 +5245,6 @@ const Suministros = () => {
                   Proveedor
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Folio
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Cantidad
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -5173,7 +5264,7 @@ const Suministros = () => {
             <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
               {paginatedSuministros.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <FaBox className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-4" />
                     <p>No hay suministros registrados</p>
                   </td>
@@ -5223,11 +5314,6 @@ const Suministros = () => {
                               <div className="font-medium text-gray-900 dark:text-white">
                                 {recibo.proveedor}
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 dark:text-white">
-                              {recibo.folio || '-'}
                             </div>
                           </td>
                           <td className="px-6 py-4">
@@ -5301,18 +5387,13 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <div className="text-sm text-gray-900 dark:text-white">
-                                  -
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="text-sm text-gray-900 dark:text-white">
-                                  {formatQuantityDisplay(suministro.cantidad)} {getDisplayUnidadMedida(suministro.unidad_medida)}
+                                  {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
                                 </div>
                               </td>
                               <td className="px-6 py-4">
                                 <div>
                                   <div className="text-sm text-gray-900 dark:text-white">
-                                    {formatPriceDisplay(suministro.precio_unitario)} / {getDisplayUnidadMedida(suministro.unidad_medida)}
+                                    {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidad_medida)}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
                                     Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -5328,21 +5409,9 @@ const Suministros = () => {
                                 {formatDate(suministro.fecha || suministro.fecha_necesaria)}
                               </td>
                               <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => handleEdit(suministro)}
-                                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
-                                    title="Editar individual"
-                                  >
-                                    <STANDARD_ICONS.EDIT className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(suministro.id_suministro)}
-                                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
-                                    title="Eliminar"
-                                  >
-                                    <STANDARD_ICONS.DELETE className="w-4 h-4" />
-                                  </button>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  <span className="inline-block w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full mr-2"></span>
+                                  Elemento del grupo
                                 </div>
                               </td>
                             </tr>
@@ -5396,18 +5465,13 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {suministro.folio || '-'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 dark:text-white">
-                              {formatQuantityDisplay(suministro.cantidad)} {getDisplayUnidadMedida(suministro.unidad_medida)}
+                              {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm text-gray-900 dark:text-white">
-                                {formatPriceDisplay(suministro.precio_unitario)} / {getDisplayUnidadMedida(suministro.unidad_medida)}
+                                {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidad_medida)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -5880,6 +5944,19 @@ const Suministros = () => {
         type={notificationModal.type}
         autoClose={true}
         duration={4000}
+      />
+
+      {/* Modal de Gráficas Expandidas */}
+      <ChartModal
+        isOpen={chartModal.isOpen}
+        onClose={closeChartModal}
+        chartData={chartModal.chartData}
+        chartOptions={chartModal.chartOptions}
+        chartType={chartModal.chartType}
+        title={chartModal.title}
+        subtitle={chartModal.subtitle}
+        color={chartModal.color}
+        metrics={chartModal.metrics}
       />
     </div>
   );

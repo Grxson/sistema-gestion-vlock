@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePermissions } from '../contexts/PermissionsContext';
+import UserMenu from './ui/UserMenu';
 import {
   HomeIcon,
   UserGroupIcon,
@@ -160,11 +161,11 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
   return (
     <div className={`
       sidebar-container
-      ${isCollapsed ? 'w-16' : 'w-64'} 
+      ${isCollapsed ? 'w-16' : 'w-56'} 
       flex flex-col bg-gradient-to-b from-white to-gray-50 dark:from-dark-100 dark:to-dark-200 
       border-r border-gray-200 dark:border-gray-700 h-screen shadow-xl
       transition-all duration-300 ease-in-out transform
-      ${isCollapsed ? 'hover:w-64 hover:shadow-2xl' : ''}
+      ${isCollapsed ? 'hover:w-56 hover:shadow-2xl' : ''}
       relative group z-30
     `}>
       {/* Header mejorado */}
@@ -381,78 +382,12 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
       </div>
 
       {/* Información de usuario mejorada */}
-      <div className="flex-shrink-0 p-4 border-t border-gray-200 dark:border-gray-700 bg-gradient-to-r from-white to-gray-50 dark:from-dark-100 dark:to-dark-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center flex-1">
-            <div className="flex-shrink-0 relative">
-              <div className="h-10 w-10 bg-gradient-to-br from-primary-500 via-primary-600 to-primary-700 rounded-full flex items-center justify-center shadow-lg transform transition-transform duration-300 hover:scale-110 status-indicator">
-                <span className="text-white text-sm font-bold">
-                  {user?.nombre_usuario?.charAt(0)?.toUpperCase() || 'U'}
-                </span>
-              </div>
-            </div>
-            
-            <div className={`
-              ml-3 flex-1 transition-all duration-300
-              ${isCollapsed ? 'opacity-0 group-hover:opacity-100 transform translate-x-2 group-hover:translate-x-0' : 'opacity-100 translate-x-0'}
-            `}>
-              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">
-                {user?.nombre_usuario || 'Usuario'}
-              </p>
-              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                {user?.email || 'usuario@vlock.com'}
-              </p>
-              <div className="flex items-center mt-1">
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse-soft mr-2"></div>
-                <span className="text-xs text-green-600 dark:text-green-400 font-medium">En línea</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className={`
-            flex items-center space-x-1 transition-all duration-300
-            ${isCollapsed ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}
-          `}>
-            <button
-              onClick={handleRefreshPermissions}
-              onMouseEnter={() => setHoveredItem('refresh')}
-              onMouseLeave={() => setHoveredItem(null)}
-              className="
-                text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 
-                p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 
-                transition-all duration-300 transform hover:scale-110 hover:rotate-180
-                group/refresh
-              "
-              title="Actualizar permisos"
-            >
-              <svg 
-                xmlns="http://www.w3.org/2000/svg" 
-                fill="none" 
-                viewBox="0 0 24 24" 
-                strokeWidth={1.5} 
-                stroke="currentColor" 
-                className="h-5 w-5 transform group-hover/refresh:rotate-180 transition-transform duration-500"
-              >
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-              </svg>
-            </button>
-            
-            <button
-              onClick={handleLogout}
-              onMouseEnter={() => setHoveredItem('logout')}
-              onMouseLeave={() => setHoveredItem(null)}
-              className="
-                text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-400 
-                p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 
-                transition-all duration-300 transform hover:scale-110
-                group/logout
-              "
-              title="Cerrar sesión"
-            >
-              <ArrowRightOnRectangleIcon className="h-5 w-5 transform group-hover/logout:translate-x-1 transition-transform duration-300" />
-            </button>
-          </div>
-        </div>
+      <div>
+        <UserMenu 
+          user={user} 
+          isCollapsed={isCollapsed}
+          sidebarWidth={isCollapsed ? 'w-16' : 'w-64'}
+        />
       </div>
     </div>
   );

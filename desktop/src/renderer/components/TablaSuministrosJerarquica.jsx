@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { FaChevronDown, FaChevronRight, FaEdit, FaTrash, FaReceipt, FaBox, FaBuilding } from 'react-icons/fa';
+import { formatUnidadMedida } from '../utils/formatters';
 
 export default function TablaSuministrosJerarquica({ 
   suministros, 
@@ -122,9 +123,6 @@ export default function TablaSuministrosJerarquica({
                 Proveedor
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                Folio
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 Cantidad
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -144,7 +142,7 @@ export default function TablaSuministrosJerarquica({
           <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
             {gruposSuministros.length === 0 ? (
               <tr>
-                <td colSpan="9" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                <td colSpan="8" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                   <FaBox className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-4" />
                   <p>No hay suministros registrados</p>
                 </td>
@@ -180,6 +178,11 @@ export default function TablaSuministrosJerarquica({
                           <div className="text-sm text-gray-500 dark:text-gray-400">
                             {grupo.numero_factura && `Factura: ${grupo.numero_factura}`}
                           </div>
+                          {grupo.folio && (
+                            <div className="text-sm font-medium text-blue-600 dark:text-blue-400">
+                              Folio: {grupo.folio}
+                            </div>
+                          )}
                           <div className="text-xs text-gray-400 dark:text-gray-500">
                             {grupo.proyecto}
                           </div>
@@ -197,11 +200,6 @@ export default function TablaSuministrosJerarquica({
                         <div className="font-medium text-gray-900 dark:text-white">
                           {grupo.proveedor}
                         </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900 dark:text-white">
-                        {grupo.folio || '-'}
                       </div>
                     </td>
                     <td className="px-6 py-4">
@@ -266,14 +264,19 @@ export default function TablaSuministrosJerarquica({
                             <div className="font-medium text-gray-700 dark:text-gray-300">
                               {suministro.nombre}
                             </div>
+                            {suministro.codigo_producto && (
+                              <div className="text-sm text-blue-600 dark:text-blue-400 font-mono">
+                                {suministro.codigo_producto}
+                              </div>
+                            )}
+                            {suministro.folio && (
+                              <div className="text-sm font-medium text-green-600 dark:text-green-400">
+                                Folio: {suministro.folio}
+                              </div>
+                            )}
                             <div className="text-sm text-gray-500 dark:text-gray-400">
                               {suministro.descripcion_detallada || suministro.observaciones}
                             </div>
-                            {suministro.codigo_producto && (
-                              <div className="text-xs text-gray-400 dark:text-gray-500">
-                                Código: {suministro.codigo_producto}
-                              </div>
-                            )}
                           </div>
                         </div>
                       </td>
@@ -294,17 +297,12 @@ export default function TablaSuministrosJerarquica({
                       </td>
                       <td className="px-6 py-3">
                         <div className="text-sm text-gray-600 dark:text-gray-400">
-                          -
+                          {formatQuantity(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
                         </div>
                       </td>
                       <td className="px-6 py-3">
                         <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {formatQuantity(suministro.cantidad)} {suministro.unidad_medida}
-                        </div>
-                      </td>
-                      <td className="px-6 py-3">
-                        <div className="text-sm text-gray-600 dark:text-gray-400">
-                          {formatCurrency(suministro.precio_unitario)}/{suministro.unidad_medida}
+                          {formatCurrency(suministro.precio_unitario)}/{formatUnidadMedida(suministro.unidad_medida)}
                         </div>
                         <div className="font-medium text-gray-700 dark:text-gray-300">
                           Total: {formatCurrency(
@@ -328,13 +326,30 @@ export default function TablaSuministrosJerarquica({
                         </div>
                       </td>
                       <td className="px-6 py-3">
-                        <button
-                          onClick={() => onEdit(suministro)}
-                          className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300"
-                          title="Editar este artículo individual"
-                        >
-                          <FaEdit className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          {grupo.cantidad_items > 1 ? (
+                            // En recibos agrupados (múltiples suministros), deshabilitar edición individual
+                            <div className="flex items-center gap-2">
+                              <button
+                                className="text-gray-300 cursor-not-allowed dark:text-gray-600"
+                                title="No se puede editar artículos individuales en recibos agrupados. Edita el recibo completo desde la fila principal."
+                                disabled
+                              >
+                                <FaEdit className="w-4 h-4" />
+                              </button>
+                              <span className="text-xs text-gray-400 italic">Solo recibo completo</span>
+                            </div>
+                          ) : (
+                            // En recibos con un solo suministro, permitir edición individual
+                            <button
+                              onClick={() => onEdit(suministro)}
+                              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                              title="Editar este artículo"
+                            >
+                              <FaEdit className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
