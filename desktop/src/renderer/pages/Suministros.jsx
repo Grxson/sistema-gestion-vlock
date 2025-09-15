@@ -38,8 +38,9 @@ import {
   processImportFile 
 } from '../utils/exportUtils';
 import ReportePersonalizadoModal from '../components/ReportePersonalizado/ReportePersonalizadoModal';
-import useReportePersonalizado from '../hooks/useReportePersonalizado';
+import useReportePersonalizadoCompleto from '../hooks/useReportePersonalizadoCompleto';
 import ChartModal from '../components/ui/ChartModal';
+import ProgressModal from '../components/ui/ProgressModal';
 import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import {
   Chart as ChartJS,
@@ -54,7 +55,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { Bar, Line, Doughnut, Pie } from 'react-chartjs-2';
 import api from '../services/api';
 import ProveedorAutocomplete from '../components/common/ProveedorAutocomplete';
 import DateInput from '../components/ui/DateInput';
@@ -185,8 +186,10 @@ const Suministros = () => {
     setShowReportModal,
     reportConfig,
     setReportConfig,
-    handleCustomExport
-  } = useReportePersonalizado();
+    handleCustomExport,
+    loading: reportLoading,
+    progress: reportProgress
+  } = useReportePersonalizadoCompleto();
 
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
@@ -205,7 +208,8 @@ const Suministros = () => {
     title: '',
     subtitle: '',
     color: 'blue',
-    metrics: null
+    metrics: null,
+    customContent: null
   });
   
   const [notificationModal, setNotificationModal] = useState({
@@ -235,11 +239,14 @@ const Suministros = () => {
     codigosProducto: null,
     analisisTecnicoConcreto: null,
     concretoDetallado: null,
-    // Nuevas gráficas para horas
+    // Gráficas para horas
     horasPorMes: null,
     horasPorProyecto: null,
     horasPorEquipo: null,
-    comparativoHorasVsCosto: null
+    comparativoHorasVsCosto: null,
+    // Nuevas gráficas profesionales
+    gastosPorCategoriaDetallado: null,
+    analisisFrecuenciaSuministros: null
   });
   const [chartFilters, setChartFilters] = useState({
     fechaInicio: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0], // Enero del año actual
@@ -274,7 +281,10 @@ const Suministros = () => {
     comparativoUnidades: false,
     // Análisis por unidades específicas
     totalMetrosCubicos: false,
-    analisisUnidadesMedida: false
+    analisisUnidadesMedida: false,
+    // Nuevas gráficas profesionales
+    gastosPorCategoriaDetallado: false,
+    analisisFrecuenciaSuministros: false
   });
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [themeVersion, setThemeVersion] = useState(0); // Para forzar re-render cuando cambie el tema
@@ -514,6 +524,22 @@ const Suministros = () => {
         } catch (error) {
           console.error('❌ Error en comparativoHorasVsCosto:', error);
           chartDataProcessed.comparativoHorasVsCosto = null;
+        }
+
+        // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
+        try {
+          chartDataProcessed.gastosPorCategoriaDetallado = processGastosPorCategoriaDetallado(filteredData);
+        } catch (error) {
+          console.error('❌ Error en gastosPorCategoriaDetallado:', error);
+          chartDataProcessed.gastosPorCategoriaDetallado = null;
+        }
+
+        // Nueva gráfica: Análisis de Frecuencia de Suministros (Estilo Tabla + Gráfica)
+        try {
+          chartDataProcessed.analisisFrecuenciaSuministros = processAnalisisFrecuenciaSuministros(filteredData);
+        } catch (error) {
+          console.error('❌ Error en analisisFrecuenciaSuministros:', error);
+          chartDataProcessed.analisisFrecuenciaSuministros = null;
         }
 
         try {
@@ -1834,6 +1860,154 @@ const Suministros = () => {
     };
   };
 
+  // ======================= NUEVAS GRÁFICAS PROFESIONALES =======================
+
+  // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
+  const processGastosPorCategoriaDetallado = (data) => {
+    const gastosPorCategoria = {};
+    let totalGeneral = 0;
+    
+    data.forEach(suministro => {
+      const categoria = suministro.categoria || suministro.tipo_suministro || 'Sin Categoría';
+      const cantidad = parseFloat(suministro.cantidad) || 0;
+      const precio = parseFloat(suministro.precio_unitario) || 0;
+      const gasto = cantidad * precio;
+      
+      if (!gastosPorCategoria[categoria]) {
+        gastosPorCategoria[categoria] = 0;
+      }
+      gastosPorCategoria[categoria] += gasto;
+      totalGeneral += gasto;
+    });
+
+    // Ordenar por gasto descendente
+    const categoriasOrdenadas = Object.entries(gastosPorCategoria)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 8); // Top 8 categorías
+
+    // Calcular porcentajes
+    const labels = categoriasOrdenadas.map(([categoria, gasto]) => {
+      const porcentaje = ((gasto / totalGeneral) * 100).toFixed(1);
+      return `${categoria}\n$${formatCurrency(gasto)} (${porcentaje}%)`;
+    });
+
+    const valores = categoriasOrdenadas.map(([,gasto]) => gasto);
+    const porcentajes = categoriasOrdenadas.map(([,gasto]) => ((gasto / totalGeneral) * 100).toFixed(1));
+
+    const colores = [
+      'rgba(239, 68, 68, 0.8)',    // Red
+      'rgba(59, 130, 246, 0.8)',   // Blue  
+      'rgba(16, 185, 129, 0.8)',   // Emerald
+      'rgba(245, 158, 11, 0.8)',   // Amber
+      'rgba(139, 92, 246, 0.8)',   // Violet
+      'rgba(249, 115, 22, 0.8)',   // Orange
+      'rgba(6, 182, 212, 0.8)',    // Cyan
+      'rgba(132, 204, 22, 0.8)',   // Lime
+    ];
+
+    return {
+      labels: labels,
+      datasets: [{
+        label: 'Gasto por Categoría',
+        data: valores,
+        backgroundColor: colores.slice(0, categoriasOrdenadas.length),
+        borderColor: colores.slice(0, categoriasOrdenadas.length).map(color => color.replace('0.8', '1')),
+        borderWidth: 2,
+        hoverOffset: 4
+      }],
+      metadata: {
+        totalGeneral: totalGeneral,
+        totalCategorias: categoriasOrdenadas.length,
+        detalles: categoriasOrdenadas.map(([categoria, gasto], index) => ({
+          categoria,
+          gasto,
+          porcentaje: porcentajes[index],
+          color: colores[index]
+        }))
+      }
+    };
+  };
+
+  // Nueva gráfica: Análisis de Frecuencia de Suministros (Estilo Tabla + Gráfica)
+  const processAnalisisFrecuenciaSuministros = (data) => {
+    const frecuenciaPorProveedor = {};
+    const gastosPorProveedor = {};
+    
+    data.forEach(suministro => {
+      const proveedor = suministro.proveedor || 'Sin Proveedor';
+      const cantidad = parseFloat(suministro.cantidad) || 0;
+      const precio = parseFloat(suministro.precio_unitario) || 0;
+      const gasto = cantidad * precio;
+      
+      if (!frecuenciaPorProveedor[proveedor]) {
+        frecuenciaPorProveedor[proveedor] = 0;
+        gastosPorProveedor[proveedor] = 0;
+      }
+      frecuenciaPorProveedor[proveedor] += 1;
+      gastosPorProveedor[proveedor] += gasto;
+    });
+
+    // Ordenar por frecuencia descendente y tomar top 10
+    const proveedoresOrdenados = Object.entries(frecuenciaPorProveedor)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10);
+
+    const totalRegistros = Object.values(frecuenciaPorProveedor).reduce((sum, freq) => sum + freq, 0);
+    
+    // Crear datos para la tabla y gráfica
+    const analisisDetallado = proveedoresOrdenados.map(([proveedor, frecuencia]) => {
+      const porcentaje = ((frecuencia / totalRegistros) * 100).toFixed(1);
+      const gasto = gastosPorProveedor[proveedor];
+      return {
+        proveedor,
+        frecuencia,
+        porcentaje: parseFloat(porcentaje),
+        gasto,
+        formatoTabla: {
+          proveedor: proveedor.length > 15 ? proveedor.substring(0, 15) + '...' : proveedor,
+          frecuencia: frecuencia.toString(),
+          porcentaje: `${porcentaje}%`,
+          gasto: formatCurrency(gasto)
+        }
+      };
+    });
+
+    const colores = analisisDetallado.map((_, index) => {
+      const baseColors = [
+        'rgba(59, 130, 246, 0.8)',   // Blue
+        'rgba(16, 185, 129, 0.8)',   // Emerald
+        'rgba(245, 158, 11, 0.8)',   // Amber
+        'rgba(239, 68, 68, 0.8)',    // Red
+        'rgba(139, 92, 246, 0.8)',   // Violet
+        'rgba(249, 115, 22, 0.8)',   // Orange
+        'rgba(6, 182, 212, 0.8)',    // Cyan
+        'rgba(132, 204, 22, 0.8)',   // Lime
+        'rgba(244, 114, 182, 0.8)',  // Pink
+        'rgba(167, 139, 250, 0.8)'   // Purple
+      ];
+      return baseColors[index % baseColors.length];
+    });
+
+    return {
+      labels: analisisDetallado.map(item => item.formatoTabla.proveedor),
+      datasets: [{
+        label: 'Frecuencia de Suministros',
+        data: analisisDetallado.map(item => item.frecuencia),
+        backgroundColor: colores,
+        borderColor: colores.map(color => color.replace('0.8', '1')),
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false
+      }],
+      metadata: {
+        totalRegistros,
+        totalProveedores: analisisDetallado.length,
+        tablaCompleta: analisisDetallado,
+        encabezados: ['Proveedor', 'Frecuencia', 'Porcentaje', 'Gasto Total']
+      }
+    };
+  };
+
   // Función para obtener colores según el tema - Mejorada
   const getChartColors = () => {
     const isDarkMode = document.documentElement.classList.contains('dark');
@@ -2211,7 +2385,8 @@ const Suministros = () => {
       title: chartConfig.title || 'Gráfica',
       subtitle: chartConfig.subtitle || '',
       color: chartConfig.color || 'blue',
-      metrics: chartConfig.metrics || null
+      metrics: chartConfig.metrics || null,
+      customContent: chartConfig.customContent || null
     });
   };
 
@@ -2225,7 +2400,8 @@ const Suministros = () => {
       title: '',
       subtitle: '',
       color: 'blue',
-      metrics: null
+      metrics: null,
+      customContent: null
     });
   };
 
@@ -3632,7 +3808,7 @@ const Suministros = () => {
                   </div>
                 </div>
                 
-                {/* Gráficas Principales - Grid Compacto */}
+                {/* Gráficas Principales - Simplificado */}
                 <div className="space-y-4">
                   <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg">
                     <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
@@ -3703,183 +3879,52 @@ const Suministros = () => {
                         />
                         <span className="text-gray-700 dark:text-gray-300">Cantidad por Estado</span>
                       </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.distribucionTipos}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, distribucionTipos: e.target.checked})}
-                          className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Distribución de Tipos</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.tendenciaEntregas}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, tendenciaEntregas: e.target.checked})}
-                          className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Tendencia de Entregas</span>
-                      </label>
                     </div>
                   </div>
 
-                  <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg">
-                    <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
-                      <FaCog className="mr-1.5 h-3.5 w-3.5" />
-                      Análisis Técnico
-                    </h5>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.codigosProducto}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, codigosProducto: e.target.checked})}
-                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Códigos de Producto</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.analisisTecnicoConcreto}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, analisisTecnicoConcreto: e.target.checked})}
-                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Análisis Técnico</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.concretoDetallado}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, concretoDetallado: e.target.checked})}
-                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Concreto Detallado</span>
-                      </label>
+                  {/* Nuevas Gráficas Profesionales */}
+                  <div className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700">
+                    <div className="flex items-center space-x-3 mb-4">
+                      <div className="bg-purple-500 p-2 rounded-lg">
+                        <FaChartPie className="h-5 w-5 text-white" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-purple-800 dark:text-purple-200">
+                        Gráficas Profesionales Avanzadas
+                      </h4>
                     </div>
-                  </div>
-
-                  {/* Sección de Análisis por Unidades */}
-                  <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                    <h5 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200 mb-2 flex items-center">
-                      <FaRuler className="mr-1.5 h-3.5 w-3.5" />
-                      Análisis por Unidades de Medida
-                    </h5>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.totalMetrosCubicos}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, totalMetrosCubicos: e.target.checked})}
-                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Total m³ (Concreto)</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.analisisUnidadesMedida}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, analisisUnidadesMedida: e.target.checked})}
-                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Distribución por Unidades</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Sección de Gráficas de Horas */}
-                  <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <h5 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2 flex items-center">
-                      <FaClock className="mr-1.5 h-3.5 w-3.5" />
-                      Análisis de Horas (Maquinaria y Equipos)
-                    </h5>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.horasPorMes}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, horasPorMes: e.target.checked})}
-                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Horas por Mes</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.horasPorEquipo}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, horasPorEquipo: e.target.checked})}
-                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Top Equipos por Horas</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.comparativoHorasVsCosto}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, comparativoHorasVsCosto: e.target.checked})}
-                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Horas vs Costo</span>
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Análisis de Unidades de Medida */}
-              <div className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border border-teal-200 dark:border-teal-800 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <FaCog className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                  <h4 className="font-medium text-teal-800 dark:text-teal-200">Análisis de Unidades de Medida</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.distribucionUnidades}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, distribucionUnidades: e.target.checked})}
-                          className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Distribución por Unidades</span>
-                      </label>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.cantidadPorUnidad}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, cantidadPorUnidad: e.target.checked})}
-                          className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Cantidad por Unidad</span>
-                      </label>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.valorPorUnidad}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, valorPorUnidad: e.target.checked})}
-                          className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Valor por Unidad</span>
-                      </label>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.comparativoUnidades}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, comparativoUnidades: e.target.checked})}
-                          className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Cantidad vs Valor</span>
-                      </label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <div className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2">
+                          Análisis Financiero Detallado
+                        </div>
+                        <div className="space-y-2">
+                          <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                            <input
+                              type="checkbox"
+                              checked={selectedCharts.gastosPorCategoriaDetallado}
+                              onChange={(e) => setSelectedCharts({...selectedCharts, gastosPorCategoriaDetallado: e.target.checked})}
+                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                            <span className="text-gray-700 dark:text-gray-300">Gastos por Categoría (con %)</span>
+                          </label>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2">
+                          Análisis de Frecuencia
+                        </div>
+                        <div className="space-y-2">
+                          <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                            <input
+                              type="checkbox"
+                              checked={selectedCharts.analisisFrecuenciaSuministros}
+                              onChange={(e) => setSelectedCharts({...selectedCharts, analisisFrecuenciaSuministros: e.target.checked})}
+                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                            <span className="text-gray-700 dark:text-gray-300">Frecuencia por Proveedor</span>
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3904,7 +3949,7 @@ const Suministros = () => {
                 
                 {/* Gráfica de Gastos por Mes */}
                 {selectedCharts.gastosPorMes && chartData.gastosPorMes && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="gastosPorMes">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gastos por Mes</h3>
@@ -3954,7 +3999,7 @@ const Suministros = () => {
 
                 {/* Gráfica de Valor por Categoría */}
                 {selectedCharts.valorPorCategoria && chartData.valorPorCategoria && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="valorPorCategoria">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Valor Total por Categoría</h3>
@@ -4002,7 +4047,7 @@ const Suministros = () => {
 
                 {/* Gráfica de Suministros por Mes */}
                 {selectedCharts.suministrosPorMes && chartData.suministrosPorMes && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="suministrosPorMes">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Suministros Solicitados por Mes</h3>
@@ -4088,7 +4133,7 @@ const Suministros = () => {
 
                 {/* Gráfica de Gastos por Proyecto */}
                 {selectedCharts.gastosPorProyecto && chartData.gastosPorProyecto && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="gastosPorProyecto">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gastos por Proyecto</h3>
@@ -4179,7 +4224,7 @@ const Suministros = () => {
 
                 {/* Gráfica de Gastos por Proveedor */}
                 {selectedCharts.gastosPorProveedor && chartData.gastosPorProveedor && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="gastosPorProveedor">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gastos por Proveedor</h3>
@@ -5215,6 +5260,252 @@ const Suministros = () => {
                   </div>
                 )}
 
+                {/* ===== NUEVAS GRÁFICAS PROFESIONALES ===== */}
+
+                {/* Gráfica de Gastos por Categoría Detallado (Estilo Pastel Profesional) */}
+                {selectedCharts.gastosPorCategoriaDetallado && chartData.gastosPorCategoriaDetallado && (
+                  <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="gastosPorCategoriaDetallado">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Distribución de Gastos por Categoría</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Análisis detallado con porcentajes y montos por categoría
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'pie',
+                            data: chartData.gastosPorCategoriaDetallado,
+                            title: 'Distribución de Gastos por Categoría',
+                            subtitle: 'Análisis detallado con porcentajes y montos por categoría',
+                            options: {
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: {
+                                  display: false // Ocultar leyenda ya que tenemos la tabla detallada
+                                },
+                                tooltip: {
+                                  backgroundColor: getChartColors().tooltipBg,
+                                  titleColor: getChartColors().tooltipText,
+                                  bodyColor: getChartColors().tooltipText,
+                                  callbacks: {
+                                    title: function(context) {
+                                      const detalle = chartData.gastosPorCategoriaDetallado.metadata?.detalles[context[0].dataIndex];
+                                      return detalle?.categoria || 'Categoría';
+                                    },
+                                    label: function(context) {
+                                      const detalle = chartData.gastosPorCategoriaDetallado.metadata?.detalles[context.dataIndex];
+                                      return [
+                                        `Gasto: ${formatCurrency(detalle?.gasto || 0)}`,
+                                        `Porcentaje: ${detalle?.porcentaje}%`
+                                      ];
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            customContent: chartData.gastosPorCategoriaDetallado.metadata
+                          })}
+                          className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors duration-200"
+                          title="Abrir en modal"
+                        >
+                          <ArrowsPointingOutIcon className="w-5 h-5" />
+                        </button>
+                        <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
+                          <FaChartPie className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Gráfica de Pastel */}
+                      <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <div className="h-80">
+                          <Pie
+                            key={`gastos-categoria-detallado-${themeVersion}`}
+                            data={chartData.gastosPorCategoriaDetallado}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: {
+                                  display: false // Ocultamos la leyenda por defecto
+                                },
+                                tooltip: {
+                                  backgroundColor: getChartColors().tooltipBg,
+                                  titleColor: getChartColors().tooltipText,
+                                  bodyColor: getChartColors().tooltipText,
+                                  callbacks: {
+                                    title: function(context) {
+                                      const detalle = chartData.gastosPorCategoriaDetallado.metadata?.detalles[context[0].dataIndex];
+                                      return detalle?.categoria || 'Categoría';
+                                    },
+                                    label: function(context) {
+                                      const detalle = chartData.gastosPorCategoriaDetallado.metadata?.detalles[context.dataIndex];
+                                      return [
+                                        `Gasto: ${formatCurrency(detalle?.gasto || 0)}`,
+                                        `Porcentaje: ${detalle?.porcentaje}%`
+                                      ];
+                                    }
+                                  }
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Tabla de Datos */}
+                      <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Desglose Detallado</h4>
+                        <div className="space-y-3 max-h-80 overflow-y-auto">
+                          {chartData.gastosPorCategoriaDetallado.metadata?.detalles?.map((detalle, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
+                              <div className="flex items-center space-x-3">
+                                <div 
+                                  className="w-4 h-4 rounded-full" 
+                                  style={{ backgroundColor: detalle.color }}
+                                ></div>
+                                <span className="font-medium text-gray-900 dark:text-white text-sm">
+                                  {detalle.categoria}
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-bold text-gray-900 dark:text-white">
+                                  {formatCurrency(detalle.gasto)}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {detalle.porcentaje}%
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                          <div className="flex justify-between items-center font-bold text-gray-900 dark:text-white">
+                            <span>Total General:</span>
+                            <span>{formatCurrency(chartData.gastosPorCategoriaDetallado.metadata?.totalGeneral || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Análisis de Frecuencia de Suministros (Estilo Tabla + Gráfica) */}
+                {selectedCharts.analisisFrecuenciaSuministros && chartData.analisisFrecuenciaSuministros && (
+                  <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="analisisFrecuenciaSuministros">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Análisis de Frecuencia por Proveedor</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Distribución de suministros por proveedor con estadísticas detalladas
+                        </p>
+                      </div>
+                      <div className="bg-indigo-100 dark:bg-indigo-900/30 p-3 rounded-lg">
+                        <FaChartBar className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      {/* Gráfica de Barras */}
+                      <div className="lg:col-span-2 bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <div className="h-80">
+                          <Bar
+                            key={`frecuencia-suministros-${themeVersion}`}
+                            data={chartData.analisisFrecuenciaSuministros}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: {
+                                  display: false
+                                },
+                                tooltip: {
+                                  backgroundColor: getChartColors().tooltipBg,
+                                  titleColor: getChartColors().tooltipText,
+                                  bodyColor: getChartColors().tooltipText,
+                                  callbacks: {
+                                    title: function(context) {
+                                      const detalle = chartData.analisisFrecuenciaSuministros.metadata?.tablaCompleta[context[0].dataIndex];
+                                      return detalle?.proveedor || 'Proveedor';
+                                    },
+                                    label: function(context) {
+                                      const detalle = chartData.analisisFrecuenciaSuministros.metadata?.tablaCompleta[context.dataIndex];
+                                      return [
+                                        `Frecuencia: ${detalle?.frecuencia} suministros`,
+                                        `Porcentaje: ${detalle?.porcentaje}%`,
+                                        `Gasto Total: ${formatCurrency(detalle?.gasto || 0)}`
+                                      ];
+                                    }
+                                  }
+                                }
+                              },
+                              scales: {
+                                y: {
+                                  beginAtZero: true,
+                                  grid: { color: getChartColors().gridColor },
+                                  ticks: {
+                                    color: getChartColors().textColor,
+                                    callback: function(value) {
+                                      return value + ' suministros';
+                                    }
+                                  }
+                                },
+                                x: {
+                                  grid: { display: false },
+                                  ticks: {
+                                    color: getChartColors().textColor,
+                                    maxRotation: 45,
+                                    font: { size: 10 }
+                                  }
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Tabla Estadística */}
+                      <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Proveedores</h4>
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                          <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-600 pb-2">
+                            <span>Proveedor</span>
+                            <span className="text-center">Freq.</span>
+                            <span className="text-right">%</span>
+                          </div>
+                          {chartData.analisisFrecuenciaSuministros.metadata?.tablaCompleta?.map((item, index) => (
+                            <div key={index} className="grid grid-cols-3 gap-2 py-2 text-sm border-b border-gray-100 dark:border-gray-700">
+                              <span className="font-medium text-gray-900 dark:text-white truncate" title={item.proveedor}>
+                                {item.formatoTabla.proveedor}
+                              </span>
+                              <span className="text-center text-gray-600 dark:text-gray-300">
+                                {item.formatoTabla.frecuencia}
+                              </span>
+                              <span className="text-right text-gray-600 dark:text-gray-300 font-medium">
+                                {item.formatoTabla.porcentaje}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                          <div className="text-center">
+                            <div className="text-sm font-bold text-gray-900 dark:text-white">
+                              Total: {chartData.analisisFrecuenciaSuministros.metadata?.totalRegistros} suministros
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {chartData.analisisFrecuenciaSuministros.metadata?.totalProveedores} proveedores únicos
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Mensaje cuando no hay gráficas seleccionadas */}
                 {!Object.values(selectedCharts).some(selected => selected) && (
                   <div className="col-span-full bg-gray-50 dark:bg-dark-200 p-8 rounded-lg text-center">
@@ -5410,8 +5701,7 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <div className="text-sm text-gray-500 dark:text-gray-400">
-                                  <span className="inline-block w-2 h-2 bg-gray-300 dark:bg-gray-600 rounded-full mr-2"></span>
-                                  Elemento del grupo
+
                                 </div>
                               </td>
                             </tr>
@@ -5897,9 +6187,9 @@ const Suministros = () => {
           estado: filters.estado,
           fechaInicio: filters.fechaInicio,
           fechaFin: filters.fechaFin
-        }, proyectos, proveedores)}
+        }, proyectos, proveedores, chartData)}
         availableCharts={[
-          // Análisis Financiero
+          // Análisis Financiero Principal
           { key: 'gastosPorMes', label: 'Gastos por Mes' },
           { key: 'valorPorCategoria', label: 'Valor por Categoría' },
           { key: 'gastosPorProyecto', label: 'Gastos por Proyecto' },
@@ -5907,20 +6197,9 @@ const Suministros = () => {
           // Análisis de Cantidad y Estado
           { key: 'suministrosPorMes', label: 'Cantidad por Mes' },
           { key: 'cantidadPorEstado', label: 'Cantidad por Estado' },
-          { key: 'distribucionTipos', label: 'Distribución de Tipos' },
-          { key: 'tendenciaEntregas', label: 'Tendencia de Entregas' },
-          // Análisis Técnico
-          { key: 'codigosProducto', label: 'Códigos de Producto' },
-          { key: 'analisisTecnicoConcreto', label: 'Análisis Técnico' },
-          { key: 'concretoDetallado', label: 'Concreto Detallado' },
-          // Análisis por Unidades de Medida
-          { key: 'totalM3Concreto', label: 'Total m³ (Concreto)' },
-          { key: 'distribucionPorUnidades', label: 'Distribución por Unidades' },
-          // Análisis de Horas (Maquinaria y Equipos)
-          { key: 'horasPorMes', label: 'Horas por Mes' },
-          { key: 'horasPorProyecto', label: 'Horas por Proyecto' },
-          { key: 'topEquiposPorHoras', label: 'Top Equipos por Horas' },
-          { key: 'horasVsCosto', label: 'Horas vs Costo' }
+          // Nuevas Gráficas Profesionales
+          { key: 'gastosPorCategoriaDetallado', label: '📊 Gastos por Categoría (con %)' },
+          { key: 'analisisFrecuenciaSuministros', label: '📈 Frecuencia por Proveedor' }
         ]}
       />
 
@@ -5957,6 +6236,14 @@ const Suministros = () => {
         subtitle={chartModal.subtitle}
         color={chartModal.color}
         metrics={chartModal.metrics}
+        customContent={chartModal.customContent}
+      />
+
+      {/* Modal de Progreso para Exportación */}
+      <ProgressModal
+        isOpen={reportLoading}
+        progress={reportProgress}
+        message="Generando reporte personalizado..."
       />
     </div>
   );

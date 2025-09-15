@@ -84,12 +84,17 @@ const ReportePersonalizadoModal = ({
                   onChange={(e) => setReportConfig({...reportConfig, includeTable: e.target.checked})}
                   className="mr-3 h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
-                <span className="text-sm text-gray-700 dark:text-gray-300">Tabla de Suministros</span>
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Tabla Completa de Suministros
+                  <span className="block text-xs text-gray-500">
+                    (Incluye todos los registros con detalles completos)
+                  </span>
+                </span>
               </label>
 
               {reportConfig.includeTable && (
                 <div className="ml-7">
-                  <label className="flex items-center">
+                  <label className="flex items-center mb-2">
                     <input
                       type="radio"
                       name="tableFormat"
@@ -98,7 +103,9 @@ const ReportePersonalizadoModal = ({
                       onChange={(e) => setReportConfig({...reportConfig, tableFormat: e.target.value})}
                       className="mr-2 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Mostrar con ID</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      ID Original (conservar números reales de suministros)
+                    </span>
                   </label>
                   <label className="flex items-center">
                     <input
@@ -109,7 +116,9 @@ const ReportePersonalizadoModal = ({
                       onChange={(e) => setReportConfig({...reportConfig, tableFormat: e.target.value})}
                       className="mr-2 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-600 dark:text-gray-400">Tabla Enumerada (1, 2, 3...)</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      Enumerada (1, 2, 3... + ID original)
+                    </span>
                   </label>
                 </div>
               )}

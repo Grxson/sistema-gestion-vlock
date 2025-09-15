@@ -17,7 +17,8 @@ const ChartModal = ({
   title = 'Gráfica', 
   subtitle = '',
   color = 'blue',
-  metrics = null
+  metrics = null,
+  customContent = null // Nuevo parámetro para contenido personalizado
 }) => {
   const chartRef = useRef(null);
   const modalRef = useRef(null);
@@ -266,29 +267,100 @@ const ChartModal = ({
             </div>
           )}
           
-          <div 
-            ref={chartRef}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6"
-            style={{ height: '60vh', minHeight: '400px' }}
-          >
-            {hasValidData ? (
-              renderChart()
-            ) : (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <div className="text-gray-400 dark:text-gray-600 mb-4">
-                    <XMarkIcon className="h-16 w-16 mx-auto" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                    No hay datos disponibles
-                  </h3>
-                  <p className="text-gray-500 dark:text-gray-400">
-                    Los datos de la gráfica no están disponibles o son inválidos.
-                  </p>
+          {/* Layout especial para gráfica con tabla personalizada */}
+          {customContent ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Gráfica */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-6">
+                <div style={{ height: '400px' }}>
+                  {hasValidData ? (
+                    renderChart()
+                  ) : (
+                    <div className="flex items-center justify-center h-full">
+                      <div className="text-center">
+                        <div className="text-gray-400 dark:text-gray-600 mb-4">
+                          <XMarkIcon className="h-16 w-16 mx-auto" />
+                        </div>
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                          No hay datos disponibles
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400">
+                          Los datos de la gráfica no están disponibles o son inválidos.
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            )}
-          </div>
+              
+              {/* Tabla Desglosada - Estilo Original */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-6">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  Desglose Detallado
+                </h4>
+                
+                {/* Lista de categorías - Sin scroll, todas visibles */}
+                <div className="space-y-3">
+                  {customContent.detalles?.map((detalle, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-600 rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200">
+                      <div className="flex items-center space-x-3">
+                        <div 
+                          className="w-4 h-4 rounded-full" 
+                          style={{ backgroundColor: detalle.color }}
+                        ></div>
+                        <span className="font-medium text-gray-900 dark:text-white text-sm">
+                          {detalle.categoria}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-gray-900 dark:text-white">
+                          {formatCurrency(detalle.gasto)}
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {detalle.porcentaje}%
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                
+                {/* Total General */}
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-500">
+                  <div className="flex justify-between items-center p-3 bg-white dark:bg-gray-600 rounded-lg shadow-sm">
+                    <span className="font-bold text-gray-900 dark:text-white">Total General:</span>
+                    <span className="text-lg font-bold text-gray-900 dark:text-white">
+                      {formatCurrency(customContent.totalGeneral || 0)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            /* Layout normal para otras gráficas */
+            <div 
+              ref={chartRef}
+              className="bg-white dark:bg-gray-800 rounded-xl p-6"
+              style={{ height: '60vh', minHeight: '400px' }}
+            >
+              {hasValidData ? (
+                renderChart()
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="text-gray-400 dark:text-gray-600 mb-4">
+                      <XMarkIcon className="h-16 w-16 mx-auto" />
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                      No hay datos disponibles
+                    </h3>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Los datos de la gráfica no están disponibles o son inválidos.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
