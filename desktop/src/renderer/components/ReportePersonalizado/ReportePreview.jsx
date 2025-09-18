@@ -99,68 +99,50 @@ const ReportePreview = ({
           </span>
         </h2>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs border-collapse border border-gray-300">
+        <div className="overflow-x-auto" style={{ margin: '0 -20px' }}>
+          <table className="w-full text-sm border-collapse border border-gray-300" style={{ minWidth: '100%', tableLayout: 'fixed', width: 'calc(100% + 40px)' }}>
             <thead>
               <tr className="bg-gray-100">
                 {config.formatoTabla === 'enumerada' && (
-                  <th className="border border-gray-300 px-2 py-2 text-left font-semibold">#</th>
+                  <th className="border border-gray-300 px-3 py-3 text-left font-semibold" style={{ width: '6%' }}>#</th>
                 )}
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">ID</th>
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Nombre</th>
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Categoría</th>
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Proveedor</th>
-                <th className="border border-gray-300 px-2 py-2 text-right font-semibold">Cantidad</th>
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Unidad</th>
-                <th className="border border-gray-300 px-2 py-2 text-right font-semibold">Precio Unit.</th>
-                <th className="border border-gray-300 px-2 py-2 text-right font-semibold">Total</th>
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Estado</th>
-                <th className="border border-gray-300 px-2 py-2 text-left font-semibold">Fecha</th>
+                <th className="border border-gray-300 px-3 py-3 text-left font-semibold" style={{ width: '28%' }}>Nombre</th>
+                <th className="border border-gray-300 px-3 py-3 text-left font-semibold" style={{ width: '14%' }}>Categoría</th>
+                <th className="border border-gray-300 px-3 py-3 text-left font-semibold" style={{ width: '18%' }}>Proveedor</th>
+                <th className="border border-gray-300 px-3 py-3 text-right font-semibold" style={{ width: '8%' }}>Cant.</th>
+                <th className="border border-gray-300 px-3 py-3 text-left font-semibold" style={{ width: '8%' }}>Unidad</th>
+                <th className="border border-gray-300 px-3 py-3 text-right font-semibold" style={{ width: '9%' }}>Precio Unit.</th>
+                <th className="border border-gray-300 px-3 py-3 text-right font-semibold" style={{ width: '9%' }}>Total</th>
               </tr>
             </thead>
             <tbody>
               {suministrosPaginados.map((suministro, index) => (
                 <tr key={suministro.id_suministro} className="hover:bg-gray-50">
                   {config.formatoTabla === 'enumerada' && (
-                    <td className="border border-gray-300 px-2 py-2 text-center">
+                    <td className="border border-gray-300 px-3 py-2 text-center">
                       {index + 1}
                     </td>
                   )}
-                  <td className="border border-gray-300 px-2 py-2">
-                    {suministro.id_suministro}
-                  </td>
-                  <td className="border border-gray-300 px-2 py-2">
+                  <td className="border border-gray-300 px-3 py-2" style={{ wordWrap: 'break-word' }}>
                     {suministro.nombre_suministro}
                   </td>
-                  <td className="border border-gray-300 px-2 py-2">
+                  <td className="border border-gray-300 px-3 py-2">
                     {suministro.categoria || 'N/A'}
                   </td>
-                  <td className="border border-gray-300 px-2 py-2">
+                  <td className="border border-gray-300 px-3 py-2" style={{ wordWrap: 'break-word' }}>
                     {suministro.nombre_proveedor || 'N/A'}
                   </td>
-                  <td className="border border-gray-300 px-2 py-2 text-right">
+                  <td className="border border-gray-300 px-3 py-2 text-right">
                     {formatNumber(suministro.cantidad, 2)}
                   </td>
-                  <td className="border border-gray-300 px-2 py-2">
+                  <td className="border border-gray-300 px-3 py-2">
                     {suministro.unidad_medida || 'N/A'}
                   </td>
-                  <td className="border border-gray-300 px-2 py-2 text-right">
+                  <td className="border border-gray-300 px-3 py-2 text-right">
                     {formatCurrency(suministro.precio_unitario, 2)}
                   </td>
-                  <td className="border border-gray-300 px-2 py-2 text-right font-semibold">
+                  <td className="border border-gray-300 px-3 py-2 text-right font-semibold">
                     {formatCurrency(suministro.cantidad * suministro.precio_unitario, 2)}
-                  </td>
-                  <td className="border border-gray-300 px-2 py-2">
-                    <span className={`px-2 py-1 rounded text-xs ${
-                      suministro.estado === 'Recibido' ? 'bg-green-100 text-green-800' :
-                      suministro.estado === 'Pendiente' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {suministro.estado || 'N/A'}
-                    </span>
-                  </td>
-                  <td className="border border-gray-300 px-2 py-2">
-                    {formatDate(suministro.fecha_solicitud)}
                   </td>
                 </tr>
               ))}
@@ -183,15 +165,15 @@ const ReportePreview = ({
       <div className="p-8 text-center break-after-page">
         <div className="mb-8">
           <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-800 rounded-full mx-auto mb-4 flex items-center justify-center">
-            <span className="text-white font-bold text-2xl">V</span>
+            <span className="text-white font-bold text-2xl">R</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">VLOCK SISTEMAS</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Reporte de Gastos</h1>
           <p className="text-gray-600">Sistema de Gestión de Suministros</p>
         </div>
 
         <div className="border-t border-b border-gray-200 py-8 my-8">
           <h2 className="text-2xl font-bold text-gray-800 mb-4">
-            {config.titulo || 'REPORTE DE SUMINISTROS'}
+            {config.titulo || 'Reporte de Gastos'}
           </h2>
           {config.subtitulo && (
             <p className="text-lg text-gray-600 mb-4">{config.subtitulo}</p>
@@ -202,7 +184,7 @@ const ReportePreview = ({
         </div>
 
         <div className="text-left max-w-md mx-auto">
-          <h3 className="font-semibold text-gray-800 mb-2">Contenido del Reporte:</h3>
+          <h3 className="font-semibold text-gray-800 mb-2">Incluye:</h3>
           <ul className="text-sm text-gray-600 space-y-1">
             {config.incluirEstadisticas && <li>• Estadísticas Generales</li>}
             {config.incluirTabla && <li>• Tabla Detallada de Suministros</li>}
