@@ -830,10 +830,15 @@ export default function FormularioSuministros({
 
   // Función para proceder con el envío después de confirmar duplicados
   const proceedWithSubmit = useCallback(async () => {
+    // NO permitir continuar - solo cerrar el modal y mostrar mensaje
     setShowDuplicatesWarning(false);
     setDuplicatesWarningData([]);
-    await submitFormData();
-  }, []);
+    
+    // Mostrar mensaje toast de error
+    showError(
+      `❌ No se puede crear el suministro: El folio "${reciboInfo.folio}" ya existe para este proveedor. Por favor, verifique el folio o la información del proveedor.`
+    );
+  }, [reciboInfo.folio, showError]);
 
   // Función para cancelar el envío cuando hay duplicados
   const cancelSubmit = useCallback(() => {
@@ -884,25 +889,30 @@ export default function FormularioSuministros({
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
       }
       
-      const existingDuplicates = existingSuministros.filter(suministro => {
+      // Verificar duplicados del MISMO proveedor (esto SÍ debe bloquearse)
+      const duplicadosMismoProveedor = existingSuministros.filter(suministro => {
         // Excluir suministros que estamos editando
         if (editingIds.includes(suministro.id_suministro)) {
-          if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-          }
           return false;
         }
 
-        // Verificar folio exacto
-        return suministro.folio && 
-               suministro.folio.toLowerCase().trim() === reciboInfo.folio.toLowerCase().trim();
+        // Verificar folio exacto Y mismo proveedor
+        const mismoFolio = suministro.folio && 
+                          suministro.folio.toLowerCase().trim() === reciboInfo.folio.toLowerCase().trim();
+        
+        const mismoProveedor = suministro.id_proveedor && 
+                              reciboInfo.proveedor_info?.id_proveedor &&
+                              suministro.id_proveedor === reciboInfo.proveedor_info.id_proveedor;
+
+        return mismoFolio && mismoProveedor;
       });
 
-      if (existingDuplicates.length > 0) {
+      if (duplicadosMismoProveedor.length > 0) {
         if (process.env.NODE_ENV === 'development') {
         }
         
-        // Mostrar advertencia visual en lugar de alert
-        setDuplicatesWarningData(existingDuplicates);
+        // BLOQUEAR: Mostrar mensaje de error específico para duplicados del mismo proveedor
+        setDuplicatesWarningData(duplicadosMismoProveedor);
         setShowDuplicatesWarning(true);
         return;
       }
@@ -1534,7 +1544,7 @@ export default function FormularioSuministros({
             onClick={handleSubmit}
             disabled={loading || suministros.length === 0}
             className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg disabled:cursor-not-allowed flex items-center gap-2 transition-colors font-medium shadow-md"
-          >
+          > 
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -1562,11 +1572,11 @@ export default function FormularioSuministros({
               </div>
               <div className="ml-3 w-full">
                 <h3 className="text-lg font-medium text-red-800 dark:text-red-300">
-                  🚫 FOLIO DUPLICADO DETECTADO
+                  🚫 FOLIO DUPLICADO - NO PERMITIDO
                 </h3>
                 <div className="mt-2">
                   <p className="text-sm text-red-700 dark:text-red-400">
-                    ¡ATENCIÓN! El folio "<strong>{reciboInfo.folio}</strong>" ya existe en:
+                    ❌ <strong>ERROR:</strong> El folio "<strong>{reciboInfo.folio}</strong>" ya existe para este mismo proveedor:
                   </p>
                   <div className="mt-3 max-h-40 overflow-y-auto">
                     {duplicatesWarningData.slice(0, 5).map((dup, idx) => (
@@ -1582,24 +1592,34 @@ export default function FormularioSuministros({
                       </div>
                     )}
                   </div>
-                  <p className="mt-3 text-sm text-red-700 dark:text-red-400">
-                    Los folios deben ser únicos. ¿Está seguro de que desea continuar?
+                  <div className="mt-3 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                    <p className="text-sm text-red-800 dark:text-red-300 font-medium">
+                      ⚠️ <strong>Acción requerida:</strong>
+                    </p>
+                    <ul className="mt-1 text-xs text-red-700 dark:text-red-400 list-disc list-inside">
+                      <li>Verifique que el folio sea correcto</li>
+                      <li>Confirme que está seleccionando el proveedor correcto</li>
+                      <li>Use un folio diferente si es un nuevo suministro</li>
+                    </ul>
+                  </div>
+                  <p className="mt-3 text-sm text-red-700 dark:text-red-400 font-medium">
+                    📝 <strong>Nota:</strong> Puede usar el mismo folio solo si es de un proveedor diferente.
                   </p>
                 </div>
                 <div className="mt-4 flex space-x-3">
                   <button
                     type="button"
                     onClick={proceedWithSubmit}
-                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                    className="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
                   >
-                    Sí, continuar
+                    🔍 Entendido, revisar información
                   </button>
                   <button
                     type="button"
                     onClick={cancelSubmit}
                     className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
                   >
-                    Cancelar
+                    ✖️ Cerrar
                   </button>
                 </div>
               </div>
