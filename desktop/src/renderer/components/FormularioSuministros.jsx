@@ -4,6 +4,7 @@ import ProveedorAutocomplete from "./common/ProveedorAutocomplete";
 import ProveedorModal from "./proveedores/ProveedorModal";
 import DateInput from "./ui/DateInput";
 import TimeInput from "./ui/TimeInput";
+import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
 import { debugTools } from '../hooks/useFormDebug';
 
@@ -128,6 +129,7 @@ export default function FormularioSuministros({
   // Estados para validación de duplicados y autocompletado
   const [duplicatesSuggestions, setDuplicatesSuggestions] = useState([]);
   const [showDuplicatesWarning, setShowDuplicatesWarning] = useState(false);
+  const [duplicatesWarningData, setDuplicatesWarningData] = useState([]);
   const [nameSuggestions, setNameSuggestions] = useState({});
   const [showNameSuggestions, setShowNameSuggestions] = useState({});
   const [codeSuggestions, setCodeSuggestions] = useState({});
@@ -137,6 +139,9 @@ export default function FormularioSuministros({
   // Estados para el modal de proveedores
   const [showProveedorModal, setShowProveedorModal] = useState(false);
   const [proveedorModalData, setProveedorModalData] = useState(null);
+
+  // Hook para toast notifications
+  const { showSuccess, showError } = useToast();
 
   // =================== DEBUGGING Y MONITORING ===================
   debugTools.useRenderDebug('FormularioSuministros', { 
@@ -154,11 +159,14 @@ export default function FormularioSuministros({
     suministros, existingSuministros, reciboInfo
   ]);
   
-  // Validador automático de estado (solo en desarrollo)
+  // Validador automático de estado (solo en desarrollo y cuando hay datos)
   debugTools.useFormStateValidator(reciboInfo, {
-    id_proyecto: { required: true },
-    proveedor_info: { required: true },
-    fecha: { required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ }
+    // Solo validar campos si el formulario tiene datos o se está enviando
+    ...(reciboInfo.folio || reciboInfo.proveedor_info || suministros.some(s => s.nombre) ? {
+      id_proyecto: { required: true },
+      proveedor_info: { required: true },
+      fecha: { required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ }
+    } : {})
   });
   
   // Validador para suministros (sin usar forEach para evitar violación de reglas de hooks)
@@ -820,7 +828,20 @@ export default function FormularioSuministros({
     return !hasErrors && Object.keys(newErrors).length === 0;
   }, [reciboInfo, suministros]);
 
-  // Manejo del envío
+  // Función para proceder con el envío después de confirmar duplicados
+  const proceedWithSubmit = useCallback(async () => {
+    setShowDuplicatesWarning(false);
+    setDuplicatesWarningData([]);
+    await submitFormData();
+  }, []);
+
+  // Función para cancelar el envío cuando hay duplicados
+  const cancelSubmit = useCallback(() => {
+    setShowDuplicatesWarning(false);
+    setDuplicatesWarningData([]);
+  }, []);
+
+  // Manejo del envío (con validación de duplicados)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -880,30 +901,19 @@ export default function FormularioSuministros({
         if (process.env.NODE_ENV === 'development') {
         }
         
-        const duplicateInfo = existingDuplicates.slice(0, 3).map(dup => {
-          const proveedor = dup.proveedor || dup.proveedor?.nombre || 'Sin proveedor';
-          const fecha = dup.fecha ? new Date(dup.fecha).toLocaleDateString('es-MX') : 'Sin fecha';
-          return `• ${dup.nombre} (${proveedor} - ${fecha})`;
-        }).join('\n');
-
-        const moreMessage = existingDuplicates.length > 3 ? `\n... y ${existingDuplicates.length - 3} más` : '';
-        
-        const warningTitle = "🚫 FOLIO DUPLICADO DETECTADO";
-        const warningMessage = `¡ATENCIÓN! El folio "${reciboInfo.folio}" ya existe en:\n\n${duplicateInfo}${moreMessage}\n\n` +
-                         `Los folios deben ser únicos. ¿Está seguro de que desea continuar?`;
-
-        const confirmed = window.confirm(warningMessage);
-        if (!confirmed) {
-          if (process.env.NODE_ENV === 'development') {
-          }
-          return;
-        }
-        
-        if (process.env.NODE_ENV === 'development') {
-        }
+        // Mostrar advertencia visual en lugar de alert
+        setDuplicatesWarningData(existingDuplicates);
+        setShowDuplicatesWarning(true);
+        return;
       }
     }
     
+    // Si no hay duplicados, proceder con el envío
+    await submitFormData();
+  };
+
+  // Función principal para envío de datos (sin validación de duplicados)
+  const submitFormData = async () => {
     setLoading(true);
     
     try {
@@ -979,19 +989,34 @@ export default function FormularioSuministros({
     setProveedorModalData(null);
   };
 
-  const handleProveedorSaved = async (proveedor) => {
-    // Cerrar modal
-    setShowProveedorModal(false);
-    
-    // Mostrar notificación de éxito
-    toast.success('Proveedor creado exitosamente');
-    
-    // Actualizar el proveedor seleccionado en el formulario
-    if (proveedor && proveedor.id) {
-      setReciboInfo(prev => ({
-        ...prev,
-        proveedor_info: proveedor
-      }));
+  const handleProveedorSaved = async (proveedorData) => {
+    try {
+      console.log('📤 [FormularioSuministros] Creando proveedor:', proveedorData);
+      
+      // Llamar a la API para crear el proveedor
+      const response = await api.createProveedor(proveedorData);
+      
+      if (response.success) {
+        const nuevoProveedor = response.data;
+        console.log('✅ [FormularioSuministros] Proveedor creado:', nuevoProveedor);
+        
+        // Cerrar modal
+        setShowProveedorModal(false);
+        
+        // Mostrar notificación de éxito
+        showSuccess('Proveedor creado exitosamente');
+        
+        // Actualizar el proveedor seleccionado en el formulario
+        setReciboInfo(prev => ({
+          ...prev,
+          proveedor_info: nuevoProveedor
+        }));
+      } else {
+        throw new Error(response.message || 'Error al crear el proveedor');
+      }
+    } catch (error) {
+      console.error('❌ [FormularioSuministros] Error al crear proveedor:', error);
+      showError('Error al crear el proveedor: ' + (error.message || 'Error desconocido'));
     }
   };
 
@@ -1124,7 +1149,7 @@ export default function FormularioSuministros({
                     </p>
                     {duplicatesSuggestions.slice(0, 3).map((dup, idx) => (
                       <div key={idx} className="mt-1 text-xs text-orange-600 dark:text-orange-400">
-                        • {dup.nombre} - {dup.proveedor} ({new Date(dup.fecha).toLocaleDateString()})
+                        • {dup.nombre} - {dup.proveedor?.nombre || dup.proveedor || 'Sin proveedor'} ({new Date(dup.fecha).toLocaleDateString()})
                       </div>
                     ))}
                   </div>
@@ -1525,14 +1550,71 @@ export default function FormularioSuministros({
         </div>
       </div>
 
+      {/* Modal de Confirmación de Duplicados */}
+      {showDuplicatesWarning && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="ml-3 w-full">
+                <h3 className="text-lg font-medium text-red-800 dark:text-red-300">
+                  🚫 FOLIO DUPLICADO DETECTADO
+                </h3>
+                <div className="mt-2">
+                  <p className="text-sm text-red-700 dark:text-red-400">
+                    ¡ATENCIÓN! El folio "<strong>{reciboInfo.folio}</strong>" ya existe en:
+                  </p>
+                  <div className="mt-3 max-h-40 overflow-y-auto">
+                    {duplicatesWarningData.slice(0, 5).map((dup, idx) => (
+                      <div key={idx} className="mt-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                        • <strong>{dup.nombre}</strong><br />
+                        &nbsp;&nbsp;Proveedor: {dup.proveedor?.nombre || dup.proveedor || 'Sin proveedor'}<br />
+                        &nbsp;&nbsp;Fecha: {dup.fecha ? new Date(dup.fecha).toLocaleDateString('es-MX') : 'Sin fecha'}
+                      </div>
+                    ))}
+                    {duplicatesWarningData.length > 5 && (
+                      <div className="mt-2 text-xs text-red-500 dark:text-red-400">
+                        ... y {duplicatesWarningData.length - 5} más
+                      </div>
+                    )}
+                  </div>
+                  <p className="mt-3 text-sm text-red-700 dark:text-red-400">
+                    Los folios deben ser únicos. ¿Está seguro de que desea continuar?
+                  </p>
+                </div>
+                <div className="mt-4 flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={proceedWithSubmit}
+                    className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Sí, continuar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelSubmit}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Proveedores */}
       {showProveedorModal && (
         <ProveedorModal
           isOpen={showProveedorModal}
           onClose={handleCloseProveedorModal}
           onSave={handleProveedorSaved}
-          proveedorData={proveedorModalData}
-          title="Crear Proveedor"
+          proveedor={proveedorModalData}
         />
       )}
     </div>
