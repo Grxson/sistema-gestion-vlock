@@ -163,16 +163,16 @@ function MainApp() {
         onToggle={toggleSidebar}
       />
       
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Header */}
         <header className="bg-white dark:bg-dark-100 shadow-sm border-b border-gray-200 dark:border-gray-700 transition-colors duration-300">
-          <div className="px-6 py-4">
+          <div className="px-4 sm:px-6 py-4">
             <div className="flex items-center justify-between">
-              <h1 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <h1 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
                 {import.meta.env.VITE_APP_FULL_NAME}
-                </h1>
-              <div className="flex items-center space-x-4">
-                <div className="text-sm text-gray-500 dark:text-gray-400">
+              </h1>
+              <div className="flex items-center space-x-2 sm:space-x-4">
+                <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 hidden sm:block">
                   {new Date().toLocaleDateString('es-ES', {
                     weekday: 'long',
                     year: 'numeric',
@@ -186,7 +186,7 @@ function MainApp() {
         </header>
 
         {/* Main content */}
-        <main className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-dark-50 transition-colors duration-300">
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 bg-gray-50 dark:bg-dark-50 transition-colors duration-300">
           {renderContent()}
         </main>
       </div>

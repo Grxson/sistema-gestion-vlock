@@ -16,6 +16,8 @@ import {
   FaUndo,
   FaInfoCircle
 } from 'react-icons/fa';
+import ProveedorName from '../ui/ProveedorName';
+import { formatTelefono } from '../../utils/formatters';
 
 const ProveedorTable = ({
   proveedores = [],
@@ -145,16 +147,16 @@ const ProveedorTable = ({
                         <FaBuilding className="w-4 h-4 text-red-600 dark:text-red-400" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                          {getNombreProveedor(proveedor)}
-                        </div>
-                        {proveedor.razon_social && proveedor.razon_social !== proveedor.nombre && (
-                          <div className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                            {proveedor.razon_social}
-                          </div>
-                        )}
+                        <ProveedorName 
+                          proveedor={proveedor}
+                          maxLength={35}
+                          size="small"
+                          showRazonSocial={true}
+                          nameClassName="text-sm font-medium text-gray-900 dark:text-white"
+                          razonSocialClassName="text-sm text-gray-500 dark:text-gray-400"
+                        />
                         {proveedor.rfc && (
-                          <div className="text-xs text-gray-400 dark:text-gray-500">
+                          <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                             RFC: {proveedor.rfc}
                           </div>
                         )}
@@ -175,7 +177,7 @@ const ProveedorTable = ({
                       {proveedor.telefono && (
                         <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
                           <FaPhone className="w-3 h-3 text-gray-400" />
-                          <span>{proveedor.telefono}</span>
+                          <span>{formatTelefono(proveedor.telefono)}</span>
                         </div>
                       )}
                       {proveedor.email && (

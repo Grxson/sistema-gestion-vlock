@@ -14,6 +14,8 @@ import {
   FaUndo,
   FaInfoCircle
 } from 'react-icons/fa';
+import ProveedorName from '../ui/ProveedorName';
+import { formatTelefono } from '../../utils/formatters';
 
 const ProveedorCard = ({
   proveedor,
@@ -38,26 +40,24 @@ const ProveedorCard = ({
   const handleViewDetails = () => onViewDetails && onViewDetails(proveedor);
 
   return (
-    <div className="bg-white dark:bg-dark-100 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200 flex flex-col h-full">
+    <div className="bg-white dark:bg-dark-100 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow duration-200 flex flex-col h-full min-h-[320px]">
       {/* Header de la tarjeta */}
-      <div className="p-6 pb-4 flex-1">
+      <div className="p-4 sm:p-6 pb-4 flex-1">
         <div className="flex items-start justify-between">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-3 mb-2">
-              <div className="flex items-center justify-center w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex-shrink-0">
-                <FaBuilding className="w-5 h-5 text-red-600 dark:text-red-400" />
+            <div className="flex items-center gap-2 sm:gap-3 mb-2">
+              <div className="flex items-center justify-center w-8 h-8 sm:w-10 sm:h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex-shrink-0">
+                <FaBuilding className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">
-                  {(proveedor.nombre && proveedor.nombre.trim()) ? proveedor.nombre.trim() : 'Proveedor sin nombre'}
-                </h3>
-                <div className="h-5">
-                  {proveedor.razon_social && proveedor.razon_social !== proveedor.nombre && (
-                    <p className="text-sm text-gray-500 dark:text-gray-400 truncate">
-                      {proveedor.razon_social}
-                    </p>
-                  )}
-                </div>
+                <ProveedorName 
+                  proveedor={proveedor}
+                  maxLength={25}
+                  size="normal"
+                  showRazonSocial={true}
+                  nameClassName="text-lg font-semibold text-gray-900 dark:text-white"
+                  razonSocialClassName="text-sm text-gray-500 dark:text-gray-400"
+                />
               </div>
             </div>
             
@@ -80,39 +80,39 @@ const ProveedorCard = ({
 
         {/* Información de contacto - altura fija */}
         <div className="space-y-2 min-h-[120px]">
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 h-5">
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 h-4 sm:h-5">
             <FaPhone className="w-3 h-3 text-gray-400 flex-shrink-0" />
-            <span className="truncate">{proveedor.telefono || 'Sin información'}</span>
+            <span className="truncate">{formatTelefono(proveedor.telefono)}</span>
           </div>
           
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 h-5">
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 h-4 sm:h-5">
             <FaEnvelope className="w-3 h-3 text-gray-400 flex-shrink-0" />
             <span className="truncate">{proveedor.email || 'Sin información'}</span>
           </div>
           
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 h-5">
+          <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400 h-4 sm:h-5">
             <FaUser className="w-3 h-3 text-gray-400 flex-shrink-0" />
             <span className="truncate">{proveedor.contacto_principal || 'Sin información'}</span>
           </div>
           
-          <div className="flex items-start gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <div className="flex items-start gap-2 text-xs sm:text-sm text-gray-600 dark:text-gray-400">
             <FaMapMarkerAlt className="w-3 h-3 text-gray-400 mt-0.5 flex-shrink-0" />
-            <span className="line-clamp-2 h-10 overflow-hidden">
+            <span className="line-clamp-2 h-8 sm:h-10 overflow-hidden leading-tight">
               {proveedor.direccion || 'Sin información'}
             </span>
           </div>
 
           {/* Información bancaria si existe */}
           {(proveedor.banco || proveedor.cuentaBancaria) && (
-            <div className="pt-2">
+            <div className="pt-2 space-y-1">
               {proveedor.banco && (
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  <strong>Banco:</strong> {proveedor.banco}
+                <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                  <strong>Banco:</strong> <span className="truncate">{proveedor.banco}</span>
                 </div>
               )}
               {proveedor.cuentaBancaria && (
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  <strong>Cuenta:</strong> {proveedor.cuentaBancaria}
+                <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                  <strong>Cuenta:</strong> <span className="truncate">{proveedor.cuentaBancaria}</span>
                 </div>
               )}
             </div>
@@ -128,10 +128,10 @@ const ProveedorCard = ({
       </div>
 
       {/* Footer con acciones */}
-      <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl border-t border-gray-100 dark:border-gray-700 mt-auto">
+      <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-gray-900/50 rounded-b-xl border-t border-gray-100 dark:border-gray-700 mt-auto">
         <div className="flex items-center justify-between">
           {/* Fechas */}
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs text-gray-500 dark:text-gray-400 hidden sm:block">
             {proveedor.createdAt && (
               <div>
                 Creado: {new Date(proveedor.createdAt).toLocaleDateString('es-MX')}
@@ -145,24 +145,24 @@ const ProveedorCard = ({
           </div>
 
           {/* Botones de acción */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 ml-auto">
             {/* Botón Ver Solo Lectura */}
             <button
               onClick={handleViewDetails}
-              className="inline-flex items-center p-2 text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+              className="inline-flex items-center p-1.5 sm:p-2 text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
               title="Ver información (solo lectura)"
             >
-              <FaInfoCircle className="w-4 h-4" />
+              <FaInfoCircle className="w-3 h-3 sm:w-4 sm:h-4" />
             </button>
 
             {/* Botón Editar */}
             {onEdit && (
               <button
                 onClick={handleEdit}
-                className="inline-flex items-center p-2 text-amber-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
+                className="inline-flex items-center p-1.5 sm:p-2 text-amber-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"
                 title="Editar proveedor"
               >
-                <FaEdit className="w-4 h-4" />
+                <FaEdit className="w-3 h-3 sm:w-4 sm:h-4" />
               </button>
             )}
 
@@ -170,10 +170,10 @@ const ProveedorCard = ({
             {onDelete && proveedor.activo && (
               <button
                 onClick={handleDelete}
-                className="inline-flex items-center p-2 text-orange-500 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg transition-colors"
+                className="inline-flex items-center p-1.5 sm:p-2 text-orange-500 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300 hover:bg-orange-50 dark:hover:bg-orange-900/30 rounded-lg transition-colors"
                 title="Desactivar proveedor"
               >
-                <FaToggleOff className="w-4 h-4" />
+                <FaToggleOff className="w-3 h-3 sm:w-4 sm:h-4" />
               </button>
             )}
 

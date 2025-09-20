@@ -4,6 +4,7 @@ import ProveedorAutocomplete from "./common/ProveedorAutocomplete";
 import ProveedorModal from "./proveedores/ProveedorModal";
 import DateInput from "./ui/DateInput";
 import TimeInput from "./ui/TimeInput";
+import { useToast } from '../contexts/ToastContext';
 import api from '../services/api';
 import { debugTools } from '../hooks/useFormDebug';
 
@@ -46,6 +47,29 @@ const UNIDADES_MEDIDA = {
   'docena': 'Docena',
   'paquete': 'Paquete',
   'set': 'Set'
+};
+
+// Funciones auxiliares para formateo de números
+const formatNumberWithCommas = (value) => {
+  if (!value) return '';
+  // Convertir a string y eliminar caracteres no numéricos excepto punto decimal
+  const cleanValue = value.toString().replace(/[^\d.]/g, '');
+  // Si está vacío o solo tiene punto, retornar tal como está
+  if (!cleanValue || cleanValue === '.') return cleanValue;
+  
+  // Separar parte entera y decimal
+  const parts = cleanValue.split('.');
+  // Formatear parte entera con comas
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  
+  // Reunir las partes
+  return parts.join('.');
+};
+
+const parseFormattedNumber = (value) => {
+  if (!value) return '';
+  // Eliminar todas las comas para obtener el valor numérico
+  return value.toString().replace(/,/g, '');
 };
 
 export default function FormularioSuministros({ 
@@ -124,10 +148,12 @@ export default function FormularioSuministros({
   const [loading, setLoading] = useState(false);
   const [includeIVA, setIncludeIVA] = useState(initialIVAValue); // Estado para controlar si incluir IVA
   const [suministrosEliminados, setSuministrosEliminados] = useState([]); // Track eliminated supplies
+  const [formattedPrices, setFormattedPrices] = useState({}); // Estado para manejar precios formateados
 
   // Estados para validación de duplicados y autocompletado
   const [duplicatesSuggestions, setDuplicatesSuggestions] = useState([]);
   const [showDuplicatesWarning, setShowDuplicatesWarning] = useState(false);
+  const [duplicatesWarningData, setDuplicatesWarningData] = useState([]);
   const [nameSuggestions, setNameSuggestions] = useState({});
   const [showNameSuggestions, setShowNameSuggestions] = useState({});
   const [codeSuggestions, setCodeSuggestions] = useState({});
@@ -137,6 +163,9 @@ export default function FormularioSuministros({
   // Estados para el modal de proveedores
   const [showProveedorModal, setShowProveedorModal] = useState(false);
   const [proveedorModalData, setProveedorModalData] = useState(null);
+
+  // Hook para toast notifications
+  const { showSuccess, showError } = useToast();
 
   // =================== DEBUGGING Y MONITORING ===================
   debugTools.useRenderDebug('FormularioSuministros', { 
@@ -154,11 +183,14 @@ export default function FormularioSuministros({
     suministros, existingSuministros, reciboInfo
   ]);
   
-  // Validador automático de estado (solo en desarrollo)
+  // Validador automático de estado (solo en desarrollo y cuando hay datos)
   debugTools.useFormStateValidator(reciboInfo, {
-    id_proyecto: { required: true },
-    proveedor_info: { required: true },
-    fecha: { required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ }
+    // Solo validar campos si el formulario tiene datos o se está enviando
+    ...(reciboInfo.folio || reciboInfo.proveedor_info || suministros.some(s => s.nombre) ? {
+      id_proyecto: { required: true },
+      proveedor_info: { required: true },
+      fecha: { required: true, pattern: /^\d{4}-\d{2}-\d{2}$/ }
+    } : {})
   });
   
   // Validador para suministros (sin usar forEach para evitar violación de reglas de hooks)
@@ -397,6 +429,15 @@ export default function FormularioSuministros({
       // ⚡ BATCH: Actualizar suministros una sola vez
       setSuministros(suministrosCargados);
       
+      // Inicializar precios formateados
+      const initialFormattedPrices = suministrosCargados.reduce((acc, suministro) => {
+        if (suministro.precio_unitario) {
+          acc[suministro.id_temp] = formatNumberWithCommas(suministro.precio_unitario);
+        }
+        return acc;
+      }, {});
+      setFormattedPrices(initialFormattedPrices);
+      
       const processingTime = performance.now() - startTime;
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
       }
@@ -522,12 +563,44 @@ export default function FormularioSuministros({
 
   // Cache para nombres únicos (optimización de memoria y performance)
   const uniqueNames = useMemo(() => {
-    return [...new Set(existingSuministros.map(s => s.nombre))].filter(Boolean);
+    const namesSet = new Set();
+    const normalizedNames = existingSuministros
+      .map(s => s.nombre)
+      .filter(Boolean) // Filtrar valores nulos/undefined
+      .map(name => name.trim()) // Eliminar espacios al inicio/final
+      .filter(name => name.length > 0); // Filtrar nombres vacíos
+    
+    // Usar un Map para eliminar duplicados case-insensitive pero conservar el formato original
+    const nameMap = new Map();
+    normalizedNames.forEach(name => {
+      const normalizedKey = name.toLowerCase().replace(/\s+/g, ' '); // Normalizar espacios
+      if (!nameMap.has(normalizedKey)) {
+        nameMap.set(normalizedKey, name);
+      }
+    });
+    
+    return Array.from(nameMap.values()).sort();
   }, [existingSuministros]);
 
   // Cache para códigos únicos
   const uniqueCodes = useMemo(() => {
-    return [...new Set(existingSuministros.map(s => s.codigo_producto))].filter(Boolean);
+    const codesSet = new Set();
+    const normalizedCodes = existingSuministros
+      .map(s => s.codigo_producto)
+      .filter(Boolean) // Filtrar valores nulos/undefined
+      .map(code => code.toString().trim()) // Convertir a string y eliminar espacios
+      .filter(code => code.length > 0); // Filtrar códigos vacíos
+    
+    // Usar un Map para eliminar duplicados case-insensitive pero conservar el formato original
+    const codeMap = new Map();
+    normalizedCodes.forEach(code => {
+      const normalizedKey = code.toLowerCase().replace(/\s+/g, ''); // Normalizar espacios
+      if (!codeMap.has(normalizedKey)) {
+        codeMap.set(normalizedKey, code);
+      }
+    });
+    
+    return Array.from(codeMap.values()).sort();
   }, [existingSuministros]);
 
   // Función optimizada para autocompletar nombres de suministros
@@ -658,6 +731,12 @@ export default function FormularioSuministros({
     if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
     }
     setSuministros(prev => [...prev, nuevoSuministro]);
+    
+    // Inicializar precio formateado para el nuevo suministro
+    setFormattedPrices(prev => ({
+      ...prev,
+      [nuevoSuministro.id_temp]: ''
+    }));
   }, [nuevoSuministroTemplate]);
 
   // Función optimizada para eliminar suministro
@@ -672,6 +751,13 @@ export default function FormularioSuministros({
       
       return prev.filter(s => s.id_temp !== id);
     });
+    
+    // Limpiar precio formateado
+    setFormattedPrices(prev => {
+      const newPrices = { ...prev };
+      delete newPrices[id];
+      return newPrices;
+    });
   }, []);
 
   // Función optimizada para duplicar suministro
@@ -684,13 +770,35 @@ export default function FormularioSuministros({
         ...suministroOriginal,
         id_temp: Date.now() + Math.random(),
         nombre: `${suministroOriginal.nombre} (Copia)`,
-        cantidad: '',
-        precio_unitario: '',
+        // Conservar TODOS los campos del original, incluyendo precio y cantidad
+        // cantidad: suministroOriginal.cantidad, // Ya incluido en ...suministroOriginal
+        // precio_unitario: suministroOriginal.precio_unitario, // Ya incluido en ...suministroOriginal
         id_suministro: undefined // Remover ID para que sea tratado como nuevo
       };
       
+      // Inicializar precio formateado para el suministro duplicado
+      setFormattedPrices(prev => ({
+        ...prev,
+        [suministroDuplicado.id_temp]: formatNumberWithCommas(suministroOriginal.precio_unitario || '')
+      }));
+      
       return [...prev, suministroDuplicado];
     });
+  }, []);
+
+  // Función especializada para manejar cambios en precio con formato visual
+  const handlePriceChange = useCallback((id, value) => {
+    // Eliminar caracteres no numéricos excepto punto decimal
+    const cleanValue = parseFormattedNumber(value);
+    
+    // Actualizar el valor real del suministro (sin formato)
+    actualizarSuministro(id, 'precio_unitario', cleanValue);
+    
+    // Actualizar el valor formateado para mostrar
+    setFormattedPrices(prev => ({
+      ...prev,
+      [id]: formatNumberWithCommas(cleanValue)
+    }));
   }, []);
 
   // Función optimizada para actualizar suministros con debounce en autocompletado
@@ -820,7 +928,25 @@ export default function FormularioSuministros({
     return !hasErrors && Object.keys(newErrors).length === 0;
   }, [reciboInfo, suministros]);
 
-  // Manejo del envío
+  // Función para proceder con el envío después de confirmar duplicados
+  const proceedWithSubmit = useCallback(async () => {
+    // NO permitir continuar - solo cerrar el modal y mostrar mensaje
+    setShowDuplicatesWarning(false);
+    setDuplicatesWarningData([]);
+    
+    // Mostrar mensaje toast de error
+    showError(
+      `❌ No se puede crear el suministro: El folio "${reciboInfo.folio}" ya existe para este proveedor. Por favor, verifique el folio o la información del proveedor.`
+    );
+  }, [reciboInfo.folio, showError]);
+
+  // Función para cancelar el envío cuando hay duplicados
+  const cancelSubmit = useCallback(() => {
+    setShowDuplicatesWarning(false);
+    setDuplicatesWarningData([]);
+  }, []);
+
+  // Manejo del envío (con validación de duplicados)
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -863,47 +989,41 @@ export default function FormularioSuministros({
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
       }
       
-      const existingDuplicates = existingSuministros.filter(suministro => {
+      // Verificar duplicados del MISMO proveedor (esto SÍ debe bloquearse)
+      const duplicadosMismoProveedor = existingSuministros.filter(suministro => {
         // Excluir suministros que estamos editando
         if (editingIds.includes(suministro.id_suministro)) {
-          if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-          }
           return false;
         }
 
-        // Verificar folio exacto
-        return suministro.folio && 
-               suministro.folio.toLowerCase().trim() === reciboInfo.folio.toLowerCase().trim();
+        // Verificar folio exacto Y mismo proveedor
+        const mismoFolio = suministro.folio && 
+                          suministro.folio.toLowerCase().trim() === reciboInfo.folio.toLowerCase().trim();
+        
+        const mismoProveedor = suministro.id_proveedor && 
+                              reciboInfo.proveedor_info?.id_proveedor &&
+                              suministro.id_proveedor === reciboInfo.proveedor_info.id_proveedor;
+
+        return mismoFolio && mismoProveedor;
       });
 
-      if (existingDuplicates.length > 0) {
+      if (duplicadosMismoProveedor.length > 0) {
         if (process.env.NODE_ENV === 'development') {
         }
         
-        const duplicateInfo = existingDuplicates.slice(0, 3).map(dup => {
-          const proveedor = dup.proveedor || dup.proveedor?.nombre || 'Sin proveedor';
-          const fecha = dup.fecha ? new Date(dup.fecha).toLocaleDateString('es-MX') : 'Sin fecha';
-          return `• ${dup.nombre} (${proveedor} - ${fecha})`;
-        }).join('\n');
-
-        const moreMessage = existingDuplicates.length > 3 ? `\n... y ${existingDuplicates.length - 3} más` : '';
-        
-        const warningTitle = "🚫 FOLIO DUPLICADO DETECTADO";
-        const warningMessage = `¡ATENCIÓN! El folio "${reciboInfo.folio}" ya existe en:\n\n${duplicateInfo}${moreMessage}\n\n` +
-                         `Los folios deben ser únicos. ¿Está seguro de que desea continuar?`;
-
-        const confirmed = window.confirm(warningMessage);
-        if (!confirmed) {
-          if (process.env.NODE_ENV === 'development') {
-          }
-          return;
-        }
-        
-        if (process.env.NODE_ENV === 'development') {
-        }
+        // BLOQUEAR: Mostrar mensaje de error específico para duplicados del mismo proveedor
+        setDuplicatesWarningData(duplicadosMismoProveedor);
+        setShowDuplicatesWarning(true);
+        return;
       }
     }
     
+    // Si no hay duplicados, proceder con el envío
+    await submitFormData();
+  };
+
+  // Función principal para envío de datos (sin validación de duplicados)
+  const submitFormData = async () => {
     setLoading(true);
     
     try {
@@ -979,19 +1099,34 @@ export default function FormularioSuministros({
     setProveedorModalData(null);
   };
 
-  const handleProveedorSaved = async (proveedor) => {
-    // Cerrar modal
-    setShowProveedorModal(false);
-    
-    // Mostrar notificación de éxito
-    toast.success('Proveedor creado exitosamente');
-    
-    // Actualizar el proveedor seleccionado en el formulario
-    if (proveedor && proveedor.id) {
-      setReciboInfo(prev => ({
-        ...prev,
-        proveedor_info: proveedor
-      }));
+  const handleProveedorSaved = async (proveedorData) => {
+    try {
+      console.log('📤 [FormularioSuministros] Creando proveedor:', proveedorData);
+      
+      // Llamar a la API para crear el proveedor
+      const response = await api.createProveedor(proveedorData);
+      
+      if (response.success) {
+        const nuevoProveedor = response.data;
+        console.log('✅ [FormularioSuministros] Proveedor creado:', nuevoProveedor);
+        
+        // Cerrar modal
+        setShowProveedorModal(false);
+        
+        // Mostrar notificación de éxito
+        showSuccess('Proveedor creado exitosamente');
+        
+        // Actualizar el proveedor seleccionado en el formulario
+        setReciboInfo(prev => ({
+          ...prev,
+          proveedor_info: nuevoProveedor
+        }));
+      } else {
+        throw new Error(response.message || 'Error al crear el proveedor');
+      }
+    } catch (error) {
+      console.error('❌ [FormularioSuministros] Error al crear proveedor:', error);
+      showError('Error al crear el proveedor: ' + (error.message || 'Error desconocido'));
     }
   };
 
@@ -1124,7 +1259,7 @@ export default function FormularioSuministros({
                     </p>
                     {duplicatesSuggestions.slice(0, 3).map((dup, idx) => (
                       <div key={idx} className="mt-1 text-xs text-orange-600 dark:text-orange-400">
-                        • {dup.nombre} - {dup.proveedor} ({new Date(dup.fecha).toLocaleDateString()})
+                        • {dup.nombre} - {dup.proveedor?.nombre || dup.proveedor || 'Sin proveedor'} ({new Date(dup.fecha).toLocaleDateString()})
                       </div>
                     ))}
                   </div>
@@ -1398,10 +1533,19 @@ export default function FormularioSuministros({
                       Precio *
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
-                      value={suministro.precio_unitario}
-                      onChange={(e) => actualizarSuministro(suministro.id_temp, 'precio_unitario', e.target.value)}
+                      type="text"
+                      value={formattedPrices[suministro.id_temp] || ''}
+                      onChange={(e) => handlePriceChange(suministro.id_temp, e.target.value)}
+                      onBlur={(e) => {
+                        // Al perder el foco, formatear el valor
+                        const cleanValue = parseFormattedNumber(e.target.value);
+                        if (cleanValue) {
+                          setFormattedPrices(prev => ({
+                            ...prev,
+                            [suministro.id_temp]: formatNumberWithCommas(cleanValue)
+                          }));
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                       placeholder="0.00"
                     />
@@ -1425,13 +1569,14 @@ export default function FormularioSuministros({
                       <option value="Parcial">Parcial</option>
                     </select>
                   </div>
+
                   {/* Subtotal */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Subtotal
                     </label>
                     <div className="px-3 py-2 bg-gray-100 dark:bg-gray-600 rounded-md text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 text-sm font-medium">
-                      ${((parseFloat(suministro.cantidad) || 0) * (parseFloat(suministro.precio_unitario) || 0)).toFixed(2)}
+                      ${formatNumberWithCommas(((parseFloat(suministro.cantidad) || 0) * (parseFloat(suministro.precio_unitario) || 0)).toFixed(2))}
                     </div>
                   </div>
                 </div>
@@ -1480,15 +1625,15 @@ export default function FormularioSuministros({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
-                <span className="font-semibold text-gray-900 dark:text-white">${totales.subtotal}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">${formatNumberWithCommas(totales.subtotal)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-gray-600 dark:text-gray-400">IVA:</span>
-                <span className="font-semibold text-orange-600 dark:text-orange-400">${totales.iva}</span>
+                <span className="font-semibold text-orange-600 dark:text-orange-400">${formatNumberWithCommas(totales.iva)}</span>
               </div>
               <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-lg">
                 <span className="text-green-600 dark:text-green-300 font-medium">Total:</span>
-                <span className="font-bold text-green-700 dark:text-green-400 text-lg">${totales.total}</span>
+                <span className="font-bold text-green-700 dark:text-green-400 text-lg">${formatNumberWithCommas(totales.total)}</span>
               </div>
             </div>
           </div>
@@ -1508,7 +1653,7 @@ export default function FormularioSuministros({
             onClick={handleSubmit}
             disabled={loading || suministros.length === 0}
             className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg disabled:cursor-not-allowed flex items-center gap-2 transition-colors font-medium shadow-md"
-          >
+          > 
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -1524,14 +1669,81 @@ export default function FormularioSuministros({
         </div>
       </div>
 
+      {/* Modal de Confirmación de Duplicados */}
+      {showDuplicatesWarning && (
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="ml-3 w-full">
+                <h3 className="text-lg font-medium text-red-800 dark:text-red-300">
+                  🚫 FOLIO DUPLICADO - NO PERMITIDO
+                </h3>
+                <div className="mt-2">
+                  <p className="text-sm text-red-700 dark:text-red-400">
+                    ❌ <strong>ERROR:</strong> El folio "<strong>{reciboInfo.folio}</strong>" ya existe para este mismo proveedor:
+                  </p>
+                  <div className="mt-3 max-h-40 overflow-y-auto">
+                    {duplicatesWarningData.slice(0, 5).map((dup, idx) => (
+                      <div key={idx} className="mt-1 text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                        • <strong>{dup.nombre}</strong><br />
+                        &nbsp;&nbsp;Proveedor: {dup.proveedor?.nombre || dup.proveedor || 'Sin proveedor'}<br />
+                        &nbsp;&nbsp;Fecha: {dup.fecha ? new Date(dup.fecha).toLocaleDateString('es-MX') : 'Sin fecha'}
+                      </div>
+                    ))}
+                    {duplicatesWarningData.length > 5 && (
+                      <div className="mt-2 text-xs text-red-500 dark:text-red-400">
+                        ... y {duplicatesWarningData.length - 5} más
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-3 p-3 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                    <p className="text-sm text-red-800 dark:text-red-300 font-medium">
+                      ⚠️ <strong>Acción requerida:</strong>
+                    </p>
+                    <ul className="mt-1 text-xs text-red-700 dark:text-red-400 list-disc list-inside">
+                      <li>Verifique que el folio sea correcto</li>
+                      <li>Confirme que está seleccionando el proveedor correcto</li>
+                      <li>Use un folio diferente si es un nuevo suministro</li>
+                    </ul>
+                  </div>
+                  <p className="mt-3 text-sm text-red-700 dark:text-red-400 font-medium">
+                    📝 <strong>Nota:</strong> Puede usar el mismo folio solo si es de un proveedor diferente.
+                  </p>
+                </div>
+                <div className="mt-4 flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={proceedWithSubmit}
+                    className="flex-1 bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    🔍 Entendido, revisar información
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelSubmit}
+                    className="flex-1 bg-gray-300 hover:bg-gray-400 text-gray-700 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    ✖️ Cerrar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal de Proveedores */}
       {showProveedorModal && (
         <ProveedorModal
           isOpen={showProveedorModal}
           onClose={handleCloseProveedorModal}
           onSave={handleProveedorSaved}
-          proveedorData={proveedorModalData}
-          title="Crear Proveedor"
+          proveedor={proveedorModalData}
         />
       )}
     </div>

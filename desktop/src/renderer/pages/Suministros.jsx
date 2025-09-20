@@ -17,16 +17,23 @@ import {
   FaClock,
   FaBoxes,
   FaCog,
+  FaCogs,
   FaTimes,
   FaRuler,
+  FaRulerCombined,
   FaCalculator,
   FaReceipt,
   FaFileExcel,
   FaFilePdf,
   FaUpload,
-  FaFileDownload
+  FaFileDownload,
+  FaEye,
+  FaListUl
 } from 'react-icons/fa';
 import { formatCurrency } from '../utils/currency';
+import { formatNumber, formatNumberForChart, formatPercentage, formatUnidadMedida } from '../utils/formatters';
+import { validateFolioDuplicado } from '../utils/validationUtils';
+import ValidationModal from '../components/ui/ValidationModal';
 import { 
   generateImportTemplate, 
   validateImportData, 
@@ -35,7 +42,10 @@ import {
   processImportFile 
 } from '../utils/exportUtils';
 import ReportePersonalizadoModal from '../components/ReportePersonalizado/ReportePersonalizadoModal';
-import useReportePersonalizado from '../hooks/useReportePersonalizado';
+import useReportePersonalizadoCompleto from '../hooks/useReportePersonalizadoCompleto';
+import ChartModal from '../components/ui/ChartModal';
+import ProgressModal from '../components/ui/ProgressModal';
+import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -49,7 +59,7 @@ import {
   Legend,
   Filler,
 } from 'chart.js';
-import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { Bar, Line, Doughnut, Pie } from 'react-chartjs-2';
 import api from '../services/api';
 import ProveedorAutocomplete from '../components/common/ProveedorAutocomplete';
 import DateInput from '../components/ui/DateInput';
@@ -180,8 +190,10 @@ const Suministros = () => {
     setShowReportModal,
     reportConfig,
     setReportConfig,
-    handleCustomExport
-  } = useReportePersonalizado();
+    handleCustomExport,
+    loading: reportLoading,
+    progress: reportProgress
+  } = useReportePersonalizadoCompleto();
 
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
@@ -190,14 +202,41 @@ const Suministros = () => {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [deleteType, setDeleteType] = useState('suministro'); // 'suministro' o 'recibo'
+  
+  // Estado para modal de gráficas expandidas
+  const [chartModal, setChartModal] = useState({
+    isOpen: false,
+    chartData: null,
+    chartOptions: null,
+    chartType: 'line',
+    title: '',
+    subtitle: '',
+    color: 'indigo',
+    metrics: null,
+    customContent: null
+  });
+  
   const [notificationModal, setNotificationModal] = useState({
     open: false,
     message: '',
     type: 'success'
   });
+  const [validationModal, setValidationModal] = useState({
+    open: false,
+    title: '',
+    message: '',
+    type: 'warning',
+    onConfirm: null
+  });
+  const [viewModal, setViewModal] = useState({
+    open: false,
+    suministro: null,
+    recibo: null
+  });
 
   // Estados para gráficas
   const [showCharts, setShowCharts] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [chartData, setChartData] = useState({
     gastosPorMes: null,
     valorPorCategoria: null,
@@ -210,11 +249,14 @@ const Suministros = () => {
     codigosProducto: null,
     analisisTecnicoConcreto: null,
     concretoDetallado: null,
-    // Nuevas gráficas para horas
+    // Gráficas para horas
     horasPorMes: null,
     horasPorProyecto: null,
     horasPorEquipo: null,
-    comparativoHorasVsCosto: null
+    comparativoHorasVsCosto: null,
+    // Nuevas gráficas profesionales
+    gastosPorCategoriaDetallado: null,
+    analisisFrecuenciaSuministros: null
   });
   const [chartFilters, setChartFilters] = useState({
     fechaInicio: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0], // Enero del año actual
@@ -249,7 +291,10 @@ const Suministros = () => {
     comparativoUnidades: false,
     // Análisis por unidades específicas
     totalMetrosCubicos: false,
-    analisisUnidadesMedida: false
+    analisisUnidadesMedida: false,
+    // Nuevas gráficas profesionales
+    gastosPorCategoriaDetallado: false,
+    analisisFrecuenciaSuministros: false
   });
   const [loadingCharts, setLoadingCharts] = useState(false);
   const [themeVersion, setThemeVersion] = useState(0); // Para forzar re-render cuando cambie el tema
@@ -478,13 +523,6 @@ const Suministros = () => {
         }
 
         try {
-          chartDataProcessed.horasPorProyecto = processHorasPorProyecto(filteredData);
-        } catch (error) {
-          console.error('❌ Error en horasPorProyecto:', error);
-          chartDataProcessed.horasPorProyecto = null;
-        }
-
-        try {
           chartDataProcessed.horasPorEquipo = processHorasPorEquipo(filteredData);
         } catch (error) {
           console.error('❌ Error en horasPorEquipo:', error);
@@ -496,6 +534,22 @@ const Suministros = () => {
         } catch (error) {
           console.error('❌ Error en comparativoHorasVsCosto:', error);
           chartDataProcessed.comparativoHorasVsCosto = null;
+        }
+
+        // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
+        try {
+          chartDataProcessed.gastosPorCategoriaDetallado = processGastosPorCategoriaDetallado(filteredData);
+        } catch (error) {
+          console.error('❌ Error en gastosPorCategoriaDetallado:', error);
+          chartDataProcessed.gastosPorCategoriaDetallado = null;
+        }
+
+        // Nueva gráfica: Análisis de Frecuencia de Suministros (Estilo Tabla + Gráfica)
+        try {
+          chartDataProcessed.analisisFrecuenciaSuministros = processAnalisisFrecuenciaSuministros(filteredData);
+        } catch (error) {
+          console.error('❌ Error en analisisFrecuenciaSuministros:', error);
+          chartDataProcessed.analisisFrecuenciaSuministros = null;
         }
 
         try {
@@ -1186,6 +1240,11 @@ const Suministros = () => {
 
   // Procesar análisis técnico inteligente según categoría
   const processAnalisisTecnicoInteligente = (data) => {
+    // Validación inicial
+    if (!data || data.length === 0) {
+      return null;
+    }
+
     // Determinar qué categoría analizar (basado en filtros o la más común)
     const categoriaFiltrada = chartFilters.tipoSuministro;
     let categoriaAnalizar = categoriaFiltrada;
@@ -1197,7 +1256,14 @@ const Suministros = () => {
         const cat = suministro.tipo_suministro || suministro.categoria || 'Material';
         categorias[cat] = (categorias[cat] || 0) + 1;
       });
-      categoriaAnalizar = Object.keys(categorias).reduce((a, b) => categorias[a] > categorias[b] ? a : b);
+      
+      // Verificar que hay categorías antes de hacer reduce
+      const categoriasKeys = Object.keys(categorias);
+      if (categoriasKeys.length === 0) {
+        return null;
+      }
+      
+      categoriaAnalizar = categoriasKeys.reduce((a, b) => categorias[a] > categorias[b] ? a : b);
     }
 
     // Filtrar datos por categoría
@@ -1434,47 +1500,6 @@ const Suministros = () => {
         borderWidth: 3,
         fill: true,
         tension: 0.4
-      }]
-    };
-  };
-
-  // Procesar horas por proyecto
-  const processHorasPorProyecto = (data) => {
-    const horasPorProyecto = {};
-    
-    // Filtrar solo suministros con unidad de medida en horas
-    const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
-    );
-    
-    datosHoras.forEach(suministro => {
-      const proyecto = suministro.proyecto_nombre || suministro.proyectoInfo?.nombre || 'Sin proyecto';
-      const horas = parseFloat(suministro.cantidad) || 0;
-      
-      if (!horasPorProyecto[proyecto]) {
-        horasPorProyecto[proyecto] = 0;
-      }
-      horasPorProyecto[proyecto] += horas;
-    });
-
-    const colores = [
-      'rgba(59, 130, 246, 0.8)',   // Blue
-      'rgba(16, 185, 129, 0.8)',   // Emerald
-      'rgba(245, 158, 11, 0.8)',   // Amber
-      'rgba(239, 68, 68, 0.8)',    // Red
-      'rgba(139, 92, 246, 0.8)',   // Violet
-      'rgba(249, 115, 22, 0.8)'    // Orange
-    ];
-
-    return {
-      labels: Object.keys(horasPorProyecto),
-      datasets: [{
-        data: Object.values(horasPorProyecto),
-        backgroundColor: colores,
-        borderColor: colores.map(color => color.replace('0.8', '1')),
-        borderWidth: 2
       }]
     };
   };
@@ -1857,6 +1882,154 @@ const Suministros = () => {
     };
   };
 
+  // ======================= NUEVAS GRÁFICAS PROFESIONALES =======================
+
+  // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
+  const processGastosPorCategoriaDetallado = (data) => {
+    const gastosPorCategoria = {};
+    let totalGeneral = 0;
+    
+    data.forEach(suministro => {
+      const categoria = suministro.categoria || suministro.tipo_suministro || 'Sin Categoría';
+      const cantidad = parseFloat(suministro.cantidad) || 0;
+      const precio = parseFloat(suministro.precio_unitario) || 0;
+      const gasto = cantidad * precio;
+      
+      if (!gastosPorCategoria[categoria]) {
+        gastosPorCategoria[categoria] = 0;
+      }
+      gastosPorCategoria[categoria] += gasto;
+      totalGeneral += gasto;
+    });
+
+    // Ordenar por gasto descendente
+    const categoriasOrdenadas = Object.entries(gastosPorCategoria)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 8); // Top 8 categorías
+
+    // Calcular porcentajes
+    const labels = categoriasOrdenadas.map(([categoria, gasto]) => {
+      const porcentaje = ((gasto / totalGeneral) * 100).toFixed(1);
+      return `${categoria}\n$${formatCurrency(gasto)} (${porcentaje}%)`;
+    });
+
+    const valores = categoriasOrdenadas.map(([,gasto]) => gasto);
+    const porcentajes = categoriasOrdenadas.map(([,gasto]) => ((gasto / totalGeneral) * 100).toFixed(1));
+
+    const colores = [
+      'rgba(239, 68, 68, 0.8)',    // Red
+      'rgba(59, 130, 246, 0.8)',   // Blue  
+      'rgba(16, 185, 129, 0.8)',   // Emerald
+      'rgba(245, 158, 11, 0.8)',   // Amber
+      'rgba(139, 92, 246, 0.8)',   // Violet
+      'rgba(249, 115, 22, 0.8)',   // Orange
+      'rgba(6, 182, 212, 0.8)',    // Cyan
+      'rgba(132, 204, 22, 0.8)',   // Lime
+    ];
+
+    return {
+      labels: labels,
+      datasets: [{
+        label: 'Gasto por Categoría',
+        data: valores,
+        backgroundColor: colores.slice(0, categoriasOrdenadas.length),
+        borderColor: colores.slice(0, categoriasOrdenadas.length).map(color => color.replace('0.8', '1')),
+        borderWidth: 2,
+        hoverOffset: 4
+      }],
+      metadata: {
+        totalGeneral: totalGeneral,
+        totalCategorias: categoriasOrdenadas.length,
+        detalles: categoriasOrdenadas.map(([categoria, gasto], index) => ({
+          categoria,
+          gasto,
+          porcentaje: porcentajes[index],
+          color: colores[index]
+        }))
+      }
+    };
+  };
+
+  // Nueva gráfica: Análisis de Frecuencia de Suministros (Estilo Tabla + Gráfica)
+  const processAnalisisFrecuenciaSuministros = (data) => {
+    const frecuenciaPorProveedor = {};
+    const gastosPorProveedor = {};
+    
+    data.forEach(suministro => {
+      const proveedor = suministro.proveedor || 'Sin Proveedor';
+      const cantidad = parseFloat(suministro.cantidad) || 0;
+      const precio = parseFloat(suministro.precio_unitario) || 0;
+      const gasto = cantidad * precio;
+      
+      if (!frecuenciaPorProveedor[proveedor]) {
+        frecuenciaPorProveedor[proveedor] = 0;
+        gastosPorProveedor[proveedor] = 0;
+      }
+      frecuenciaPorProveedor[proveedor] += 1;
+      gastosPorProveedor[proveedor] += gasto;
+    });
+
+    // Ordenar por frecuencia descendente y tomar top 10
+    const proveedoresOrdenados = Object.entries(frecuenciaPorProveedor)
+      .sort(([,a], [,b]) => b - a)
+      .slice(0, 10);
+
+    const totalRegistros = Object.values(frecuenciaPorProveedor).reduce((sum, freq) => sum + freq, 0);
+    
+    // Crear datos para la tabla y gráfica
+    const analisisDetallado = proveedoresOrdenados.map(([proveedor, frecuencia]) => {
+      const porcentaje = ((frecuencia / totalRegistros) * 100).toFixed(1);
+      const gasto = gastosPorProveedor[proveedor];
+      return {
+        proveedor,
+        frecuencia,
+        porcentaje: parseFloat(porcentaje),
+        gasto,
+        formatoTabla: {
+          proveedor: proveedor.length > 15 ? proveedor.substring(0, 15) + '...' : proveedor,
+          frecuencia: frecuencia.toString(),
+          porcentaje: `${porcentaje}%`,
+          gasto: formatCurrency(gasto)
+        }
+      };
+    });
+
+    const colores = analisisDetallado.map((_, index) => {
+      const baseColors = [
+        'rgba(59, 130, 246, 0.8)',   // Blue
+        'rgba(16, 185, 129, 0.8)',   // Emerald
+        'rgba(245, 158, 11, 0.8)',   // Amber
+        'rgba(239, 68, 68, 0.8)',    // Red
+        'rgba(139, 92, 246, 0.8)',   // Violet
+        'rgba(249, 115, 22, 0.8)',   // Orange
+        'rgba(6, 182, 212, 0.8)',    // Cyan
+        'rgba(132, 204, 22, 0.8)',   // Lime
+        'rgba(244, 114, 182, 0.8)',  // Pink
+        'rgba(167, 139, 250, 0.8)'   // Purple
+      ];
+      return baseColors[index % baseColors.length];
+    });
+
+    return {
+      labels: analisisDetallado.map(item => item.formatoTabla.proveedor),
+      datasets: [{
+        label: 'Frecuencia de Suministros',
+        data: analisisDetallado.map(item => item.frecuencia),
+        backgroundColor: colores,
+        borderColor: colores.map(color => color.replace('0.8', '1')),
+        borderWidth: 2,
+        borderRadius: 4,
+        borderSkipped: false
+      }],
+      metadata: {
+        totalRegistros,
+        totalProveedores: analisisDetallado.length,
+        tablaCompleta: analisisDetallado,
+        encabezados: ['Proveedor', 'Frecuencia', 'Porcentaje', 'Gasto Total']
+      }
+    };
+  };
+
   // Función para obtener colores según el tema - Mejorada
   const getChartColors = () => {
     const isDarkMode = document.documentElement.classList.contains('dark');
@@ -1899,11 +2072,14 @@ const Suministros = () => {
           title: function(context) {
             return `${title} - ${context[0].label}`;
           },
+          label: function(context) {
+            return `${context.dataset.label}: ${formatCurrency(context.parsed.y)}`;
+          },
           afterBody: function(context) {
             if (metrics.total) {
-              const percentage = ((context[0].parsed.y / metrics.total) * 100).toFixed(1);
+              const percentage = formatPercentage((context[0].parsed.y / metrics.total) * 100);
               return [
-                `Porcentaje del total: ${percentage}%`,
+                `Porcentaje del total: ${percentage}`,
                 metrics.tendencia ? `Tendencia: ${metrics.tendencia}` : ''
               ].filter(Boolean);
             }
@@ -1928,12 +2104,7 @@ const Suministros = () => {
           color: getChartColors().textColor,
           font: { size: 12 },
           callback: function(value) {
-            return new Intl.NumberFormat('es-MX', {
-              style: 'currency',
-              currency: 'MXN',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0
-            }).format(value);
+            return formatCurrency(value);
           }
         },
         grid: { color: getChartColors().gridColor }
@@ -1965,9 +2136,9 @@ const Suministros = () => {
               return data.labels.map((label, index) => {
                 const value = data.datasets[0].data[index];
                 const total = data.datasets[0].data.reduce((sum, val) => sum + val, 0);
-                const percentage = ((value / total) * 100).toFixed(1);
+                const percentage = formatPercentage((value / total) * 100);
                 return {
-                  text: `${label}: ${percentage}%`,
+                  text: `${label}: ${percentage}`,
                   fillStyle: data.datasets[0].backgroundColor[index],
                   fontColor: getChartColors().textColor,
                   index: index
@@ -2073,9 +2244,9 @@ const Suministros = () => {
   });
 
   // Componente de métricas para mostrar datos clave
-  const MetricsDisplay = ({ title, metrics, icon: Icon, color = "blue" }) => {
+  const MetricsDisplay = ({ title, metrics, icon: Icon, color = "indigo" }) => {
     const colorClasses = {
-      blue: "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200",
+      blue: "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200",
       green: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200",
       amber: "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200",
       red: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200",
@@ -2100,17 +2271,34 @@ const Suministros = () => {
             // Formatear etiquetas y valores
             switch (key) {
               case 'total':
-                label = 'Total';
-                displayValue = typeof value === 'number' ? 
-                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
-                  value;
+                label = 'TotalGasto';
+                displayValue = formatCurrency(value);
                 break;
               case 'promedio':
               case 'gastoPromedio':
-                label = 'Promedio';
-                displayValue = typeof value === 'number' ? 
-                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
-                  value;
+              case 'promedioMensual':
+                label = 'Promedio/Mes';
+                displayValue = formatCurrency(value);
+                break;
+              case 'cambioMensual':
+                label = 'CambioMensual';
+                displayValue = formatPercentage(value);
+                break;
+              case 'ultimoMes':
+                label = 'UltimoMes';
+                displayValue = formatCurrency(value);
+                break;
+              case 'totalItems':
+                label = 'TotalItems';
+                displayValue = formatNumber(value);
+                break;
+              case 'maximo':
+                label = 'Máximo';
+                displayValue = formatCurrency(value);
+                break;
+              case 'minimo':
+                label = 'Mínimo';
+                displayValue = formatCurrency(value);
                 break;
               case 'mesTop':
                 label = 'Mes Principal';
@@ -2129,46 +2317,58 @@ const Suministros = () => {
                 break;
               case 'porcentajeTop':
                 label = 'Porcentaje';
-                displayValue = `${value}%`;
+                displayValue = formatPercentage(value);
                 break;
               case 'totalCategorias':
                 label = 'Categorías';
+                displayValue = formatNumber(value);
                 break;
               case 'totalProveedores':
                 label = 'Proveedores';
+                displayValue = formatNumber(value);
                 break;
               case 'totalTipos':
                 label = 'Tipos';
+                displayValue = formatNumber(value);
                 break;
               case 'totalEstados':
                 label = 'Estados';
+                displayValue = formatNumber(value);
                 break;
               case 'mesesActivos':
                 label = 'Meses';
+                displayValue = formatNumber(value);
                 break;
               case 'totalEntregas':
                 label = 'Entregas';
-                break;
-              case 'promedioMensual':
-                label = 'Promedio/Mes';
+                displayValue = formatNumber(value);
                 break;
               case 'maxEntregas':
                 label = 'Máx/Mes';
+                displayValue = formatNumber(value);
                 break;
               case 'valorTotal':
                 label = 'Valor Total';
-                displayValue = typeof value === 'number' ? 
-                  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(value) : 
-                  `$${value}`;
+                displayValue = formatCurrency(value);
                 break;
               case 'cantidadItems':
                 label = 'Items';
+                displayValue = formatNumber(value);
                 break;
               case 'promedioXEstado':
                 label = 'Prom/Estado';
+                displayValue = formatNumber(value);
                 break;
               default:
                 label = key.charAt(0).toUpperCase() + key.slice(1);
+                // Si es un número, intentar formatear según el contexto
+                if (typeof value === 'number') {
+                  if (key.includes('gasto') || key.includes('valor') || key.includes('total') || key.includes('promedio')) {
+                    displayValue = formatCurrency(value);
+                  } else {
+                    displayValue = formatNumber(value);
+                  }
+                }
             }
 
             return (
@@ -2185,6 +2385,48 @@ const Suministros = () => {
     );
   };
 
+  // Función para abrir modal de gráfica expandida
+  const openChartModal = (chartConfig) => {
+    // Validar que los datos existan y tengan la estructura correcta
+    if (!chartConfig || !chartConfig.data) {
+      console.warn('ChartModal: No se proporcionaron datos válidos para la gráfica');
+      return;
+    }
+
+    // Validar que los datasets existan
+    if (!chartConfig.data.datasets || !Array.isArray(chartConfig.data.datasets)) {
+      console.warn('ChartModal: Los datasets no están definidos o no son un array');
+      return;
+    }
+
+    setChartModal({
+      isOpen: true,
+      chartData: chartConfig.data,
+      chartOptions: chartConfig.options,
+      chartType: chartConfig.type || 'line',
+      title: chartConfig.title || 'Gráfica',
+      subtitle: chartConfig.subtitle || '',
+      color: chartConfig.color || 'indigo',
+      metrics: chartConfig.metrics || null,
+      customContent: chartConfig.customContent || null
+    });
+  };
+
+  // Función para cerrar modal de gráfica
+  const closeChartModal = () => {
+    setChartModal({
+      isOpen: false,
+      chartData: null,
+      chartOptions: null,
+      chartType: 'line',
+      title: '',
+      subtitle: '',
+      color: 'indigo',
+      metrics: null,
+      customContent: null
+    });
+  };
+
   // Cargar gráficas cuando se cambian los filtros
   useEffect(() => {
     if (showCharts) {
@@ -2192,50 +2434,70 @@ const Suministros = () => {
     }
   }, [chartFilters, showCharts]);
 
-  // Función para verificar duplicados - SOLO POR FOLIO
+  // Función mejorada para verificar duplicados por folio y proveedor
   const checkForDuplicates = (newSuministro) => {
-    // Solo verificar duplicados si hay folio
-    if (!newSuministro.folio || newSuministro.folio.trim() === '') {
-      return []; // Sin folio, no hay duplicados que verificar
-    }
-
-    const duplicates = suministros.filter(suministro => {
-      // Si estamos editando, excluir el suministro actual de la verificación
-      if (editingSuministro && suministro.id_suministro === editingSuministro.id_suministro) {
-        return false;
+    try {
+      // Obtener ID del proveedor desde diferentes posibles ubicaciones
+      const proveedorId = newSuministro.proveedor_info?.id_proveedor || 
+                         newSuministro.id_proveedor || 
+                         newSuministro.proveedor_id;
+      
+      if (!proveedorId) {
+        return []; // Si no hay proveedor, no se puede validar
       }
 
-      // ÚNICO CRITERIO: Folio del proveedor
-      return suministro.folio && 
-             suministro.folio.toLowerCase().trim() === newSuministro.folio.toLowerCase().trim();
-    });
+      const validation = validateFolioDuplicado(
+        newSuministro.folio,
+        proveedorId,
+        suministros,
+        editingSuministro?.id_suministro
+      );
 
-    return duplicates;
+      return validation.duplicateItems;
+    } catch (error) {
+      console.error('Error en verificación de duplicados:', error);
+      // En caso de error, devolver array vacío para evitar crashes
+      return [];
+    }
   };
 
-  // Función para buscar sugerencias de duplicados en tiempo real - SOLO POR FOLIO
+  // Función mejorada para buscar sugerencias de duplicados por folio y proveedor
   const searchDuplicateSuggestions = useCallback((nombre, codigo_producto, folio) => {
-    // Solo mostrar advertencias para folios duplicados EXACTOS
-    if (!folio || folio.trim() === '') {
-      setDuplicatesSuggestions([]);
-      setShowDuplicatesWarning(false);
-      return;
-    }
-
-    const suggestions = suministros.filter(suministro => {
-      // Excluir el suministro actual si estamos editando
-      if (editingSuministro && suministro.id_suministro === editingSuministro.id_suministro) {
-        return false;
+    try {
+      if (!folio || folio.trim() === '') {
+        setDuplicatesSuggestions([]);
+        setShowDuplicatesWarning(false);
+        return;
       }
 
-      // CRITERIO MÁS ESTRICTO: Solo folios que coincidan exactamente o sean muy similares
-      return suministro.folio && 
-             suministro.folio.toLowerCase().trim() === folio.toLowerCase().trim();
-    }).slice(0, 5); // Limitar a 5 sugerencias
+      const proveedorId = formData.proveedor_info?.id_proveedor;
+      
+      if (!proveedorId) {
+        setDuplicatesSuggestions([]);
+        setShowDuplicatesWarning(false);
+        return;
+      }
 
-    setDuplicatesSuggestions(suggestions);
-    setShowDuplicatesWarning(suggestions.length > 0);
-  }, [suministros, editingSuministro]);
+      const validation = validateFolioDuplicado(
+        folio,
+        proveedorId,
+        suministros,
+        editingSuministro?.id_suministro
+      );
+
+      if (validation.isDuplicate) {
+        setDuplicatesSuggestions(validation.duplicateItems);
+        setShowDuplicatesWarning(true);
+      } else {
+        setDuplicatesSuggestions([]);
+        setShowDuplicatesWarning(false);
+      }
+    } catch (error) {
+      console.error('Error en búsqueda de duplicados:', error);
+      setDuplicatesSuggestions([]);
+      setShowDuplicatesWarning(false);
+    }
+  }, [suministros, editingSuministro, formData.proveedor_info]);
 
   // =================== FUNCIONES DE AUTOCOMPLETADO AVANZADO ===================
 
@@ -2733,6 +2995,21 @@ const Suministros = () => {
   const handleEditRecibo = (recibo) => {
     setEditingRecibo(recibo);
     setShowMultipleModal(true);
+  };
+
+  const handleView = (suministro) => {
+    setViewModal({
+      open: true,
+      suministro: suministro
+    });
+  };
+
+  const handleViewRecibo = (recibo) => {
+    setViewModal({
+      open: true,
+      suministro: null,
+      recibo: recibo
+    });
   };
 
   const handleDelete = async (id) => {
@@ -3234,10 +3511,10 @@ const Suministros = () => {
         </div>
 
         {/* Total Suministros */}
-        <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-blue-100 text-sm font-medium mb-1">Total Suministros</p>
+              <p className="text-indigo-100 text-sm font-medium mb-1">Total Suministros</p>
               <p className="text-2xl font-bold">
                 {stats.totalSuministros.toLocaleString()}
               </p>
@@ -3310,7 +3587,7 @@ const Suministros = () => {
       <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
         <div className="flex flex-col xl:flex-row gap-2 items-center justify-between">
           {/* Barra de búsqueda */}
-          <div className="relative flex-1 max-w-sm">
+          <div className="relative flex-1 max-w-lg">
             <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" />
             <input
               type="text"
@@ -3321,52 +3598,27 @@ const Suministros = () => {
             />
           </div>
 
-          {/* Filtros */}
-          <div className="flex flex-wrap gap-2 items-left">
-            <select
-              value={filters.categoria}
-              onChange={(e) => setFilters({...filters, categoria: e.target.value})}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-            >
-              <option value="">Todas las categorías</option>
-              {Object.entries(CATEGORIAS_SUMINISTRO).map(([key, label]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-
-            <select
-              value={filters.estado}
-              onChange={(e) => setFilters({...filters, estado: e.target.value})}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-            >
-              <option value="">Todos los estados</option>
-              {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
-                <option key={key} value={key}>{label}</option>
-              ))}
-            </select>
-
-            <select
-              value={filters.proveedor}
-              onChange={(e) => setFilters({...filters, proveedor: e.target.value})}
-              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-            >
-              <option value="">Todos los proveedores</option>
-              {proveedores.map((proveedor) => (
-                <option key={proveedor.id_proveedor} value={proveedor.nombre}>
-                  {proveedor.nombre}
-                </option>
-              ))}
-            </select>
-          </div>
-
           {/* Botones */}
           <div className="flex-shrink-0 flex gap-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+            >
+              <FaFilter className="w-4 h-4" />
+              {showFilters ? 'Filtros' : 'Filtros'}
+              {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor) && (
+                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-1">
+                  {[filters.categoria, filters.estado, filters.proyecto, filters.proveedor].filter(f => f).length}
+                </span>
+              )}
+              {showFilters ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
+            </button>
             <button
               onClick={() => setShowCharts(!showCharts)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
             >
               <FaChartBar className="w-4 h-4" />
-              {showCharts ? 'Ocultar Gráficas' : 'Ver Gráficas'}
+              {showCharts ? 'Ver Gráficas' : 'Ver Gráficas'}
               {showCharts ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
             </button>
             <button
@@ -3379,6 +3631,115 @@ const Suministros = () => {
           </div>
         </div>
       </div>
+
+      {/* Sección de Filtros */}
+      {showFilters && (
+        <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Filtros de Suministros</h2>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {/* Filtro por Proyecto */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <FaBuilding className="inline w-4 h-4 mr-2" />
+                  Proyecto ({proyectos.length} disponibles)
+                </label>
+                <select
+                  value={filters.proyecto}
+                  onChange={(e) => setFilters({...filters, proyecto: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                >
+                  <option value="">Todos los proyectos</option>
+                  {proyectos.map((proyecto) => {
+                    // Usar diferentes posibles nombres de campo
+                    const nombreProyecto = proyecto.nombre_proyecto || proyecto.nombre || proyecto.title || proyecto.name || `Proyecto ${proyecto.id_proyecto || proyecto.id}`;
+                    const idProyecto = proyecto.id_proyecto || proyecto.id;
+                    return (
+                      <option key={idProyecto} value={idProyecto}>
+                        {nombreProyecto}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Filtro por Categoría */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <FaBox className="inline w-4 h-4 mr-2" />
+                  Categoría
+                </label>
+                <select
+                  value={filters.categoria}
+                  onChange={(e) => setFilters({...filters, categoria: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                >
+                  <option value="">Todas las categorías</option>
+                  {Object.entries(CATEGORIAS_SUMINISTRO).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro por Estado */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <FaClock className="inline w-4 h-4 mr-2" />
+                  Estado
+                </label>
+                <select
+                  value={filters.estado}
+                  onChange={(e) => setFilters({...filters, estado: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                >
+                  <option value="">Todos los estados</option>
+                  {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro por Proveedor */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <FaTruck className="inline w-4 h-4 mr-2" />
+                  Proveedor
+                </label>
+                <select
+                  value={filters.proveedor}
+                  onChange={(e) => setFilters({...filters, proveedor: e.target.value})}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                >
+                  <option value="">Todos los proveedores</option>
+                  {proveedores.map((proveedor) => (
+                    <option 
+                      key={proveedor.id_proveedor} 
+                      value={proveedor.nombre}
+                      title={proveedor.nombre}
+                    >
+                      {proveedor.nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Botón para limpiar filtros */}
+            {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor) && (
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={() => setFilters({categoria: '', estado: '', proyecto: '', proveedor: ''})}
+                  className="px-4 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 flex items-center gap-2 border border-red-300 dark:border-red-600"
+                >
+                  <FaTimes className="w-4 h-4" />
+                  Limpiar filtros
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Sección de Gráficas */}
       {showCharts && (
@@ -3421,11 +3782,15 @@ const Suministros = () => {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                   >
                     <option value="">Todos los proyectos</option>
-                    {proyectos.map((proyecto) => (
-                      <option key={proyecto.id_proyecto} value={proyecto.id_proyecto.toString()}>
-                        {proyecto.nombre}
-                      </option>
-                    ))}
+                    {proyectos.map((proyecto) => {
+                      const nombreProyecto = proyecto.nombre_proyecto || proyecto.nombre || proyecto.title || proyecto.name || `Proyecto ${proyecto.id_proyecto || proyecto.id}`;
+                      const idProyecto = proyecto.id_proyecto || proyecto.id;
+                      return (
+                        <option key={idProyecto} value={idProyecto.toString()}>
+                          {nombreProyecto}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
                 <div>
@@ -3433,12 +3798,19 @@ const Suministros = () => {
                   <select
                     value={chartFilters.proveedorNombre}
                     onChange={(e) => setChartFilters({...chartFilters, proveedorNombre: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500 truncate"
                   >
                     <option value="">Todos los proveedores</option>
                     {proveedores.map((proveedor) => (
-                      <option key={proveedor.id_proveedor} value={proveedor.nombre}>
-                        {proveedor.nombre}
+                      <option 
+                        key={proveedor.id_proveedor} 
+                        value={proveedor.nombre}
+                        title={proveedor.nombre} // Tooltip con nombre completo
+                      >
+                        {proveedor.nombre.length > 30 ? 
+                          `${proveedor.nombre.substring(0, 30)}...` : 
+                          proveedor.nombre
+                        }
                       </option>
                     ))}
                   </select>
@@ -3510,15 +3882,12 @@ const Suministros = () => {
                         analisisTecnicoConcreto: true,
                         concretoDetallado: true,
                         horasPorMes: true,
-                        horasPorProyecto: true,
                         horasPorEquipo: true,
                         comparativoHorasVsCosto: true,
-                        distribucionUnidades: true,
                         cantidadPorUnidad: true,
                         valorPorUnidad: true,
-                        comparativoUnidades: true,
-                        totalMetrosCubicos: true,
-                        analisisUnidadesMedida: true
+                        analisisUnidadesMedida: true,
+                        gastosPorCategoriaDetallado: true
                       })}
                       className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md transition-colors font-medium"
                     >
@@ -3538,15 +3907,12 @@ const Suministros = () => {
                         analisisTecnicoConcreto: false,
                         concretoDetallado: false,
                         horasPorMes: false,
-                        horasPorProyecto: false,
                         horasPorEquipo: false,
                         comparativoHorasVsCosto: false,
-                        distribucionUnidades: false,
                         cantidadPorUnidad: false,
                         valorPorUnidad: false,
-                        comparativoUnidades: false,
-                        totalMetrosCubicos: false,
-                        analisisUnidadesMedida: false
+                        analisisUnidadesMedida: false,
+                        gastosPorCategoriaDetallado: false
                       })}
                       className="text-xs bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded-md transition-colors font-medium"
                     >
@@ -3555,7 +3921,7 @@ const Suministros = () => {
                   </div>
                 </div>
                 
-                {/* Gráficas Principales - Grid Compacto */}
+                {/* Gráficas Principales - Simplificado */}
                 <div className="space-y-4">
                   <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg">
                     <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
@@ -3626,39 +3992,40 @@ const Suministros = () => {
                         />
                         <span className="text-gray-700 dark:text-gray-300">Cantidad por Estado</span>
                       </label>
+                    </div>
+                  </div>
+
+                  {/* Análisis Técnico Especializado */}
+                  <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg">
+                    <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                      <FaCogs className="mr-1.5 h-3.5 w-3.5" />
+                      Análisis Técnico Especializado
+                    </h5>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedCharts.distribucionTipos}
                           onChange={(e) => setSelectedCharts({...selectedCharts, distribucionTipos: e.target.checked})}
-                          className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Distribución de Tipos</span>
+                        <span className="text-gray-700 dark:text-gray-300">Distribución por Tipos</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedCharts.tendenciaEntregas}
                           onChange={(e) => setSelectedCharts({...selectedCharts, tendenciaEntregas: e.target.checked})}
-                          className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                         />
                         <span className="text-gray-700 dark:text-gray-300">Tendencia de Entregas</span>
                       </label>
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg">
-                    <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
-                      <FaCog className="mr-1.5 h-3.5 w-3.5" />
-                      Análisis Técnico
-                    </h5>
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedCharts.codigosProducto}
                           onChange={(e) => setSelectedCharts({...selectedCharts, codigosProducto: e.target.checked})}
-                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                         />
                         <span className="text-gray-700 dark:text-gray-300">Códigos de Producto</span>
                       </label>
@@ -3667,119 +4034,67 @@ const Suministros = () => {
                           type="checkbox"
                           checked={selectedCharts.analisisTecnicoConcreto}
                           onChange={(e) => setSelectedCharts({...selectedCharts, analisisTecnicoConcreto: e.target.checked})}
-                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Análisis Técnico</span>
+                        <span className="text-gray-700 dark:text-gray-300">Análisis Técnico de Concreto</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedCharts.concretoDetallado}
                           onChange={(e) => setSelectedCharts({...selectedCharts, concretoDetallado: e.target.checked})}
-                          className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                         />
                         <span className="text-gray-700 dark:text-gray-300">Concreto Detallado</span>
                       </label>
                     </div>
                   </div>
 
-                  {/* Sección de Análisis por Unidades */}
-                  <div className="bg-indigo-50 dark:bg-indigo-900/20 p-3 rounded-lg border border-indigo-200 dark:border-indigo-800">
-                    <h5 className="text-sm font-semibold text-indigo-800 dark:text-indigo-200 mb-2 flex items-center">
-                      <FaRuler className="mr-1.5 h-3.5 w-3.5" />
-                      Análisis por Unidades de Medida
-                    </h5>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.totalMetrosCubicos}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, totalMetrosCubicos: e.target.checked})}
-                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Total m³ (Concreto)</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.analisisUnidadesMedida}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, analisisUnidadesMedida: e.target.checked})}
-                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Distribución por Unidades</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Sección de Gráficas de Horas */}
-                  <div className="bg-amber-50 dark:bg-amber-900/20 p-3 rounded-lg border border-amber-200 dark:border-amber-800">
-                    <h5 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2 flex items-center">
+                  {/* Análisis de Horas de Trabajo */}
+                  <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg">
+                    <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
                       <FaClock className="mr-1.5 h-3.5 w-3.5" />
-                      Análisis de Horas (Maquinaria y Equipos)
+                      Análisis de Horas de Trabajo
                     </h5>
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedCharts.horasPorMes}
                           onChange={(e) => setSelectedCharts({...selectedCharts, horasPorMes: e.target.checked})}
-                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                         />
                         <span className="text-gray-700 dark:text-gray-300">Horas por Mes</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
-                          checked={selectedCharts.horasPorProyecto}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, horasPorProyecto: e.target.checked})}
-                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Horas por Proyecto</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
                           checked={selectedCharts.horasPorEquipo}
                           onChange={(e) => setSelectedCharts({...selectedCharts, horasPorEquipo: e.target.checked})}
-                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Top Equipos por Horas</span>
+                        <span className="text-gray-700 dark:text-gray-300">Horas por Equipo</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedCharts.comparativoHorasVsCosto}
                           onChange={(e) => setSelectedCharts({...selectedCharts, comparativoHorasVsCosto: e.target.checked})}
-                          className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500"
+                          className="w-4 h-4 text-indigo-600 rounded focus:ring-indigo-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Horas vs Costo</span>
+                        <span className="text-gray-700 dark:text-gray-300">Comparativo Horas vs Costo</span>
                       </label>
                     </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Análisis de Unidades de Medida */}
-              <div className="bg-gradient-to-r from-teal-50 to-cyan-50 dark:from-teal-900/20 dark:to-cyan-900/20 border border-teal-200 dark:border-teal-800 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <FaCog className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                  <h4 className="font-medium text-teal-800 dark:text-teal-200">Análisis de Unidades de Medida</h4>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.distribucionUnidades}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, distribucionUnidades: e.target.checked})}
-                          className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Distribución por Unidades</span>
-                      </label>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 text-sm">
+                  {/* Análisis por Unidades de Medida */}
+                  <div className="bg-gray-50 dark:bg-gray-800/50 p-3 rounded-lg">
+                    <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 flex items-center">
+                      <FaRulerCombined className="mr-1.5 h-3.5 w-3.5" />
+                      Análisis por Unidades de Medida
+                    </h5>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
+                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedCharts.cantidadPorUnidad}
@@ -3788,11 +4103,7 @@ const Suministros = () => {
                         />
                         <span className="text-gray-700 dark:text-gray-300">Cantidad por Unidad</span>
                       </label>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 text-sm">
+                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
                           checked={selectedCharts.valorPorUnidad}
@@ -3801,17 +4112,45 @@ const Suministros = () => {
                         />
                         <span className="text-gray-700 dark:text-gray-300">Valor por Unidad</span>
                       </label>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 text-sm">
+                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
                           type="checkbox"
-                          checked={selectedCharts.comparativoUnidades}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, comparativoUnidades: e.target.checked})}
+                          checked={selectedCharts.analisisUnidadesMedida}
+                          onChange={(e) => setSelectedCharts({...selectedCharts, analisisUnidadesMedida: e.target.checked})}
                           className="w-4 h-4 text-teal-600 rounded focus:ring-teal-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Cantidad vs Valor</span>
+                        <span className="text-gray-700 dark:text-gray-300">Análisis de Unidades</span>
                       </label>
+                    </div>
+                  </div>
+
+                  {/* Nuevas Gráficas Profesionales */}
+                  <div className="bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 rounded-xl p-6 border border-purple-200 dark:border-purple-700">
+                    <div className="flex items-center space-x-3 mb-4">
+                      <div className="bg-purple-500 p-2 rounded-lg">
+                        <FaChartPie className="h-5 w-5 text-white" />
+                      </div>
+                      <h4 className="text-lg font-semibold text-purple-800 dark:text-purple-200">
+                        Gráficas Profesionales Avanzadas
+                      </h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-3">
+                        <div className="text-sm font-medium text-purple-700 dark:text-purple-300 mb-2">
+                          Análisis Financiero Detallado
+                        </div>
+                        <div className="space-y-2">
+                          <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                            <input
+                              type="checkbox"
+                              checked={selectedCharts.gastosPorCategoriaDetallado}
+                              onChange={(e) => setSelectedCharts({...selectedCharts, gastosPorCategoriaDetallado: e.target.checked})}
+                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                            <span className="text-gray-700 dark:text-gray-300">Gastos por Categoría (con %)</span>
+                          </label>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3836,7 +4175,7 @@ const Suministros = () => {
                 
                 {/* Gráfica de Gastos por Mes */}
                 {selectedCharts.gastosPorMes && chartData.gastosPorMes && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="gastosPorMes">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gastos por Mes</h3>
@@ -3844,8 +4183,25 @@ const Suministros = () => {
                           Evolución temporal de los gastos en suministros
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'line',
+                            data: chartData.gastosPorMes,
+                            title: 'Gastos por Mes',
+                            subtitle: 'Evolución temporal de los gastos en suministros',
+                            options: getLineChartOptions("Gastos por Mes", chartData.gastosPorMes?.metrics),
+                            color: 'blue',
+                            metrics: chartData.gastosPorMes?.metrics
+                          })}
+                          className="p-2 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors duration-200"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5" />
+                        </button>
+                        <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                        </div>
                       </div>
                     </div>
                     
@@ -3869,7 +4225,7 @@ const Suministros = () => {
 
                 {/* Gráfica de Valor por Categoría */}
                 {selectedCharts.valorPorCategoria && chartData.valorPorCategoria && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="valorPorCategoria">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Valor Total por Categoría</h3>
@@ -3877,8 +4233,23 @@ const Suministros = () => {
                           Distribución de inversión por categoría de suministros
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-green-600 dark:text-green-400" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'doughnut',
+                            data: chartData.valorPorCategoria,
+                            title: 'Valor Total por Categoría',
+                            options: getDoughnutChartOptions('Valor Total por Categoría', chartData.valorPorCategoria?.metrics),
+                            metrics: chartData.valorPorCategoria?.metrics
+                          })}
+                          className="p-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors group"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-green-600 dark:text-green-400" />
+                        </div>
                       </div>
                     </div>
                     
@@ -3902,7 +4273,7 @@ const Suministros = () => {
 
                 {/* Gráfica de Suministros por Mes */}
                 {selectedCharts.suministrosPorMes && chartData.suministrosPorMes && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="suministrosPorMes">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Suministros Solicitados por Mes</h3>
@@ -3910,8 +4281,23 @@ const Suministros = () => {
                           Número de suministros por período
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'bar',
+                            data: chartData.suministrosPorMes,
+                            title: 'Suministros Solicitados por Mes',
+                            options: getBarChartOptions('Suministros Solicitados por Mes', chartData.suministrosPorMes?.metrics),
+                            metrics: chartData.suministrosPorMes?.metrics
+                          })}
+                          className="p-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors group"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        </div>
                       </div>
                     </div>
                     <div className="h-80">
@@ -3973,7 +4359,7 @@ const Suministros = () => {
 
                 {/* Gráfica de Gastos por Proyecto */}
                 {selectedCharts.gastosPorProyecto && chartData.gastosPorProyecto && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="gastosPorProyecto">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gastos por Proyecto</h3>
@@ -3981,8 +4367,23 @@ const Suministros = () => {
                           Inversión por proyecto
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'bar',
+                            data: chartData.gastosPorProyecto,
+                            title: 'Gastos por Proyecto',
+                            options: getBarChartOptions('Gastos por Proyecto', chartData.gastosPorProyecto?.metrics),
+                            metrics: chartData.gastosPorProyecto?.metrics
+                          })}
+                          className="p-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors group"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-orange-600 dark:text-orange-400" />
+                        </div>
                       </div>
                     </div>
                     <div className="h-80">
@@ -4049,7 +4450,7 @@ const Suministros = () => {
 
                 {/* Gráfica de Gastos por Proveedor */}
                 {selectedCharts.gastosPorProveedor && chartData.gastosPorProveedor && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="gastosPorProveedor">
                     <div className="flex items-center justify-between mb-6">
                       <div>
                         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Gastos por Proveedor</h3>
@@ -4057,8 +4458,23 @@ const Suministros = () => {
                           Distribución de gastos por empresa proveedora
                         </p>
                       </div>
-                      <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
-                        <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'doughnut',
+                            data: chartData.gastosPorProveedor,
+                            title: 'Gastos por Proveedor',
+                            options: getDoughnutChartOptions('Gastos por Proveedor', chartData.gastosPorProveedor?.metrics),
+                            metrics: chartData.gastosPorProveedor?.metrics
+                          })}
+                          className="p-2 bg-blue-100 dark:bg-blue-900/30 hover:bg-blue-200 dark:hover:bg-blue-900/50 rounded-lg transition-colors group"
+                          title="Expandir gráfica"
+                        >
+                          <ArrowsPointingOutIcon className="h-5 w-5 text-blue-600 dark:text-blue-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-xl flex items-center justify-center">
+                          <FaChartBar className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        </div>
                       </div>
                     </div>
                     
@@ -4467,57 +4883,6 @@ const Suministros = () => {
                                 font: { size: 12, weight: '500' } 
                               },
                               grid: { color: getChartColors().gridColor }
-                            }
-                          }
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* Gráfica de Horas por Proyecto */}
-                {selectedCharts.horasPorProyecto && chartData.horasPorProyecto && (
-                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8">
-                    <div className="flex items-center justify-between mb-6">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Horas por Proyecto</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                          Distribución de horas de trabajo por proyecto
-                        </p>
-                      </div>
-                      <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/30 rounded-xl flex items-center justify-center">
-                        <FaBuilding className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                      </div>
-                    </div>
-                    <div className="h-80">
-                      <Doughnut 
-                        key={`horas-proyecto-${themeVersion}`}
-                        data={chartData.horasPorProyecto} 
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'bottom',
-                              labels: {
-                                color: getChartColors().textColor,
-                                padding: 20,
-                                font: { size: 13, weight: '600' },
-                                usePointStyle: true,
-                                pointStyle: 'circle'
-                              }
-                            },
-                            tooltip: {
-                              backgroundColor: getChartColors().tooltipBg,
-                              titleColor: getChartColors().tooltipText,
-                              bodyColor: getChartColors().tooltipText,
-                              callbacks: {
-                                label: function(context) {
-                                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                  const percentage = ((context.parsed * 100) / total).toFixed(1);
-                                  return `${context.label}: ${context.parsed.toFixed(1)} horas (${percentage}%)`;
-                                }
-                              }
                             }
                           }
                         }}
@@ -5121,6 +5486,252 @@ const Suministros = () => {
                   </div>
                 )}
 
+                {/* ===== NUEVAS GRÁFICAS PROFESIONALES ===== */}
+
+                {/* Gráfica de Gastos por Categoría Detallado (Estilo Pastel Profesional) */}
+                {selectedCharts.gastosPorCategoriaDetallado && chartData.gastosPorCategoriaDetallado && (
+                  <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="gastosPorCategoriaDetallado">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Distribución de Gastos por Categoría</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Análisis detallado con porcentajes y montos por categoría
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => openChartModal({
+                            type: 'pie',
+                            data: chartData.gastosPorCategoriaDetallado,
+                            title: 'Distribución de Gastos por Categoría',
+                            subtitle: 'Análisis detallado con porcentajes y montos por categoría',
+                            options: {
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: {
+                                  display: false // Ocultar leyenda ya que tenemos la tabla detallada
+                                },
+                                tooltip: {
+                                  backgroundColor: getChartColors().tooltipBg,
+                                  titleColor: getChartColors().tooltipText,
+                                  bodyColor: getChartColors().tooltipText,
+                                  callbacks: {
+                                    title: function(context) {
+                                      const detalle = chartData.gastosPorCategoriaDetallado.metadata?.detalles[context[0].dataIndex];
+                                      return detalle?.categoria || 'Categoría';
+                                    },
+                                    label: function(context) {
+                                      const detalle = chartData.gastosPorCategoriaDetallado.metadata?.detalles[context.dataIndex];
+                                      return [
+                                        `Gasto: ${formatCurrency(detalle?.gasto || 0)}`,
+                                        `Porcentaje: ${detalle?.porcentaje}%`
+                                      ];
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            customContent: chartData.gastosPorCategoriaDetallado.metadata
+                          })}
+                          className="text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors duration-200"
+                          title="Abrir en modal"
+                        >
+                          <ArrowsPointingOutIcon className="w-5 h-5" />
+                        </button>
+                        <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-lg">
+                          <FaChartPie className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                      {/* Gráfica de Pastel */}
+                      <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <div className="h-80">
+                          <Pie
+                            key={`gastos-categoria-detallado-${themeVersion}`}
+                            data={chartData.gastosPorCategoriaDetallado}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: {
+                                  display: false // Ocultamos la leyenda por defecto
+                                },
+                                tooltip: {
+                                  backgroundColor: getChartColors().tooltipBg,
+                                  titleColor: getChartColors().tooltipText,
+                                  bodyColor: getChartColors().tooltipText,
+                                  callbacks: {
+                                    title: function(context) {
+                                      const detalle = chartData.gastosPorCategoriaDetallado.metadata?.detalles[context[0].dataIndex];
+                                      return detalle?.categoria || 'Categoría';
+                                    },
+                                    label: function(context) {
+                                      const detalle = chartData.gastosPorCategoriaDetallado.metadata?.detalles[context.dataIndex];
+                                      return [
+                                        `Gasto: ${formatCurrency(detalle?.gasto || 0)}`,
+                                        `Porcentaje: ${detalle?.porcentaje}%`
+                                      ];
+                                    }
+                                  }
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Tabla de Datos */}
+                      <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Desglose Detallado</h4>
+                        <div className="space-y-3 max-h-80 overflow-y-auto">
+                          {chartData.gastosPorCategoriaDetallado.metadata?.detalles?.map((detalle, index) => (
+                            <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
+                              <div className="flex items-center space-x-3">
+                                <div 
+                                  className="w-4 h-4 rounded-full" 
+                                  style={{ backgroundColor: detalle.color }}
+                                ></div>
+                                <span className="font-medium text-gray-900 dark:text-white text-sm">
+                                  {detalle.categoria}
+                                </span>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-sm font-bold text-gray-900 dark:text-white">
+                                  {formatCurrency(detalle.gasto)}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {detalle.porcentaje}%
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                          <div className="flex justify-between items-center font-bold text-gray-900 dark:text-white">
+                            <span>Total General:</span>
+                            <span>{formatCurrency(chartData.gastosPorCategoriaDetallado.metadata?.totalGeneral || 0)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Gráfica de Análisis de Frecuencia de Suministros (Estilo Tabla + Gráfica) */}
+                {selectedCharts.analisisFrecuenciaSuministros && chartData.analisisFrecuenciaSuministros && (
+                  <div className="xl:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8" data-chart-id="analisisFrecuenciaSuministros">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Análisis de Frecuencia por Proveedor</h3>
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          Distribución de suministros por proveedor con estadísticas detalladas
+                        </p>
+                      </div>
+                      <div className="bg-indigo-100 dark:bg-indigo-900/30 p-3 rounded-lg">
+                        <FaChartBar className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                      {/* Gráfica de Barras */}
+                      <div className="lg:col-span-2 bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <div className="h-80">
+                          <Bar
+                            key={`frecuencia-suministros-${themeVersion}`}
+                            data={chartData.analisisFrecuenciaSuministros}
+                            options={{
+                              responsive: true,
+                              maintainAspectRatio: false,
+                              plugins: {
+                                legend: {
+                                  display: false
+                                },
+                                tooltip: {
+                                  backgroundColor: getChartColors().tooltipBg,
+                                  titleColor: getChartColors().tooltipText,
+                                  bodyColor: getChartColors().tooltipText,
+                                  callbacks: {
+                                    title: function(context) {
+                                      const detalle = chartData.analisisFrecuenciaSuministros.metadata?.tablaCompleta[context[0].dataIndex];
+                                      return detalle?.proveedor || 'Proveedor';
+                                    },
+                                    label: function(context) {
+                                      const detalle = chartData.analisisFrecuenciaSuministros.metadata?.tablaCompleta[context.dataIndex];
+                                      return [
+                                        `Frecuencia: ${detalle?.frecuencia} suministros`,
+                                        `Porcentaje: ${detalle?.porcentaje}%`,
+                                        `Gasto Total: ${formatCurrency(detalle?.gasto || 0)}`
+                                      ];
+                                    }
+                                  }
+                                }
+                              },
+                              scales: {
+                                y: {
+                                  beginAtZero: true,
+                                  grid: { color: getChartColors().gridColor },
+                                  ticks: {
+                                    color: getChartColors().textColor,
+                                    callback: function(value) {
+                                      return value + ' suministros';
+                                    }
+                                  }
+                                },
+                                x: {
+                                  grid: { display: false },
+                                  ticks: {
+                                    color: getChartColors().textColor,
+                                    maxRotation: 45,
+                                    font: { size: 10 }
+                                  }
+                                }
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                      
+                      {/* Tabla Estadística */}
+                      <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
+                        <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Top Proveedores</h4>
+                        <div className="space-y-2 max-h-80 overflow-y-auto">
+                          <div className="grid grid-cols-3 gap-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-600 pb-2">
+                            <span>Proveedor</span>
+                            <span className="text-center">Freq.</span>
+                            <span className="text-right">%</span>
+                          </div>
+                          {chartData.analisisFrecuenciaSuministros.metadata?.tablaCompleta?.map((item, index) => (
+                            <div key={index} className="grid grid-cols-3 gap-2 py-2 text-sm border-b border-gray-100 dark:border-gray-700">
+                              <span className="font-medium text-gray-900 dark:text-white truncate" title={item.proveedor}>
+                                {item.formatoTabla.proveedor}
+                              </span>
+                              <span className="text-center text-gray-600 dark:text-gray-300">
+                                {item.formatoTabla.frecuencia}
+                              </span>
+                              <span className="text-right text-gray-600 dark:text-gray-300 font-medium">
+                                {item.formatoTabla.porcentaje}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
+                          <div className="text-center">
+                            <div className="text-sm font-bold text-gray-900 dark:text-white">
+                              Total: {chartData.analisisFrecuenciaSuministros.metadata?.totalRegistros} suministros
+                            </div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              {chartData.analisisFrecuenciaSuministros.metadata?.totalProveedores} proveedores únicos
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Mensaje cuando no hay gráficas seleccionadas */}
                 {!Object.values(selectedCharts).some(selected => selected) && (
                   <div className="col-span-full bg-gray-50 dark:bg-dark-200 p-8 rounded-lg text-center">
@@ -5151,9 +5762,6 @@ const Suministros = () => {
                   Proveedor
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Folio
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Cantidad
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
@@ -5173,7 +5781,7 @@ const Suministros = () => {
             <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
               {paginatedSuministros.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                     <FaBox className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-4" />
                     <p>No hay suministros registrados</p>
                   </td>
@@ -5227,11 +5835,6 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {recibo.folio || '-'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 dark:text-white">
                               {recibo.cantidad_items} artículos
                             </div>
                           </td>
@@ -5250,6 +5853,13 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleViewRecibo(recibo)}
+                                className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 p-1 transition-colors duration-200"
+                                title="Ver grupo completo"
+                              >
+                                <FaEye className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => handleEditRecibo(recibo)}
                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
@@ -5301,18 +5911,13 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <div className="text-sm text-gray-900 dark:text-white">
-                                  -
-                                </div>
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="text-sm text-gray-900 dark:text-white">
-                                  {formatQuantityDisplay(suministro.cantidad)} {getDisplayUnidadMedida(suministro.unidad_medida)}
+                                  {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
                                 </div>
                               </td>
                               <td className="px-6 py-4">
                                 <div>
                                   <div className="text-sm text-gray-900 dark:text-white">
-                                    {formatPriceDisplay(suministro.precio_unitario)} / {getDisplayUnidadMedida(suministro.unidad_medida)}
+                                    {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidad_medida)}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
                                     Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -5328,21 +5933,8 @@ const Suministros = () => {
                                 {formatDate(suministro.fecha || suministro.fecha_necesaria)}
                               </td>
                               <td className="px-6 py-4">
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => handleEdit(suministro)}
-                                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
-                                    title="Editar individual"
-                                  >
-                                    <STANDARD_ICONS.EDIT className="w-4 h-4" />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(suministro.id_suministro)}
-                                    className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 transition-colors duration-200"
-                                    title="Eliminar"
-                                  >
-                                    <STANDARD_ICONS.DELETE className="w-4 h-4" />
-                                  </button>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+
                                 </div>
                               </td>
                             </tr>
@@ -5396,18 +5988,13 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {suministro.folio || '-'}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 dark:text-white">
-                              {formatQuantityDisplay(suministro.cantidad)} {getDisplayUnidadMedida(suministro.unidad_medida)}
+                              {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm text-gray-900 dark:text-white">
-                                {formatPriceDisplay(suministro.precio_unitario)} / {getDisplayUnidadMedida(suministro.unidad_medida)}
+                                {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidad_medida)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -5424,6 +6011,13 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => handleView(suministro)}
+                                className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 p-1 transition-colors duration-200"
+                                title="Ver detalles"
+                              >
+                                <FaEye className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => handleEdit(suministro)}
                                 className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 transition-colors duration-200"
@@ -5520,7 +6114,7 @@ const Suministros = () => {
                           onClick={() => handlePageChange(i)}
                           className={`px-3 py-1 text-sm border rounded-md ${
                             i === currentPage
-                              ? 'bg-blue-500 border-blue-500 text-white'
+                              ? 'bg-indigo-600 border-indigo-600 text-white'
                               : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
                           }`}
                         >
@@ -5833,30 +6427,32 @@ const Suministros = () => {
           estado: filters.estado,
           fechaInicio: filters.fechaInicio,
           fechaFin: filters.fechaFin
-        }, proyectos, proveedores)}
+        }, proyectos, proveedores, chartData)}
         availableCharts={[
-          // Análisis Financiero
-          { key: 'gastosPorMes', label: 'Gastos por Mes' },
-          { key: 'valorPorCategoria', label: 'Valor por Categoría' },
-          { key: 'gastosPorProyecto', label: 'Gastos por Proyecto' },
-          { key: 'gastosPorProveedor', label: 'Gastos por Proveedor' },
+          // Análisis Financiero Principal
+          { key: 'gastosPorMes', label: 'Gastos por Mes', category: 'financiero' },
+          { key: 'valorPorCategoria', label: 'Valor por Categoría', category: 'financiero' },
+          { key: 'gastosPorProyecto', label: 'Gastos por Proyecto', category: 'financiero' },
+          { key: 'gastosPorProveedor', label: 'Gastos por Proveedor', category: 'financiero' },
           // Análisis de Cantidad y Estado
-          { key: 'suministrosPorMes', label: 'Cantidad por Mes' },
-          { key: 'cantidadPorEstado', label: 'Cantidad por Estado' },
-          { key: 'distribucionTipos', label: 'Distribución de Tipos' },
-          { key: 'tendenciaEntregas', label: 'Tendencia de Entregas' },
-          // Análisis Técnico
-          { key: 'codigosProducto', label: 'Códigos de Producto' },
-          { key: 'analisisTecnicoConcreto', label: 'Análisis Técnico' },
-          { key: 'concretoDetallado', label: 'Concreto Detallado' },
+          { key: 'suministrosPorMes', label: 'Cantidad por Mes', category: 'cantidad' },
+          { key: 'cantidadPorEstado', label: 'Cantidad por Estado', category: 'cantidad' },
+          // Análisis Técnico Especializado
+          { key: 'distribucionTipos', label: 'Distribución por Tipos', category: 'tecnico' },
+          { key: 'tendenciaEntregas', label: 'Tendencia de Entregas', category: 'tecnico' },
+          { key: 'codigosProducto', label: 'Códigos de Producto', category: 'tecnico' },
+          { key: 'analisisTecnicoConcreto', label: 'Análisis Técnico de Concreto', category: 'tecnico' },
+          { key: 'concretoDetallado', label: 'Concreto Detallado', category: 'tecnico' },
+          // Análisis de Horas de Trabajo
+          { key: 'horasPorMes', label: 'Horas por Mes', category: 'horas' },
+          { key: 'horasPorEquipo', label: 'Horas por Equipo', category: 'horas' },
+          { key: 'comparativoHorasVsCosto', label: 'Comparativo Horas vs Costo', category: 'horas' },
           // Análisis por Unidades de Medida
-          { key: 'totalM3Concreto', label: 'Total m³ (Concreto)' },
-          { key: 'distribucionPorUnidades', label: 'Distribución por Unidades' },
-          // Análisis de Horas (Maquinaria y Equipos)
-          { key: 'horasPorMes', label: 'Horas por Mes' },
-          { key: 'horasPorProyecto', label: 'Horas por Proyecto' },
-          { key: 'topEquiposPorHoras', label: 'Top Equipos por Horas' },
-          { key: 'horasVsCosto', label: 'Horas vs Costo' }
+          { key: 'cantidadPorUnidad', label: 'Cantidad por Unidad', category: 'unidades' },
+          { key: 'valorPorUnidad', label: 'Valor por Unidad', category: 'unidades' },
+          { key: 'analisisUnidadesMedida', label: 'Análisis de Unidades', category: 'unidades' },
+          // Gráficas Profesionales Avanzadas
+          { key: 'gastosPorCategoriaDetallado', label: '📊 Gastos por Categoría (con %)', category: 'avanzado' }
         ]}
       />
 
@@ -5881,6 +6477,416 @@ const Suministros = () => {
         autoClose={true}
         duration={4000}
       />
+
+      {/* Modal de Vista de Suministro/Recibo */}
+      {viewModal.open && (viewModal.suministro || viewModal.recibo) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex items-center gap-3">
+                  {viewModal.recibo && (
+                    <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
+                      <FaBoxes className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        AGRUPADO ({viewModal.recibo.cantidad_items} artículos)
+                      </span>
+                    </div>
+                  )}
+                  {viewModal.suministro && !viewModal.recibo && (
+                    <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
+                      <FaBox className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                        INDIVIDUAL
+                      </span>
+                    </div>
+                  )}
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {viewModal.recibo ? 'Detalles del Recibo' : 'Detalles del Suministro'}
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setViewModal({ open: false, suministro: null, recibo: null })}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                >
+                  <FaTimes className="w-6 h-6" />
+                </button>
+              </div>
+              
+              {/* Vista de Recibo Agrupado */}
+              {viewModal.recibo && (
+                <div className="space-y-6">
+                  {/* Información del Recibo */}
+                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
+                      Información del Recibo
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Proveedor
+                        </label>
+                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                          {viewModal.recibo.proveedor}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Proyecto
+                        </label>
+                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                          {viewModal.recibo.proyecto}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Fecha
+                        </label>
+                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                          {formatDate(viewModal.recibo.fecha)}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Folio
+                        </label>
+                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                          {viewModal.recibo.folio || 'No especificado'}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Total de Artículos
+                        </label>
+                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                          {viewModal.recibo.cantidad_items}
+                        </p>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Total del Recibo
+                        </label>
+                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600 font-bold">
+                          {formatCurrency(viewModal.recibo.total)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Lista de Suministros */}
+                  <div>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
+                        <FaListUl className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Listado de Suministros
+                        </span>
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        ({viewModal.recibo.suministros.length} artículos)
+                      </h3>
+                    </div>
+                    <div className="space-y-4">
+                      {viewModal.recibo.suministros.map((suministro, index) => (
+                        <div key={suministro.id_suministro} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50/30 dark:bg-gray-800/20">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="flex items-center justify-center w-6 h-6 bg-gray-100 dark:bg-gray-800 rounded-full border border-gray-300 dark:border-gray-600">
+                              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
+                                {index + 1}
+                              </span>
+                            </div>
+                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                              Artículo {index + 1} de {viewModal.recibo.suministros.length}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Nombre
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                {suministro.nombre || suministro.descripcion}
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Código
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                {suministro.codigo_producto || 'No especificado'}
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Categoría
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                {getDisplayCategoria(suministro.tipo_suministro || suministro.categoria)}
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Cantidad
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                {formatNumber(suministro.cantidad || 0)} {suministro.unidad_medida || ''}
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Precio Unitario
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                {formatCurrency(suministro.precio_unitario || 0)}
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Subtotal
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600 font-semibold">
+                                {formatCurrency((suministro.cantidad || 0) * (suministro.precio_unitario || 0))}
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Estado
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                  suministro.estado === 'Entregado' 
+                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                    : suministro.estado === 'En Proceso'
+                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                }`}>
+                                  {suministro.estado || 'No especificado'}
+                                </span>
+                              </p>
+                            </div>
+
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Fecha
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                {formatDate(suministro.fecha || suministro.fecha_necesaria)}
+                              </p>
+                            </div>
+                          </div>
+
+                          {suministro.descripcion_detallada && (
+                            <div className="mt-4">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Descripción Detallada
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                {suministro.descripcion_detallada}
+                              </p>
+                            </div>
+                          )}
+
+                          {suministro.observaciones && (
+                            <div className="mt-4">
+                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Observaciones
+                              </label>
+                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                                {suministro.observaciones}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Vista de Suministro Individual */}
+              {viewModal.suministro && !viewModal.recibo && (
+                <div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Nombre
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.nombre || 'No especificado'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Código
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.codigo_producto || 'No especificado'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Categoría
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.tipo_suministro || viewModal.suministro.categoria || 'No especificado'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Proyecto
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.proyecto?.nombre || viewModal.suministro.proyecto || 'No especificado'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Proveedor
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.proveedor?.nombre || viewModal.suministro.proveedor || 'No especificado'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Folio Proveedor
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.folio_proveedor || 'No especificado'}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Cantidad
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {formatNumber(viewModal.suministro.cantidad || 0)} {viewModal.suministro.unidad_medida || ''}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Precio Unitario
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {formatCurrency(viewModal.suministro.precio_unitario || 0)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Subtotal
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md font-semibold">
+                        {formatCurrency((viewModal.suministro.cantidad || 0) * (viewModal.suministro.precio_unitario || 0))}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Estado
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          viewModal.suministro.estado === 'Entregado' 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : viewModal.suministro.estado === 'En Proceso'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                        }`}>
+                          {viewModal.suministro.estado || 'No especificado'}
+                        </span>
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Fecha
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {formatDate(viewModal.suministro.fecha || viewModal.suministro.fecha_necesaria)}
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Método de Pago
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.metodo_pago || 'No especificado'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {viewModal.suministro.descripcion_detallada && (
+                    <div className="mt-6">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Descripción Detallada
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.descripcion_detallada}
+                      </p>
+                    </div>
+                  )}
+
+                  {viewModal.suministro.observaciones && (
+                    <div className="mt-6">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Observaciones
+                      </label>
+                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                        {viewModal.suministro.observaciones}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="flex justify-end mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
+                <button
+                  onClick={() => setViewModal({ open: false, suministro: null, recibo: null })}
+                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Gráficas Expandidas */}
+      <ChartModal
+        isOpen={chartModal.isOpen}
+        onClose={closeChartModal}
+        chartData={chartModal.chartData}
+        chartOptions={chartModal.chartOptions}
+        chartType={chartModal.chartType}
+        title={chartModal.title}
+        subtitle={chartModal.subtitle}
+        color={chartModal.color}
+        metrics={chartModal.metrics}
+        customContent={chartModal.customContent}
+      />
+
+      {/* Modal de Progreso para Exportación */}
+      <ProgressModal
+        isOpen={reportLoading}
+        progress={reportProgress}
+        message="Generando reporte personalizado..."
+        />
     </div>
   );
 };

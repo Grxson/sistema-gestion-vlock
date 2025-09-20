@@ -63,17 +63,58 @@ export const generateImportTemplate = async (proyectos = [], proveedores = []) =
     const proyectoEjemplo = proyectos.length > 0 ? proyectos[0].nombre : 'Proyecto Real';
     const proveedorEjemplo = proveedores.length > 0 ? proveedores[0].nombre : 'Proveedor Real';
     
+    /*
+    IMPORTANTE: CATEGORÍAS Y UNIDADES VÁLIDAS
+    
+    Categorías permitidas:
+    - Material, Herramienta, Equipo Ligero, Acero, Cimbra, Ferretería, Servicio, Consumible, Maquinaria, Concreto
+    
+    Unidades de medida permitidas (usar EXACTAMENTE estos valores):
+    - pz, kg, m, m2, m3, lt, ton, hr, día, viaje, ml, cm, mm, global, lote, caja, costal, tambor, galón, rollo, bulto, par, docena, paquete, set
+    
+    NOTA IMPORTANTE: 
+    - Usar "m2" NO "m²" 
+    - Usar "m3" NO "m³"
+    - Las unidades deben escribirse exactamente como aparecen en la lista anterior
+    
+    INSTRUCCIONES DE USO:
+    - Suministro individual: Use un folio único por suministro
+    - Suministros agrupados: Use el MISMO folio para múltiples suministros del mismo recibo
+    - El sistema agrupará automáticamente suministros con el mismo folio, proveedor, fecha y proyecto
+    */
+    
     const templateData = [
+      // === EJEMPLO 1: SUMINISTRO INDIVIDUAL (UN SOLO ARTÍCULO POR RECIBO) ===
       {
-        // === INFORMACIÓN DEL RECIBO ===
+        'Proveedor': proveedorEjemplo,
+        'Proyecto': proyectoEjemplo,
+        'Folio del Proveedor': '37945',
+        'Fecha': '2025-09-03',
+        'Método de Pago': 'Efectivo',
+        'Observaciones Generales': 'Compra individual - 1 artículo',
+        
+        'Nombre del Suministro': 'Taladro Percutor',
+        'Categoría': 'Herramienta',
+        'Código': 'TAL001',
+        'Cantidad': 1,
+        'Unidad': 'pz',
+        'Precio Unitario': 1850.00,
+        'Estado': 'Entregado',
+        'Descripción Detallada': 'Taladro percutor 1/2" profesional',
+        
+        'Incluir IVA': 'Sí'
+      },
+      
+      // === EJEMPLO 2: RECIBO AGRUPADO (MÚLTIPLES ARTÍCULOS MISMO FOLIO) ===
+      // Primer artículo del recibo agrupado
+      {
         'Proveedor': proveedorEjemplo,
         'Proyecto': proyectoEjemplo,
         'Folio del Proveedor': '37946',
         'Fecha': '2025-09-04',
         'Método de Pago': 'Efectivo',
-        'Observaciones Generales': 'Entrega matutina',
+        'Observaciones Generales': 'Recibo agrupado - Materiales de construcción',
         
-        // === INFORMACIÓN DEL SUMINISTRO ===
         'Nombre del Suministro': 'Cemento Portland',
         'Categoría': 'Material',
         'Código': 'CEM001',
@@ -83,46 +124,106 @@ export const generateImportTemplate = async (proyectos = [], proveedores = []) =
         'Estado': 'Entregado',
         'Descripción Detallada': 'Cemento Portland CPO 30R de 50kg',
         
-        // === CONFIGURACIÓN FINANCIERA ===
         'Incluir IVA': 'Sí'
       },
       {
-        // === SEGUNDO EJEMPLO CON DIFERENTES VALORES ===
+        // Segundo artículo del mismo recibo (mismo folio)
+        'Proveedor': proveedorEjemplo,
+        'Proyecto': proyectoEjemplo,
+        'Folio del Proveedor': '37946',
+        'Fecha': '2025-09-04',
+        'Método de Pago': 'Efectivo',
+        'Observaciones Generales': 'Recibo agrupado - Materiales de construcción',
+        
+        'Nombre del Suministro': 'Arena Fina',
+        'Categoría': 'Material',
+        'Código': 'ARE001',
+        'Cantidad': 5,
+        'Unidad': 'm3',
+        'Precio Unitario': 250.00,
+        'Estado': 'Entregado',
+        'Descripción Detallada': 'Arena fina para mortero',
+        
+        'Incluir IVA': 'Sí'
+      },
+      {
+        // Tercer artículo del mismo recibo (mismo folio)
+        'Proveedor': proveedorEjemplo,
+        'Proyecto': proyectoEjemplo,
+        'Folio del Proveedor': '37946',
+        'Fecha': '2025-09-04',
+        'Método de Pago': 'Efectivo',
+        'Observaciones Generales': 'Recibo agrupado - Materiales de construcción',
+        
+        'Nombre del Suministro': 'Grava',
+        'Categoría': 'Material',
+        'Código': 'GRA001',
+        'Cantidad': 3,
+        'Unidad': 'm3',
+        'Precio Unitario': 280.00,
+        'Estado': 'Entregado',
+        'Descripción Detallada': 'Grava de 3/4" para concreto',
+        
+        'Incluir IVA': 'Sí'
+      },
+      
+      // === EJEMPLO 3: OTRO RECIBO AGRUPADO (ACERO Y FERRETERÍA) ===
+      {
         'Proveedor': proveedorEjemplo,
         'Proyecto': proyectoEjemplo,
         'Folio del Proveedor': '37947',
-        'Fecha': '2025-09-04',
+        'Fecha': '2025-09-05',
         'Método de Pago': 'Transferencia',
-        'Observaciones Generales': 'Entrega tarde',
+        'Observaciones Generales': 'Recibo agrupado - Acero y ferretería',
         
-        'Nombre del Suministro': 'Varilla Corrugada',
+        'Nombre del Suministro': 'Varilla Corrugada #4',
         'Categoría': 'Acero',
-        'Código': 'VAR12',
+        'Código': 'VAR04',
         'Cantidad': 20,
         'Unidad': 'pz',
         'Precio Unitario': 450.00,
-        'Estado': 'Solicitado',
-        'Descripción Detallada': 'Varilla corrugada #4 de 12m',
+        'Estado': 'Entregado',
+        'Descripción Detallada': 'Varilla corrugada #4 de 12m grado 60',
         
         'Incluir IVA': 'Sí'
       },
       {
-        // === FILA TEMPLATE PARA EL USUARIO ===
+        'Proveedor': proveedorEjemplo,
+        'Proyecto': proyectoEjemplo,
+        'Folio del Proveedor': '37947',
+        'Fecha': '2025-09-05',
+        'Método de Pago': 'Transferencia',
+        'Observaciones Generales': 'Recibo agrupado - Acero y ferretería',
+        
+        'Nombre del Suministro': 'Alambre Recocido',
+        'Categoría': 'Ferretería',
+        'Código': 'ALA001',
+        'Cantidad': 10,
+        'Unidad': 'kg',
+        'Precio Unitario': 35.50,
+        'Estado': 'Entregado',
+        'Descripción Detallada': 'Alambre recocido calibre 18',
+        
+        'Incluir IVA': 'Sí'
+      },
+      
+      // === FILA TEMPLATE PARA EL USUARIO ===
+      {
         'Proveedor': '[ESCRIBA_NOMBRE_PROVEEDOR]',
         'Proyecto': '[ESCRIBA_NOMBRE_PROYECTO]',
-        'Folio del Proveedor': '[ESCRIBA_FOLIO]',
-        'Fecha': '2025-09-04',
+        'Folio del Proveedor': '[FOLIO_ÚNICO_POR_RECIBO]',
+        'Fecha': '2025-09-07',
         'Método de Pago': 'Efectivo',
-        'Observaciones Generales': '',
+        'Observaciones Generales': '[OPCIONAL: Descripción del recibo]',
         
         'Nombre del Suministro': '[ESCRIBA_NOMBRE_SUMINISTRO]',
         'Categoría': 'Material',
-        'Código': '',
+        'Código': '[OPCIONAL]',
         'Cantidad': 1,
         'Unidad': 'pz',
         'Precio Unitario': 0.01,
         'Estado': 'Entregado',
-        'Descripción Detallada': '',
+        'Descripción Detallada': '[OPCIONAL]',
         
         'Incluir IVA': 'Sí'
       }
