@@ -1,6 +1,6 @@
 {
   "name": "vlock-backend",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.4",
   "description": "Backend para Sistema de Gestión VLock",
   "main": "server.js",
   "scripts": {
