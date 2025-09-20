@@ -49,6 +49,29 @@ const UNIDADES_MEDIDA = {
   'set': 'Set'
 };
 
+// Funciones auxiliares para formateo de números
+const formatNumberWithCommas = (value) => {
+  if (!value) return '';
+  // Convertir a string y eliminar caracteres no numéricos excepto punto decimal
+  const cleanValue = value.toString().replace(/[^\d.]/g, '');
+  // Si está vacío o solo tiene punto, retornar tal como está
+  if (!cleanValue || cleanValue === '.') return cleanValue;
+  
+  // Separar parte entera y decimal
+  const parts = cleanValue.split('.');
+  // Formatear parte entera con comas
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  
+  // Reunir las partes
+  return parts.join('.');
+};
+
+const parseFormattedNumber = (value) => {
+  if (!value) return '';
+  // Eliminar todas las comas para obtener el valor numérico
+  return value.toString().replace(/,/g, '');
+};
+
 export default function FormularioSuministros({ 
   onSubmit, 
   onCancel, 
@@ -125,6 +148,7 @@ export default function FormularioSuministros({
   const [loading, setLoading] = useState(false);
   const [includeIVA, setIncludeIVA] = useState(initialIVAValue); // Estado para controlar si incluir IVA
   const [suministrosEliminados, setSuministrosEliminados] = useState([]); // Track eliminated supplies
+  const [formattedPrices, setFormattedPrices] = useState({}); // Estado para manejar precios formateados
 
   // Estados para validación de duplicados y autocompletado
   const [duplicatesSuggestions, setDuplicatesSuggestions] = useState([]);
@@ -405,6 +429,15 @@ export default function FormularioSuministros({
       // ⚡ BATCH: Actualizar suministros una sola vez
       setSuministros(suministrosCargados);
       
+      // Inicializar precios formateados
+      const initialFormattedPrices = suministrosCargados.reduce((acc, suministro) => {
+        if (suministro.precio_unitario) {
+          acc[suministro.id_temp] = formatNumberWithCommas(suministro.precio_unitario);
+        }
+        return acc;
+      }, {});
+      setFormattedPrices(initialFormattedPrices);
+      
       const processingTime = performance.now() - startTime;
       if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
       }
@@ -530,12 +563,44 @@ export default function FormularioSuministros({
 
   // Cache para nombres únicos (optimización de memoria y performance)
   const uniqueNames = useMemo(() => {
-    return [...new Set(existingSuministros.map(s => s.nombre))].filter(Boolean);
+    const namesSet = new Set();
+    const normalizedNames = existingSuministros
+      .map(s => s.nombre)
+      .filter(Boolean) // Filtrar valores nulos/undefined
+      .map(name => name.trim()) // Eliminar espacios al inicio/final
+      .filter(name => name.length > 0); // Filtrar nombres vacíos
+    
+    // Usar un Map para eliminar duplicados case-insensitive pero conservar el formato original
+    const nameMap = new Map();
+    normalizedNames.forEach(name => {
+      const normalizedKey = name.toLowerCase().replace(/\s+/g, ' '); // Normalizar espacios
+      if (!nameMap.has(normalizedKey)) {
+        nameMap.set(normalizedKey, name);
+      }
+    });
+    
+    return Array.from(nameMap.values()).sort();
   }, [existingSuministros]);
 
   // Cache para códigos únicos
   const uniqueCodes = useMemo(() => {
-    return [...new Set(existingSuministros.map(s => s.codigo_producto))].filter(Boolean);
+    const codesSet = new Set();
+    const normalizedCodes = existingSuministros
+      .map(s => s.codigo_producto)
+      .filter(Boolean) // Filtrar valores nulos/undefined
+      .map(code => code.toString().trim()) // Convertir a string y eliminar espacios
+      .filter(code => code.length > 0); // Filtrar códigos vacíos
+    
+    // Usar un Map para eliminar duplicados case-insensitive pero conservar el formato original
+    const codeMap = new Map();
+    normalizedCodes.forEach(code => {
+      const normalizedKey = code.toLowerCase().replace(/\s+/g, ''); // Normalizar espacios
+      if (!codeMap.has(normalizedKey)) {
+        codeMap.set(normalizedKey, code);
+      }
+    });
+    
+    return Array.from(codeMap.values()).sort();
   }, [existingSuministros]);
 
   // Función optimizada para autocompletar nombres de suministros
@@ -666,6 +731,12 @@ export default function FormularioSuministros({
     if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
     }
     setSuministros(prev => [...prev, nuevoSuministro]);
+    
+    // Inicializar precio formateado para el nuevo suministro
+    setFormattedPrices(prev => ({
+      ...prev,
+      [nuevoSuministro.id_temp]: ''
+    }));
   }, [nuevoSuministroTemplate]);
 
   // Función optimizada para eliminar suministro
@@ -680,6 +751,13 @@ export default function FormularioSuministros({
       
       return prev.filter(s => s.id_temp !== id);
     });
+    
+    // Limpiar precio formateado
+    setFormattedPrices(prev => {
+      const newPrices = { ...prev };
+      delete newPrices[id];
+      return newPrices;
+    });
   }, []);
 
   // Función optimizada para duplicar suministro
@@ -692,13 +770,35 @@ export default function FormularioSuministros({
         ...suministroOriginal,
         id_temp: Date.now() + Math.random(),
         nombre: `${suministroOriginal.nombre} (Copia)`,
-        cantidad: '',
-        precio_unitario: '',
+        // Conservar TODOS los campos del original, incluyendo precio y cantidad
+        // cantidad: suministroOriginal.cantidad, // Ya incluido en ...suministroOriginal
+        // precio_unitario: suministroOriginal.precio_unitario, // Ya incluido en ...suministroOriginal
         id_suministro: undefined // Remover ID para que sea tratado como nuevo
       };
       
+      // Inicializar precio formateado para el suministro duplicado
+      setFormattedPrices(prev => ({
+        ...prev,
+        [suministroDuplicado.id_temp]: formatNumberWithCommas(suministroOriginal.precio_unitario || '')
+      }));
+      
       return [...prev, suministroDuplicado];
     });
+  }, []);
+
+  // Función especializada para manejar cambios en precio con formato visual
+  const handlePriceChange = useCallback((id, value) => {
+    // Eliminar caracteres no numéricos excepto punto decimal
+    const cleanValue = parseFormattedNumber(value);
+    
+    // Actualizar el valor real del suministro (sin formato)
+    actualizarSuministro(id, 'precio_unitario', cleanValue);
+    
+    // Actualizar el valor formateado para mostrar
+    setFormattedPrices(prev => ({
+      ...prev,
+      [id]: formatNumberWithCommas(cleanValue)
+    }));
   }, []);
 
   // Función optimizada para actualizar suministros con debounce en autocompletado
@@ -1433,10 +1533,19 @@ export default function FormularioSuministros({
                       Precio *
                     </label>
                     <input
-                      type="number"
-                      step="0.01"
-                      value={suministro.precio_unitario}
-                      onChange={(e) => actualizarSuministro(suministro.id_temp, 'precio_unitario', e.target.value)}
+                      type="text"
+                      value={formattedPrices[suministro.id_temp] || ''}
+                      onChange={(e) => handlePriceChange(suministro.id_temp, e.target.value)}
+                      onBlur={(e) => {
+                        // Al perder el foco, formatear el valor
+                        const cleanValue = parseFormattedNumber(e.target.value);
+                        if (cleanValue) {
+                          setFormattedPrices(prev => ({
+                            ...prev,
+                            [suministro.id_temp]: formatNumberWithCommas(cleanValue)
+                          }));
+                        }
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                       placeholder="0.00"
                     />
@@ -1467,7 +1576,7 @@ export default function FormularioSuministros({
                       Subtotal
                     </label>
                     <div className="px-3 py-2 bg-gray-100 dark:bg-gray-600 rounded-md text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 text-sm font-medium">
-                      ${((parseFloat(suministro.cantidad) || 0) * (parseFloat(suministro.precio_unitario) || 0)).toFixed(2)}
+                      ${formatNumberWithCommas(((parseFloat(suministro.cantidad) || 0) * (parseFloat(suministro.precio_unitario) || 0)).toFixed(2))}
                     </div>
                   </div>
                 </div>
@@ -1516,15 +1625,15 @@ export default function FormularioSuministros({
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-gray-600 dark:text-gray-400">Subtotal:</span>
-                <span className="font-semibold text-gray-900 dark:text-white">${totales.subtotal}</span>
+                <span className="font-semibold text-gray-900 dark:text-white">${formatNumberWithCommas(totales.subtotal)}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-gray-600 dark:text-gray-400">IVA:</span>
-                <span className="font-semibold text-orange-600 dark:text-orange-400">${totales.iva}</span>
+                <span className="font-semibold text-orange-600 dark:text-orange-400">${formatNumberWithCommas(totales.iva)}</span>
               </div>
               <div className="flex items-center gap-2 bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-lg">
                 <span className="text-green-600 dark:text-green-300 font-medium">Total:</span>
-                <span className="font-bold text-green-700 dark:text-green-400 text-lg">${totales.total}</span>
+                <span className="font-bold text-green-700 dark:text-green-400 text-lg">${formatNumberWithCommas(totales.total)}</span>
               </div>
             </div>
           </div>
