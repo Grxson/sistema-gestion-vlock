@@ -737,6 +737,7 @@ export default function Dashboard() {
               <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl border border-blue-200 dark:border-blue-700">
                 <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                   ${(dashboardData.estadisticasDetalladas.total_gastado || 0).toLocaleString('es-MX')}
+                  
                 </div>
                 <div className="text-xs font-medium text-gray-600 dark:text-gray-400 mt-1">Total Gastado</div>
               </div>
