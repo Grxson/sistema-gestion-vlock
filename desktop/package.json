@@ -51,8 +51,8 @@
   },
   "build": {
     "appId": "com.vlock.sistema-gestion",
-    "productName": "VLock Sistema de Gestión",
-    "copyright": "Copyright © 2025 VLock",
+    "productName": "Vlock Sistema de Gestión",
+    "copyright": "Copyright © 2025 Vlock",
     "directories": {
       "output": "dist",
       "buildResources": "build"
