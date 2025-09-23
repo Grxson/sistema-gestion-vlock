@@ -1,7 +1,7 @@
 {
   "name": "vlock-sistema-gestion",
-  "version": "1.0.0-beta.4",
-  "description": "VLock Sistema de Gestión - Módulo de Suministros Beta",
+  "version": "1.0.0-beta.5",
+  "description": "Vlock Sistema de Gestión - Módulo de Suministros Beta",
   "main": "src/main/index.js",
   "homepage": "https://vlock.com",
   "scripts": {

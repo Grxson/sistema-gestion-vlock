@@ -1,6 +1,6 @@
 {
-  "name": "Sistema de Gestión VLock",
-  "short_name": "VLock",
+  "name": "Sistema de Gestión Vlock",
+  "short_name": "Vlock",
   "description": "Administra materiales, herramientas y equipos para proyectos",
   "start_url": "/",
   "display": "standalone",
