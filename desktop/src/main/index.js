@@ -140,4 +140,4 @@ ipcMain.handle('open-logs', async () => {
     console.error('Error al abrir los logs:', err);
     dialog.showErrorBox('Error', 'No se pudo abrir el directorio de logs.');
   }
-});
+}); 
