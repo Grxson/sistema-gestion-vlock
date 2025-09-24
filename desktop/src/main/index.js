@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, dialog, screen } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -12,15 +12,24 @@ console.log('__dirname:', __dirname);
 
 function createWindow() {
   console.log('Creating window...');
+
+  // Obtener las dimensiones del área de trabajo de la pantalla principal
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width, height } = primaryDisplay.workAreaSize;
+
+  // Calcular el tamaño al 80% del área de trabajo
+  const windowWidth = Math.floor(width * 0.8);
+  const windowHeight = Math.floor(height * 0.8);
+
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: windowWidth,
+    height: windowHeight,
     show: false, // No mostrar hasta que esté listo
-    icon: path.join(__dirname, '../build/favicon-32x32.png'),
+    icon: path.resolve(__dirname, '../build/favicon-32x32.png'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
-      preload: path.join(__dirname, '../preload.js'),
+      preload: path.resolve(__dirname, '../preload.js'),
       webSecurity: true,
       allowRunningInsecureContent: false
     },
@@ -29,67 +38,18 @@ function createWindow() {
   });
 
   console.log('Window created, loading content...');
-  if (process.env.NODE_ENV === 'development') {
-    console.log('Loading development URL: http://localhost:3000');
-    mainWindow.loadURL('http://localhost:3000');
-    mainWindow.webContents.openDevTools();
-  } else {
-    // En producción, buscar el archivo en diferentes ubicaciones posibles
-    let buildPath;
-    
-    // Opción 1: Desde extraResources/app (empaquetado con electron-builder)
-    const resourcesPath = path.join(process.resourcesPath, 'app', 'index.html');
-    
-    // Opción 2: Desde la carpeta build (desarrollo/build local)
-    const localBuildPath = path.join(__dirname, '../build/index.html');
-    
-    // Opción 3: Desde la carpeta build relativa al directorio de la app
-    const appBuildPath = path.join(__dirname, '../../build/index.html');
-    
-    // Opción 4: Dentro del asar
-    const asarBuildPath = path.join(__dirname, '../build/index.html');
-    
-    console.log('Buscando archivos en las siguientes ubicaciones:');
-    console.log('1. Resources:', resourcesPath, '- Existe:', fs.existsSync(resourcesPath));
-    console.log('2. Local build:', localBuildPath, '- Existe:', fs.existsSync(localBuildPath));
-    console.log('3. App build:', appBuildPath, '- Existe:', fs.existsSync(appBuildPath));
-    console.log('4. Asar build:', asarBuildPath, '- Existe:', fs.existsSync(asarBuildPath));
-    
-    // Verificar cuál existe
-    if (fs.existsSync(resourcesPath)) {
-      buildPath = resourcesPath;
-      console.log('✓ Loading production file from extraResources:', buildPath);
-    } else if (fs.existsSync(asarBuildPath)) {
-      buildPath = asarBuildPath;
-      console.log('✓ Loading production file from asar build:', buildPath);
-    } else if (fs.existsSync(localBuildPath)) {
-      buildPath = localBuildPath;
-      console.log('✓ Loading production file from local build:', buildPath);
-    } else if (fs.existsSync(appBuildPath)) {
-      buildPath = appBuildPath;
-      console.log('✓ Loading production file from app build:', buildPath);
-    } else {
-      console.error('❌ No se pudo encontrar el archivo index.html en ninguna ubicación');
-      console.log('__dirname:', __dirname);
-      console.log('process.resourcesPath:', process.resourcesPath);
-      
-      // Intentar cargar directamente desde el build en desarrollo
-      const devBuildPath = path.join(__dirname, '../../../../build/index.html');
-      console.log('5. Dev build:', devBuildPath, '- Existe:', fs.existsSync(devBuildPath));
-      
-      if (fs.existsSync(devBuildPath)) {
-        buildPath = devBuildPath;
-        console.log('✓ Loading from dev build path:', buildPath);
-      } else {
-        console.error('❌ No se encontró index.html en ninguna ubicación');
-        return;
-      }
-    }
-    
+  const buildPath = getBuildPath();
+  if (buildPath) {
     console.log('🚀 Cargando archivo:', buildPath);
     mainWindow.loadFile(buildPath);
+  } else {
+    console.error('❌ No se pudo cargar ningún archivo index.html.');
+    dialog.showErrorBox('Error', 'No se pudo encontrar el archivo index.html para cargar la aplicación.');
+    app.quit();
+    return;
   }
 
+  // Eventos de la ventana
   mainWindow.on('closed', () => {
     console.log('Window closed');
     mainWindow = null;
@@ -101,12 +61,10 @@ function createWindow() {
 
   mainWindow.webContents.on('did-finish-load', () => {
     console.log('Content loaded successfully');
-    // Mostrar la ventana cuando el contenido esté cargado
-    mainWindow.show();
+    mainWindow.show(); // Mostrar cuando esté listo
     mainWindow.focus();
   });
-  
-  // También mostrar en caso de que no se dispare did-finish-load
+
   mainWindow.webContents.on('dom-ready', () => {
     console.log('DOM ready');
     if (!mainWindow.isVisible()) {
@@ -116,6 +74,29 @@ function createWindow() {
   });
 }
 
+// Función para obtener la ruta del archivo `index.html`
+function getBuildPath() {
+  const possiblePaths = [
+    path.join(process.resourcesPath, 'app', 'index.html'), // Extra resources (empaquetado)
+    path.resolve(__dirname, '../build/index.html'), // Build local
+    path.resolve(__dirname, '../../build/index.html'), // Build relativo
+    path.resolve(__dirname, '../../../../build/index.html') // Dev build
+  ];
+
+  console.log('Buscando archivos en las siguientes ubicaciones:');
+  for (const filePath of possiblePaths) {
+    console.log(`- ${filePath} - Existe:`, fs.existsSync(filePath));
+    if (fs.existsSync(filePath)) {
+      console.log(`✓ Cargando archivo desde: ${filePath}`);
+      return filePath;
+    }
+  }
+
+  console.error('❌ No se encontró index.html en las ubicaciones conocidas.');
+  return null;
+}
+
+// Eventos de `app`
 app.whenReady().then(createWindow);
 
 app.on('window-all-closed', () => {
@@ -133,7 +114,7 @@ ipcMain.handle('get-system-info', async () => {
     platform: process.platform,
     node: process.versions.node,
     electron: process.versions.electron,
-    app: 'VLock Sistema de Gestión',
+    app: 'Vlock Sistema de Gestión',
     version: appVersion
   };
 });
@@ -147,12 +128,16 @@ ipcMain.handle('restart-app', async () => {
 // Manejador para abrir los archivos de registro
 ipcMain.handle('open-logs', async () => {
   const logPath = path.join(app.getPath('userData'), 'logs');
-  
-  // Crear directorio de logs si no existe
-  if (!fs.existsSync(logPath)) {
-    fs.mkdirSync(logPath, { recursive: true });
-    fs.writeFileSync(path.join(logPath, 'app.log'), 'Log file initialized\n');
+
+  try {
+    if (!fs.existsSync(logPath)) {
+      fs.mkdirSync(logPath, { recursive: true });
+      fs.writeFileSync(path.join(logPath, 'app.log'), 'Log file initialized\n');
+    }
+
+    shell.openPath(logPath);
+  } catch (err) {
+    console.error('Error al abrir los logs:', err);
+    dialog.showErrorBox('Error', 'No se pudo abrir el directorio de logs.');
   }
-  
-  shell.openPath(logPath);
 });
