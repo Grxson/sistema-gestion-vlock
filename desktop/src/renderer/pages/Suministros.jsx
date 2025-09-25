@@ -161,7 +161,7 @@ const Suministros = () => {
 
   // Estados para paginación
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
   const [totalPages, setTotalPages] = useState(1);
 
   // Estados para detección de duplicados
@@ -184,16 +184,7 @@ const Suministros = () => {
   const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [isProcessingImport, setIsProcessingImport] = useState(false);
 
-  // Hook para reporte personalizado
-  const {
-    showReportModal,
-    setShowReportModal,
-    reportConfig,
-    setReportConfig,
-    handleCustomExport,
-    loading: reportLoading,
-    progress: reportProgress
-  } = useReportePersonalizadoCompleto();
+  // Hook para reporte personalizado eliminado
 
   // Hook para notificaciones
   const { showSuccess, showError, showWarning, showInfo } = useToast();
@@ -2165,11 +2156,23 @@ const Suministros = () => {
             const value = context.parsed || 0;
             const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
             const percentage = ((value / total) * 100).toFixed(1);
-            return `${label}: ${value} (${percentage}%)`;
+            const formattedValue = value.toLocaleString('es-MX', { 
+              style: 'currency', 
+              currency: 'MXN',
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 2
+            });
+            return `${label}: ${formattedValue} (${percentage}%)`;
           },
           afterLabel: function(context) {
             if (metrics.total) {
-              return `Total general: ${metrics.total}`;
+              const formattedTotal = metrics.total.toLocaleString('es-MX', { 
+                style: 'currency', 
+                currency: 'MXN',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2
+              });
+              return `Total general: ${formattedTotal}`;
             }
             return '';
           }
@@ -3074,11 +3077,27 @@ const Suministros = () => {
 
   const handleExportToExcel = async () => {
     try {
-      const dataToExport = filteredSuministros.map(suministro => ({
-        ...suministro,
-        proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || '',
-        proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || ''
-      }));
+      // Agrupar suministros por folio para mantener consistencia
+      const folioGroups = {};
+      
+      filteredSuministros.forEach(suministro => {
+        const folio = suministro.folio || suministro.id_suministro;
+        if (!folioGroups[folio]) {
+          folioGroups[folio] = [];
+        }
+        folioGroups[folio].push(suministro);
+      });
+
+      // Asignar el mismo folio a todos los suministros del grupo
+      const dataToExport = filteredSuministros.map(suministro => {
+        const folio = suministro.folio || suministro.id_suministro;
+        return {
+          ...suministro,
+          folio: folio, // Asegurar que el folio esté presente
+          proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || '',
+          proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || ''
+        };
+      });
       
       await exportToExcel(dataToExport);
       showSuccess('Exportación exitosa', 'Los suministros han sido exportados a Excel');
@@ -3090,11 +3109,27 @@ const Suministros = () => {
 
   const handleExportToPDF = async () => {
     try {
-      const dataToExport = filteredSuministros.map(suministro => ({
-        ...suministro,
-        proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || '',
-        proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || ''
-      }));
+      // Agrupar suministros por folio para mantener consistencia
+      const folioGroups = {};
+      
+      filteredSuministros.forEach(suministro => {
+        const folio = suministro.folio || suministro.id_suministro;
+        if (!folioGroups[folio]) {
+          folioGroups[folio] = [];
+        }
+        folioGroups[folio].push(suministro);
+      });
+
+      // Asignar el mismo folio a todos los suministros del grupo
+      const dataToExport = filteredSuministros.map(suministro => {
+        const folio = suministro.folio || suministro.id_suministro;
+        return {
+          ...suministro,
+          folio: folio, // Asegurar que el folio esté presente
+          proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || '',
+          proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || ''
+        };
+      });
       
       // Información de filtros aplicados
       const filtrosInfo = {
@@ -6203,17 +6238,7 @@ const Suministros = () => {
                   <FaFilePdf className="w-4 h-4 text-red-600" />
                   Exportar a PDF
                 </button>
-                <hr className="border-gray-200 dark:border-gray-600 mx-2" />
-                <button
-                  onClick={() => {
-                    setShowReportModal(true);
-                    setShowExportDropdown(false);
-                  }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300 rounded-b-lg"
-                >
-                  <FaChartBar className="w-4 h-4 text-blue-600" />
-                  Reporte Personalizado
-                </button>
+
               </div>
             )}
           </div>
@@ -6414,47 +6439,7 @@ const Suministros = () => {
         </div>
       )}
 
-      {/* Modal de Configuración de Reporte Personalizado */}
-      <ReportePersonalizadoModal
-        showModal={showReportModal}
-        setShowModal={setShowReportModal}
-        reportConfig={reportConfig}
-        setReportConfig={setReportConfig}
-        handleCustomExport={(format) => handleCustomExport(format, filteredSuministros, {
-          busqueda: searchTerm,
-          proyecto: filters.proyecto,
-          proveedor: filters.proveedor,
-          estado: filters.estado,
-          fechaInicio: filters.fechaInicio,
-          fechaFin: filters.fechaFin
-        }, proyectos, proveedores, chartData)}
-        availableCharts={[
-          // Análisis Financiero Principal
-          { key: 'gastosPorMes', label: 'Gastos por Mes', category: 'financiero' },
-          { key: 'valorPorCategoria', label: 'Valor por Categoría', category: 'financiero' },
-          { key: 'gastosPorProyecto', label: 'Gastos por Proyecto', category: 'financiero' },
-          { key: 'gastosPorProveedor', label: 'Gastos por Proveedor', category: 'financiero' },
-          // Análisis de Cantidad y Estado
-          { key: 'suministrosPorMes', label: 'Cantidad por Mes', category: 'cantidad' },
-          { key: 'cantidadPorEstado', label: 'Cantidad por Estado', category: 'cantidad' },
-          // Análisis Técnico Especializado
-          { key: 'distribucionTipos', label: 'Distribución por Tipos', category: 'tecnico' },
-          { key: 'tendenciaEntregas', label: 'Tendencia de Entregas', category: 'tecnico' },
-          { key: 'codigosProducto', label: 'Códigos de Producto', category: 'tecnico' },
-          { key: 'analisisTecnicoConcreto', label: 'Análisis Técnico de Concreto', category: 'tecnico' },
-          { key: 'concretoDetallado', label: 'Concreto Detallado', category: 'tecnico' },
-          // Análisis de Horas de Trabajo
-          { key: 'horasPorMes', label: 'Horas por Mes', category: 'horas' },
-          { key: 'horasPorEquipo', label: 'Horas por Equipo', category: 'horas' },
-          { key: 'comparativoHorasVsCosto', label: 'Comparativo Horas vs Costo', category: 'horas' },
-          // Análisis por Unidades de Medida
-          { key: 'cantidadPorUnidad', label: 'Cantidad por Unidad', category: 'unidades' },
-          { key: 'valorPorUnidad', label: 'Valor por Unidad', category: 'unidades' },
-          { key: 'analisisUnidadesMedida', label: 'Análisis de Unidades', category: 'unidades' },
-          // Gráficas Profesionales Avanzadas
-          { key: 'gastosPorCategoriaDetallado', label: '📊 Gastos por Categoría (con %)', category: 'avanzado' }
-        ]}
-      />
+
 
       {/* Modales de confirmación mejorados */}
       <SuministroDeleteConfirmModal
@@ -6881,12 +6866,7 @@ const Suministros = () => {
         customContent={chartModal.customContent}
       />
 
-      {/* Modal de Progreso para Exportación */}
-      <ProgressModal
-        isOpen={reportLoading}
-        progress={reportProgress}
-        message="Generando reporte personalizado..."
-        />
+
     </div>
   );
 };

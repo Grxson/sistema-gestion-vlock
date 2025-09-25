@@ -23,7 +23,8 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   BuildingStorefrontIcon,
-  RectangleGroupIcon
+  RectangleGroupIcon,
+  CalculatorIcon
 } from '@heroicons/react/24/outline';
 
 
@@ -39,6 +40,7 @@ const navigationItems = [
   { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false, permissionModule: 'auditoria' },
   { name: 'Suministros', href: '/suministros', icon: TruckIcon, current: false, permissionModule: 'suministros' },
   { name: 'Proveedores', href: '/proveedores', icon: BuildingStorefrontIcon, current: false, permissionModule: 'proveedores' },
+  { name: 'Presupuestos', href: '/presupuestos', icon: CalculatorIcon, current: false, permissionModule: 'presupuestos', inDevelopment: true },
   { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false, permissionModule: 'reportes' },
   { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false, permissionModule: 'usuarios' },
   { name: 'Roles', href: '/roles', icon: ShieldCheckIcon, current: false, permissionModule: 'roles' },
@@ -233,7 +235,13 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
               )}
               
               <button
-                onClick={() => onNavigate(item.href)}
+                onClick={() => {
+                  if (item.inDevelopment) {
+                    // Mostrar mensaje de desarrollo sin navegar
+                    return;
+                  }
+                  onNavigate(item.href);
+                }}
                 onMouseEnter={() => {
                   setHoveredItem(item.name);
                   if (isCollapsed) {
@@ -247,6 +255,8 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
                 className={classNames(
                   isActive
                     ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 font-semibold'
+                    : item.inDevelopment
+                    ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700/50',
                   'group/item flex items-center px-4 py-3 text-sm rounded-lg w-full transition-all duration-300 relative'
                 )}
@@ -273,11 +283,16 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
                 />
                 
                 <span className={`
-                  ml-3 transition-all duration-300 relative z-10
+                  ml-3 transition-all duration-300 relative z-10 flex items-center
                   ${isCollapsed ? 'opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0' : 'opacity-100 translate-x-0'}
                   ${isActive ? 'font-semibold' : 'font-medium'}
                 `}>
                   {item.name}
+                  {item.inDevelopment && (
+                    <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 rounded-full border border-yellow-200 dark:border-yellow-700">
+                      Beta
+                    </span>
+                  )}
                 </span>
                 
                 {/* Tooltip para modo colapsado */}
@@ -289,6 +304,11 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
                     before:border-4 before:border-transparent before:border-r-gray-900 dark:before:border-r-gray-800
                   ">
                     {item.name}
+                    {item.inDevelopment && (
+                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-yellow-500/20 text-yellow-300 rounded border border-yellow-500/30">
+                        En desarrollo
+                      </span>
+                    )}
                   </div>
                 )}
               </button>

@@ -441,7 +441,7 @@ export const exportToExcel = async (data) => {
   try {
     // Mapear datos solo con las columnas necesarias
     const exportData = data.map(item => ({
-      'ID': item.id_suministro,
+      'Folio': item.folio || item.id_suministro,
       'Nombre del Suministro': item.nombre,
       'Código': item.codigo_producto || '',
       'Descripción': item.descripcion_detallada || '',
@@ -463,7 +463,7 @@ export const exportToExcel = async (data) => {
 
     // Configurar ancho de columnas
     const colWidths = [
-      { wch: 8 },  // ID
+      { wch: 12 }, // Folio
       { wch: 25 }, // Nombre del Suministro
       { wch: 12 }, // Código
       { wch: 30 }, // Descripción
@@ -502,20 +502,77 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
       format: 'a4'
     });
 
-    // Título
-    doc.setFontSize(18);
+    // Título principal
+    doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text('Reporte de Suministros', 148, 15, { align: 'center' });
+    doc.text('REPORTE DE SUMINISTROS', 148, 15, { align: 'center' });
 
     // Fecha de generación
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text(`Generado el: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 148, 25, { align: 'center' });
 
+    // Calcular estadísticas generales
+    const totalSupplies = data.length;
+    const totalSpent = data.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
+    const totalQuantity = data.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
+    const uniqueSuppliers = new Set(data.map(item => item.proveedor).filter(Boolean)).size;
+    const uniqueProjects = new Set(data.map(item => item.proyecto).filter(Boolean)).size;
+    const avgUnitPrice = totalSpent / totalQuantity || 0;
+
+    // Sección de estadísticas generales con mejor diseño
+    let statsY = 35;
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('RESUMEN EJECUTIVO', 10, statsY);
+
+    statsY += 10;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+
+    // Crear tabla de estadísticas
+    const statsData = [
+      ['Total de Suministros:', totalSupplies.toLocaleString()],
+      ['Monto Total Gastado:', `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+      ['Cantidad Total:', totalQuantity.toLocaleString()],
+      ['Proveedores Únicos:', uniqueSuppliers.toString()],
+      ['Proyectos Activos:', uniqueProjects.toString()],
+      ['Precio Promedio por Unidad:', `$${avgUnitPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`]
+    ];
+
+    autoTable(doc, {
+      body: statsData,
+      startY: statsY,
+      styles: {
+        fontSize: 9,
+        cellPadding: 3
+      },
+      columnStyles: {
+        0: { 
+          cellWidth: 60, 
+          fontStyle: 'bold',
+          fillColor: [240, 248, 255] 
+        },
+        1: { 
+          cellWidth: 40, 
+          halign: 'right',
+          fillColor: [248, 250, 252]
+        }
+      },
+      margin: { left: 10 },
+      theme: 'grid'
+    });
+
     // Información de filtros si está disponible
-    let startY = 35;
+    let startY = doc.lastAutoTable.finalY + 15;
     if (filtrosInfo) {
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text('FILTROS APLICADOS', 10, startY);
+      
+      startY += 8;
       doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
       doc.text(`Mostrando ${filtrosInfo.registrosFiltrados} de ${filtrosInfo.totalRegistros} registros totales`, 10, startY);
       
       const filtrosActivos = [];
@@ -529,90 +586,140 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
       }
       
       if (filtrosActivos.length > 0) {
-        doc.text(`Filtros aplicados: ${filtrosActivos.join(' | ')}`, 10, startY + 5);
+        startY += 5;
+        doc.text(`${filtrosActivos.join(' | ')}`, 10, startY);
         startY += 10;
       } else {
-        startY += 5;
+        startY += 10;
       }
     }
 
-    // Configurar datos para la tabla
+    // Agregar nueva página para la tabla de suministros
+    doc.addPage();
+
+    // Título de la tabla de datos en la nueva página
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DETALLE DE SUMINISTROS', 10, 20);
+    startY = 30;
+
+    // Configurar datos para la tabla con mejor formato
     const tableData = data.map(item => [
-      item.id_suministro || '',
-      item.nombre || '',
+      item.folio || '',
+      (item.nombre || '').substring(0, 30) + ((item.nombre || '').length > 30 ? '...' : ''),
       item.codigo_producto || '',
       item.tipo_suministro || '',
-      item.cantidad || '',
+      Number(item.cantidad || 0).toLocaleString(),
       item.unidad_medida || '',
-      `$${Number(item.precio_unitario || 0).toFixed(2)}`,
-      `$${Number(item.subtotal || 0).toFixed(2)}`,
+      `$${Number(item.precio_unitario || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
+      `$${Number(item.subtotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
       item.estado || '',
-      item.proyecto || '',
-      item.proveedor || ''
+      (item.proyecto || '').substring(0, 25) + ((item.proyecto || '').length > 25 ? '...' : ''),
+      (item.proveedor || '').substring(0, 25) + ((item.proveedor || '').length > 25 ? '...' : '')
     ]);
 
-    // Configurar tabla usando autoTable importado
+    // Configurar tabla con mejor espaciado y formato
     autoTable(doc, {
-      head: [['ID', 'Nombre', 'Código', 'Categoría', 'Cantidad', 'Unidad', 'Precio Unit.', 'Subtotal', 'Estado', 'Proyecto', 'Proveedor']],
+      head: [['Folio', 'Nombre', 'Código', 'Categoría', 'Cantidad', 'Unidad', 'P. Unitario', 'Subtotal', 'Estado', 'Proyecto', 'Proveedor']],
       body: tableData,
       startY: startY,
       styles: {
-        fontSize: 8,
-        cellPadding: 2,
+        fontSize: 7,
+        cellPadding: 3,
         overflow: 'linebreak',
-        halign: 'left'
+        halign: 'left',
+        lineColor: [200, 200, 200],
+        lineWidth: 0.1
       },
       headStyles: {
-        fillColor: [41, 128, 185],
+        fillColor: [52, 73, 94],
         textColor: 255,
         fontStyle: 'bold',
-        fontSize: 9
+        fontSize: 8,
+        halign: 'center'
       },
       columnStyles: {
-        0: { cellWidth: 15 }, // ID
-        1: { cellWidth: 35 }, // Nombre
-        2: { cellWidth: 20 }, // Código
-        3: { cellWidth: 25 }, // Categoría
-        4: { cellWidth: 15 }, // Cantidad
-        5: { cellWidth: 15 }, // Unidad
-        6: { cellWidth: 20 }, // Precio Unit.
-        7: { cellWidth: 20 }, // Subtotal
-        8: { cellWidth: 20 }, // Estado
-        9: { cellWidth: 30 }, // Proyecto
-        10: { cellWidth: 30 } // Proveedor
+        0: { cellWidth: 18, halign: 'center' }, // Folio
+        1: { cellWidth: 38 }, // Nombre
+        2: { cellWidth: 22, halign: 'center' }, // Código
+        3: { cellWidth: 24 }, // Categoría
+        4: { cellWidth: 18, halign: 'right' }, // Cantidad
+        5: { cellWidth: 20, halign: 'center' }, // Unidad
+        6: { cellWidth: 24, halign: 'right' }, // Precio Unit.
+        7: { cellWidth: 25, halign: 'right', fillColor: [252, 248, 227] }, // Subtotal
+        8: { cellWidth: 19, halign: 'center' }, // Estado
+        9: { cellWidth: 35 }, // Proyecto
+        10: { cellWidth: 35 } // Proveedor
       },
-      margin: { left: 10, right: 10 },
+      margin: { left: 8, right: 8 },
       pageBreak: 'auto',
-      rowPageBreak: 'avoid'
+      rowPageBreak: 'avoid',
+      alternateRowStyles: {
+        fillColor: [248, 249, 250]
+      }
     });
 
-    // Agregar resumen al final con más detalles
-    const totalSubtotal = data.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
-    const totalCantidad = data.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
+    // Agregar pie de página con totales mejorados
     const finalY = doc.lastAutoTable.finalY + 15;
+    
+    // Verificar si necesitamos nueva página
+    if (finalY > 180) {
+      doc.addPage();
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TOTALES FINALES', 148, 20, { align: 'center' });
+    } else {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('TOTALES FINALES', 10, finalY);
+    }
 
-    // Crear tabla de resumen
+    const resumenY = finalY > 180 ? 35 : finalY + 10;
+    
+    // Crear tabla de totales final más completa
     const resumenData = [
-      ['Total de Registros:', data.length.toString()],
-      ['Total de Cantidad:', totalCantidad.toString()],
-      ['Total General:', `$${totalSubtotal.toFixed(2)}`]
+      ['CONCEPTO', 'VALOR'],
+      ['Total de Registros Mostrados:', data.length.toLocaleString()],
+      ['Monto Total Invertido:', `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+      ['Precio Promedio por Unidad:', `$${avgUnitPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+      ['Proveedores Involucrados:', uniqueSuppliers.toString()],
+      ['Proyectos con Suministros:', uniqueProjects.toString()]
     ];
 
     autoTable(doc, {
       body: resumenData,
-      startY: finalY,
+      startY: resumenY,
       styles: {
-        fontSize: 10,
-        cellPadding: 3,
-        halign: 'left'
+        fontSize: 9,
+        cellPadding: 4
+      },
+      headStyles: {
+        fillColor: [52, 73, 94],
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 10
       },
       columnStyles: {
-        0: { cellWidth: 40, fontStyle: 'bold' },
-        1: { cellWidth: 40, halign: 'right' }
+        0: { 
+          cellWidth: 80, 
+          fontStyle: 'bold',
+          fillColor: [240, 248, 255] 
+        },
+        1: { 
+          cellWidth: 60, 
+          halign: 'right',
+          fillColor: [248, 250, 252]
+        }
       },
-      margin: { left: 180 },
-      theme: 'plain'
+      margin: { left: 75, right: 75 },
+      theme: 'grid'
     });
+
+    // Agregar nota de pie
+    const pageHeight = doc.internal.pageSize.height;
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.text('Reporte generado automáticamente por Sistema de Gestión Vlock', 148, pageHeight - 10, { align: 'center' });
 
     const fileName = `suministros_report_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.pdf`;
     doc.save(fileName);
