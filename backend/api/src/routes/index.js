@@ -16,6 +16,10 @@ const suministrosRoutes = require('./suministros.routes');
 const proveedoresRoutes = require('./proveedores.routes');
 const healthRoutes = require('./health.routes');
 
+// Rutas del sistema de presupuestos
+const presupuestosRoutes = require('./presupuestos.routes');
+const detallesRoutes = require('./detalles.routes');
+
 // Ruta base para verificar que la API está funcionando
 router.get('/', (req, res) => {
   res.send('API funcionando');
@@ -35,6 +39,10 @@ router.use('/proyectos', proyectosRoutes);
 router.use('/suministros', suministrosRoutes);
 router.use('/proveedores', proveedoresRoutes);
 router.use('/health', healthRoutes);
+
+// Registrar rutas del sistema de presupuestos
+router.use('/presupuestos', presupuestosRoutes);
+router.use('/detalles', detallesRoutes);
 
 // Rutas de health y monitoreo (sin autenticación para permitir health checks)
 router.use('/', healthRoutes);

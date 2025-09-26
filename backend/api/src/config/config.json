@@ -1,0 +1,25 @@
+{
+  "development": {
+    "username": "root",
+    "password": "grxson_18",
+    "database": "sistema_gestion",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "dialect": "mysql",
+    "timezone": "+00:00"
+  },
+  "test": {
+    "username": "root",
+    "password": "grxson_18", 
+    "database": "sistema_gestion_test",
+    "host": "127.0.0.1",
+    "port": 3306,
+    "dialect": "mysql",
+    "timezone": "+00:00"
+  },
+  "production": {
+    "use_env_variable": "DATABASE_URL",
+    "dialect": "mysql",
+    "timezone": "+00:00"
+  }
+}

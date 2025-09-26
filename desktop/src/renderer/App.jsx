@@ -16,8 +16,12 @@ import Reportes from './components/Reportes';
 import Suministros from './pages/Suministros';
 import Proveedores from './pages/Proveedores';
 import Proyectos from './pages/Proyectos';
+import Herramientas from './pages/Herramientas';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 import { useDocumentTitle } from './hooks/useDocumentTitle';
+
+// Importar router de presupuestos
+import PresupuestosRouter from './components/presupuestos/PresupuestosRouter';
 
 // Importar componente AccessDenied
 import AccessDenied from './components/AccessDenied';
@@ -43,7 +47,13 @@ function MainApp() {
     '/reportes': 'Reportes',
     '/suministros': 'Suministros',
     '/proveedores': 'Proveedores',
-    '/diagnostico': 'Diagnóstico'
+    '/diagnostico': 'Diagnóstico',
+    '/presupuestos/conceptos': 'Conceptos de Obra',
+    '/presupuestos/precios': 'Precios Unitarios',
+    '/presupuestos/listado': 'Presupuestos',
+    '/presupuestos/catalogos': 'Catálogos de Precios',
+    '/presupuestos/nuevo': 'Nuevo Presupuesto',
+    '/presupuestos/ml': 'IA para Presupuestos'
   };
 
   // Usar el hook para actualizar el título dinámicamente
@@ -62,6 +72,10 @@ function MainApp() {
   
   // Función para obtener el módulo basado en la ruta actual
   const getModuleFromPath = (path) => {
+    // Si es una subruta de presupuestos, devolver 'presupuestos'
+    if (path.startsWith('/presupuestos/')) {
+      return 'presupuestos';
+    }
     // Eliminar la barra inicial para obtener el nombre del módulo
     return path.substring(1) || 'dashboard';
   };
@@ -93,15 +107,15 @@ function MainApp() {
       const moduleNames = {
         empleados: 'Empleados',
         proyectos: 'Proyectos',
-        nomina: 'Nomina',
+        nomina: 'Nómina',
         contratos: 'Contratos',
         oficios: 'Oficios',
-        suministros: 'Suministros',
         auditoria: 'Auditoria',
         reportes: 'Reportes',
         usuarios: 'Usuarios',
         roles: 'Roles',
-        config: 'Configuración'
+        config: 'Configuración',
+        presupuestos: 'Presupuestos'
       };
       
       return <AccessDenied moduleName={moduleNames[currentModule]} />;
@@ -134,6 +148,8 @@ function MainApp() {
         return <Suministros />;
       case '/proveedores':
         return <Proveedores />;
+      case '/herramientas':
+        return <Herramientas />;
       case '/configuracion':
         return (
           <div className="text-center py-20">
@@ -150,6 +166,18 @@ function MainApp() {
       case '/diagnostico':
         return <DiagnosticPageAdvanced />;
       default:
+        // Si la ruta empieza con /presupuestos/, usar el router de presupuestos
+        if (currentPath.startsWith('/presupuestos/')) {
+          return <PresupuestosRouter currentPath={currentPath} onNavigate={handleNavigate} />;
+        }
+        // Si la ruta empieza con /suministros/, manejar las subrutas
+        if (currentPath.startsWith('/suministros/')) {
+          return <Suministros />;
+        }
+        // Si la ruta empieza con /herramientas/, manejar las subrutas
+        if (currentPath.startsWith('/herramientas/')) {
+          return <Herramientas />;
+        }
         return <Dashboard />;
     }
   };

@@ -24,7 +24,15 @@ import {
   ChevronRightIcon,
   BuildingStorefrontIcon,
   RectangleGroupIcon,
-  CalculatorIcon
+  CalculatorIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  PlusIcon,
+  ListBulletIcon,
+  TagIcon,
+  DocumentDuplicateIcon,
+  ChartPieIcon,
+  CpuChipIcon
 } from '@heroicons/react/24/outline';
 
 
@@ -38,9 +46,52 @@ const navigationItems = [
   { name: 'Contratos', href: '/contratos', icon: DocumentTextIcon, current: false, permissionModule: 'contratos' },
   { name: 'Oficios', href: '/oficios', icon: BuildingOfficeIcon, current: false, permissionModule: 'oficios' },
   { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false, permissionModule: 'auditoria' },
-  { name: 'Suministros', href: '/suministros', icon: TruckIcon, current: false, permissionModule: 'suministros' },
+  { 
+    name: 'Suministros', 
+    href: '/suministros', 
+    icon: TruckIcon, 
+    current: false, 
+    permissionModule: 'suministros',
+    hasSubmenu: true,
+    submenu: [
+      { name: 'Gestión de Suministros', href: '/suministros', icon: TruckIcon, description: 'Administrar inventario de suministros' },
+      { name: 'Recibos Agrupados', href: '/suministros/recibos', icon: DocumentTextIcon, description: 'Gestionar recibos de materiales' },
+      { name: 'Importar Suministros', href: '/suministros/importar', icon: DocumentDuplicateIcon, description: 'Importar desde archivos Excel' },
+      { name: 'Dashboard Suministros', href: '/suministros/dashboard', icon: ChartBarIcon, description: 'Estadísticas y reportes' }
+    ]
+  },
   { name: 'Proveedores', href: '/proveedores', icon: BuildingStorefrontIcon, current: false, permissionModule: 'proveedores' },
-  { name: 'Presupuestos', href: '/presupuestos', icon: CalculatorIcon, current: false, permissionModule: 'presupuestos', inDevelopment: true },
+  { 
+    name: 'Herramientas', 
+    href: '/herramientas', 
+    icon: WrenchScrewdriverIcon, 
+    current: false, 
+    permissionModule: 'herramientas',
+    hasSubmenu: true,
+    submenu: [
+      { name: 'Inventario de Herramientas', href: '/herramientas', icon: WrenchScrewdriverIcon, description: 'Gestionar inventario de herramientas' },
+      { name: 'Préstamo de Herramientas', href: '/herramientas/prestamos', icon: UserGroupIcon, description: 'Control de préstamos a empleados' },
+      { name: 'Mantenimiento', href: '/herramientas/mantenimiento', icon: CogIcon, description: 'Programar y seguir mantenimientos' },
+      { name: 'Reportes de Herramientas', href: '/herramientas/reportes', icon: ChartBarIcon, description: 'Reportes de uso y estado' },
+      { name: 'Nueva Herramienta', href: '/herramientas/nueva', icon: PlusIcon, description: 'Registrar nueva herramienta', isAction: true }
+    ]
+  },
+  { 
+    name: 'Presupuestos', 
+    href: '/presupuestos', 
+    icon: CalculatorIcon, 
+    current: false, 
+    permissionModule: 'presupuestos', 
+    hasSubmenu: true,
+    submenu: [
+      { name: 'Conceptos de Obra', href: '/presupuestos/conceptos', icon: ListBulletIcon, description: 'Gestionar catálogo de conceptos' },
+      { name: 'Precios Unitarios', href: '/presupuestos/precios', icon: TagIcon, description: 'Administrar precios regionales' },
+      { name: 'Presupuestos', href: '/presupuestos/listado', icon: DocumentDuplicateIcon, description: 'Crear y gestionar presupuestos' },
+      { name: 'Catálogos de Precios', href: '/presupuestos/catalogos', icon: ChartPieIcon, description: 'Administrar catálogos especializados' },
+      { name: 'Nuevo Presupuesto', href: '/presupuestos/nuevo', icon: PlusIcon, description: 'Crear presupuesto desde cero', isAction: true },
+      { name: 'IA para Presupuestos', href: '/presupuestos/ml', icon: CpuChipIcon, description: 'Análisis predictivo e inteligencia artificial', isAdvanced: true }
+    ]
+  },
   { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false, permissionModule: 'reportes' },
   { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false, permissionModule: 'usuarios' },
   { name: 'Roles', href: '/roles', icon: ShieldCheckIcon, current: false, permissionModule: 'roles' },
@@ -59,6 +110,7 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
   // Estados para animaciones y tooltips
   const [hoveredItem, setHoveredItem] = useState(null);
   const [showTooltip, setShowTooltip] = useState(false);
+  const [expandedMenus, setExpandedMenus] = useState({});
 
   // Guardar preferencia de sidebar en localStorage
   useEffect(() => {
@@ -75,6 +127,14 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed));
   }, [isCollapsed]);
+
+  // Función para alternar submenús
+  const toggleSubmenu = (itemName) => {
+    setExpandedMenus(prev => ({
+      ...prev,
+      [itemName]: !prev[itemName]
+    }));
+  };
 
   // Auto-colapsar en pantallas pequeñas
   useEffect(() => {
@@ -236,8 +296,12 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
               
               <button
                 onClick={() => {
-                  if (item.inDevelopment) {
-                    // Mostrar mensaje de desarrollo sin navegar
+                  if (item.hasSubmenu) {
+                    toggleSubmenu(item.name);
+                    // También navegar a la página principal si no es solo un contenedor de submenús
+                    if (item.href && item.href !== '#') {
+                      onNavigate(item.href);
+                    }
                     return;
                   }
                   onNavigate(item.href);
@@ -255,8 +319,6 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
                 className={classNames(
                   isActive
                     ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300 font-semibold'
-                    : item.inDevelopment
-                    ? 'text-gray-400 dark:text-gray-500 cursor-not-allowed'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-700/50',
                   'group/item flex items-center px-4 py-3 text-sm rounded-lg w-full transition-all duration-300 relative'
                 )}
@@ -283,15 +345,17 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
                 />
                 
                 <span className={`
-                  ml-3 transition-all duration-300 relative z-10 flex items-center
+                  ml-3 transition-all duration-300 relative z-10 flex items-center justify-between w-full
                   ${isCollapsed ? 'opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0' : 'opacity-100 translate-x-0'}
                   ${isActive ? 'font-semibold' : 'font-medium'}
                 `}>
-                  {item.name}
-                  {item.inDevelopment && (
-                    <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-400 rounded-full border border-yellow-200 dark:border-yellow-700">
-                      Beta
-                    </span>
+                  <span className="flex items-center">
+                    {item.name}
+                  </span>
+                  {item.hasSubmenu && !isCollapsed && (
+                    <ChevronDownIcon 
+                      className={`h-4 w-4 transition-transform duration-300 ${expandedMenus[item.name] ? 'rotate-180' : ''}`}
+                    />
                   )}
                 </span>
                 
@@ -304,14 +368,70 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
                     before:border-4 before:border-transparent before:border-r-gray-900 dark:before:border-r-gray-800
                   ">
                     {item.name}
-                    {item.inDevelopment && (
-                      <span className="ml-2 px-1.5 py-0.5 text-xs bg-yellow-500/20 text-yellow-300 rounded border border-yellow-500/30">
-                        En desarrollo
-                      </span>
+                    {item.hasSubmenu && (
+                      <div className="mt-2 pt-2 border-t border-gray-700">
+                        {item.submenu?.map(subItem => (
+                          <div key={subItem.name} className="text-xs text-gray-300 py-1">
+                            {subItem.name}
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
                 )}
               </button>
+
+              {/* Submenu items */}
+              {item.hasSubmenu && expandedMenus[item.name] && !isCollapsed && (
+                <div className="ml-4 mt-2 space-y-1">
+                  {item.submenu?.map((subItem, subIndex) => {
+                    const isSubActive = currentPath === subItem.href;
+                    return (
+                      <button
+                        key={subItem.name}
+                        onClick={() => onNavigate(subItem.href)}
+                        className={classNames(
+                          isSubActive
+                            ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 border-l-2 border-primary-500'
+                            : subItem.isAction
+                            ? 'text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 border-l-2 border-transparent hover:border-primary-300'
+                            : subItem.isAdvanced
+                            ? 'text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-900/20 border-l-2 border-transparent hover:border-purple-300'
+                            : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50 border-l-2 border-transparent hover:border-gray-300',
+                          'group/subitem flex items-center px-4 py-2 text-sm rounded-r-lg w-full transition-all duration-300 relative'
+                        )}
+                        style={{
+                          animationDelay: `${(index * 50) + (subIndex * 25)}ms`
+                        }}
+                      >
+                        <subItem.icon
+                          className={classNames(
+                            isSubActive 
+                              ? 'text-primary-600 dark:text-primary-400' 
+                              : subItem.isAction
+                              ? 'text-primary-500 dark:text-primary-400'
+                              : subItem.isAdvanced
+                              ? 'text-purple-500 dark:text-purple-400 group-hover/subitem:text-purple-600 dark:group-hover/subitem:text-purple-300'
+                              : 'text-gray-400 dark:text-gray-500 group-hover/subitem:text-gray-600 dark:group-hover/subitem:text-gray-400',
+                            'flex-shrink-0 h-4 w-4 transition-colors duration-300'
+                          )}
+                          aria-hidden="true"
+                        />
+                        <div className="ml-3 flex-1">
+                          <div className={`font-medium ${isSubActive ? 'text-primary-700 dark:text-primary-300' : ''}`}>
+                            {subItem.name}
+                          </div>
+                          {subItem.description && (
+                            <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+                              {subItem.description}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           );
         })}
