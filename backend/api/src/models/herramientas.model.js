@@ -43,6 +43,10 @@ module.exports = (sequelize) => {
     ubicacion: {
       type: DataTypes.STRING(100)
     },
+    observaciones: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
     image_url: {
       type: DataTypes.STRING(500),
       allowNull: true
@@ -59,8 +63,8 @@ module.exports = (sequelize) => {
     if (models.proyectos) {
       Herramienta.belongsTo(models.proyectos, { foreignKey: 'id_proyecto' });
     }
-    if (models.Movimientos_herramienta) {
-      Herramienta.hasMany(models.Movimientos_herramienta, { foreignKey: 'id_herramienta' });
+    if (models.movimientos_herramienta) {
+      Herramienta.hasMany(models.movimientos_herramienta, { foreignKey: 'id_herramienta' });
     }
   };
 

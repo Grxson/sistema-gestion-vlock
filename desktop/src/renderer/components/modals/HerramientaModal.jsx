@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { FaSave, FaTimes, FaTools, FaHistory, FaExchangeAlt, FaExclamationTriangle } from "react-icons/fa";
+import { FaSave, FaTimes, FaTools, FaHistory, FaExchangeAlt, FaExclamationTriangle, FaBoxOpen, FaShare, FaUndo, FaTrash } from "react-icons/fa";
+import ConfirmationModal from './ConfirmationModal';
 
-const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyectos = [] }) => {
+const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefresh, proyectos = [] }) => {
   const [formData, setFormData] = useState({
     // Campos que corresponden a la base de datos
     id_categoria_herr: '',
@@ -11,9 +12,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
     serial: '',
     costo: '',
     vida_util_meses: '',
-    stock: 0,
+    stock: '', // Cambio a string vacío para evitar el "Stock0"
     estado: 1, // 1 = Disponible por defecto
     ubicacion: '',
+    observaciones: '',
     image_url: ''
   });
 
@@ -24,6 +26,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
   const [movimientos, setMovimientos] = useState([]);
   const [loadingMovimientos, setLoadingMovimientos] = useState(false);
   const [categorias, setCategorias] = useState([]);
+  const [showConfirmDeleteHistory, setShowConfirmDeleteHistory] = useState(false);
 
   // Estados disponibles
   const estados = [
@@ -92,9 +95,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
           serial: herramienta.serial || '',
           costo: herramienta.costo || '',
           vida_util_meses: herramienta.vida_util_meses || '',
-          stock: herramienta.stock || 0,
+          stock: herramienta.stock ? herramienta.stock.toString() : '',
           estado: herramienta.estado || 1,
           ubicacion: herramienta.ubicacion || '',
+          observaciones: herramienta.observaciones || '',
           image_url: herramienta.image_url || ''
         });
         
@@ -112,9 +116,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
           serial: '',
           costo: '',
           vida_util_meses: '',
-          stock: 0,
+          stock: '',
           estado: 1,
           ubicacion: '',
+          observaciones: '',
           image_url: ''
         });
         setMovimientos([]);
@@ -160,7 +165,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
     if (formData.estado && (isNaN(parseInt(formData.estado)) || parseInt(formData.estado) < 1 || parseInt(formData.estado) > 5)) {
       newErrors.estado = 'El estado debe ser un valor entre 1 y 5';
     }
-    if (formData.id_proyecto && isNaN(parseInt(formData.id_proyecto))) {
+    if (formData.id_proyecto && formData.id_proyecto !== '' && isNaN(parseInt(formData.id_proyecto))) {
       newErrors.id_proyecto = 'El proyecto seleccionado no es válido';
     }
     
@@ -298,6 +303,272 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit'
+    });
+  };
+
+  // Función para obtener configuración de tipos de movimiento
+  const getMovimientoConfig = (tipoMovimiento) => {
+    const configs = {
+      'Entrada': {
+        titulo: 'Entrada de Stock',
+        color: '#10B981',
+        bgClass: 'bg-green-100 dark:bg-green-900/30',
+        textClass: 'text-green-600 dark:text-green-400',
+        badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+        icon: FaBoxOpen
+      },
+      'Salida': {
+        titulo: 'Salida de Stock',
+        color: '#F59E0B',
+        bgClass: 'bg-amber-100 dark:bg-amber-900/30',
+        textClass: 'text-amber-600 dark:text-amber-400',
+        badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
+        icon: FaShare
+      },
+      'Devolucion': {
+        titulo: 'Devolución',
+        color: '#3B82F6',
+        bgClass: 'bg-blue-100 dark:bg-blue-900/30',
+        textClass: 'text-blue-600 dark:text-blue-400',
+        badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+        icon: FaUndo
+      },
+      'Baja': {
+        titulo: 'Baja de Inventario',
+        color: '#EF4444',
+        bgClass: 'bg-red-100 dark:bg-red-900/30',
+        textClass: 'text-red-600 dark:text-red-400',
+        badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+        icon: FaTrash
+      }
+    };
+    return configs[tipoMovimiento] || configs['Entrada'];
+  };
+
+  // Función para generar descripción contextual del movimiento con información detallada
+  const getDescripcionMovimiento = (movimiento) => {
+    const tipo = movimiento.tipo_movimiento;
+    const proyecto = movimiento.proyectos?.nombre;
+    const cantidad = movimiento.cantidad;
+    const razon = movimiento.razon_movimiento;
+    const receptor = movimiento.usuario_receptor;
+
+    // Mapeo de razones a descripciones legibles
+    const razonLabels = {
+      // Entrada
+      'compra': 'Compra nueva',
+      'devolucion': 'Devolución de préstamo',
+      'reparacion': 'Vuelta de reparación',
+      'donacion': 'Donación',
+      'transferencia': 'Transferencia desde otro proyecto',
+      
+      // Salida
+      'prestamo': 'Préstamo a usuario',
+      'asignacion': 'Asignación a proyecto',
+      'mantenimiento': 'Envío a mantenimiento',
+      'reparacion_salida': 'Envío a reparación',
+      
+      // Devolución
+      'finalizacion': 'Finalización de préstamo',
+      'cambio_proyecto': 'Cambio de proyecto',
+      'mantenimiento_programado': 'Mantenimiento programado',
+      
+      // Baja
+      'perdida': 'Pérdida de herramienta',
+      'robo': 'Robo',
+      'dano_irreparable': 'Daño irreparable',
+      'obsolescencia': 'Obsolescencia',
+      'fin_vida_util': 'Fin de vida útil'
+    };
+
+    let descripcion = '';
+    const razonTexto = razonLabels[razon] || (razon ? razon.replace('_', ' ') : '');
+
+    switch (tipo) {
+      case 'Entrada':
+        if (razon === 'compra') {
+          descripcion = `Compra de ${cantidad} unidades nuevas para inventario`;
+        } else if (razon === 'devolucion') {
+          descripcion = `Devolución de ${cantidad} unidades ${receptor ? `por ${receptor}` : ''} al inventario`;
+        } else if (razon === 'reparacion') {
+          descripcion = `Regreso de ${cantidad} unidades reparadas al inventario`;
+        } else if (razon === 'donacion') {
+          descripcion = `Donación de ${cantidad} unidades agregadas al inventario`;
+        } else if (razon === 'transferencia') {
+          descripcion = `Transferencia de ${cantidad} unidades ${proyecto ? `desde proyecto "${proyecto}"` : 'desde otro origen'}`;
+        } else {
+          descripcion = `Ingreso de ${cantidad} unidades al inventario ${razonTexto ? `- ${razonTexto}` : ''}`;
+        }
+        break;
+      
+      case 'Salida':
+        if (razon === 'prestamo') {
+          descripcion = `Préstamo para uso de ${cantidad} unidades${proyecto ? ` en proyecto "${proyecto}"` : ''}`;
+        } else if (razon === 'asignacion') {
+          descripcion = `Asignación de ${cantidad} unidades${receptor ? ` a ${receptor}` : ''}${proyecto ? ` en proyecto "${proyecto}"` : ''}`;
+        } else if (razon === 'mantenimiento') {
+          descripcion = `Envío de ${cantidad} unidades a mantenimiento`;
+        } else if (razon === 'reparacion') {
+          descripcion = `Envío de ${cantidad} unidades a reparación`;
+        } else if (razon === 'transferencia') {
+          descripcion = `Transferencia de ${cantidad} unidades${proyecto ? ` al proyecto "${proyecto}"` : ' a otro destino'}`;
+        } else {
+          descripcion = `Salida de ${cantidad} unidades${proyecto ? ` para proyecto "${proyecto}"` : ''} ${razonTexto ? `- ${razonTexto}` : ''}`;
+        }
+        break;
+      
+      case 'Devolucion':
+        if (razon === 'finalizacion') {
+          descripcion = `Finalización de préstamo - Devolución de ${cantidad} unidades${receptor ? ` por ${receptor}` : ''}`;
+        } else if (razon === 'cambio_proyecto') {
+          descripcion = `Cambio de proyecto - Devolución de ${cantidad} unidades${proyecto ? ` del proyecto "${proyecto}"` : ''}`;
+        } else if (razon === 'mantenimiento_programado') {
+          descripcion = `Devolución de ${cantidad} unidades por mantenimiento programado`;
+        } else {
+          descripcion = `Devolución de ${cantidad} unidades${proyecto ? ` del proyecto "${proyecto}"` : ''} ${razonTexto ? `- ${razonTexto}` : ''}`;
+        }
+        break;
+      
+      case 'Baja':
+        if (razon === 'perdida') {
+          descripcion = `Pérdida de ${cantidad} unidades${proyecto ? ` en proyecto "${proyecto}"` : ''}`;
+        } else if (razon === 'robo') {
+          descripcion = `Robo de ${cantidad} unidades${proyecto ? ` del proyecto "${proyecto}"` : ''}`;
+        } else if (razon === 'dano_irreparable') {
+          descripcion = `Daño irreparable - Baja de ${cantidad} unidades`;
+        } else if (razon === 'obsolescencia') {
+          descripcion = `Obsolescencia - Baja de ${cantidad} unidades`;
+        } else if (razon === 'fin_vida_util') {
+          descripcion = `Fin de vida útil - Baja de ${cantidad} unidades`;
+        } else {
+          descripcion = `Baja de ${cantidad} unidades ${razonTexto ? `- ${razonTexto}` : ''}`;
+        }
+        break;
+      
+      default:
+        descripcion = `Movimiento de ${cantidad} unidades ${razonTexto ? `- ${razonTexto}` : ''}`;
+    }
+
+    return descripcion;
+  };
+
+  // Función para eliminar el historial de movimientos
+  const handleClickEliminarHistorial = (e) => {
+    e?.preventDefault();
+    e?.stopPropagation();
+    
+    if (!herramienta?.id_herramienta) {
+      alert('Error: No se pudo identificar la herramienta');
+      return;
+    }
+
+    if (movimientos.length === 0) {
+      alert('No hay movimientos para eliminar');
+      return;
+    }
+
+    setShowConfirmDeleteHistory(true);
+  };
+
+  const eliminarHistorialMovimientos = async () => {
+
+    try {
+      setLoadingMovimientos(true);
+      const token = localStorage.getItem('token');
+      
+      console.log('Iniciando eliminación del historial...');
+      console.log('ID de herramienta:', herramienta.id_herramienta);
+      console.log('Token presente:', !!token);
+      
+      const response = await fetch(`http://localhost:4000/api/herramientas/${herramienta.id_herramienta}/movimientos`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      console.log('Status de respuesta:', response.status);
+      console.log('Response OK:', response.ok);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error del servidor:', errorText);
+        throw new Error(`Error del servidor (${response.status}): ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Respuesta del servidor:', result);
+      
+      if (result.success) {        
+        console.log('✅ Eliminación exitosa');
+        
+        // Limpiar la lista de movimientos inmediatamente
+        setMovimientos([]);
+        
+        // Mostrar mensaje de éxito
+        alert(`Historial eliminado exitosamente.\n\n${result.message || 'Operación completada'}`);
+        
+        // Intentar refrescar los datos del componente padre (opcional)
+        if (onRefresh) {
+          try {
+            await onRefresh();
+            console.log('✅ Datos del componente padre refrescados');
+          } catch (refreshError) {
+            console.warn('⚠️ Error al refrescar datos del componente padre (no crítico):', refreshError);
+            // No mostramos este error al usuario porque la eliminación fue exitosa
+          }
+        }
+        
+      } else {
+        console.error('❌ Operación no exitosa:', result);
+        throw new Error(result.message || 'Error desconocido al eliminar historial');
+      }
+    } catch (error) {
+      console.error('❌ Error al eliminar historial:', error);
+      console.error('Tipo de error:', error.constructor.name);
+      console.error('Stack trace:', error.stack);
+      alert(`Error al eliminar historial:\n\n${error.message || 'Error de conexión'}`);
+    } finally {
+      setLoadingMovimientos(false);
+    }
+  };
+
+  // Función para calcular el stock después de un movimiento específico
+  const calcularStockDespues = (movimientos, indiceMovimiento, stockActual) => {
+    // Los movimientos están ordenados del más reciente al más antiguo
+    // Calculamos hacia atrás desde el stock actual
+    let stock = stockActual;
+    
+    for (let i = 0; i < indiceMovimiento; i++) {
+      const mov = movimientos[i];
+      const cantidad = parseInt(mov.cantidad) || 0;
+      
+      switch (mov.tipo_movimiento) {
+        case 'Entrada':
+        case 'Devolucion':
+          stock -= cantidad; // Restamos porque vamos hacia atrás
+          break;
+        case 'Salida':
+        case 'Baja':
+          stock += cantidad; // Sumamos porque vamos hacia atrás
+          break;
+      }
+    }
+    
+    return stock;
+  };
+
+  // Función mejorada para formatear fecha con hora
+  const formatDateWithTime = (dateString) => {
+    if (!dateString) return '';
+    return new Date(dateString).toLocaleDateString('es-ES', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
     });
   };
 
@@ -468,8 +739,8 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                 <div>
                   <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Control de Inventario</h4>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* Proyecto */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Primera fila: Proyecto y Estado */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Proyecto
@@ -484,7 +755,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                       >
                         <option value="">Seleccionar proyecto...</option>
                         {proyectos?.map((proyecto) => (
-                          <option key={proyecto.id} value={proyecto.id}>
+                          <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
                             {proyecto.nombre}
                           </option>
                         ))}
@@ -494,7 +765,6 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                       )}
                     </div>
 
-                    {/* Estado */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Estado
@@ -518,11 +788,11 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                       )}
                     </div>
 
-                    {/* Stock */}
+                    {/* Segunda fila: Stock y Ubicación */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-2">
                         Stock
-                        {formData.stock && formData.stock <= 5 && (
+                        {formData.stock && parseInt(formData.stock) <= 5 && (
                           <div className="relative group">
                             <FaExclamationTriangle className="text-orange-500 cursor-help" />
                             <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50">
@@ -542,7 +812,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                         readOnly={isReadOnly}
                         className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        } ${formData.stock && formData.stock <= 5 ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : ''}`}
+                        } ${formData.stock && parseInt(formData.stock) <= 5 ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : ''}`}
                         placeholder="0"
                       />
                       {errors.stock && (
@@ -550,7 +820,6 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                       )}
                     </div>
 
-                    {/* Ubicación */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Ubicación
@@ -570,66 +839,280 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                       )}
                     </div>
                   </div>
+
+                  {/* Observaciones - Campo completo */}
+                  <div className="mt-6">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Observaciones
+                    </label>
+                    <textarea
+                      value={formData.observaciones || ''}
+                      onChange={(e) => handleInputChange('observaciones', e.target.value)}
+                      readOnly={isReadOnly}
+                      rows="4"
+                      className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 resize-vertical ${
+                        isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                      placeholder="Notas adicionales sobre la herramienta, mantenimientos realizados, condiciones especiales, etc."
+                    />
+                    {errors.observaciones && (
+                      <p className="mt-1 text-sm text-red-600">{errors.observaciones}</p>
+                    )}
+                  </div>
                 </div>
 
                 {/* Historial de Movimientos */}
                 {mode === 'view' && herramienta && (
                   <div>
-                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                      <FaHistory className="text-blue-600" />
-                      Historial de Movimientos
-                    </h4>
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
+                        <FaHistory className="text-blue-600" />
+                        Historial de Movimientos
+                      </h4>
+                      <div className="flex items-center gap-3">
+                        {movimientos.length > 0 && (
+                          <>
+                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm font-medium rounded-full">
+                              {movimientos.length} movimiento{movimientos.length !== 1 ? 's' : ''}
+                            </span>
+                            <button
+                              onClick={handleClickEliminarHistorial}
+                              className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm font-medium rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors flex items-center gap-1"
+                              title="Eliminar historial de movimientos"
+                              disabled={loadingMovimientos}
+                            >
+                              <FaTrash className="h-3 w-3" />
+                              {loadingMovimientos ? 'Eliminando...' : 'Limpiar Historial'}
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Resumen estadístico */}
+                    {movimientos.length > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        {['Entrada', 'Salida', 'Devolucion', 'Baja'].map(tipo => {
+                          const count = movimientos.filter(m => m.tipo_movimiento === tipo).length;
+                          const total = movimientos.filter(m => m.tipo_movimiento === tipo)
+                            .reduce((sum, m) => sum + (parseInt(m.cantidad) || 0), 0);
+                          const config = getMovimientoConfig(tipo);
+                          
+                          if (count === 0) return null;
+                          
+                          return (
+                            <div key={tipo} className={`p-3 rounded-lg ${config.bgClass} border border-gray-200 dark:border-gray-600`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <config.icon className={`h-4 w-4 ${config.textClass}`} />
+                                <span className={`text-sm font-medium ${config.textClass}`}>
+                                  {tipo}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">
+                                {count} movimiento{count !== 1 ? 's' : ''} • {total} unidades
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     
                     {loadingMovimientos ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                       </div>
-                    ) : movimientos.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                        <FaExchangeAlt className="mx-auto h-12 w-12 mb-2 opacity-50" />
-                        <p>No hay movimientos registrados para esta herramienta</p>
-                      </div>
                     ) : (
-                      <div className="space-y-3 max-h-64 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                        {movimientos.map((movimiento, index) => (
-                          <div 
-                            key={movimiento.id_movimiento || index}
-                            className="bg-white dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600"
-                          >
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                                    movimiento.tipo_movimiento === 'entrada' 
-                                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
-                                      : movimiento.tipo_movimiento === 'salida'
-                                      ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
-                                      : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                                  }`}>
-                                    {movimiento.tipo_movimiento?.toUpperCase()}
-                                  </span>
-                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {formatNumber(movimiento.cantidad)} unidades
-                                  </span>
-                                </div>
+                      <>
+                        {/* Información de actividad reciente */}
+                        {movimientos.length > 0 && (
+                          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <span className="font-medium">Último movimiento: {formatDateWithTime(movimientos[0].fecha_movimiento)}</span>
+                            <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full">
+                              {(() => {
+                                const ultimaFecha = new Date(movimientos[0].fecha_movimiento);
+                                const ahora = new Date();
+                                const diffMs = ahora - ultimaFecha;
+                                const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
                                 
-                                <div className="text-sm text-gray-600 dark:text-gray-400">
-                                  <p><strong>Fecha:</strong> {formatDate(movimiento.fecha_movimiento)}</p>
-                                  {movimiento.proyecto && (
-                                    <p><strong>Proyecto:</strong> {movimiento.proyecto.nombre}</p>
-                                  )}
-                                  {movimiento.usuario && (
-                                    <p><strong>Usuario:</strong> {movimiento.usuario.nombre_usuario}</p>
-                                  )}
-                                  {movimiento.notas && (
-                                    <p><strong>Notas:</strong> {movimiento.notas}</p>
-                                  )}
+                                if (diffDias === 0) return 'Hoy';
+                                if (diffDias === 1) return 'Ayer';
+                                if (diffDias < 7) return `Hace ${diffDias} días`;
+                                if (diffDias < 30) return `Hace ${Math.floor(diffDias / 7)} semana${Math.floor(diffDias / 7) !== 1 ? 's' : ''}`;
+                                return `Hace ${Math.floor(diffDias / 30)} mes${Math.floor(diffDias / 30) !== 1 ? 'es' : ''}`;
+                              })()}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Lista de movimientos */}
+                        {movimientos.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                            <FaExchangeAlt className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                            <p>No hay movimientos registrados para esta herramienta</p>
+                            <p className="text-xs mt-2 opacity-75">Los movimientos aparecerán aquí cuando registres entradas, salidas o devoluciones</p>
+                          </div>
+                        ) : (
+                      <div className="space-y-4 max-h-80 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                        {movimientos.map((movimiento, index) => {
+                          const tipoConfig = getMovimientoConfig(movimiento.tipo_movimiento);
+                          const descripcionContextual = getDescripcionMovimiento(movimiento);
+                          
+                          return (
+                            <div 
+                              key={movimiento.id_movimiento || index}
+                              className="bg-white dark:bg-gray-700 p-4 rounded-lg border-l-4 shadow-sm"
+                              style={{ borderLeftColor: tipoConfig.color }}
+                            >
+                              {/* Header con tipo y cantidad */}
+                              <div className="flex items-center justify-between mb-3">
+                                <div className="flex items-center gap-3">
+                                  <div className={`p-2 rounded-full ${tipoConfig.bgClass}`}>
+                                    <tipoConfig.icon className={`h-4 w-4 ${tipoConfig.textClass}`} />
+                                  </div>
+                                  <div>
+                                    <h5 className="font-medium text-gray-900 dark:text-white">
+                                      {tipoConfig.titulo}
+                                    </h5>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                                      {descripcionContextual}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <span className={`px-2 py-1 text-xs font-bold rounded-full ${tipoConfig.badgeClass}`}>
+                                    {movimiento.cantidad > 0 ? '+' : ''}{formatNumber(movimiento.cantidad)}
+                                  </span>
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                    {formatDateWithTime(movimiento.fecha_movimiento)}
+                                  </p>
                                 </div>
                               </div>
+
+                              {/* Información detallada */}
+                              <div className="space-y-3">
+                                {/* Primera fila - Info básica */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
+                                  {/* Proyecto */}
+                                  {movimiento.proyectos && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-blue-600 dark:text-blue-400">📁</span>
+                                      <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Proyecto</p>
+                                        <p className="font-medium text-gray-900 dark:text-white">
+                                          {movimiento.proyectos.nombre}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+                                  
+                                  {/* Usuario */}
+                                  {movimiento.usuarios && (
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-purple-600 dark:text-purple-400">👤</span>
+                                      <div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400">Responsable</p>
+                                        <p className="font-medium text-gray-900 dark:text-white">
+                                          {movimiento.usuarios.nombre_usuario}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Estado resultante */}
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-600 dark:text-gray-400">📊</span>
+                                    <div>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">Stock después</p>
+                                      <p className="font-medium text-gray-900 dark:text-white">
+                                        {calcularStockDespues(movimientos, index, herramienta.stock)} unidades
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Segunda fila - Información específica del movimiento */}
+                                {(movimiento.razon_movimiento || movimiento.usuario_receptor || movimiento.fecha_devolucion_esperada || movimiento.estado_movimiento) && (
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm pt-2 border-t border-gray-200 dark:border-gray-600">
+                                    {/* Razón específica */}
+                                    {movimiento.razon_movimiento && (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-green-600 dark:text-green-400">🏷️</span>
+                                        <div>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400">Razón</p>
+                                          <p className="font-medium text-gray-900 dark:text-white text-xs">
+                                            {movimiento.razon_movimiento.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Usuario receptor (solo para asignaciones) */}
+                                    {movimiento.usuario_receptor && movimiento.razon_movimiento === 'asignacion' && (
+                                      <div className="flex items-center gap-2">
+                                        <span className="text-orange-600 dark:text-orange-400">👥</span>
+                                        <div>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400">Asignado a</p>
+                                          <p className="font-medium text-gray-900 dark:text-white text-xs">
+                                            {movimiento.usuario_receptor}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    )}
+
+
+
+                                    {/* Estado del movimiento */}
+                                    {movimiento.estado_movimiento && movimiento.estado_movimiento !== 'activo' && (
+                                      <div className="flex items-center gap-2">
+                                        <span className={`${
+                                          movimiento.estado_movimiento === 'completado' ? 'text-green-600 dark:text-green-400' :
+                                          movimiento.estado_movimiento === 'cancelado' ? 'text-red-600 dark:text-red-400' :
+                                          'text-gray-600 dark:text-gray-400'
+                                        }`}>
+                                          {movimiento.estado_movimiento === 'completado' ? '✅' : 
+                                           movimiento.estado_movimiento === 'cancelado' ? '❌' : '⏳'}
+                                        </span>
+                                        <div>
+                                          <p className="text-xs text-gray-500 dark:text-gray-400">Estado</p>
+                                          <p className={`font-medium text-xs capitalize ${
+                                            movimiento.estado_movimiento === 'completado' ? 'text-green-600 dark:text-green-400' :
+                                            movimiento.estado_movimiento === 'cancelado' ? 'text-red-600 dark:text-red-400' :
+                                            'text-gray-900 dark:text-white'
+                                          }`}>
+                                            {movimiento.estado_movimiento}
+                                          </p>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Detalles adicionales */}
+                              {movimiento.detalle_adicional && (
+                                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                  <p className="text-xs text-blue-600 dark:text-blue-400 mb-1 font-medium">📝 Detalles específicos:</p>
+                                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                                    {movimiento.detalle_adicional}
+                                  </p>
+                                </div>
+                              )}
+
+                              {/* Notas generales */}
+                              {movimiento.notas && (
+                                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">💬 Notas generales:</p>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                                    "{movimiento.notas}"
+                                  </p>
+                                </div>
+                              )}
                             </div>
+                          );
+                        })}
                           </div>
-                        ))}
-                      </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -734,6 +1217,21 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
           </form>
         </div>
       </div>
+      
+      {/* Modal de confirmación para eliminar historial */}
+      <ConfirmationModal
+        isOpen={showConfirmDeleteHistory}
+        onClose={() => setShowConfirmDeleteHistory(false)}
+        onConfirm={() => {
+          setShowConfirmDeleteHistory(false);
+          eliminarHistorialMovimientos();
+        }}
+        title="Eliminar Historial de Movimientos"
+        message={`¿Eliminar historial de movimientos?\n\nSe eliminarán ${movimientos.length} registro${movimientos.length !== 1 ? 's' : ''} de movimiento.\nEsta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        type="danger"
+      />
     </div>
   );
 };

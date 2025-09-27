@@ -240,7 +240,7 @@ const herramientasController = {
       }
 
       // Verificar si tiene movimientos asociados
-      const movimientos = await models.Movimientos_herramienta.count({
+      const movimientos = await models.movimientos_herramienta.count({
         where: { id_herramienta: id }
       });
 
@@ -274,7 +274,7 @@ const herramientasController = {
       const { page = 1, limit = 10 } = req.query;
       const offset = (page - 1) * limit;
 
-      const movimientos = await models.Movimientos_herramienta.findAndCountAll({
+      const movimientos = await models.movimientos_herramienta.findAndCountAll({
         where: { id_herramienta: id },
         include: [
           {
@@ -340,25 +340,28 @@ const herramientasController = {
         });
       }
 
-      // Crear el movimiento
-      const nuevoMovimiento = await models.Movimientos_herramienta.create({
+      // Crear el movimiento con campos detallados
+      const nuevoMovimiento = await models.movimientos_herramienta.create({
         ...movimientoData,
-        fecha_movimiento: new Date()
+        fecha_movimiento: new Date(),
+        // Campos adicionales para información detallada
+        razon_movimiento: movimientoData.razon_movimiento || null,
+        detalle_adicional: movimientoData.detalle_adicional || null,
+        usuario_receptor: movimientoData.usuario_receptor || null,
+        fecha_devolucion_esperada: movimientoData.fecha_devolucion_esperada || null,
+        estado_movimiento: movimientoData.estado_movimiento || 'activo'
       });
 
       // Actualizar stock según el tipo de movimiento
       const cantidad = parseInt(movimientoData.cantidad);
-      let nuevoStock = herramienta.stock_disponible;
+      let nuevoStock = herramienta.stock;
 
       switch (movimientoData.tipo_movimiento) {
-        case 'entrada':
+        case 'Entrada':
           nuevoStock += cantidad;
-          await herramienta.update({ 
-            stock_disponible: nuevoStock,
-            stock_total: herramienta.stock_total + cantidad
-          });
+          await herramienta.update({ stock: nuevoStock });
           break;
-        case 'salida':
+        case 'Salida':
           if (nuevoStock < cantidad) {
             return res.status(400).json({
               success: false,
@@ -366,9 +369,24 @@ const herramientasController = {
             });
           }
           nuevoStock -= cantidad;
-          await herramienta.update({ stock_disponible: nuevoStock });
+          // Al hacer una salida, asignar la herramienta al proyecto
+          const updateData = { stock: nuevoStock };
+          if (movimientoData.id_proyecto) {
+            updateData.id_proyecto = movimientoData.id_proyecto;
+            updateData.estado = 2; // Cambiar estado a "En uso"
+          }
+          await herramienta.update(updateData);
           break;
-        case 'baja':
+        case 'Devolucion':
+          // Devolver herramienta de un proyecto
+          nuevoStock += cantidad;
+          await herramienta.update({ 
+            stock: nuevoStock,
+            id_proyecto: null, // Quitar asignación de proyecto
+            estado: 1 // Cambiar estado a "Disponible"
+          });
+          break;
+        case 'Baja':
           if (nuevoStock < cantidad) {
             return res.status(400).json({
               success: false,
@@ -376,15 +394,12 @@ const herramientasController = {
             });
           }
           nuevoStock -= cantidad;
-          await herramienta.update({ 
-            stock_disponible: nuevoStock,
-            stock_total: herramienta.stock_total - cantidad
-          });
+          await herramienta.update({ stock: nuevoStock });
           break;
       }
 
       // Obtener el movimiento creado con relaciones
-      const movimientoCompleto = await models.Movimientos_herramienta.findByPk(nuevoMovimiento.id_movimiento, {
+      const movimientoCompleto = await models.movimientos_herramienta.findByPk(nuevoMovimiento.id_movimiento, {
         include: [
           {
             model: models.herramientas,
@@ -423,7 +438,7 @@ const herramientasController = {
   async getStockBajo(req, res) {
     try {
       const herramientas = await models.herramientas.findAll({
-        where: require('sequelize').literal('stock_disponible <= stock_minimo'),
+        where: require('sequelize').literal('stock <= 5'),
         include: [
           {
             model: models.Categorias_herramienta,
@@ -431,7 +446,7 @@ const herramientasController = {
             attributes: ['id_categoria_herr', 'nombre', 'descripcion']
           }
         ],
-        order: [['stock_disponible', 'ASC']]
+        order: [['stock', 'ASC']]
       });
 
       res.json({
@@ -546,6 +561,83 @@ const herramientasController = {
       });
     } catch (error) {
       console.error('Error al eliminar imagen:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
+        error: error.message
+      });
+    }
+  },
+
+  // Eliminar historial de movimientos de una herramienta
+  async deleteHistorialMovimientos(req, res) {
+    try {
+      const { id } = req.params;
+
+      // Verificar que la herramienta existe
+      const herramienta = await models.herramientas.findByPk(id);
+      if (!herramienta) {
+        return res.status(404).json({
+          success: false,
+          message: 'Herramienta no encontrada'
+        });
+      }
+
+      // Eliminar todos los movimientos de la herramienta
+      const movimientosEliminados = await models.movimientos_herramienta.destroy({
+        where: {
+          id_herramienta: id
+        }
+      });
+
+      res.json({
+        success: true,
+        message: `Historial de movimientos eliminado exitosamente. ${movimientosEliminados} registros eliminados.`,
+        data: {
+          herramienta_id: id,
+          movimientos_eliminados: movimientosEliminados
+        }
+      });
+    } catch (error) {
+      console.error('Error al eliminar historial de movimientos:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error interno del servidor',
+        error: error.message
+      });
+    }
+  },
+
+  // Actualizar estado de un movimiento específico
+  async updateEstadoMovimiento(req, res) {
+    try {
+      const { id } = req.params;
+      const { estado_movimiento } = req.body;
+
+      if (!['activo', 'completado', 'cancelado'].includes(estado_movimiento)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Estado de movimiento inválido. Debe ser: activo, completado o cancelado'
+        });
+      }
+
+      const movimiento = await models.movimientos_herramienta.findByPk(id);
+      if (!movimiento) {
+        return res.status(404).json({
+          success: false,
+          message: 'Movimiento no encontrado'
+        });
+      }
+
+      await movimiento.update({ estado_movimiento });
+
+      res.json({
+        success: true,
+        message: 'Estado del movimiento actualizado exitosamente',
+        data: movimiento
+      });
+    } catch (error) {
+      console.error('Error al actualizar estado del movimiento:', error);
       res.status(500).json({
         success: false,
         message: 'Error interno del servidor',

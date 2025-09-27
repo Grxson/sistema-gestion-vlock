@@ -16,7 +16,7 @@ module.exports = (sequelize) => {
       allowNull: true // Según la BD real
     },
     tipo_movimiento: {
-      type: DataTypes.ENUM('Entrada', 'Salida', 'Baja'),
+      type: DataTypes.ENUM('Entrada', 'Salida', 'Devolucion', 'Baja'),
       allowNull: false
     },
     cantidad: {
@@ -33,15 +33,47 @@ module.exports = (sequelize) => {
     },
     notas: { // Nombre real en la BD en lugar de 'motivo'
       type: DataTypes.STRING(255) // VARCHAR(255) en la BD real
+    },
+    razon_movimiento: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Razón específica: prestamo, perdida, dano, mantenimiento, transferencia, etc.'
+    },
+    detalle_adicional: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Información adicional detallada sobre el movimiento'
+    },
+    usuario_receptor: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      comment: 'Usuario que recibe la herramienta en caso de préstamo'
+    },
+    fecha_devolucion_esperada: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+      comment: 'Fecha esperada de devolución para préstamos'
+    },
+    estado_movimiento: {
+      type: DataTypes.ENUM('activo', 'completado', 'cancelado'),
+      allowNull: false,
+      defaultValue: 'activo',
+      comment: 'Estado del movimiento'
     }
   }, {
     timestamps: false // No tiene createdAt ni updatedAt
   });
 
   MovimientoHerramienta.associate = models => {
-    MovimientoHerramienta.belongsTo(models.Herramientas, { foreignKey: 'id_herramienta' });
-    MovimientoHerramienta.belongsTo(models.Proyectos, { foreignKey: 'id_proyecto' });
-    MovimientoHerramienta.belongsTo(models.Usuarios, { foreignKey: 'id_usuario' });
+    if (models.herramientas) {
+      MovimientoHerramienta.belongsTo(models.herramientas, { foreignKey: 'id_herramienta' });
+    }
+    if (models.proyectos) {
+      MovimientoHerramienta.belongsTo(models.proyectos, { foreignKey: 'id_proyecto' });
+    }
+    if (models.usuarios) {
+      MovimientoHerramienta.belongsTo(models.usuarios, { foreignKey: 'id_usuario' });
+    }
   };
 
   return MovimientoHerramienta;

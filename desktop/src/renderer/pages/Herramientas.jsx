@@ -4,6 +4,7 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { STANDARD_ICONS } from '../constants/icons';
 import HerramientaModal from '../components/modals/HerramientaModal';
+import MovimientoModal from '../components/modals/MovimientoModal';
 import ConfirmationModal from '../components/modals/ConfirmationModal';
 import apiService from '../services/api';
 import {
@@ -17,7 +18,8 @@ import {
   CheckCircleIcon,
   ClockIcon,
   CalendarIcon,
-  BuildingOfficeIcon
+  BuildingOfficeIcon,
+  ArrowsRightLeftIcon
 } from '@heroicons/react/24/outline';
 
 const Herramientas = () => {
@@ -39,6 +41,10 @@ const Herramientas = () => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [herramientaToDelete, setHerramientaToDelete] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Estados para modal de movimientos
+  const [showMovimientoModal, setShowMovimientoModal] = useState(false);
+  const [herramientaParaMovimiento, setHerramientaParaMovimiento] = useState(null);
   
   // Estados para datos de API
   const [categorias, setCategorias] = useState([]);
@@ -194,16 +200,43 @@ const Herramientas = () => {
     setShowConfirmModal(true);
   };
 
+  const handleMovimiento = (herramienta) => {
+    setHerramientaParaMovimiento(herramienta);
+    setShowMovimientoModal(true);
+  };
+
   const confirmDelete = async () => {
     if (!herramientaToDelete) return;
     
     try {
-      const response = await apiService.deleteHerramienta(herramientaToDelete.id_herramienta || herramientaToDelete.id);
+      const herramientaId = herramientaToDelete.id_herramienta || herramientaToDelete.id;
+      const herramientaNombre = herramientaToDelete.nombre;
+      
+      // Primero eliminar el historial de movimientos si existe
+      try {
+        const token = localStorage.getItem('token');
+        await fetch(`http://localhost:4000/api/herramientas/${herramientaId}/movimientos`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+      } catch (movError) {
+        console.warn('Error al eliminar movimientos (continuando):', movError);
+        // Continuamos aunque falle la eliminación de movimientos
+      }
+      
+      // Luego eliminar la herramienta
+      const response = await apiService.deleteHerramienta(herramientaId);
       
       if (response && response.success) {
         // Recargar la lista desde la API
         await loadHerramientas();
-        showSuccess('¡Herramienta eliminada!', `La herramienta "${herramientaToDelete.nombre}" ha sido eliminada exitosamente.`);
+        showSuccess(
+          '¡Herramienta eliminada!', 
+          `La herramienta "${herramientaNombre}" y todo su historial han sido eliminados exitosamente.`
+        );
       } else {
         console.error('Error al eliminar herramienta:', response);
         showError('Error al eliminar', response?.message || 'No se pudo eliminar la herramienta. Intenta nuevamente.');
@@ -258,6 +291,19 @@ const Herramientas = () => {
   const handleCloseModal = () => {
     setShowModal(false);
     setSelectedHerramienta(null);
+  };
+
+  const handleMovimientoSave = async (movimientoData) => {
+    showSuccess('¡Movimiento registrado!', 'El movimiento ha sido registrado exitosamente.');
+    setShowMovimientoModal(false);
+    setHerramientaParaMovimiento(null);
+    // Recargar la lista de herramientas para actualizar el stock
+    loadHerramientas();
+  };
+
+  // Función específica para refrescar datos (usada después de eliminar historial)
+  const handleRefreshData = async () => {
+    await loadHerramientas();
   };
 
   const getEstadoConfig = (estado) => {
@@ -382,7 +428,7 @@ const Herramientas = () => {
         {filteredHerramientas.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-800 text-white">
+              <thead className="bg-gray-900/40 text-white">
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">
                     Herramienta
@@ -424,13 +470,13 @@ const Herramientas = () => {
                       
                       <td className="px-4 py-3">
                         <span className="text-sm text-gray-900 dark:text-white">
-                          {herramienta.Categorias_herramienta?.nombre || 'Sin categoría'}
+                          {herramienta.categorias_herramientum?.nombre || 'Sin categoría'}
                         </span>
                       </td>
                       
                       <td className="px-4 py-3">
                         <span className="text-sm text-gray-900 dark:text-white">
-                          {herramienta.proyectos?.nombre || 'No asignado'}
+                          {herramienta.proyecto?.nombre || 'No asignado'}
                         </span>
                       </td>
                       
@@ -441,7 +487,7 @@ const Herramientas = () => {
                           <span className={`font-medium ${herramienta.stock <= 5 ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>
                             {herramienta.stock || 0}
                             {herramienta.stock <= 5 && (
-                              <span className="text-xs text-red-600 font-medium ml-2">⚠️ Bajo</span>
+                              <span className="text-xs text-red-600 font-medium ml-2">⚠️</span>
                             )}
                           </span>
                         </div>
@@ -467,6 +513,13 @@ const Herramientas = () => {
                             title="Ver detalles"
                           >
                             <STANDARD_ICONS.VIEW className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => handleMovimiento(herramienta)}
+                            className="p-1 text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 transition-colors rounded"
+                            title="Registrar movimiento"
+                          >
+                            <ArrowsRightLeftIcon className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleEdit(herramienta)}
@@ -654,7 +707,17 @@ const Herramientas = () => {
         mode={modalMode}
         herramienta={selectedHerramienta}
         onSave={handleSave}
+        onRefresh={handleRefreshData}
         proyectos={proyectos}
+      />
+
+      {/* Modal de Movimientos */}
+      <MovimientoModal
+        isOpen={showMovimientoModal}
+        onClose={() => setShowMovimientoModal(false)}
+        herramienta={herramientaParaMovimiento}
+        proyectos={proyectos}
+        onSave={handleMovimientoSave}
       />
 
       {/* Modal de Confirmación */}
@@ -663,7 +726,7 @@ const Herramientas = () => {
         onClose={() => setShowConfirmModal(false)}
         onConfirm={confirmDelete}
         title="Eliminar Herramienta"
-        message={herramientaToDelete ? `¿Estás seguro de eliminar la herramienta "${herramientaToDelete.nombre}"? Esta acción no se puede deshacer.` : ''}
+        message={herramientaToDelete ? `¿Eliminar "${herramientaToDelete.nombre}"?\n\nEsta acción eliminará:\n• La herramienta\n• Todo su historial de movimientos\n• Todos los registros asociados\n\nEsta acción no se puede deshacer.` : ''}
         confirmText="Eliminar"
         cancelText="Cancelar"
         type="danger"

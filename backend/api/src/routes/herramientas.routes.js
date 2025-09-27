@@ -33,4 +33,9 @@ router.get('/:id/movimientos', herramientasController.getMovimientosHerramienta)
 
 router.post('/movimientos', herramientasController.createMovimiento);
 
+// Rutas para gestión de historial de movimientos
+router.delete('/:id/movimientos', herramientasController.deleteHistorialMovimientos);
+
+router.put('/movimientos/:id/estado', herramientasController.updateEstadoMovimiento);
+
 module.exports = router;
