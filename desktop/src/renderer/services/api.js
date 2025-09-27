@@ -653,6 +653,45 @@ class ApiService {
     return this.get('/roles/acciones-permiso/all');
   }
 
+  // Métodos para herramientas
+  async getHerramientas(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.get(`/herramientas${queryString ? '?' + queryString : ''}`);
+  }
+
+  async getHerramientaById(id) {
+    return this.get(`/herramientas/${id}`);
+  }
+
+  async createHerramienta(herramientaData) {
+    return this.post('/herramientas', herramientaData);
+  }
+
+  async updateHerramienta(id, herramientaData) {
+    return this.put(`/herramientas/${id}`, herramientaData);
+  }
+
+  async deleteHerramienta(id) {
+    return this.delete(`/herramientas/${id}`);
+  }
+
+  async getCategoriasHerramientas() {
+    return this.get('/herramientas/categorias');
+  }
+
+  async getHerramientasStockBajo() {
+    return this.get('/herramientas/stock-bajo');
+  }
+
+  async getMovimientosHerramienta(id, params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.get(`/herramientas/${id}/movimientos${queryString ? '?' + queryString : ''}`);
+  }
+
+  async createMovimientoHerramienta(movimientoData) {
+    return this.post('/herramientas/movimientos', movimientoData);
+  }
+
   // Utilidades
   /**
    * Verifica si el usuario está autenticado y el token es válido

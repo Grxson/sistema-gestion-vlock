@@ -27,26 +27,41 @@ module.exports = (sequelize) => {
     vida_util_meses: {
       type: DataTypes.INTEGER
     },
-    stock_total: {
+    stock: {
       type: DataTypes.INTEGER,
       defaultValue: 0
     },
-    stock_disponible: {
+    estado: {
       type: DataTypes.INTEGER,
-      defaultValue: 0
+      allowNull: false,
+      defaultValue: 1 // 1=Disponible, 2=Prestado, 3=Mantenimiento, 4=Reparación, 5=Fuera de Servicio
     },
-    stock_minimo: {
+    id_proyecto: {
       type: DataTypes.INTEGER,
-      defaultValue: 0
+      allowNull: true
     },
     ubicacion: {
       type: DataTypes.STRING(100)
+    },
+    image_url: {
+      type: DataTypes.STRING(500),
+      allowNull: true
     }
+  }, {
+    timestamps: false // No tiene createdAt ni updatedAt
   });
 
   Herramienta.associate = models => {
-    Herramienta.belongsTo(models.CategoriaHerramienta, { foreignKey: 'id_categoria_herr' });
-    Herramienta.hasMany(models.MovimientoHerramienta, { foreignKey: 'id_herramienta' });
+    // Usar los nombres tal como se registran en el índice de modelos
+    if (models.Categorias_herramienta) {
+      Herramienta.belongsTo(models.Categorias_herramienta, { foreignKey: 'id_categoria_herr' });
+    }
+    if (models.proyectos) {
+      Herramienta.belongsTo(models.proyectos, { foreignKey: 'id_proyecto' });
+    }
+    if (models.Movimientos_herramienta) {
+      Herramienta.hasMany(models.Movimientos_herramienta, { foreignKey: 'id_herramienta' });
+    }
   };
 
   return Herramienta;

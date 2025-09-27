@@ -30,71 +30,7 @@ const DashboardHerramientas = () => {
   
   const [loading, setLoading] = useState(true);
 
-  // Datos de ejemplo para el dashboard
-  const ejemploData = {
-    resumen: {
-      total_herramientas: 45,
-      disponibles: 32,
-      prestadas: 8,
-      mantenimiento: 3,
-      fuera_servicio: 2
-    },
-    proximosMantenimientos: [
-      {
-        id: 1,
-        herramienta: 'Soldadora Inverter',
-        codigo: 'HER-002',
-        fecha_mantenimiento: '2024-10-15',
-        dias_restantes: 19,
-        tipo: 'preventivo'
-      },
-      {
-        id: 2,
-        herramienta: 'Compresor de Aire',
-        codigo: 'HER-003',
-        fecha_mantenimiento: '2024-11-01',
-        dias_restantes: 36,
-        tipo: 'preventivo'
-      },
-      {
-        id: 3,
-        herramienta: 'Martillo Demoledor',
-        codigo: 'HER-005',
-        fecha_mantenimiento: '2024-10-08',
-        dias_restantes: 12,
-        tipo: 'correctivo'
-      }
-    ],
-    herramientasPrestadas: [
-      {
-        id: 1,
-        herramienta: 'Taladro Percutor',
-        codigo: 'HER-001',
-        empleado: 'Juan Pérez',
-        fecha_prestamo: '2024-09-20',
-        dias_prestado: 6,
-        proyecto: 'Obra Central Park'
-      },
-      {
-        id: 2,
-        herramienta: 'Nivel Láser',
-        codigo: 'HER-004',
-        empleado: 'María González',
-        fecha_prestamo: '2024-09-18',
-        dias_prestado: 8,
-        proyecto: 'Plaza Comercial Norte'
-      }
-    ],
-    valorInventario: 125780.50,
-    estadisticasUso: {
-      utilizacion_promedio: 78,
-      herramientas_mas_usadas: [
-        { nombre: 'Taladro Percutor', usos: 24 },
-        { nombre: 'Soldadora Inverter', usos: 18 },
-        { nombre: 'Compresor', usos: 15 }
-      ]
-    }
-  };
+
 
   useEffect(() => {
     const loadDashboardData = async () => {
@@ -162,7 +98,7 @@ const DashboardHerramientas = () => {
       </div>
 
       {/* Tarjetas de resumen */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
         {/* Total Herramientas */}
         <div className="bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20 border border-orange-200 dark:border-orange-700 rounded-xl p-6 shadow-lg">
           <div className="flex items-center justify-between">
@@ -229,6 +165,40 @@ const DashboardHerramientas = () => {
                 {resumen.mantenimiento}
               </p>
               <p className="text-sm font-medium text-blue-700 dark:text-blue-300">En Mantenimiento</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Stock Bajo */}
+        <div className="bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/20 dark:to-red-800/20 border border-red-200 dark:border-red-700 rounded-xl p-6 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center mb-2">
+                <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center shadow-lg">
+                  <ExclamationTriangleIcon className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                {resumen.stock_bajo}
+              </p>
+              <p className="text-sm font-medium text-red-700 dark:text-red-300">Stock Bajo</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Stock Total */}
+        <div className="bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border border-purple-200 dark:border-purple-700 rounded-xl p-6 shadow-lg">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center mb-2">
+                <div className="w-10 h-10 bg-purple-500 rounded-lg flex items-center justify-center shadow-lg">
+                  <ChartBarIcon className="h-5 w-5 text-white" />
+                </div>
+              </div>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mb-1">
+                {resumen.total_stock}
+              </p>
+              <p className="text-sm font-medium text-purple-700 dark:text-purple-300">Stock Total</p>
             </div>
           </div>
         </div>

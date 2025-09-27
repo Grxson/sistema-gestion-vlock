@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
+const path = require('path');
 
 const routes = require('./routes');
 
@@ -10,6 +11,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(morgan('dev'));
+
+// Servir archivos estáticos (imágenes)
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Ruta de salud para Railway
 app.get('/', (req, res) => {

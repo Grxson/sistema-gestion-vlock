@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Herramientas API</title>
+</head>
+<body>
+    <h1>Test de API de Herramientas</h1>
+    <button onclick="testAPI()">Probar API</button>
+    <div id="result"></div>
+
+    <script>
+        async function testAPI() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = 'Cargando...';
+            
+            try {
+                // Primero intentamos hacer login
+                const loginResponse = await fetch('http://localhost:4000/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@vlock.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const loginResult = await loginResponse.json();
+                console.log('Login result:', loginResult);
+                
+                if (loginResult.success) {
+                    const token = loginResult.data.token;
+                    
+                    // Ahora consultamos las herramientas
+                    const herramientasResponse = await fetch('http://localhost:4000/api/herramientas', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const herramientasResult = await herramientasResponse.json();
+                    console.log('Herramientas result:', herramientasResult);
+                    
+                    resultDiv.innerHTML = `
+                        <h2>Login: ${loginResult.success ? 'OK' : 'ERROR'}</h2>
+                        <h2>Herramientas: ${herramientasResult.success ? 'OK' : 'ERROR'}</h2>
+                        <p>Total herramientas: ${herramientasResult.data ? herramientasResult.data.length : 0}</p>
+                        <pre>${JSON.stringify(herramientasResult, null, 2)}</pre>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<h2>Error en login: ${loginResult.message}</h2>`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = `<h2>Error: ${error.message}</h2>`;
+            }
+        }
+    </script>
+</body>
+</html>

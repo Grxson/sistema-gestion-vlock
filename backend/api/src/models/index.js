@@ -15,9 +15,13 @@ fs.readdirSync(__dirname)
 
         // Registrar el modelo usando el nombre exacto que tiene en su definición
         const modelName = model.name.charAt(0).toUpperCase() + model.name.slice(1);
+        const originalName = model.name;
 
-        // Registrar el modelo bajo un nombre estándar
+        // Registrar el modelo bajo ambos nombres para compatibilidad
         models[modelName] = model;
+        models[originalName] = model;
+
+        console.log(`Modelo registrado: ${modelName} y ${originalName}`);
 
     });
 

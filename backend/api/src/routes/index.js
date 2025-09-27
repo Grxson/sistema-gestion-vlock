@@ -14,6 +14,7 @@ const reportesRoutes = require('./reportes.routes');
 const proyectosRoutes = require('./proyectos.routes');
 const suministrosRoutes = require('./suministros.routes');
 const proveedoresRoutes = require('./proveedores.routes');
+const herramientasRoutes = require('./herramientas.routes');
 const healthRoutes = require('./health.routes');
 
 // Rutas del sistema de presupuestos
@@ -38,6 +39,7 @@ router.use('/reportes', reportesRoutes);
 router.use('/proyectos', proyectosRoutes);
 router.use('/suministros', suministrosRoutes);
 router.use('/proveedores', proveedoresRoutes);
+router.use('/herramientas', herramientasRoutes);
 router.use('/health', healthRoutes);
 
 // Registrar rutas del sistema de presupuestos

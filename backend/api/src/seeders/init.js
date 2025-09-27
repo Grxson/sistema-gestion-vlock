@@ -3,6 +3,9 @@ const { Op } = require('sequelize');
 const bcrypt = require('bcrypt');
 const models = require('../models');
 const initNominaData = require('./nomina_seed');
+const { initCategoriasHerramientas } = require('./categorias_herramientas_seed');
+const { initHerramientas } = require('./herramientas_seed');
+const { initMovimientosHerramientas } = require('./movimientos_herramientas_seed');
 
 // Obtener referencias a los modelos usando los nombres actualizados
 const Usuario = models.Usuarios;
@@ -328,6 +331,44 @@ const initDB = async () => {
                 modulo: 'roles'
             },
             
+            // Herramientas
+            {
+                nombre: 'Ver herramientas',
+                codigo: 'herramientas.ver',
+                descripcion: 'Ver inventario de herramientas',
+                modulo: 'herramientas'
+            },
+            {
+                nombre: 'Crear herramienta',
+                codigo: 'herramientas.crear',
+                descripcion: 'Agregar nuevas herramientas al inventario',
+                modulo: 'herramientas'
+            },
+            {
+                nombre: 'Editar herramienta',
+                codigo: 'herramientas.editar',
+                descripcion: 'Modificar información de herramientas',
+                modulo: 'herramientas'
+            },
+            {
+                nombre: 'Eliminar herramienta',
+                codigo: 'herramientas.eliminar',
+                descripcion: 'Eliminar herramientas del inventario',
+                modulo: 'herramientas'
+            },
+            {
+                nombre: 'Gestionar movimientos herramientas',
+                codigo: 'herramientas.movimientos',
+                descripcion: 'Registrar entradas, salidas y bajas de herramientas',
+                modulo: 'herramientas'
+            },
+            {
+                nombre: 'Ver reportes herramientas',
+                codigo: 'herramientas.reportes',
+                descripcion: 'Generar reportes de inventario de herramientas',
+                modulo: 'herramientas'
+            },
+
             // Configuración
             {
                 nombre: 'Ver configuración',
@@ -379,7 +420,9 @@ const initDB = async () => {
                         'contratos.ver',
                         'oficios.ver',
                         'auditoria.ver',
-                        'reportes.ver'
+                        'reportes.ver',
+                        'herramientas.ver',
+                        'herramientas.reportes'
                         // NO incluimos usuarios, roles ni configuración para usuarios normales
                         // NO incluimos permisos de crear, editar o eliminar
                     ]
@@ -424,6 +467,11 @@ const initDB = async () => {
         
         // Inicializar proyectos básicos
         await initProyectosBasicos();
+        
+        // Inicializar datos de herramientas
+        await initCategoriasHerramientas(models);
+        await initHerramientas(models);
+        await initMovimientosHerramientas(models);
         
         console.log('🚀 Inicialización completada');
 

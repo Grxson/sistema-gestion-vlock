@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { FaSave, FaTimes, FaTools, FaHistory, FaExchangeAlt, FaExclamationTriangle } from "react-icons/fa";
+import { FaSave, FaTimes, FaTools, FaHistory, FaExchangeAlt } from "react-icons/fa";
 
 const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyectos = [] }) => {
   const [formData, setFormData] = useState({
     // Campos que corresponden a la base de datos
     id_categoria_herr: '',
-    id_proyecto: '',
     nombre: '',
     marca: '',
     serial: '',
     costo: '',
     vida_util_meses: '',
-    stock: 0,
-    estado: 1, // 1 = Disponible por defecto
+    stock_total: 0,
+    stock_disponible: 0,
+    stock_minimo: 0,
     ubicacion: '',
     image_url: ''
   });
@@ -25,13 +25,15 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
   const [loadingMovimientos, setLoadingMovimientos] = useState(false);
   const [categorias, setCategorias] = useState([]);
 
-  // Estados disponibles
-  const estados = [
-    { value: 1, label: 'Disponible' },
-    { value: 2, label: 'Prestado' },
-    { value: 3, label: 'Mantenimiento' },
-    { value: 4, label: 'Reparación' },
-    { value: 5, label: 'Fuera de Servicio' }
+  // Ubicaciones disponibles
+  const ubicaciones = [
+    'Almacén Principal',
+    'Almacén Secundario',
+    'Taller de Mantenimiento',
+    'Taller de Reparación',
+    'Obra Central Park',
+    'Obra Plaza Norte',
+    'Oficinas Administrativas'
   ];
 
   // Función para formatear números
@@ -86,14 +88,14 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
       if (herramienta && (mode === 'edit' || mode === 'view' || mode === 'duplicate')) {
         setFormData({
           id_categoria_herr: herramienta.id_categoria_herr || '',
-          id_proyecto: herramienta.id_proyecto || '',
           nombre: herramienta.nombre || '',
           marca: herramienta.marca || '',
           serial: herramienta.serial || '',
           costo: herramienta.costo || '',
           vida_util_meses: herramienta.vida_util_meses || '',
-          stock: herramienta.stock || 0,
-          estado: herramienta.estado || 1,
+          stock_total: herramienta.stock_total || 0,
+          stock_disponible: herramienta.stock_disponible || 0,
+          stock_minimo: herramienta.stock_minimo || 0,
           ubicacion: herramienta.ubicacion || '',
           image_url: herramienta.image_url || ''
         });
@@ -106,14 +108,14 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
         // Reset form for create mode
         setFormData({
           id_categoria_herr: '',
-          id_proyecto: '',
           nombre: '',
           marca: '',
           serial: '',
           costo: '',
           vida_util_meses: '',
-          stock: 0,
-          estado: 1,
+          stock_total: 0,
+          stock_disponible: 0,
+          stock_minimo: 0,
           ubicacion: '',
           image_url: ''
         });
@@ -154,14 +156,14 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
     if (formData.vida_util_meses && (isNaN(parseInt(formData.vida_util_meses)) || parseInt(formData.vida_util_meses) < 0)) {
       newErrors.vida_util_meses = 'La vida útil debe ser un número positivo';
     }
-    if (formData.stock && (isNaN(parseInt(formData.stock)) || parseInt(formData.stock) < 0)) {
-      newErrors.stock = 'El stock debe ser un número positivo';
+    if (formData.stock_total && (isNaN(parseInt(formData.stock_total)) || parseInt(formData.stock_total) < 0)) {
+      newErrors.stock_total = 'El stock total debe ser un número positivo';
     }
-    if (formData.estado && (isNaN(parseInt(formData.estado)) || parseInt(formData.estado) < 1 || parseInt(formData.estado) > 5)) {
-      newErrors.estado = 'El estado debe ser un valor entre 1 y 5';
+    if (formData.stock_disponible && (isNaN(parseInt(formData.stock_disponible)) || parseInt(formData.stock_disponible) < 0)) {
+      newErrors.stock_disponible = 'El stock disponible debe ser un número positivo';
     }
-    if (formData.id_proyecto && isNaN(parseInt(formData.id_proyecto))) {
-      newErrors.id_proyecto = 'El proyecto seleccionado no es válido';
+    if (formData.stock_minimo && (isNaN(parseInt(formData.stock_minimo)) || parseInt(formData.stock_minimo) < 0)) {
+      newErrors.stock_minimo = 'El stock mínimo debe ser un número positivo';
     }
     
     setErrors(newErrors);
@@ -180,11 +182,11 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
       const processedData = {
         ...formData,
         id_categoria_herr: parseInt(formData.id_categoria_herr),
-        id_proyecto: formData.id_proyecto ? parseInt(formData.id_proyecto) : null,
         costo: formData.costo ? parseFloat(formData.costo) : null,
         vida_util_meses: formData.vida_util_meses ? parseInt(formData.vida_util_meses) : null,
-        stock: parseInt(formData.stock) || 0,
-        estado: parseInt(formData.estado) || 1
+        stock_total: parseInt(formData.stock_total) || 0,
+        stock_disponible: parseInt(formData.stock_disponible) || 0,
+        stock_minimo: parseInt(formData.stock_minimo) || 0
       };
       
       // Función para manejar la subida de imagen después de guardar
@@ -309,37 +311,41 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
     <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 overflow-y-auto h-screen w-screen z-50 flex items-start justify-center">
       <div className="relative top-10 mx-auto p-6 border border-gray-300 dark:border-gray-700 max-w-6xl shadow-lg rounded-md bg-white dark:bg-dark-100 w-full md:w-auto">
         <div className="mt-3">
-          <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-6">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+            <FaTools className="text-red-600" />
             {mode === 'create' && 'Nueva Herramienta'}
             {mode === 'edit' && 'Editar Herramienta'}
             {mode === 'view' && 'Detalles de la Herramienta'}
             {mode === 'duplicate' && 'Duplicar Herramienta'}
-          </h3>
+          </h2>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
               {/* Columna principal - Información */}
               <div className="xl:col-span-2 space-y-6">
                 {/* Información básica */}
-                <div>
-                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Información Básica</h4>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Información Básica</h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* Nombre */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Nombre de la Herramienta *
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Nombre *
                       </label>
                       <input
                         type="text"
-                        required
                         value={formData.nombre}
                         onChange={(e) => handleInputChange('nombre', e.target.value)}
                         readOnly={isReadOnly}
                         className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                        } ${
+                          errors.nombre ? 'border-red-500 focus:ring-red-500' : ''
                         }`}
-                        placeholder="Ej: Taladro Percutor"
+                        placeholder="Nombre de la herramienta"
                       />
                       {errors.nombre && (
                         <p className="mt-1 text-sm text-red-600">{errors.nombre}</p>
@@ -348,16 +354,19 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
 
                     {/* Categoría */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
                         Categoría *
                       </label>
                       <select
-                        required
                         value={formData.id_categoria_herr}
                         onChange={(e) => handleInputChange('id_categoria_herr', e.target.value)}
                         disabled={isReadOnly}
                         className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                        } ${
+                          errors.id_categoria_herr ? 'border-red-500 focus:ring-red-500' : ''
                         }`}
                       >
                         <option value="">Seleccionar categoría</option>
@@ -372,7 +381,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
 
                     {/* Marca */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
                         Marca
                       </label>
                       <input
@@ -383,13 +394,15 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                         className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
-                        placeholder="Ej: DeWalt"
+                        placeholder="Marca de la herramienta"
                       />
                     </div>
 
                     {/* Serial */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
                         Número de Serie
                       </label>
                       <input
@@ -397,29 +410,50 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                         value={formData.serial}
                         onChange={(e) => handleInputChange('serial', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                        placeholder="Ej: DW001-2024"
+                        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md ${
+                          isReadOnly 
+                            ? 'bg-gray-50 dark:bg-gray-700 cursor-default'
+                            : 'bg-white dark:bg-dark-100'
+                        } text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500`}
+                        placeholder="Número de serie"
                       />
                     </div>
 
-
+                    {/* Ubicación */}
+                    <div className="lg:col-span-2">
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Ubicación
+                      </label>
+                      <select
+                        value={formData.ubicacion}
+                        onChange={(e) => handleInputChange('ubicacion', e.target.value)}
+                        disabled={isReadOnly}
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <option value="">Seleccionar ubicación</option>
+                        {ubicaciones.map(ubicacion => (
+                          <option key={ubicacion} value={ubicacion}>{ubicacion}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
 
                 {/* Información Financiera */}
-                <div>
-                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Información Financiera</h4>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Información Financiera</h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     {/* Costo */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Costo de Adquisición
-                        {isReadOnly && formData.costo && (
-                          <span className="ml-2 text-green-600 font-semibold">${formatNumber(formData.costo)}</span>
-                        )}
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Costo <span className="text-sm text-gray-500">{isReadOnly && formData.costo && `($${formatNumber(formData.costo)})`}</span>
                       </label>
                       <input
                         type="number"
@@ -430,6 +464,8 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                         readOnly={isReadOnly}
                         className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                        } ${
+                          errors.costo ? 'border-red-500 focus:ring-red-500' : ''
                         }`}
                         placeholder="0.00"
                       />
@@ -440,11 +476,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
 
                     {/* Vida Útil */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Vida Útil (meses)
-                        {isReadOnly && formData.vida_util_meses && (
-                          <span className="ml-2 text-blue-600 font-semibold">{formatNumber(formData.vida_util_meses)} meses</span>
-                        )}
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Vida Útil (meses) <span className="text-sm text-gray-500">{isReadOnly && formData.vida_util_meses && `(${formatNumber(formData.vida_util_meses)} meses)`}</span>
                       </label>
                       <input
                         type="number"
@@ -452,8 +487,12 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                         value={formData.vida_util_meses}
                         onChange={(e) => handleInputChange('vida_util_meses', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md ${
+                          isReadOnly 
+                            ? 'bg-gray-50 dark:bg-gray-700 cursor-default'
+                            : 'bg-white dark:bg-dark-100'
+                        } text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                          errors.vida_util_meses ? 'border-red-500' : ''
                         }`}
                         placeholder="24"
                       />
@@ -465,108 +504,88 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                 </div>
 
                 {/* Control de Stock */}
-                <div>
-                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Control de Inventario</h4>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Control de Stock</h3>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                    {/* Proyecto */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {/* Stock Total */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Proyecto
-                      </label>
-                      <select
-                        value={formData.id_proyecto || ''}
-                        onChange={(e) => handleInputChange('id_proyecto', e.target.value)}
-                        disabled={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        <option value="">Seleccionar proyecto...</option>
-                        {proyectos?.map((proyecto) => (
-                          <option key={proyecto.id} value={proyecto.id}>
-                            {proyecto.nombre}
-                          </option>
-                        ))}
-                      </select>
-                      {errors.id_proyecto && (
-                        <p className="mt-1 text-sm text-red-600">{errors.id_proyecto}</p>
-                      )}
-                    </div>
-
-                    {/* Estado */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Estado
-                      </label>
-                      <select
-                        value={formData.estado || 1}
-                        onChange={(e) => handleInputChange('estado', parseInt(e.target.value))}
-                        disabled={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        <option value={1}>Disponible</option>
-                        <option value={2}>En uso</option>
-                        <option value={3}>En mantenimiento</option>
-                        <option value={4}>Averiado</option>
-                        <option value={5}>Fuera de servicio</option>
-                      </select>
-                      {errors.estado && (
-                        <p className="mt-1 text-sm text-red-600">{errors.estado}</p>
-                      )}
-                    </div>
-
-                    {/* Stock */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-2">
-                        Stock
-                        {formData.stock && formData.stock <= 5 && (
-                          <div className="relative group">
-                            <FaExclamationTriangle className="text-orange-500 cursor-help" />
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50">
-                              Stock bajo (≤ 5 unidades)
-                            </div>
-                          </div>
-                        )}
-                        {isReadOnly && (
-                          <span className="ml-2 text-gray-600 font-semibold">{formatNumber(formData.stock)} unidades</span>
-                        )}
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Stock Total <span className="text-sm text-gray-500">{isReadOnly && `(${formatNumber(formData.stock_total)} unidades)`}</span>
                       </label>
                       <input
                         type="number"
                         min="0"
-                        value={formData.stock || ''}
-                        onChange={(e) => handleInputChange('stock', e.target.value)}
+                        value={formData.stock_total}
+                        onChange={(e) => handleInputChange('stock_total', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        } ${formData.stock && formData.stock <= 5 ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : ''}`}
+                        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md ${
+                          isReadOnly 
+                            ? 'bg-gray-50 dark:bg-gray-700 cursor-default'
+                            : 'bg-white dark:bg-dark-100'
+                        } text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                          errors.stock_total ? 'border-red-500' : ''
+                        }`}
                         placeholder="0"
                       />
-                      {errors.stock && (
-                        <p className="mt-1 text-sm text-red-600">{errors.stock}</p>
+                      {errors.stock_total && (
+                        <p className="mt-1 text-sm text-red-600">{errors.stock_total}</p>
                       )}
                     </div>
 
-                    {/* Ubicación */}
+                    {/* Stock Disponible */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Ubicación
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Stock Disponible <span className="text-sm text-gray-500">{isReadOnly && `(${formatNumber(formData.stock_disponible)} unidades)`}</span>
                       </label>
                       <input
-                        type="text"
-                        value={formData.ubicacion || ''}
-                        onChange={(e) => handleInputChange('ubicacion', e.target.value)}
+                        type="number"
+                        min="0"
+                        value={formData.stock_disponible}
+                        onChange={(e) => handleInputChange('stock_disponible', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md ${
+                          isReadOnly 
+                            ? 'bg-gray-50 dark:bg-gray-700 cursor-default'
+                            : 'bg-white dark:bg-dark-100'
+                        } text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                          errors.stock_disponible ? 'border-red-500' : ''
                         }`}
-                        placeholder="Ej: Almacén A - Rack 1"
+                        placeholder="0"
                       />
-                      {errors.ubicacion && (
-                        <p className="mt-1 text-sm text-red-600">{errors.ubicacion}</p>
+                      {errors.stock_disponible && (
+                        <p className="mt-1 text-sm text-red-600">{errors.stock_disponible}</p>
+                      )}
+                    </div>
+
+                    {/* Stock Mínimo */}
+                    <div>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        isReadOnly ? 'text-gray-900 dark:text-white' : 'text-gray-700 dark:text-gray-300'
+                      }`}>
+                        Stock Mínimo <span className="text-sm text-gray-500">{isReadOnly && `(${formatNumber(formData.stock_minimo)} unidades)`}</span>
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={formData.stock_minimo}
+                        onChange={(e) => handleInputChange('stock_minimo', e.target.value)}
+                        readOnly={isReadOnly}
+                        className={`w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md ${
+                          isReadOnly 
+                            ? 'bg-gray-50 dark:bg-gray-700 cursor-default'
+                            : 'bg-white dark:bg-dark-100'
+                        } text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 ${
+                          errors.stock_minimo ? 'border-red-500' : ''
+                        }`}
+                        placeholder="1"
+                      />
+                      {errors.stock_minimo && (
+                        <p className="mt-1 text-sm text-red-600">{errors.stock_minimo}</p>
                       )}
                     </div>
                   </div>
@@ -574,27 +593,27 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
 
                 {/* Historial de Movimientos */}
                 {mode === 'view' && herramienta && (
-                  <div>
-                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                       <FaHistory className="text-blue-600" />
                       Historial de Movimientos
-                    </h4>
+                    </h3>
                     
                     {loadingMovimientos ? (
                       <div className="flex items-center justify-center py-8">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
                       </div>
                     ) : movimientos.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                      <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                         <FaExchangeAlt className="mx-auto h-12 w-12 mb-2 opacity-50" />
                         <p>No hay movimientos registrados para esta herramienta</p>
                       </div>
                     ) : (
-                      <div className="space-y-3 max-h-64 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                      <div className="space-y-3 max-h-64 overflow-y-auto">
                         {movimientos.map((movimiento, index) => (
                           <div 
                             key={movimiento.id_movimiento || index}
-                            className="bg-white dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600"
+                            className="bg-gray-50 dark:bg-gray-700 p-3 rounded-lg border border-gray-200 dark:border-gray-600"
                           >
                             <div className="flex justify-between items-start">
                               <div className="flex-1">
@@ -637,11 +656,11 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
 
               {/* Columna lateral - Imagen */}
               <div className="xl:col-span-1">
-                <div className="sticky top-4">
-                  <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Imagen de la Herramienta</h4>
+                <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 sticky top-4">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Imagen</h3>
                   
                   {/* Preview de imagen */}
-                  <div className="w-full h-64 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-800 mb-4">
+                  <div className="w-full h-64 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-gray-700 mb-4">
                     {imagePreview || formData.image_url ? (
                       <img 
                         src={imagePreview || `http://localhost:4000${formData.image_url}`}
@@ -668,10 +687,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
                                    file:mr-4 file:py-2 file:px-4
                                    file:rounded-md file:border-0
                                    file:text-sm file:font-medium
-                                   file:bg-primary-50 file:text-primary-700
-                                   hover:file:bg-primary-100
-                                   dark:file:bg-primary-900 dark:file:text-primary-300
-                                   dark:hover:file:bg-primary-800"
+                                   file:bg-red-50 file:text-red-700
+                                   hover:file:bg-red-100
+                                   dark:file:bg-red-900 dark:file:text-red-300
+                                   dark:hover:file:bg-red-800"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           PNG, JPG, GIF, WebP hasta 5MB
@@ -711,20 +730,22 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, proyecto
             </div>
 
             {/* Botones */}
-            <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-gray-600 dark:text-white dark:border-gray-500 dark:hover:bg-gray-700"
+                className="px-4 py-2 text-gray-900 dark:text-white bg-white dark:bg-dark-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-300 transition-colors duration-200 flex items-center gap-2"
               >
+                <FaTimes className="w-4 h-4" />
                 {isReadOnly ? 'Cerrar' : 'Cancelar'}
               </button>
               
               {!isReadOnly && (
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-primary-600 dark:hover:bg-primary-700"
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors duration-200 flex items-center gap-2 font-medium shadow-md"
                 >
+                  <FaSave className="w-4 h-4" />
                   {mode === 'create' && 'Crear Herramienta'}
                   {mode === 'edit' && 'Guardar Cambios'}
                   {mode === 'duplicate' && 'Duplicar Herramienta'}

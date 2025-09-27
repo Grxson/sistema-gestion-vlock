@@ -8,17 +8,22 @@ module.exports = (sequelize) => {
       autoIncrement: true
     },
     nombre: {
-      type: DataTypes.STRING(50),
+      type: DataTypes.STRING(80), // Según la BD real
       allowNull: false,
       unique: true
     },
     descripcion: {
-      type: DataTypes.TEXT
+      type: DataTypes.STRING(255) // Según la BD real
     }
+  }, {
+    timestamps: false // No tiene createdAt ni updatedAt
   });
 
   CategoriaHerramienta.associate = models => {
-    CategoriaHerramienta.hasMany(models.Herramienta, { foreignKey: 'id_categoria_herr' });
+    // Usar los nombres tal como se registran en el índice de modelos
+    if (models.herramientas) {
+      CategoriaHerramienta.hasMany(models.herramientas, { foreignKey: 'id_categoria_herr' });
+    }
   };
 
   return CategoriaHerramienta;

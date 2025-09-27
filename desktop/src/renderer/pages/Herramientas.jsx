@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { useToast } from '../contexts/ToastContext';
+import { STANDARD_ICONS } from '../constants/icons';
 import HerramientaModal from '../components/modals/HerramientaModal';
 import ConfirmationModal from '../components/modals/ConfirmationModal';
+import apiService from '../services/api';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
   FunnelIcon,
-  EyeIcon,
-  PencilIcon,
-  TrashIcon,
-  DocumentDuplicateIcon,
   WrenchScrewdriverIcon,
   UserGroupIcon,
   CogIcon,
@@ -24,6 +23,7 @@ import {
 const Herramientas = () => {
   const { user } = useAuth();
   const { isDarkMode } = useTheme();
+  const { showSuccess, showError, showWarning, showInfo } = useToast();
   
   // Estados principales
   const [herramientas, setHerramientas] = useState([]);
@@ -31,170 +31,144 @@ const Herramientas = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState('');
   const [selectedEstado, setSelectedEstado] = useState('');
+  const [selectedProyecto, setSelectedProyecto] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [modalMode, setModalMode] = useState('create');
   const [selectedHerramienta, setSelectedHerramienta] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [herramientaToDelete, setHerramientaToDelete] = useState(null);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
-  // Estados para filtros
-  const [filters, setFilters] = useState({
-    categoria: '',
-    estado: '',
-    ubicacion: '',
-    disponible: ''
-  });
+  // Estados para datos de API
+  const [categorias, setCategorias] = useState([]);
+  const [proyectos, setProyectos] = useState([]);
+  const [paginationData, setPaginationData] = useState({ total: 0, totalPages: 1, currentPage: 1 });
 
-  const itemsPerPage = 10;
+  // Estados de herramientas (números del backend)
+  const estadosHerramientas = {
+    1: { label: 'Disponible', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+    2: { label: 'Prestado', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' },
+    3: { label: 'Mantenimiento', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
+    4: { label: 'Reparación', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
+    5: { label: 'Fuera de Servicio', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' }
+  };
 
-  // Categorías de herramientas
-  const categorias = [
-    'Herramientas Manuales',
-    'Herramientas Eléctricas',
-    'Maquinaria Pesada',
-    'Equipos de Medición',
-    'Equipos de Seguridad',
-    'Herramientas de Corte',
-    'Herramientas de Soldadura',
-    'Equipos Hidráulicos'
-  ];
 
-  // Estados de herramientas
-  const estados = [
-    { value: 'disponible', label: 'Disponible', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
-    { value: 'prestado', label: 'Prestado', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' },
-    { value: 'mantenimiento', label: 'Mantenimiento', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
-    { value: 'reparacion', label: 'Reparación', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
-    { value: 'fuera_servicio', label: 'Fuera de Servicio', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' }
-  ];
 
-  // Datos de ejemplo
-  const herramientasEjemplo = [
-    {
-      id: 1,
-      codigo: 'HER-001',
-      nombre: 'Taladro Percutor',
-      marca: 'Bosch',
-      modelo: 'GSB 13 RE',
-      categoria: 'Herramientas Eléctricas',
-      estado: 'disponible',
-      ubicacion: 'Almacén Principal',
-      numero_serie: 'BS001234567',
-      fecha_compra: '2024-01-15',
-      valor_compra: 2500.00,
-      empleado_asignado: null,
-      fecha_ultimo_mantenimiento: '2024-08-01',
-      proximo_mantenimiento: '2025-02-01',
-      observaciones: 'En perfecto estado'
-    },
-    {
-      id: 2,
-      codigo: 'HER-002',
-      nombre: 'Soldadora Inverter',
-      marca: 'Lincoln Electric',
-      modelo: 'Invertec V160-T',
-      categoria: 'Herramientas de Soldadura',
-      estado: 'prestado',
-      ubicacion: 'Obra Central Park',
-      numero_serie: 'LE987654321',
-      fecha_compra: '2023-11-20',
-      valor_compra: 8500.00,
-      empleado_asignado: 'Juan Pérez',
-      fecha_ultimo_mantenimiento: '2024-06-15',
-      proximo_mantenimiento: '2024-12-15',
-      observaciones: 'Prestado para proyecto especial'
-    },
-    {
-      id: 3,
-      codigo: 'HER-003',
-      nombre: 'Compresor de Aire',
-      marca: 'DeWalt',
-      modelo: 'DCC020IB',
-      categoria: 'Maquinaria Pesada',
-      estado: 'mantenimiento',
-      ubicacion: 'Taller de Mantenimiento',
-      numero_serie: 'DW112233445',
-      fecha_compra: '2023-08-10',
-      valor_compra: 4200.00,
-      empleado_asignado: null,
-      fecha_ultimo_mantenimiento: '2024-09-20',
-      proximo_mantenimiento: '2024-12-20',
-      observaciones: 'Mantenimiento preventivo programado'
-    },
-    {
-      id: 4,
-      codigo: 'HER-004',
-      nombre: 'Nivel Láser',
-      marca: 'Bosch',
-      modelo: 'GLL 3-80 P',
-      categoria: 'Equipos de Medición',
-      estado: 'disponible',
-      ubicacion: 'Almacén Principal',
-      numero_serie: 'BS445566778',
-      fecha_compra: '2024-03-05',
-      valor_compra: 3200.00,
-      empleado_asignado: null,
-      fecha_ultimo_mantenimiento: null,
-      proximo_mantenimiento: '2025-03-05',
-      observaciones: 'Herramienta nueva, sin uso intensivo'
-    },
-    {
-      id: 5,
-      codigo: 'HER-005',
-      nombre: 'Martillo Demoledor',
-      marca: 'Makita',
-      modelo: 'HM1812',
-      categoria: 'Herramientas Eléctricas',
-      estado: 'reparacion',
-      ubicacion: 'Taller de Reparación',
-      numero_serie: 'MK778899001',
-      fecha_compra: '2022-12-18',
-      valor_compra: 6800.00,
-      empleado_asignado: null,
-      fecha_ultimo_mantenimiento: '2024-07-10',
-      proximo_mantenimiento: '2025-01-10',
-      observaciones: 'En reparación por daño en motor'
+
+
+  // Función para cargar categorías
+  const loadCategorias = async () => {
+    try {
+      console.log('Cargando categorías usando apiService...');
+      const result = await apiService.getCategoriasHerramientas();
+      console.log('Categorías cargadas:', result);
+      if (result && result.success) {
+        setCategorias(result.data);
+      }
+    } catch (error) {
+      console.error('Error al cargar categorías:', error);
     }
-  ];
+  };
+
+  // Función para cargar proyectos
+  const loadProyectos = async () => {
+    try {
+      console.log('Cargando proyectos usando apiService...');
+      const result = await apiService.getProyectos();
+      console.log('Proyectos cargados:', result);
+      if (result && result.success) {
+        setProyectos(result.data || []);
+      }
+    } catch (error) {
+      console.error('Error al cargar proyectos:', error);
+    }
+  };
+
+
 
   // Cargar herramientas
-  const loadHerramientas = async () => {
+  const loadHerramientas = async (page = currentPage, limit = itemsPerPage, filters = {}) => {
     setLoading(true);
     try {
-      // Simular llamada a API
-      setTimeout(() => {
-        setHerramientas(herramientasEjemplo);
-        setLoading(false);
-      }, 1000);
+      const params = { page, limit };
+      if (searchTerm) params.search = searchTerm;
+      if (selectedCategoria) params.categoria = selectedCategoria;
+      if (selectedEstado) params.estado = selectedEstado;
+      if (selectedProyecto) params.proyecto = selectedProyecto;
+      if (selectedEstado) params.estado = selectedEstado;
+      if (selectedProyecto) params.proyecto = selectedProyecto;
+      
+      console.log('Cargando herramientas usando apiService...', params);
+      const result = await apiService.getHerramientas(params);
+      console.log('Respuesta completa del API:', result);
+      
+      if (result && result.success) {
+        console.log('Herramientas cargadas:', result.data);
+        setHerramientas(result.data || []);
+        // Guardar datos de paginación del API
+        if (result.pagination) {
+          setPaginationData({
+            total: result.pagination.total,
+            totalPages: result.pagination.totalPages,
+            currentPage: result.pagination.currentPage
+          });
+        }
+      } else {
+        console.error('Error en la respuesta de la API:', result);
+        setHerramientas([]);
+      }
     } catch (error) {
       console.error('Error al cargar herramientas:', error);
+      setHerramientas([]);
+    } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
     loadHerramientas();
+    loadCategorias();
+    loadProyectos();
   }, []);
 
-  // Filtrar herramientas
-  const filteredHerramientas = herramientas.filter(herramienta => {
-    const matchesSearch = !searchTerm || 
-      herramienta.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      herramienta.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      herramienta.marca.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      herramienta.modelo.toLowerCase().includes(searchTerm.toLowerCase());
+    // Reload data when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+    loadHerramientas(1, itemsPerPage);
+  }, [searchTerm, selectedCategoria, selectedEstado, selectedProyecto]);
 
-    const matchesCategoria = !selectedCategoria || herramienta.categoria === selectedCategoria;
-    const matchesEstado = !selectedEstado || herramienta.estado === selectedEstado;
+  // Con paginación del servidor, no necesitamos filtrar en el cliente
+  const filteredHerramientas = herramientas;
 
-    return matchesSearch && matchesCategoria && matchesEstado;
-  });
+  // Paginación usando datos del API
+  const totalPages = paginationData.totalPages;
+  const paginatedHerramientas = herramientas; // El API ya devuelve los datos paginados
 
-  // Paginación
-  const totalPages = Math.ceil(filteredHerramientas.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedHerramientas = filteredHerramientas.slice(startIndex, startIndex + itemsPerPage);
+  // Funciones para manejar paginación avanzada
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setCurrentPage(newPage);
+      loadHerramientas(newPage, itemsPerPage);
+    }
+  };
+
+  const handleItemsPerPageChange = (newItemsPerPage) => {
+    setItemsPerPage(newItemsPerPage);
+    setCurrentPage(1); // Resetear a la primera página
+    loadHerramientas(1, newItemsPerPage);
+  };
+
+  const getPaginationInfo = () => {
+    const start = Math.min((currentPage - 1) * itemsPerPage + 1, paginationData.total);
+    const end = Math.min(currentPage * itemsPerPage, paginationData.total);
+    return {
+      start,
+      end,
+      total: paginationData.total
+    };
+  };
 
   // Funciones de manejo
   const handleCreate = () => {
@@ -220,32 +194,63 @@ const Herramientas = () => {
     setShowConfirmModal(true);
   };
 
-  const confirmDelete = () => {
-    if (herramientaToDelete) {
-      setHerramientas(prev => prev.filter(h => h.id !== herramientaToDelete.id));
-      setHerramientaToDelete(null);
+  const confirmDelete = async () => {
+    if (!herramientaToDelete) return;
+    
+    try {
+      const response = await apiService.deleteHerramienta(herramientaToDelete.id_herramienta || herramientaToDelete.id);
+      
+      if (response && response.success) {
+        // Recargar la lista desde la API
+        await loadHerramientas();
+        showSuccess('¡Herramienta eliminada!', `La herramienta "${herramientaToDelete.nombre}" ha sido eliminada exitosamente.`);
+      } else {
+        console.error('Error al eliminar herramienta:', response);
+        showError('Error al eliminar', response?.message || 'No se pudo eliminar la herramienta. Intenta nuevamente.');
+      }
+    } catch (error) {
+      console.error('Error al eliminar herramienta:', error);
+      showError('Error', 'Ocurrió un error al eliminar la herramienta. Intenta nuevamente.');
     }
+    
+    setShowConfirmModal(false);
+    setHerramientaToDelete(null);
   };
 
-  const handleDuplicate = (herramienta) => {
-    setModalMode('duplicate');
-    setSelectedHerramienta(herramienta);
-    setShowModal(true);
-  };
+    const handleSave = async (herramientaData, imageUploadCallback) => {
+    try {
+      let response;
+      
+      if (modalMode === 'create' || modalMode === 'duplicate') {
+        response = await apiService.createHerramienta(herramientaData);
+      } else if (modalMode === 'edit') {
+        response = await apiService.updateHerramienta(selectedHerramienta.id_herramienta, herramientaData);
+      }
 
-  const handleSave = (formData) => {
-    if (modalMode === 'create' || modalMode === 'duplicate') {
-      const newId = Math.max(...herramientas.map(h => h.id), 0) + 1;
-      const newHerramienta = {
-        ...formData,
-        id: newId
-      };
-      setHerramientas(prev => [...prev, newHerramienta]);
-    } else if (modalMode === 'edit') {
-      setHerramientas(prev => 
-        prev.map(h => h.id === selectedHerramienta.id ? { ...formData, id: selectedHerramienta.id } : h)
-      );
+      if (response && response.success) {
+        // Manejar subida de imagen si existe callback
+        let finalHerramienta = response.data;
+        if (imageUploadCallback) {
+          finalHerramienta = await imageUploadCallback(response.data);
+        }
+
+        // Recargar la lista completa desde la API para asegurar datos actualizados
+        await loadHerramientas();
+
+        // Mostrar mensaje de éxito
+        if (modalMode === 'create' || modalMode === 'duplicate') {
+          showSuccess('¡Herramienta creada!', `La herramienta "${herramientaData.nombre}" ha sido creada exitosamente.`);
+        } else if (modalMode === 'edit') {
+          showSuccess('¡Herramienta actualizada!', `La herramienta "${herramientaData.nombre}" ha sido actualizada exitosamente.`);
+        }
+      } else {
+        showError('Error', response?.message || 'No se pudo guardar la herramienta. Intenta nuevamente.');
+      }
+    } catch (error) {
+      console.error('Error al guardar herramienta:', error);
+      showError('Error', 'Ocurrió un error al guardar la herramienta. Intenta nuevamente.');
     }
+    
     setShowModal(false);
     setSelectedHerramienta(null);
   };
@@ -256,8 +261,10 @@ const Herramientas = () => {
   };
 
   const getEstadoConfig = (estado) => {
-    return estados.find(e => e.value === estado) || estados[0];
+    return estadosHerramientas[estado] || estadosHerramientas[1];
   };
+
+
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('es-MX', {
@@ -301,7 +308,7 @@ const Herramientas = () => {
             
             <button
               onClick={handleCreate}
-              className="inline-flex items-center px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+              className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
             >
               <PlusIcon className="h-5 w-5 mr-2" />
               Nueva Herramienta
@@ -333,7 +340,9 @@ const Herramientas = () => {
             >
               <option value="">Todas las categorías</option>
               {categorias.map(categoria => (
-                <option key={categoria} value={categoria}>{categoria}</option>
+                <option key={categoria.id_categoria_herr} value={categoria.id_categoria_herr}>
+                  {categoria.nombre}
+                </option>
               ))}
             </select>
 
@@ -343,10 +352,27 @@ const Herramientas = () => {
               className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-200 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
             >
               <option value="">Todos los estados</option>
-              {estados.map(estado => (
-                <option key={estado.value} value={estado.value}>{estado.label}</option>
+              <option value="1">Disponible</option>
+              <option value="2">Prestado</option>
+              <option value="3">Mantenimiento</option>
+              <option value="4">Reparación</option>
+              <option value="5">Fuera de Servicio</option>
+            </select>
+
+            <select
+              value={selectedProyecto}
+              onChange={(e) => setSelectedProyecto(e.target.value)}
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-200 text-gray-900 dark:text-white focus:ring-2 focus:ring-orange-500"
+            >
+              <option value="">Todos los proyectos</option>
+              {proyectos.map(proyecto => (
+                <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
+                  {proyecto.nombre}
+                </option>
               ))}
             </select>
+
+
           </div>
         </div>
       </div>
@@ -356,27 +382,27 @@ const Herramientas = () => {
         {filteredHerramientas.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
+              <thead className="bg-gray-800 text-white">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">
                     Herramienta
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">
                     Categoría
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">
+                    Proyecto
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">
+                    Stock
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">
                     Estado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-left text-xs font-medium uppercase tracking-wider">
                     Ubicación
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Empleado
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                    Próximo Mantenimiento
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 py-2 text-right text-xs font-medium uppercase tracking-wider">
                     Acciones
                   </th>
                 </tr>
@@ -386,93 +412,75 @@ const Herramientas = () => {
                   const estadoConfig = getEstadoConfig(herramienta.estado);
                   
                   return (
-                    <tr key={herramienta.id} className="hover:bg-gray-50 dark:hover:bg-dark-200">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div className="h-10 w-10 rounded-lg bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center">
-                              <WrenchScrewdriverIcon className="h-5 w-5 text-orange-600 dark:text-orange-400" />
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {herramienta.nombre}
-                            </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {herramienta.codigo} • {herramienta.marca} {herramienta.modelo}
-                            </div>
-                          </div>
+                    <tr key={herramienta.id_herramienta || herramienta.id} className="border-b border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-dark-200">
+                      <td className="px-4 py-3">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {herramienta.nombre}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {herramienta.serial} • {herramienta.marca}
                         </div>
                       </td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {herramienta.categoria}
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-900 dark:text-white">
+                          {herramienta.Categorias_herramienta?.nombre || 'Sin categoría'}
+                        </span>
+                      </td>
+                      
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-900 dark:text-white">
+                          {herramienta.proyectos?.nombre || 'No asignado'}
+                        </span>
+                      </td>
+                      
+
+                      
+                      <td className="px-4 py-3">
+                        <div className="text-sm">
+                          <span className={`font-medium ${herramienta.stock <= 5 ? 'text-red-600' : 'text-gray-900 dark:text-white'}`}>
+                            {herramienta.stock || 0}
+                            {herramienta.stock <= 5 && (
+                              <span className="text-xs text-red-600 font-medium ml-2">⚠️ Bajo</span>
+                            )}
+                          </span>
                         </div>
                       </td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${estadoConfig.color}`}>
                           {estadoConfig.label}
                         </span>
                       </td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900 dark:text-white">
-                          <BuildingOfficeIcon className="h-4 w-4 mr-1 text-gray-400" />
+                      <td className="px-4 py-3">
+                        <span className="text-sm text-gray-900 dark:text-white">
                           {herramienta.ubicacion}
-                        </div>
+                        </span>
                       </td>
                       
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-900 dark:text-white">
-                          {herramienta.empleado_asignado ? (
-                            <div className="flex items-center">
-                              <UserGroupIcon className="h-4 w-4 mr-1 text-gray-400" />
-                              {herramienta.empleado_asignado}
-                            </div>
-                          ) : (
-                            <span className="text-gray-500 dark:text-gray-400">Sin asignar</span>
-                          )}
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center text-sm text-gray-900 dark:text-white">
-                          <CalendarIcon className="h-4 w-4 mr-1 text-gray-400" />
-                          {formatDate(herramienta.proximo_mantenimiento)}
-                        </div>
-                      </td>
-                      
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end space-x-1">
                           <button
                             onClick={() => handleView(herramienta)}
-                            className="text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                            className="p-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 transition-colors rounded"
                             title="Ver detalles"
                           >
-                            <EyeIcon className="h-5 w-5" />
+                            <STANDARD_ICONS.VIEW className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleEdit(herramienta)}
-                            className="text-gray-400 hover:text-orange-600 dark:hover:text-orange-400 transition-colors"
+                            className="p-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors rounded"
                             title="Editar herramienta"
                           >
-                            <PencilIcon className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDuplicate(herramienta)}
-                            className="text-gray-400 hover:text-green-600 dark:hover:text-green-400 transition-colors"
-                            title="Duplicar herramienta"
-                          >
-                            <DocumentDuplicateIcon className="h-5 w-5" />
+                            <STANDARD_ICONS.EDIT className="h-4 w-4" />
                           </button>
                           <button
                             onClick={() => handleDelete(herramienta)}
-                            className="text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                            className="p-1 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 transition-colors rounded"
                             title="Eliminar herramienta"
                           >
-                            <TrashIcon className="h-5 w-5" />
+                            <STANDARD_ICONS.DELETE className="h-4 w-4" />
                           </button>
                         </div>
                       </td>
@@ -486,48 +494,155 @@ const Herramientas = () => {
           <div className="text-center py-12">
             <WrenchScrewdriverIcon className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500" />
             <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
-              No hay herramientas
+              {herramientas.length === 0 ? 'No hay herramientas registradas' : 'No se encontraron herramientas'}
             </h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              Comienza agregando una nueva herramienta al inventario.
+              {herramientas.length === 0 
+                ? 'Comienza agregando una nueva herramienta al inventario.'
+                : 'Intenta ajustar los filtros de búsqueda para encontrar lo que buscas.'
+              }
             </p>
-            <div className="mt-6">
-              <button
-                onClick={handleCreate}
-                className="inline-flex items-center px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
-              >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Nueva Herramienta
-              </button>
+            <div className="mt-6 space-x-3">
+              {herramientas.length === 0 ? (
+                <button
+                  onClick={handleCreate}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                >
+                  <PlusIcon className="h-5 w-5 mr-2" />
+                  Nueva Herramienta
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setSelectedCategoria('');
+                      setSelectedEstado('');
+                      setSelectedProyecto('');
+                    }}
+                    className="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                  >
+                    Limpiar Filtros
+                  </button>
+                  <button
+                    onClick={handleCreate}
+                    className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                  >
+                    <PlusIcon className="h-5 w-5 mr-2" />
+                    Nueva Herramienta
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
       </div>
 
-      {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-6 py-3 bg-white dark:bg-dark-100 border-t border-gray-200 dark:border-gray-700">
-          <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-            Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, filteredHerramientas.length)} de {filteredHerramientas.length} herramientas
-          </div>
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-              disabled={currentPage === 1}
-              className="px-3 py-1 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-dark-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-dark-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Anterior
-            </button>
-            <span className="px-3 py-1 text-sm text-gray-900 dark:text-white">
-              {currentPage} de {totalPages}
+      {/* Componente de Paginación */}
+      {paginationData.total > 0 && (
+        <div className="bg-white dark:bg-gray-800 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Información de registros */}
+          <div className="text-sm text-gray-700 dark:text-gray-300">
+            <span>
+              Mostrando {getPaginationInfo().start} a {getPaginationInfo().end} de {getPaginationInfo().total} registros
             </span>
-            <button
-              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-              disabled={currentPage === totalPages}
-              className="px-3 py-1 text-sm text-gray-500 dark:text-gray-400 bg-white dark:bg-dark-200 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-dark-300 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Siguiente
-            </button>
+            {(searchTerm || selectedCategoria || selectedEstado || selectedProyecto) && (
+              <span className="ml-2 text-orange-600 dark:text-orange-400">
+                (filtradas)
+              </span>
+            )}
+          </div>
+          
+          {/* Controles de paginación */}
+          <div className="flex items-center gap-4">
+            {/* Selector de items por página */}
+            <div className="flex items-center gap-2">
+              <label className="text-sm text-gray-700 dark:text-gray-300">
+                Registros por página:
+              </label>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => handleItemsPerPageChange(Number(e.target.value))}
+                className="border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+            
+            {/* Navegación de páginas */}
+            <div className="flex items-center gap-2">
+              {/* Botón Primera página */}
+              <button
+                onClick={() => handlePageChange(1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Primera
+              </button>
+              
+              {/* Botón Anterior */}
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              
+              {/* Números de página */}
+              <div className="flex items-center gap-1">
+                {(() => {
+                  const pages = [];
+                  const maxVisible = 5;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+                  
+                  // Ajustar si estamos cerca del final
+                  if (endPage - startPage < maxVisible - 1) {
+                    startPage = Math.max(1, endPage - maxVisible + 1);
+                  }
+                  
+                  for (let i = startPage; i <= endPage; i++) {
+                    pages.push(
+                      <button
+                        key={i}
+                        onClick={() => handlePageChange(i)}
+                        className={`px-3 py-1 text-sm border rounded-md ${
+                          i === currentPage
+                            ? 'bg-indigo-600 border-indigo-600 text-white'
+                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                        }`}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  return pages;
+                })()}
+              </div>
+              
+              {/* Botón Siguiente */}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Siguiente
+              </button>
+              
+              {/* Botón Última página */}
+              <button
+                onClick={() => handlePageChange(totalPages)}
+                disabled={currentPage === totalPages}
+                className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Última
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -539,6 +654,7 @@ const Herramientas = () => {
         mode={modalMode}
         herramienta={selectedHerramienta}
         onSave={handleSave}
+        proyectos={proyectos}
       />
 
       {/* Modal de Confirmación */}
