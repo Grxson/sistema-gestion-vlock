@@ -327,10 +327,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
       },
       'Devolucion': {
         titulo: 'Devolución',
-        color: '#3B82F6',
-        bgClass: 'bg-blue-100 dark:bg-blue-900/30',
-        textClass: 'text-blue-600 dark:text-blue-400',
-        badgeClass: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400',
+        color: '#06B6D4',
+        bgClass: 'bg-cyan-100 dark:bg-cyan-900/30',
+        textClass: 'text-cyan-600 dark:text-cyan-400',
+        badgeClass: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
         icon: FaUndo
       },
       'Baja': {
@@ -607,7 +607,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.nombre}
                         onChange={(e) => handleInputChange('nombre', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         placeholder="Ej: Taladro Percutor"
@@ -627,7 +627,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.id_categoria_herr}
                         onChange={(e) => handleInputChange('id_categoria_herr', e.target.value)}
                         disabled={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                       >
@@ -651,7 +651,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.marca}
                         onChange={(e) => handleInputChange('marca', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         placeholder="Ej: DeWalt"
@@ -668,7 +668,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.serial}
                         onChange={(e) => handleInputChange('serial', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         placeholder="Ej: DW001-2024"
@@ -699,7 +699,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.costo}
                         onChange={(e) => handleInputChange('costo', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         placeholder="0.00"
@@ -714,7 +714,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Vida Útil (meses)
                         {isReadOnly && formData.vida_util_meses && (
-                          <span className="ml-2 text-blue-600 font-semibold">{formatNumber(formData.vida_util_meses)} meses</span>
+                          <span className="ml-2 text-gray-600 dark:text-gray-400 font-semibold">{formatNumber(formData.vida_util_meses)} meses</span>
                         )}
                       </label>
                       <input
@@ -723,7 +723,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.vida_util_meses}
                         onChange={(e) => handleInputChange('vida_util_meses', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         placeholder="24"
@@ -749,7 +749,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.id_proyecto || ''}
                         onChange={(e) => handleInputChange('id_proyecto', e.target.value)}
                         disabled={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                       >
@@ -773,7 +773,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.estado || 1}
                         onChange={(e) => handleInputChange('estado', parseInt(e.target.value))}
                         disabled={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                       >
@@ -810,7 +810,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.stock || ''}
                         onChange={(e) => handleInputChange('stock', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         } ${formData.stock && parseInt(formData.stock) <= 5 ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : ''}`}
                         placeholder="0"
@@ -829,7 +829,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         value={formData.ubicacion || ''}
                         onChange={(e) => handleInputChange('ubicacion', e.target.value)}
                         readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 ${
+                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                         placeholder="Ej: Almacén A - Rack 1"
@@ -850,7 +850,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                       onChange={(e) => handleInputChange('observaciones', e.target.value)}
                       readOnly={isReadOnly}
                       rows="4"
-                      className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 resize-vertical ${
+                      className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 resize-vertical ${
                         isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                       placeholder="Notas adicionales sobre la herramienta, mantenimientos realizados, condiciones especiales, etc."
@@ -866,13 +866,13 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                   <div>
                     <div className="flex items-center justify-between mb-4">
                       <h4 className="text-lg font-medium text-gray-900 dark:text-white flex items-center gap-2">
-                        <FaHistory className="text-blue-600" />
+                        <FaHistory className="text-gray-600 dark:text-gray-400" />
                         Historial de Movimientos
                       </h4>
                       <div className="flex items-center gap-3">
                         {movimientos.length > 0 && (
                           <>
-                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-sm font-medium rounded-full">
+                            <span className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-full">
                               {movimientos.length} movimiento{movimientos.length !== 1 ? 's' : ''}
                             </span>
                             <button
@@ -901,7 +901,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                           if (count === 0) return null;
                           
                           return (
-                            <div key={tipo} className={`p-3 rounded-lg ${config.bgClass} border border-gray-200 dark:border-gray-600`}>
+                            <div key={tipo} className={`p-3 rounded-lg ${config.bgClass} border border-gray-200/40 dark:border-gray-600/40 backdrop-blur-sm`}>
                               <div className="flex items-center gap-2 mb-1">
                                 <config.icon className={`h-4 w-4 ${config.textClass}`} />
                                 <span className={`text-sm font-medium ${config.textClass}`}>
@@ -925,9 +925,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                       <>
                         {/* Información de actividad reciente */}
                         {movimientos.length > 0 && (
-                          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                          <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-4 p-3 bg-gradient-to-r from-gray-50/70 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-700/30 rounded-lg border border-gray-200/60 dark:border-gray-600/60">
                             <span className="font-medium">Último movimiento: {formatDateWithTime(movimientos[0].fecha_movimiento)}</span>
-                            <span className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full">
+                            <span className="text-xs px-2 py-1 bg-white/70 dark:bg-gray-700/70 text-gray-700 dark:text-gray-300 rounded-full border border-gray-300/50 dark:border-gray-600/50 backdrop-blur-sm">
                               {(() => {
                                 const ultimaFecha = new Date(movimientos[0].fecha_movimiento);
                                 const ahora = new Date();
@@ -952,7 +952,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                             <p className="text-xs mt-2 opacity-75">Los movimientos aparecerán aquí cuando registres entradas, salidas o devoluciones</p>
                           </div>
                         ) : (
-                      <div className="space-y-4 max-h-80 overflow-y-auto bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                      <div className="space-y-3 max-h-80 overflow-y-auto bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
                         {movimientos.map((movimiento, index) => {
                           const tipoConfig = getMovimientoConfig(movimiento.tipo_movimiento);
                           const descripcionContextual = getDescripcionMovimiento(movimiento);
@@ -960,7 +960,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                           return (
                             <div 
                               key={movimiento.id_movimiento || index}
-                              className="bg-white dark:bg-gray-700 p-4 rounded-lg border-l-4 shadow-sm"
+                              className="bg-white/90 dark:bg-gray-700/90 backdrop-blur-sm p-4 rounded-lg border border-gray-200/60 dark:border-gray-600/60 shadow-sm hover:shadow-md transition-all duration-200 border-l-3"
                               style={{ borderLeftColor: tipoConfig.color }}
                             >
                               {/* Header con tipo y cantidad */}
@@ -989,16 +989,16 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                               </div>
 
                               {/* Información detallada */}
-                              <div className="space-y-3">
+                              <div className="space-y-2.5">
                                 {/* Primera fila - Info básica */}
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
                                   {/* Proyecto */}
                                   {movimiento.proyectos && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-blue-600 dark:text-blue-400">📁</span>
+                                    <div className="flex items-center gap-2 p-2 bg-gray-50/50 dark:bg-gray-800/50 rounded-md">
+                                      <span className="text-slate-500 dark:text-slate-400">📁</span>
                                       <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Proyecto</p>
-                                        <p className="font-medium text-gray-900 dark:text-white">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Proyecto</p>
+                                        <p className="font-medium text-gray-800 dark:text-gray-200 text-sm">
                                           {movimiento.proyectos.nombre}
                                         </p>
                                       </div>
@@ -1007,11 +1007,11 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                                   
                                   {/* Usuario */}
                                   {movimiento.usuarios && (
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-purple-600 dark:text-purple-400">👤</span>
+                                    <div className="flex items-center gap-2 p-2 bg-gray-50/50 dark:bg-gray-800/50 rounded-md">
+                                      <span className="text-slate-500 dark:text-slate-400">👤</span>
                                       <div>
-                                        <p className="text-xs text-gray-500 dark:text-gray-400">Responsable</p>
-                                        <p className="font-medium text-gray-900 dark:text-white">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Responsable</p>
+                                        <p className="font-medium text-gray-800 dark:text-gray-200 text-sm">
                                           {movimiento.usuarios.nombre_usuario}
                                         </p>
                                       </div>
@@ -1019,11 +1019,11 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                                   )}
 
                                   {/* Estado resultante */}
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-gray-600 dark:text-gray-400">📊</span>
+                                  <div className="flex items-center gap-2 p-2 bg-gray-50/50 dark:bg-gray-800/50 rounded-md">
+                                    <span className="text-slate-500 dark:text-slate-400">📊</span>
                                     <div>
-                                      <p className="text-xs text-gray-500 dark:text-gray-400">Stock después</p>
-                                      <p className="font-medium text-gray-900 dark:text-white">
+                                      <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Stock después</p>
+                                      <p className="font-medium text-gray-800 dark:text-gray-200 text-sm">
                                         {calcularStockDespues(movimientos, index, herramienta.stock)} unidades
                                       </p>
                                     </div>
@@ -1032,14 +1032,14 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
                                 {/* Segunda fila - Información específica del movimiento */}
                                 {(movimiento.razon_movimiento || movimiento.usuario_receptor || movimiento.fecha_devolucion_esperada || movimiento.estado_movimiento) && (
-                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm pt-2 border-t border-gray-200 dark:border-gray-600">
+                                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 pt-2 border-t border-gray-200/50 dark:border-gray-600/50">
                                     {/* Razón específica */}
                                     {movimiento.razon_movimiento && (
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-green-600 dark:text-green-400">🏷️</span>
+                                      <div className="flex items-center gap-2 p-2 bg-emerald-50/50 dark:bg-emerald-900/20 rounded-md">
+                                        <span className="text-emerald-600 dark:text-emerald-400">🏷️</span>
                                         <div>
-                                          <p className="text-xs text-gray-500 dark:text-gray-400">Razón</p>
-                                          <p className="font-medium text-gray-900 dark:text-white text-xs">
+                                          <p className="text-xs text-emerald-600/70 dark:text-emerald-400/70 font-medium">Razón</p>
+                                          <p className="font-medium text-emerald-700 dark:text-emerald-300 text-xs">
                                             {movimiento.razon_movimiento.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
                                           </p>
                                         </div>
@@ -1048,11 +1048,11 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
                                     {/* Usuario receptor (solo para asignaciones) */}
                                     {movimiento.usuario_receptor && movimiento.razon_movimiento === 'asignacion' && (
-                                      <div className="flex items-center gap-2">
-                                        <span className="text-orange-600 dark:text-orange-400">👥</span>
+                                      <div className="flex items-center gap-2 p-2 bg-amber-50/50 dark:bg-amber-900/20 rounded-md">
+                                        <span className="text-amber-600 dark:text-amber-400">👥</span>
                                         <div>
-                                          <p className="text-xs text-gray-500 dark:text-gray-400">Asignado a</p>
-                                          <p className="font-medium text-gray-900 dark:text-white text-xs">
+                                          <p className="text-xs text-amber-600/70 dark:text-amber-400/70 font-medium">Asignado a</p>
+                                          <p className="font-medium text-amber-700 dark:text-amber-300 text-xs">
                                             {movimiento.usuario_receptor}
                                           </p>
                                         </div>
@@ -1090,9 +1090,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
                               {/* Detalles adicionales */}
                               {movimiento.detalle_adicional && (
-                                <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                                  <p className="text-xs text-blue-600 dark:text-blue-400 mb-1 font-medium">📝 Detalles específicos:</p>
-                                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                                <div className="mt-3 p-3 bg-slate-50/60 dark:bg-slate-800/60 rounded-lg border border-slate-200/50 dark:border-slate-600/50">
+                                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-1 font-medium">📝 Detalles específicos:</p>
+                                  <p className="text-sm text-slate-700 dark:text-slate-300">
                                     {movimiento.detalle_adicional}
                                   </p>
                                 </div>
@@ -1100,9 +1100,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
                               {/* Notas generales */}
                               {movimiento.notas && (
-                                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">💬 Notas generales:</p>
-                                  <p className="text-sm text-gray-700 dark:text-gray-300 italic">
+                                <div className="mt-3 p-3 bg-slate-50/60 dark:bg-slate-800/60 rounded-lg border border-slate-200/50 dark:border-slate-600/50">
+                                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-1 font-medium">💬 Notas generales:</p>
+                                  <p className="text-sm text-slate-700 dark:text-slate-300 italic">
                                     "{movimiento.notas}"
                                   </p>
                                 </div>
@@ -1124,7 +1124,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                   <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Imagen de la Herramienta</h4>
                   
                   {/* Preview de imagen */}
-                  <div className="w-full h-64 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-800 mb-4">
+                  <div className="w-full h-64 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-900/30 mb-4">
                     {imagePreview || formData.image_url ? (
                       <img 
                         src={imagePreview || `http://localhost:4000${formData.image_url}`}
@@ -1151,10 +1151,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                                    file:mr-4 file:py-2 file:px-4
                                    file:rounded-md file:border-0
                                    file:text-sm file:font-medium
-                                   file:bg-primary-50 file:text-primary-700
-                                   hover:file:bg-primary-100
-                                   dark:file:bg-primary-900 dark:file:text-primary-300
-                                   dark:hover:file:bg-primary-800"
+                                   file:bg-gray-100 file:text-gray-700
+                                   hover:file:bg-gray-200
+                                   dark:file:bg-gray-700 dark:file:text-gray-300
+                                   dark:hover:file:bg-gray-600"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           PNG, JPG, GIF, WebP hasta 5MB
@@ -1198,7 +1198,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-gray-600 dark:text-white dark:border-gray-500 dark:hover:bg-gray-700"
+                className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-gray-600 dark:text-white dark:border-gray-500 dark:hover:bg-gray-700"
               >
                 {isReadOnly ? 'Cerrar' : 'Cancelar'}
               </button>
@@ -1206,7 +1206,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
               {!isReadOnly && (
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-primary-600 dark:hover:bg-primary-700"
+                  className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 dark:bg-primary-600 dark:hover:bg-primary-700"
                 >
                   {mode === 'create' && 'Crear Herramienta'}
                   {mode === 'edit' && 'Guardar Cambios'}
