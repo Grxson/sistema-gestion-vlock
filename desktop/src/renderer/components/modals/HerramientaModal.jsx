@@ -27,6 +27,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   const [loadingMovimientos, setLoadingMovimientos] = useState(false);
   const [categorias, setCategorias] = useState([]);
   const [showConfirmDeleteHistory, setShowConfirmDeleteHistory] = useState(false);
+  const [showImageModal, setShowImageModal] = useState(false);
 
   // Estados disponibles
   const estados = [
@@ -1019,7 +1020,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                                   )}
 
                                   {/* Estado resultante */}
-                                  <div className="flex items-center gap-2 p-2 bg-gray-50/50 dark:bg-gray-800/50 rounded-md">
+                                  <div className="flex items-center gap-2 p-2 bg-gray-50/50 dark:bg-gray-800/30 rounded-md">
                                     <span className="text-slate-500 dark:text-slate-400">📊</span>
                                     <div>
                                       <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Stock después</p>
@@ -1129,7 +1130,17 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                       <img 
                         src={imagePreview || `http://localhost:4000${formData.image_url}`}
                         alt="Preview"
-                        className="max-w-full max-h-full object-contain rounded-lg"
+                        className={`max-w-full max-h-full object-contain rounded-lg ${
+                          isReadOnly && (imagePreview || formData.image_url) 
+                            ? 'cursor-pointer hover:opacity-90 transition-opacity duration-200' 
+                            : ''
+                        }`}
+                        onClick={() => {
+                          if (isReadOnly && (imagePreview || formData.image_url)) {
+                            setShowImageModal(true);
+                          }
+                        }}
+                        title={isReadOnly ? "Clic para ampliar imagen" : ""}
                       />
                     ) : (
                       <div className="text-center text-gray-500 dark:text-gray-400">
@@ -1189,6 +1200,12 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                   {isReadOnly && !formData.image_url && (
                     <p className="text-sm text-gray-500 dark:text-gray-400 text-center">No hay imagen disponible</p>
                   )}
+                  
+                  {isReadOnly && formData.image_url && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">
+                      🔍 Clic en la imagen para ampliar
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -1232,6 +1249,34 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
         cancelText="Cancelar"
         type="danger"
       />
+
+      {/* Modal de imagen expandida */}
+      {showImageModal && (imagePreview || formData.image_url) && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 z-[60] flex items-center justify-center p-4"
+          onClick={() => setShowImageModal(false)}
+        >
+          <div className="relative max-w-4xl max-h-full">
+            <button
+              onClick={() => setShowImageModal(false)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors"
+              title="Cerrar imagen"
+            >
+              <FaTimes className="h-6 w-6" />
+            </button>
+            <img 
+              src={imagePreview || `http://localhost:4000${formData.image_url}`}
+              alt="Imagen expandida de la herramienta"
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-3 rounded-b-lg">
+              <p className="text-sm font-medium">{formData.nombre || 'Herramienta'}</p>
+              <p className="text-xs opacity-75">Clic fuera de la imagen para cerrar</p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

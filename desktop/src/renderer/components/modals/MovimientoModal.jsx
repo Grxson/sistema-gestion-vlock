@@ -157,7 +157,7 @@ const MovimientoModal = ({ isOpen, onClose, herramienta, proyectos = [], onSave 
         </div>
 
         {herramienta && (
-          <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <div className="mb-4 p-3 bg-gray-50 dark:bg-dark-100 rounded-lg">
             <p className="font-medium text-gray-900 dark:text-white">{herramienta.nombre}</p>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Stock actual: {herramienta.stock} unidades
