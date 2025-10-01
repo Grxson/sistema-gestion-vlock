@@ -527,6 +527,7 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
           user={user} 
           isCollapsed={isCollapsed}
           sidebarWidth={isCollapsed ? 'w-16' : 'w-64'}
+          onNavigate={onNavigate}
         />
       </div>
     </div>

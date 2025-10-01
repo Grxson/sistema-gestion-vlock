@@ -9,7 +9,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 
-const UserMenu = ({ user, isCollapsed, sidebarWidth }) => {
+const UserMenu = ({ user, isCollapsed, sidebarWidth, onNavigate }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { logout } = useAuth();
   const menuRef = useRef(null);
@@ -97,14 +97,16 @@ const UserMenu = ({ user, isCollapsed, sidebarWidth }) => {
 
   const handleProfile = () => {
     setIsMenuOpen(false);
-    // TODO: Implementar navegación al perfil
-    console.log('Ir al perfil');
+    if (onNavigate) {
+      onNavigate('/perfil');
+    }
   };
 
   const handleSettings = () => {
     setIsMenuOpen(false);
-    // TODO: Implementar navegación a configuración
-    console.log('Ir a configuración');
+    if (onNavigate) {
+      onNavigate('/configuracion');
+    }
   };
 
   return (

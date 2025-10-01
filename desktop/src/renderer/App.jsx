@@ -18,6 +18,8 @@ import Proveedores from './pages/Proveedores';
 import Proyectos from './pages/Proyectos';
 import Herramientas from './pages/Herramientas';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
+import ProfilePage from './pages/ProfilePage';
+import ConfigurationPage from './pages/ConfigurationPage';
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 
 // Importar router de presupuestos
@@ -48,6 +50,8 @@ function MainApp() {
     '/suministros': 'Suministros',
     '/proveedores': 'Proveedores',
     '/diagnostico': 'Diagnóstico',
+    '/configuracion': 'Configuración',
+    '/perfil': 'Mi Perfil',
     '/presupuestos/conceptos': 'Conceptos de Obra',
     '/presupuestos/precios': 'Precios Unitarios',
     '/presupuestos/listado': 'Presupuestos',
@@ -96,6 +100,11 @@ function MainApp() {
     // El dashboard siempre está disponible
     if (currentPath === '/') {
       return <Dashboard />;
+    }
+
+    // Rutas especiales que no requieren verificación de permisos específicos
+    if (currentPath === '/perfil') {
+      return <ProfilePage />;
     }
     
     // Obtener el módulo de la ruta actual
@@ -151,14 +160,7 @@ function MainApp() {
       case '/herramientas':
         return <Herramientas />;
       case '/configuracion':
-        return (
-          <div className="text-center py-20">
-            <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl p-10 max-w-md mx-auto">
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">Configuración</h2>
-              <p className="text-gray-600 dark:text-gray-400">En desarrollo...</p>
-            </div>
-          </div>
-        );
+        return <ConfigurationPage />;
       case '/usuarios':
         return <Usuarios />;
       case '/roles':

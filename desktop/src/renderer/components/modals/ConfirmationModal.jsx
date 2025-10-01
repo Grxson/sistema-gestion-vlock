@@ -73,7 +73,7 @@ const ConfirmationModal = ({
 
         {/* Content */}
         <div className="px-6 py-4">
-          <p className="text-gray-700 dark:text-gray-300">
+          <p className="text-gray-700 dark:text-gray-300" style={{ whiteSpace: 'pre-line' }}>
             {message}
           </p>
         </div>

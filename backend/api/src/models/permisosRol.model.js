@@ -29,7 +29,7 @@ module.exports = (sequelize) => {
     if (models.Roles) {
       PermisosRol.belongsTo(models.Roles, {
         foreignKey: 'id_rol',
-        as: 'rol'
+        as: 'rolePermisos'
       });
     }
     if (models.Acciones_permiso) {

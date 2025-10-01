@@ -8,9 +8,9 @@ router.post('/register', authController.register);
 router.post('/login', authController.login);
 
 // Rutas protegidas
-router.get('/verify', verifyToken, authController.verifyAuth);
 router.get('/permissions', verifyToken, authController.getUserPermissions);
-router.post('/change-password', verifyToken, authController.changePassword);
+router.put('/update-profile', verifyToken, authController.updateProfile);
+router.put('/change-password', verifyToken, authController.changePassword);
 router.post('/logout', verifyToken, authController.logout);
 
 module.exports = router;

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const categoriasController = require('../controllers/categoriasSuministro.controller');
 const unidadesController = require('../controllers/unidadesMedida.controller');
+const userConfigController = require('../controllers/userConfig.controller');
 const auth = require('../middlewares/auth');
 
 // Rutas para Categorías de Suministros
@@ -19,5 +20,10 @@ router.post('/unidades', auth, unidadesController.createUnidad);
 router.put('/unidades/:id', auth, unidadesController.updateUnidad);
 router.delete('/unidades/:id', auth, unidadesController.deleteUnidad);
 router.put('/unidades/reorder', auth, unidadesController.reorderUnidades);
+
+// Rutas para Configuraciones de Usuario
+router.get('/user-settings', auth, userConfigController.getUserSettings);
+router.put('/user-settings', auth, userConfigController.updateUserSettings);
+router.post('/user-settings/reset', auth, userConfigController.resetUserSettings);
 
 module.exports = router;

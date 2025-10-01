@@ -312,11 +312,72 @@ const getUserPermissions = async (req, res) => {
     }
 };
 
+/**
+ * Controlador para actualizar el perfil del usuario
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const updateProfile = async (req, res) => {
+    try {
+        const userId = req.usuario.id_usuario;
+        const { nombre, apellidos, email, telefono, fecha_nacimiento, cedula } = req.body;
+
+        // Validar email único si se está cambiando
+        if (email) {
+            const usuarioExistente = await Usuario.findOne({
+                where: {
+                    email,
+                    id_usuario: { [Op.not]: userId }
+                }
+            });
+
+            if (usuarioExistente) {
+                return res.status(400).json({
+                    message: 'El email ya está en uso por otro usuario'
+                });
+            }
+        }
+
+        // Actualizar el usuario
+        await Usuario.update({
+            nombre,
+            apellidos,
+            email,
+            telefono,
+            fecha_nacimiento,
+            cedula
+        }, {
+            where: { id_usuario: userId }
+        });
+
+        // Obtener el usuario actualizado
+        const usuarioActualizado = await Usuario.findByPk(userId, {
+            attributes: ['id_usuario', 'nombre_usuario', 'nombre', 'apellidos', 'email', 'telefono', 'fecha_nacimiento', 'cedula', 'id_rol'],
+            include: [{
+                model: Roles,
+                as: 'rol',
+                attributes: ['id', 'nombre']
+            }]
+        });
+
+        res.json({
+            message: 'Perfil actualizado correctamente',
+            user: usuarioActualizado
+        });
+
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).json({
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
 module.exports = {
     register,
     login,
-    verifyAuth,
-    changePassword,
     logout,
-    getUserPermissions
+    getUserPermissions,
+    updateProfile,
+    changePassword
 };
