@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { FaPlus, FaTrash, FaCopy, FaSave, FaTimes, FaBoxes } from "react-icons/fa";
 import ProveedorAutocomplete from "./common/ProveedorAutocomplete";
+import CategoriaAutocomplete from "./common/CategoriaAutocomplete";
 import ProveedorModal from "./proveedores/ProveedorModal";
 import DateInput from "./ui/DateInput";
 import TimeInput from "./ui/TimeInput";
@@ -1430,15 +1431,14 @@ export default function FormularioSuministros({
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Categoría
                     </label>
-                    <select
+                    <CategoriaAutocomplete
                       value={suministro.tipo_suministro}
-                      onChange={(e) => actualizarSuministro(suministro.id_temp, 'tipo_suministro', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
-                    >
-                      {Object.entries(categorias).map(([key, value]) => (
-                        <option key={key} value={key}>{value}</option>
-                      ))}
-                    </select>
+                      onChange={(value) => actualizarSuministro(suministro.id_temp, 'tipo_suministro', value)}
+                      placeholder="Buscar o crear categoría..."
+                      onCreateNew={(newCategoria) => {
+                        console.log('Nueva categoría creada:', newCategoria);
+                      }}
+                    />
                   </div>
 
                   {/* Código */}
