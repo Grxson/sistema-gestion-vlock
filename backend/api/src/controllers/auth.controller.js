@@ -377,6 +377,7 @@ module.exports = {
     register,
     login,
     logout,
+    verifyAuth,
     getUserPermissions,
     updateProfile,
     changePassword

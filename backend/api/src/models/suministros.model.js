@@ -38,9 +38,14 @@ module.exports = (sequelize) => {
       type: DataTypes.DATEONLY,
       allowNull: false
     },
-    tipo_suministro: {
-      type: DataTypes.ENUM('Material', 'Herramienta', 'Equipo Ligero', 'Acero', 'Cimbra', 'Ferretería', 'Servicio', 'Consumible', 'Maquinaria', 'Concreto'),
-      defaultValue: 'Material'
+    id_categoria_suministro: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      references: {
+        model: 'categorias_suministro',
+        key: 'id_categoria'
+      },
+      comment: 'ID de la categoría del suministro (FK a categorias_suministro)'
     },
     nombre: {
       type: DataTypes.STRING(255),
@@ -124,7 +129,7 @@ module.exports = (sequelize) => {
         fields: ['fecha']
       },
       {
-        fields: ['tipo_suministro']
+        fields: ['id_categoria_suministro']
       },
       {
         fields: ['folio']
@@ -142,6 +147,12 @@ module.exports = (sequelize) => {
     Suministro.belongsTo(models.Proveedores, {
       foreignKey: 'id_proveedor',
       as: 'proveedor'
+    });
+
+    // Relación con categorías de suministro
+    Suministro.belongsTo(models.Categorias_suministro, {
+      foreignKey: 'id_categoria_suministro',
+      as: 'categoria'
     });
   };
 

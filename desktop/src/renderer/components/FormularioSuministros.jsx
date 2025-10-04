@@ -73,6 +73,25 @@ const parseFormattedNumber = (value) => {
   return value.toString().replace(/,/g, '');
 };
 
+// Mapeo de categorías legacy a IDs (temporal para migración)
+const CATEGORIA_LEGACY_TO_ID = {
+  'Material': 1,
+  'Herramienta': 2,
+  'Equipo Ligero': 3,
+  'Acero': 4,
+  'Cimbra': 5,
+  'Ferretería': 6,
+  'Maquinaria': 7,
+  'Concreto': 8,
+  'Servicio': 9,
+  'Consumible': 10
+};
+
+// Función para obtener ID de categoría desde nombre legacy
+const getCategoriaIdFromName = (nombreCategoria) => {
+  return CATEGORIA_LEGACY_TO_ID[nombreCategoria] || null; // No default, retorna null si no encuentra
+};
+
 export default function FormularioSuministros({ 
   onSubmit, 
   onCancel, 
@@ -127,7 +146,7 @@ export default function FormularioSuministros({
   const [suministros, setSuministros] = useState([
     {
       id_temp: Date.now() + Math.random(),
-      tipo_suministro: 'Material',
+      id_categoria_suministro: null, // Sin categoría por defecto
       nombre: '',
       codigo_producto: '',
       descripcion_detallada: '',
@@ -302,27 +321,47 @@ export default function FormularioSuministros({
   
   // Función optimizada para normalizar categoría
   const normalizeCategoria = useCallback((categoriaFromDB) => {
-    if (!categoriaFromDB) return 'Material';
-    
-    // Fast path: Si ya es una clave válida
-    if (CATEGORIAS_SUMINISTRO[categoriaFromDB]) {
-      return categoriaFromDB;
+    // Si no hay valor, retornar null en lugar de un valor por defecto
+    if (!categoriaFromDB || categoriaFromDB === '' || categoriaFromDB === null || categoriaFromDB === undefined) {
+      return null;
     }
     
-    // Si es un número (índice), convertir a clave
+    // Si es un objeto categoria (nuevo sistema), usar el id
+    if (typeof categoriaFromDB === 'object' && categoriaFromDB.id_categoria) {
+      return categoriaFromDB.id_categoria;
+    }
+    
+    // Si es un número (ID de categoría), retornarlo directamente
     const categoriaAsNumber = parseInt(categoriaFromDB);
-    if (!isNaN(categoriaAsNumber) && categoriaAsNumber >= 0 && categoriaAsNumber < categoriaKeys.length) {
-      return categoriaKeys[categoriaAsNumber];
+    if (!isNaN(categoriaAsNumber)) {
+      return categoriaAsNumber;
     }
     
-    // Buscar por valor completo
-    const lowerCategoria = categoriaFromDB.toLowerCase();
-    const entry = categoriaEntries.find(([key, value]) => 
-      value.toLowerCase() === lowerCategoria
-    );
+    // Si es un string, puede ser una clave del sistema anterior
+    if (typeof categoriaFromDB === 'string') {
+      // Si es una clave válida del sistema anterior, convertir a ID
+      if (CATEGORIAS_SUMINISTRO[categoriaFromDB]) {
+        // Buscar el índice en las categorías locales y convertir a ID (asumiendo IDs secuenciales)
+        const categoriaKeys = Object.keys(CATEGORIAS_SUMINISTRO);
+        const index = categoriaKeys.indexOf(categoriaFromDB);
+        return index >= 0 ? index + 1 : null;
+      }
+      
+      // Buscar por valor completo en categorías locales
+      const lowerCategoria = categoriaFromDB.toLowerCase();
+      const categoriaEntries = Object.entries(CATEGORIAS_SUMINISTRO);
+      const entry = categoriaEntries.find(([key, value]) => 
+        value.toLowerCase() === lowerCategoria
+      );
+      
+      if (entry) {
+        const index = categoriaEntries.indexOf(entry);
+        return index + 1;
+      }
+    }
     
-    return entry ? entry[0] : 'Material';
-  }, [categoriaKeys, categoriaEntries]);
+    return null; // No forzar valor por defecto
+  }, []);
 
   // Función optimizada para normalizar fecha
   const normalizeFecha = useCallback((fechaFromDB) => {
@@ -403,13 +442,13 @@ export default function FormularioSuministros({
       const suministrosCargados = suministrosParaProcesar.reduce((acc, suministro, index) => {
         // ⚡ Cache normalizaciones para evitar recálculos
         const unidadNormalizada = normalizeUnidadMedida(suministro.unidad_medida);
-        const categoriaNormalizada = normalizeCategoria(suministro.tipo_suministro || suministro.categoria);
+        const categoriaId = suministro.id_categoria_suministro || getCategoriaIdFromName(suministro.tipo_suministro || suministro.categoria);
         const fechaNormalizada = normalizeFecha(suministro.fecha_necesaria || suministro.fecha || initialData?.fecha);
         
         acc.push({
           id_temp: timestamp + index,
           id_suministro: suministro.id_suministro,
-          tipo_suministro: categoriaNormalizada,
+          id_categoria_suministro: categoriaId,
           nombre: suministro.nombre || '',
           codigo_producto: suministro.codigo_producto || '',
           descripcion_detallada: suministro.descripcion_detallada || '',
@@ -658,6 +697,7 @@ export default function FormularioSuministros({
   // Función optimizada para aplicar sugerencia con autocompletado de datos
   const applySuggestion = useCallback((suministroId, campo, valor) => {
     // Buscar el suministro completo para autocompletar otros campos
+
     const suministroCompleto = existingSuministros.find(s => s[campo] === valor);
     
     setSuministros(prev => prev.map(item => {
@@ -668,12 +708,12 @@ export default function FormularioSuministros({
         if (suministroCompleto) {
           if (campo === 'nombre') {
             updated.codigo_producto = suministroCompleto.codigo_producto || item.codigo_producto;
-            updated.tipo_suministro = normalizeCategoria(suministroCompleto.tipo_suministro) || item.tipo_suministro;
+            updated.id_categoria_suministro = suministroCompleto.id_categoria_suministro || getCategoriaIdFromName(suministroCompleto.tipo_suministro) || item.id_categoria_suministro;
             updated.unidad_medida = normalizeUnidadMedida(suministroCompleto.unidad_medida) || item.unidad_medida;
             updated.precio_unitario = suministroCompleto.precio_unitario || item.precio_unitario;
           } else if (campo === 'codigo_producto') {
             updated.nombre = suministroCompleto.nombre || item.nombre;
-            updated.tipo_suministro = normalizeCategoria(suministroCompleto.tipo_suministro) || item.tipo_suministro;
+            updated.id_categoria_suministro = suministroCompleto.id_categoria_suministro || getCategoriaIdFromName(suministroCompleto.tipo_suministro) || item.id_categoria_suministro;
             updated.unidad_medida = normalizeUnidadMedida(suministroCompleto.unidad_medida) || item.unidad_medida;
             updated.precio_unitario = suministroCompleto.precio_unitario || item.precio_unitario;
           }
@@ -706,7 +746,7 @@ export default function FormularioSuministros({
 
   // Template para nuevo suministro (memoizado para evitar recreación)
   const nuevoSuministroTemplate = useMemo(() => ({
-    tipo_suministro: 'Material',
+    id_categoria_suministro: null, // Sin categoría por defecto
     nombre: '',
     codigo_producto: '',
     descripcion_detallada: '',
@@ -804,28 +844,29 @@ export default function FormularioSuministros({
 
   // Función optimizada para actualizar suministros con debounce en autocompletado
   const actualizarSuministro = useCallback((id, field, value) => {
-    if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-    }
+    console.log(`🔄 actualizarSuministro: ${id}, ${field}:`, value);
     
     // Normalizar ciertos campos antes de guardarlos
     let normalizedValue = value;
     if (field === 'unidad_medida') {
       normalizedValue = normalizeUnidadMedida(value);
       
-      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
-      }
-      
       // Verificar que la unidad normalizada existe
       if (!UNIDADES_MEDIDA[normalizedValue]) {
         console.warn(`⚠️ Unidad normalizada "${normalizedValue}" no existe en UNIDADES_MEDIDA`);
         normalizedValue = 'pz'; // Fallback
       }
-    } else if (field === 'tipo_suministro') {
-      normalizedValue = normalizeCategoria(value);
-      
-      if (process.env.NODE_ENV === 'development' && globalThis.debugForms) {
+    } else if (field === 'id_categoria_suministro') {
+      // Solo normalizar si el valor no es null/undefined
+      if (value !== null && value !== undefined) {
+        normalizedValue = normalizeCategoria(value);
+      } else {
+        normalizedValue = null; // Mantener null explícitamente
       }
+      console.log(`📂 Categoría normalizada: ${value} -> ${normalizedValue}`);
     }
+    
+    console.log(`💾 Guardando en estado: ${field} = ${normalizedValue}`);
     
     // Actualizar estado de manera optimizada
     setSuministros(prev => {
@@ -1046,7 +1087,7 @@ export default function FormularioSuministros({
         },
         suministros: suministros.map(s => ({
           id_suministro: s.id_suministro || null, // Incluir ID si existe (para actualización)
-          tipo_suministro: s.tipo_suministro,
+          id_categoria_suministro: s.id_categoria_suministro,
           nombre: s.nombre,
           codigo_producto: s.codigo_producto,
           descripcion_detallada: s.descripcion_detallada,
@@ -1432,11 +1473,35 @@ export default function FormularioSuministros({
                       Categoría
                     </label>
                     <CategoriaAutocomplete
-                      value={suministro.tipo_suministro}
-                      onChange={(value) => actualizarSuministro(suministro.id_temp, 'tipo_suministro', value)}
+                      value={suministro.id_categoria_suministro}
+                      onChange={(value) => {
+                        console.log(`🎯 CategoriaAutocomplete onChange: ${value} para suministro ${suministro.id_temp}`);
+                        console.log(`🎯 Tipo de valor recibido:`, typeof value, value);
+                        
+                        // Actualizar inmediatamente usando el callback de estado para evitar problemas de timing
+                        setSuministros(prev => {
+                          const updated = prev.map(s => 
+                            s.id_temp === suministro.id_temp 
+                              ? { ...s, id_categoria_suministro: value }
+                              : s
+                          );
+                          const updatedItem = updated.find(s => s.id_temp === suministro.id_temp);
+                          console.log(`💾 Estado actualizado para suministro ${suministro.id_temp}:`, 
+                            updatedItem?.id_categoria_suministro);
+                          return updated;
+                        });
+                      }}
                       placeholder="Buscar o crear categoría..."
                       onCreateNew={(newCategoria) => {
-                        console.log('Nueva categoría creada:', newCategoria);
+                        console.log('🆕 Nueva categoría creada en formulario:', newCategoria);
+                        // Asegurar que se asigne la nueva categoría inmediatamente
+                        if (newCategoria && newCategoria.id_categoria) {
+                          setSuministros(prev => prev.map(s => 
+                            s.id_temp === suministro.id_temp 
+                              ? { ...s, id_categoria_suministro: newCategoria.id_categoria }
+                              : s
+                          ));
+                        }
                       }}
                     />
                   </div>

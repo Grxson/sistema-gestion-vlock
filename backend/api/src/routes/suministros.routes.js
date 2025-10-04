@@ -9,6 +9,9 @@ router.use(verifyToken);
 // Obtener todas las estadísticas de suministros
 router.get('/estadisticas', suministrosController.getEstadisticasSuministros);
 
+// Obtener estadísticas por tipo de categoría
+router.get('/estadisticas/tipo', suministrosController.getEstadisticasPorTipo);
+
 // Obtener todos los suministros (con filtros opcionales)
 router.get('/', suministrosController.getSuministros);
 

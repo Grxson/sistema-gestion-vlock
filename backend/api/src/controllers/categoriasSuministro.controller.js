@@ -44,7 +44,7 @@ const getAllCategorias = async (req, res) => {
 // Crear nueva categoría
 const createCategoria = async (req, res) => {
   try {
-    const { nombre, descripcion, color, orden } = req.body;
+    const { nombre, descripcion, color, orden, tipo } = req.body;
 
     if (!nombre) {
       return res.status(400).json({
@@ -53,11 +53,20 @@ const createCategoria = async (req, res) => {
       });
     }
 
+    // Validar tipo si se proporciona
+    if (tipo && !['Proyecto', 'Administrativo'].includes(tipo)) {
+      return res.status(400).json({
+        success: false,
+        message: 'El tipo debe ser "Proyecto" o "Administrativo"'
+      });
+    }
+
     const categoria = await Categorias_suministro.create({
       nombre,
       descripcion,
       color,
-      orden
+      orden,
+      tipo: tipo || 'Proyecto' // Default a 'Proyecto'
     });
 
     res.status(201).json({
@@ -86,7 +95,7 @@ const createCategoria = async (req, res) => {
 const updateCategoria = async (req, res) => {
   try {
     const { id } = req.params;
-    const { nombre, descripcion, color, orden, activo } = req.body;
+    const { nombre, descripcion, color, orden, activo, tipo } = req.body;
 
     const categoria = await Categorias_suministro.findByPk(id);
     if (!categoria) {
@@ -96,12 +105,21 @@ const updateCategoria = async (req, res) => {
       });
     }
 
+    // Validar tipo si se proporciona
+    if (tipo && !['Proyecto', 'Administrativo'].includes(tipo)) {
+      return res.status(400).json({
+        success: false,
+        message: 'El tipo debe ser "Proyecto" o "Administrativo"'
+      });
+    }
+
     await categoria.update({
       nombre,
       descripcion,
       color,
       orden,
-      activo
+      activo,
+      tipo
     });
 
     res.json({
@@ -202,9 +220,43 @@ const reorderCategorias = async (req, res) => {
   }
 };
 
+// Obtener categorías por tipo
+const getCategoriasByTipo = async (req, res) => {
+  try {
+    const { tipo } = req.params;
+
+    if (!['Proyecto', 'Administrativo'].includes(tipo)) {
+      return res.status(400).json({
+        success: false,
+        message: 'El tipo debe ser "Proyecto" o "Administrativo"'
+      });
+    }
+
+    const categorias = await Categorias_suministro.findAll({
+      where: { 
+        activo: true,
+        tipo: tipo
+      },
+      order: [['orden', 'ASC'], ['nombre', 'ASC']]
+    });
+
+    res.json({
+      success: true,
+      data: categorias
+    });
+  } catch (error) {
+    console.error('Error al obtener categorías por tipo:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener las categorías por tipo'
+    });
+  }
+};
+
 module.exports = {
   getCategorias,
   getAllCategorias,
+  getCategoriasByTipo,
   createCategoria,
   updateCategoria,
   deleteCategoria,

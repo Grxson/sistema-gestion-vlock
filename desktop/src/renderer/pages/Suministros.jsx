@@ -28,7 +28,9 @@ import {
   FaUpload,
   FaFileDownload,
   FaEye,
-  FaListUl
+  FaListUl,
+  FaExpand,
+  FaDesktop
 } from 'react-icons/fa';
 import { formatCurrency } from '../utils/currency';
 import { formatNumber, formatNumberForChart, formatPercentage, formatUnidadMedida } from '../utils/formatters';
@@ -41,6 +43,7 @@ import {
   exportToPDF, 
   processImportFile 
 } from '../utils/exportUtils';
+import { exportReporteTipoPDF, exportReporteTipoExcel } from '../utils/reporteTipoExport';
 import ReportePersonalizadoModal from '../components/ReportePersonalizado/ReportePersonalizadoModal';
 import useReportePersonalizadoCompleto from '../hooks/useReportePersonalizadoCompleto';
 import ChartModal from '../components/ui/ChartModal';
@@ -67,6 +70,7 @@ import TimeInput from '../components/ui/TimeInput';
 import FormularioSuministros from '../components/FormularioSuministros';
 import SuministroDeleteConfirmModal from '../components/SuministroDeleteConfirmModal';
 import SuministroNotificationModal from '../components/SuministroNotificationModal';
+import FiltroTipoCategoria from '../components/common/FiltroTipoCategoria';
 import { useToast } from '../contexts/ToastContext';
 
 // Importar testing suite para desarrollo
@@ -136,15 +140,37 @@ const getDisplayUnidadMedida = (key) => {
   return UNIDADES_MEDIDA[key] || key;
 };
 
-const getDisplayCategoria = (key) => {
-  return CATEGORIAS_SUMINISTRO[key] || key;
+const getDisplayCategoria = (id, categoriasDinamicas) => {
+  if (!id) {
+    return 'Sin categoría';
+  }
+
+  if (!Array.isArray(categoriasDinamicas)) {
+    return 'Sin categoría';
+  }
+
+  // Si el id es un objeto categoría, extraer el nombre
+  if (typeof id === 'object' && id && id.nombre) {
+    return id.nombre;
+  }
+
+  // Si el id es un string (nombre de la categoría), buscar por nombre
+  if (typeof id === 'string') {
+    const categoriaPorNombre = categoriasDinamicas.find(cat => cat.nombre === id);
+    return categoriaPorNombre ? categoriaPorNombre.nombre : 'Sin categoría';
+  }
+
+  // Si el id es un número, buscar por id_categoria
+  const categoria = categoriasDinamicas.find(cat => cat.id_categoria == id);
+  return categoria ? categoria.nombre : 'Sin categoría';
 };
 
 const Suministros = () => {
   const [suministros, setSuministros] = useState([]);
   const [proyectos, setProyectos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
-  const [categorias, setCategorias] = useState(CATEGORIAS_SUMINISTRO);
+  const [categorias, setCategorias] = useState([]); // Now using dynamic categories
+  const [categoriasDinamicas, setCategoriasDinamicas] = useState([]); // Categorías desde API
   const [unidadesMedida, setUnidadesMedida] = useState(UNIDADES_MEDIDA);
   const [loading, setLoading] = useState(true);
   const [showMultipleModal, setShowMultipleModal] = useState(false);
@@ -156,8 +182,13 @@ const Suministros = () => {
     categoria: '',
     estado: '',
     proyecto: '',
-    proveedor: ''
+    proveedor: '',
+    tipo_categoria: '' // Nuevo filtro para tipo de categoría
   });
+
+  // Estados para estadísticas por tipo
+  const [estadisticasTipo, setEstadisticasTipo] = useState(null);
+  const [loadingEstadisticas, setLoadingEstadisticas] = useState(false);
 
   // Estados para paginación
   const [currentPage, setCurrentPage] = useState(1);
@@ -236,6 +267,7 @@ const Suministros = () => {
     gastosPorProveedor: null,
     cantidadPorEstado: null,
     distribucionTipos: null,
+    analisisPorTipoGasto: null, // Nueva gráfica
     tendenciaEntregas: null,
     codigosProducto: null,
     analisisTecnicoConcreto: null,
@@ -265,7 +297,8 @@ const Suministros = () => {
     gastosPorProyecto: false,
     gastosPorProveedor: false,
     cantidadPorEstado: false,
-    distribucionTipos: false,
+    distribucionTipos: true, // Habilitado por defecto
+    analisisPorTipoGasto: true, // Nueva gráfica para Proyecto vs Administrativo
     tendenciaEntregas: false,
     codigosProducto: false,
     analisisTecnicoConcreto: false,
@@ -294,7 +327,7 @@ const Suministros = () => {
   const [formData, setFormData] = useState({
     nombre: '',
     descripcion: '', // Campo de descripción detallada del formulario
-    tipo_suministro: 'Material',
+    id_categoria_suministro: null, // Usar categorías dinámicas
     cantidad: '',
     unidad_medida: 'pz', // Valor por defecto
     precio_unitario: '',
@@ -316,6 +349,7 @@ const Suministros = () => {
 
   useEffect(() => {
     loadData();
+    loadCategorias();
   }, []);
 
   // Efecto para cerrar dropdown al hacer click fuera
@@ -363,8 +397,14 @@ const Suministros = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      // Preparar parámetros de filtro para la API
+      const params = {};
+      if (filters.tipo_categoria) {
+        params.tipo_categoria = filters.tipo_categoria;
+      }
+
       const [suministrosResponse, proyectosResponse, proveedoresResponse] = await Promise.all([
-        api.getSuministros(),
+        api.getSuministros(params),
         api.getProyectos(),
         api.getProveedores()
       ]);
@@ -389,7 +429,45 @@ const Suministros = () => {
     } finally {
       setLoading(false);
     }
+  }, [filters.tipo_categoria]);
+
+  // Función para cargar categorías dinámicas desde la API
+  const loadCategorias = useCallback(async () => {
+    try {
+      console.log('🔄 Cargando categorías dinámicas...');
+      const response = await api.get('/config/categorias');
+      if (response.success) {
+        const categoriasAPI = response.data || [];
+        console.log('✅ Categorías cargadas:', categoriasAPI.length);
+        setCategoriasDinamicas(categoriasAPI);
+        setCategorias(categoriasAPI); // También actualizar el estado categorias
+      }
+    } catch (error) {
+      console.error('❌ Error cargando categorías:', error);
+      setCategoriasDinamicas([]);
+      setCategorias([]);
+    }
   }, []);
+
+  // Función para cargar estadísticas por tipo
+  const loadEstadisticasTipo = useCallback(async () => {
+    setLoadingEstadisticas(true);
+    try {
+      const response = await api.getEstadisticasSuministrosPorTipo();
+      if (response.success) {
+        setEstadisticasTipo(response.data);
+      }
+    } catch (error) {
+      console.error('Error cargando estadísticas:', error);
+    } finally {
+      setLoadingEstadisticas(false);
+    }
+  }, []);
+
+  // Cargar estadísticas al montar el componente
+  useEffect(() => {
+    loadEstadisticasTipo();
+  }, [loadEstadisticasTipo]);
 
   // Función para cargar datos de gráficas
   const loadChartData = async () => {
@@ -416,8 +494,11 @@ const Suministros = () => {
                                   suministro.proveedor?.nombre === chartFilters.proveedorNombre;
           
           // Filtro por tipo de suministro
+          const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
+            ? suministro.categoria.nombre 
+            : suministro.categoria;
           const matchesTipo = !chartFilters.tipoSuministro || 
-                             (suministro.tipo_suministro || suministro.categoria) === chartFilters.tipoSuministro;
+                             (suministro.tipo_suministro || categoriaNombre) === chartFilters.tipoSuministro;
           
           // Filtro por estado
           const matchesEstado = !chartFilters.estado || suministro.estado === chartFilters.estado;
@@ -476,6 +557,13 @@ const Suministros = () => {
         } catch (error) {
           console.error('❌ Error en distribucionTipos:', error);
           chartDataProcessed.distribucionTipos = null;
+        }
+
+        try {
+          chartDataProcessed.analisisPorTipoGasto = processAnalisisPorTipoGasto(filteredData);
+        } catch (error) {
+          console.error('❌ Error en analisisPorTipoGasto:', error);
+          chartDataProcessed.analisisPorTipoGasto = null;
         }
 
         try {
@@ -665,7 +753,10 @@ const Suministros = () => {
       
       data.forEach(suministro => {
         try {
-          const categoria = suministro.tipo_suministro || suministro.categoria || 'Sin categoría';
+          const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
+            ? suministro.categoria.nombre 
+            : suministro.categoria;
+          const categoria = suministro.tipo_suministro || categoriaNombre || 'Sin categoría';
           const cantidad = parseFloat(suministro.cantidad) || 0;
           const precio = parseFloat(suministro.precio_unitario) || 0;
           const valor = cantidad * precio;
@@ -1009,7 +1100,10 @@ const Suministros = () => {
       
       data.forEach(suministro => {
         try {
-          const tipo = suministro.tipo_suministro || suministro.categoria || 'Sin tipo';
+          const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
+            ? suministro.categoria.nombre 
+            : suministro.categoria;
+          const tipo = suministro.tipo_suministro || categoriaNombre || 'Sin tipo';
           const cantidad = parseFloat(suministro.cantidad) || 0;
           const precio = parseFloat(suministro.precio_unitario) || 0;
           const valor = cantidad * precio;
@@ -1084,6 +1178,192 @@ const Suministros = () => {
         labels: ['Error'],
         datasets: [{
           label: 'Cantidad de Suministros',
+          data: [0],
+          backgroundColor: ['rgba(239, 68, 68, 0.8)']
+        }]
+      };
+    }
+  };
+
+  // Procesar análisis por tipo de gasto (Proyecto vs Administrativo)
+  const processAnalisisPorTipoGasto = (data) => {
+    try {
+      const gastosPorTipo = {};
+      const cantidadPorTipo = {};
+      
+      console.log('🔍 Procesando análisis por tipo de gasto, datos recibidos:', data.length);
+      
+      data.forEach((suministro, index) => {
+        try {
+          let tipoGasto = 'Sin clasificar';
+          
+          // Obtener categoría desde la relación incluida o desde el ID
+          let categoria = null;
+          if (suministro.categoria && suministro.categoria.nombre) {
+            categoria = suministro.categoria.nombre;
+          } else if (suministro.id_categoria_suministro) {
+            // Mapeo directo basado en la migración conocida
+            const mapeoCategoriasId = {
+              1: 'Material',        // Proyecto
+              2: 'Herramienta',     // Proyecto  
+              3: 'Equipo_Ligero',   // Proyecto
+              4: 'Acero',           // Proyecto
+              5: 'Cimbra',          // Proyecto
+              6: 'Ferreteria',      // Proyecto
+              7: 'Maquinaria',      // Proyecto
+              8: 'Concreto',        // Proyecto
+              9: 'Servicio',        // Administrativo
+              10: 'Consumible'      // Administrativo
+            };
+            categoria = mapeoCategoriasId[suministro.id_categoria_suministro] || 'Sin_clasificar';
+          }
+          
+          // Clasificación por tipo de categoría
+          if (categoria) {
+            // Categorías de proyecto
+            if (['Material', 'Herramienta', 'Equipo_Ligero', 'Acero', 'Cimbra', 'Ferreteria', 'Maquinaria', 'Concreto'].includes(categoria)) {
+              tipoGasto = 'Proyecto';
+            } 
+            // Categorías administrativas
+            else if (['Servicio', 'Consumible'].includes(categoria)) {
+              tipoGasto = 'Administrativo';
+            }
+          }
+
+          // Calcular valor usando costo_total si existe, sino calcular
+          let valor = 0;
+          if (suministro.costo_total) {
+            valor = parseFloat(suministro.costo_total) || 0;
+          } else if (suministro.subtotal) {
+            valor = parseFloat(suministro.subtotal) || 0;
+          } else {
+            const cantidad = parseFloat(suministro.cantidad) || 0;
+            const precio = parseFloat(suministro.precio_unitario) || 0;
+            valor = cantidad * precio;
+          }
+          
+          console.log(`📊 ${index + 1}. ${suministro.nombre}: Categoría="${categoria}" (ID: ${suministro.id_categoria_suministro}) -> Tipo="${tipoGasto}" = $${valor.toFixed(2)}`);
+          
+          if (!gastosPorTipo[tipoGasto]) {
+            gastosPorTipo[tipoGasto] = 0;
+            cantidadPorTipo[tipoGasto] = 0;
+          }
+          
+          gastosPorTipo[tipoGasto] += valor;
+          cantidadPorTipo[tipoGasto] += 1;
+          
+        } catch (itemError) {
+          console.error('❌ Error procesando suministro en analisisPorTipoGasto:', itemError, suministro);
+        }
+      });
+
+      const tipos = Object.keys(gastosPorTipo);
+      const valores = tipos.map(tipo => gastosPorTipo[tipo]);
+      const cantidades = tipos.map(tipo => cantidadPorTipo[tipo]);
+
+      console.log('📈 Resumen análisis por tipo:');
+      tipos.forEach((tipo, i) => {
+        console.log(`  ${tipo}: $${valores[i].toFixed(2)} (${cantidades[i]} items)`);
+      });
+
+      if (tipos.length === 0) {
+        console.log('⚠️ No se encontraron datos para procesar');
+        return {
+          labels: ['Sin datos'],
+          datasets: [{
+            label: 'Valor Total',
+            data: [0],
+            backgroundColor: ['rgba(156, 163, 175, 0.8)']
+          }]
+        };
+      }
+
+      // Colores específicos para tipos de gasto
+      const coloresTipoGasto = {
+        'Proyecto': 'rgba(59, 130, 246, 0.8)',      // Azul para proyectos
+        'Administrativo': 'rgba(16, 185, 129, 0.8)', // Verde para administrativo
+        'Sin clasificar': 'rgba(156, 163, 175, 0.8)' // Gris para sin clasificar
+      };
+
+      const valorTotal = valores.reduce((sum, val) => sum + val, 0);
+      const cantidadTotal = cantidades.reduce((sum, cant) => sum + cant, 0);
+      
+      console.log('Resultado análisis por tipo de gasto:', {
+        tipos,
+        valores,
+        cantidades,
+        gastosPorTipo,
+        cantidadPorTipo,
+        valorTotal,
+        cantidadTotal
+      });
+      
+      return {
+        labels: tipos,
+        datasets: [{
+          label: 'Valor Total ($)',
+          data: valores,
+          backgroundColor: tipos.map(tipo => coloresTipoGasto[tipo] || 'rgba(156, 163, 175, 0.8)'),
+          borderColor: tipos.map(tipo => 
+            (coloresTipoGasto[tipo] || 'rgba(156, 163, 175, 0.8)').replace('0.8', '1')
+          ),
+          borderWidth: 2,
+          hoverBorderWidth: 3
+        }],
+        // Métricas adicionales
+        metrics: {
+          valorTotal: valorTotal.toFixed(2),
+          cantidadTotal,
+          totalProyecto: (gastosPorTipo['Proyecto'] || 0).toFixed(2),
+          totalAdministrativo: (gastosPorTipo['Administrativo'] || 0).toFixed(2),
+          cantidadProyecto: cantidadPorTipo['Proyecto'] || 0,
+          cantidadAdministrativo: cantidadPorTipo['Administrativo'] || 0,
+          promedioProyecto: gastosPorTipo['Proyecto'] ? (gastosPorTipo['Proyecto'] / cantidadPorTipo['Proyecto']).toFixed(2) : 0,
+          promedioAdministrativo: gastosPorTipo['Administrativo'] ? (gastosPorTipo['Administrativo'] / cantidadPorTipo['Administrativo']).toFixed(2) : 0,
+          promedioGeneral: cantidadTotal > 0 ? (valorTotal / cantidadTotal).toFixed(2) : 0,
+          porcentajeProyecto: valorTotal > 0 ? ((gastosPorTipo['Proyecto'] || 0) * 100 / valorTotal).toFixed(1) : 0,
+          porcentajeAdministrativo: valorTotal > 0 ? ((gastosPorTipo['Administrativo'] || 0) * 100 / valorTotal).toFixed(1) : 0,
+          balanceString: (() => {
+            const proyectoPerc = valorTotal > 0 ? ((gastosPorTipo['Proyecto'] || 0) * 100 / valorTotal) : 0;
+            const adminPerc = valorTotal > 0 ? ((gastosPorTipo['Administrativo'] || 0) * 100 / valorTotal) : 0;
+            
+            if (proyectoPerc > 70) return 'Enfocado en Proyectos';
+            if (adminPerc > 70) return 'Enfocado Administrativo';
+            if (Math.abs(proyectoPerc - adminPerc) < 20) return 'Equilibrado';
+            return proyectoPerc > adminPerc ? 'Más Proyectos' : 'Más Administrativo';
+          })(),
+          interpretacion: (() => {
+            const proyectoPerc = valorTotal > 0 ? ((gastosPorTipo['Proyecto'] || 0) * 100 / valorTotal) : 0;
+            const adminPerc = valorTotal > 0 ? ((gastosPorTipo['Administrativo'] || 0) * 100 / valorTotal) : 0;
+            
+            if (proyectoPerc > 70) {
+              return `El ${proyectoPerc.toFixed(1)}% del presupuesto se destina a proyectos, indicando una fuerte inversión en desarrollo y construcción.`;
+            } else if (adminPerc > 70) {
+              return `El ${adminPerc.toFixed(1)}% del presupuesto es administrativo, sugiriendo un enfoque en operaciones y mantenimiento.`;
+            } else {
+              return `La distribución está balanceada con ${proyectoPerc.toFixed(1)}% para proyectos y ${adminPerc.toFixed(1)}% administrativo.`;
+            }
+          })(),
+          recomendacion: (() => {
+            const proyectoPerc = valorTotal > 0 ? ((gastosPorTipo['Proyecto'] || 0) * 100 / valorTotal) : 0;
+            const adminPerc = valorTotal > 0 ? ((gastosPorTipo['Administrativo'] || 0) * 100 / valorTotal) : 0;
+            
+            if (proyectoPerc > 80) {
+              return 'Considere aumentar los gastos administrativos para mantener operaciones eficientes.';
+            } else if (adminPerc > 60) {
+              return 'Evalúe oportunidades para invertir más en proyectos que generen valor.';
+            } else {
+              return 'Mantenga el equilibrio actual entre inversión en proyectos y gastos operativos.';
+            }
+          })()
+        }
+      };
+    } catch (error) {
+      console.error('Error procesando analisisPorTipoGasto:', error);
+      return {
+        labels: ['Error'],
+        datasets: [{
+          label: 'Valor Total',
           data: [0],
           backgroundColor: ['rgba(239, 68, 68, 0.8)']
         }]
@@ -1244,7 +1524,13 @@ const Suministros = () => {
     if (!categoriaAnalizar || categoriaAnalizar === 'Todos') {
       const categorias = {};
       data.forEach(suministro => {
-        const cat = suministro.tipo_suministro || suministro.categoria || 'Material';
+        // Asegurar que extraemos el nombre si categoria es un objeto
+        let cat = suministro.tipo_suministro;
+        if (!cat) {
+          cat = typeof suministro.categoria === 'object' && suministro.categoria 
+            ? suministro.categoria.nombre 
+            : suministro.categoria || 'Material';
+        }
         categorias[cat] = (categorias[cat] || 0) + 1;
       });
       
@@ -1258,10 +1544,13 @@ const Suministros = () => {
     }
 
     // Filtrar datos por categoría
-    const datosCategoria = data.filter(suministro => 
-      (suministro.tipo_suministro === categoriaAnalizar || 
-       suministro.categoria === categoriaAnalizar)
-    );
+    const datosCategoria = data.filter(suministro => {
+      const categoriaComparar = typeof suministro.categoria === 'object' && suministro.categoria 
+        ? suministro.categoria.nombre 
+        : suministro.categoria;
+      return (suministro.tipo_suministro === categoriaAnalizar || 
+              categoriaComparar === categoriaAnalizar);
+    });
 
     if (datosCategoria.length === 0) return null;
 
@@ -1393,11 +1682,14 @@ const Suministros = () => {
 
   // Procesar concreto detallado (por proveedor y especificación)
   const processConcretoDetallado = (data) => {
-    const concretoData = data.filter(suministro => 
-      (suministro.tipo_suministro === 'Concreto' || 
-       suministro.categoria === 'Concreto' ||
-       suministro.nombre?.toLowerCase().includes('concreto'))
-    );
+    const concretoData = data.filter(suministro => {
+      const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
+        ? suministro.categoria.nombre 
+        : suministro.categoria;
+      return (suministro.tipo_suministro === 'Concreto' || 
+              categoriaNombre === 'Concreto' ||
+              suministro.nombre?.toLowerCase().includes('concreto'));
+    });
 
     const proveedores = {};
     
@@ -1752,12 +2044,15 @@ const Suministros = () => {
 
   // Procesar total de metros cúbicos de concreto
   const processTotalMetrosCubicos = (data) => {
-    const concretoData = data.filter(suministro => 
-      (suministro.tipo_suministro === 'Concreto' || 
-       suministro.categoria === 'Concreto' ||
-       suministro.nombre?.toLowerCase().includes('concreto')) &&
-      (suministro.unidad_medida === 'm³')
-    );
+    const concretoData = data.filter(suministro => {
+      const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
+        ? suministro.categoria.nombre 
+        : suministro.categoria;
+      return (suministro.tipo_suministro === 'Concreto' || 
+              categoriaNombre === 'Concreto' ||
+              suministro.nombre?.toLowerCase().includes('concreto')) &&
+             (suministro.unidad_medida === 'm³');
+    });
 
     // Agrupar por mes
     const metrosPorMes = {};
@@ -1805,10 +2100,13 @@ const Suministros = () => {
     // Filtrar datos por categoría si hay filtro específico
     let datosAnalizar = data;
     if (categoriaFiltrada && categoriaFiltrada !== 'Todos') {
-      datosAnalizar = data.filter(suministro => 
-        suministro.tipo_suministro === categoriaFiltrada || 
-        suministro.categoria === categoriaFiltrada
-      );
+      datosAnalizar = data.filter(suministro => {
+        const categoriaComparar = typeof suministro.categoria === 'object' && suministro.categoria 
+          ? suministro.categoria.nombre 
+          : suministro.categoria;
+        return (suministro.tipo_suministro === categoriaFiltrada || 
+                categoriaComparar === categoriaFiltrada);
+      });
     }
 
     const analisisUnidades = {};
@@ -1826,7 +2124,11 @@ const Suministros = () => {
       }
       analisisUnidades[unidad].cantidad += cantidad;
       analisisUnidades[unidad].registros += 1;
-      analisisUnidades[unidad].categorias.add(suministro.tipo_suministro || suministro.categoria || 'Sin categoría');
+      // Extraer nombre si categoria es un objeto
+      const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
+        ? suministro.categoria.nombre 
+        : suministro.categoria;
+      analisisUnidades[unidad].categorias.add(suministro.tipo_suministro || categoriaNombre || 'Sin categoría');
     });
 
     // Convertir a array y ordenar por cantidad
@@ -1881,7 +2183,11 @@ const Suministros = () => {
     let totalGeneral = 0;
     
     data.forEach(suministro => {
-      const categoria = suministro.categoria || suministro.tipo_suministro || 'Sin Categoría';
+      // Extraer nombre si categoria es un objeto
+      const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
+        ? suministro.categoria.nombre 
+        : suministro.categoria;
+      const categoria = categoriaNombre || suministro.tipo_suministro || 'Sin Categoría';
       const cantidad = parseFloat(suministro.cantidad) || 0;
       const precio = parseFloat(suministro.precio_unitario) || 0;
       const gasto = cantidad * precio;
@@ -2580,7 +2886,7 @@ const Suministros = () => {
       ...prev,
       nombre: templateSuministro.nombre,
       descripcion: templateSuministro.descripcion_detallada || '',
-      tipo_suministro: templateSuministro.tipo_suministro || 'Material',
+      id_categoria_suministro: templateSuministro.id_categoria_suministro || null,
       unidad_medida: templateSuministro.unidad_medida || 'pz',
       codigo_producto: templateSuministro.codigo_producto || '',
       precio_unitario: templateSuministro.precio_unitario || '',
@@ -2754,6 +3060,15 @@ const Suministros = () => {
         };
         response = await api.updateSuministro(editingSuministro.id_suministro, updatePayload);
         if (response.success) {
+          // Actualizar el estado local directamente sin recargar todo
+          setSuministros(prevSuministros => 
+            prevSuministros.map(suministro => 
+              suministro.id_suministro === editingSuministro.id_suministro 
+                ? { ...suministro, ...submitData } 
+                : suministro
+            )
+          );
+          
           showSuccess(
             'Suministro actualizado',
             `${submitData.nombre} ha sido actualizado correctamente`
@@ -2762,6 +3077,9 @@ const Suministros = () => {
       } else {
         response = await api.createSuministro(submitData);
         if (response.success) {
+          // Para nuevos suministros, sí necesitamos recargar para obtener los datos completos
+          await loadData();
+          
           showSuccess(
             'Suministro creado',
             `${submitData.nombre} ha sido registrado exitosamente`
@@ -2770,7 +3088,10 @@ const Suministros = () => {
       }
 
       if (response.success) {
-        await loadData();
+        // Solo cargar datos completos si fue una creación nueva
+        if (!editingSuministro) {
+          await loadData();
+        }
         handleCloseModal();
       }
     } catch (error) {
@@ -3310,7 +3631,7 @@ const Suministros = () => {
     setFormData({
       nombre: '',
       descripcion: '',
-      tipo_suministro: 'Material',
+      id_categoria_suministro: null,
       cantidad: '',
       unidad_medida: 'pz',
       precio_unitario: '',
@@ -3342,14 +3663,22 @@ const Suministros = () => {
                          suministro.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.folio?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesCategoria = !filters.categoria || (suministro.tipo_suministro || suministro.categoria) === filters.categoria;
+    const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
+      ? suministro.categoria.nombre 
+      : suministro.categoria;
+    const matchesCategoria = !filters.categoria || (suministro.tipo_suministro || categoriaNombre) === filters.categoria;
     const matchesEstado = !filters.estado || suministro.estado === filters.estado;
     const matchesProyecto = !filters.proyecto || suministro.id_proyecto?.toString() === filters.proyecto;
     const matchesProveedor = !filters.proveedor || 
                             suministro.proveedor === filters.proveedor ||
                             suministro.proveedor?.nombre === filters.proveedor;
+    
+    // Nuevo filtro por tipo de categoría
+    const matchesTipoCategoria = !filters.tipo_categoria || 
+                                suministro.categoria?.tipo === filters.tipo_categoria;
 
-    return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto && matchesProveedor;
+    return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto && 
+           matchesProveedor && matchesTipoCategoria;
   });
 
   // Calcular paginación
@@ -3468,6 +3797,45 @@ const Suministros = () => {
     }
     
     return sanitized;
+  };
+
+  // Función para manejar el filtro de tipo de categoría
+  const handleFiltroTipoChange = (nuevoTipo) => {
+    setFilters(prev => ({
+      ...prev,
+      tipo_categoria: nuevoTipo
+    }));
+    setCurrentPage(1); // Resetear página al cambiar filtro
+  };
+
+  // Función para exportar reportes por tipo
+  const handleExportReport = async (tipoReporte) => {
+    try {
+      showInfo('Exportando reporte', 'Generando reporte por tipo de gasto...');
+      
+      if (tipoReporte === 'tipo') {
+        // Mostrar opciones de exportación
+        const opcion = window.confirm('¿Desea exportar en formato PDF? \n\nAceptar = PDF\nCancelar = Excel');
+        
+        let fileName;
+        if (opcion) {
+          // Exportar a PDF
+          fileName = await exportReporteTipoPDF(estadisticasTipo, suministros, filters);
+        } else {
+          // Exportar a Excel
+          fileName = exportReporteTipoExcel(estadisticasTipo, suministros, filters);
+        }
+        
+        showSuccess('Reporte exportado', `El reporte por tipo ha sido generado: ${fileName}`);
+      } else {
+        // Fallback a exportación existente
+        await handleExportToPDF();
+        showSuccess('Reporte exportado', 'El reporte ha sido generado correctamente');
+      }
+    } catch (error) {
+      console.error('Error exportando reporte:', error);
+      showError('Error', 'No se pudo exportar el reporte: ' + error.message);
+    }
   };
 
   const formatQuantity = (quantity) => {
@@ -3591,8 +3959,16 @@ const Suministros = () => {
         </div>
       </div>
 
+      {/* Filtro por Tipo de Categoría */}
+      <FiltroTipoCategoria
+        filtroActivo={filters.tipo_categoria}
+        onFiltroChange={handleFiltroTipoChange}
+        estadisticas={estadisticasTipo}
+        className="mb-6"
+      />
+
       {/* Información de filtros activos */}
-      {(searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor) && (
+      {(searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria) && (
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
@@ -3607,7 +3983,7 @@ const Suministros = () => {
             <button
               onClick={() => {
                 setSearchTerm('');
-                setFilters({ categoria: '', estado: '', proyecto: '', proveedor: '' });
+                setFilters({ categoria: '', estado: '', proyecto: '', proveedor: '', tipo_categoria: '' });
               }}
               className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium flex items-center gap-1"
             >
@@ -3641,9 +4017,9 @@ const Suministros = () => {
             >
               <FaFilter className="w-4 h-4" />
               {showFilters ? 'Filtros' : 'Filtros'}
-              {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor) && (
+              {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria) && (
                 <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-1">
-                  {[filters.categoria, filters.estado, filters.proyecto, filters.proveedor].filter(f => f).length}
+                  {[filters.categoria, filters.estado, filters.proyecto, filters.proveedor, filters.tipo_categoria].filter(f => f).length}
                 </span>
               )}
               {showFilters ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
@@ -3711,8 +4087,8 @@ const Suministros = () => {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                   <option value="">Todas las categorías</option>
-                  {Object.entries(CATEGORIAS_SUMINISTRO).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
+                  {categoriasDinamicas.map((categoria) => (
+                    <option key={categoria.id} value={categoria.id}>{categoria.nombre}</option>
                   ))}
                 </select>
               </div>
@@ -3862,8 +4238,8 @@ const Suministros = () => {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                   >
                     <option value="">Todos los tipos</option>
-                    {Object.entries(CATEGORIAS_SUMINISTRO).map(([key, label]) => (
-                      <option key={key} value={key}>{label}</option>
+                    {categoriasDinamicas.map((categoria) => (
+                      <option key={categoria.id} value={categoria.id}>{categoria.nombre}</option>
                     ))}
                   </select>
                 </div>
@@ -3912,6 +4288,7 @@ const Suministros = () => {
                         gastosPorProveedor: true,
                         cantidadPorEstado: true,
                         distribucionTipos: true,
+                        analisisPorTipoGasto: true, // Nueva opción
                         tendenciaEntregas: true,
                         codigosProducto: true,
                         analisisTecnicoConcreto: true,
@@ -3937,6 +4314,7 @@ const Suministros = () => {
                         gastosPorProveedor: false,
                         cantidadPorEstado: false,
                         distribucionTipos: false,
+                        analisisPorTipoGasto: false, // Nueva opción
                         tendenciaEntregas: false,
                         codigosProducto: false,
                         analisisTecnicoConcreto: false,
@@ -4044,7 +4422,16 @@ const Suministros = () => {
                           onChange={(e) => setSelectedCharts({...selectedCharts, distribucionTipos: e.target.checked})}
                           className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                         />
-                        <span className="text-gray-700 dark:text-gray-300">Distribución por Tipos</span>
+                        <span className="text-gray-700 dark:text-gray-300">Distribución por Categorías</span>
+                      </label>
+                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                        <input
+                          type="checkbox"
+                          checked={selectedCharts.tendenciaEntregas}
+                          onChange={(e) => setSelectedCharts({...selectedCharts, tendenciaEntregas: e.target.checked})}
+                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                        />
+                        <span className="text-gray-700 dark:text-gray-300">Tendencia de Entregas</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
@@ -4184,6 +4571,15 @@ const Suministros = () => {
                             />
                             <span className="text-gray-700 dark:text-gray-300">Gastos por Categoría (con %)</span>
                           </label>
+                          <label className="flex items-center space-x-2 cursor-pointer text-sm">
+                            <input
+                              type="checkbox"
+                              checked={selectedCharts.analisisPorTipoGasto}
+                              onChange={(e) => setSelectedCharts({...selectedCharts, analisisPorTipoGasto: e.target.checked})}
+                              className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                            />
+                            <span className="text-gray-700 dark:text-gray-300">🎯 Análisis Proyecto vs Admin</span>
+                          </label>
                         </div>
                       </div>
                     </div>
@@ -4206,7 +4602,287 @@ const Suministros = () => {
                 ))}
               </div>
             ) : (
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+              <div className="space-y-8">
+                
+                {/* Sección Especial: Análisis por Tipo de Gasto */}
+                {(selectedCharts.analisisPorTipoGasto && chartData.analisisPorTipoGasto) && (
+                  <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl border-2 border-purple-200 dark:border-purple-700 p-6">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center gap-4">
+                        <div className="bg-purple-100 dark:bg-purple-900/50 p-3 rounded-full">
+                          <FaChartPie className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <div>
+                          <h2 className="text-2xl font-bold text-purple-900 dark:text-purple-100">
+                            Análisis por Tipo de Gasto
+                          </h2>
+                          <p className="text-purple-700 dark:text-purple-300 text-sm">
+                            Clasificación entre gastos de Proyecto y Administrativos
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setChartModal({
+                          isOpen: true,
+                          chartData: chartData.analisisPorTipoGasto,
+                          chartOptions: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                              legend: {
+                                position: 'bottom',
+                                labels: {
+                                  color: getChartColors().textColor,
+                                  padding: 20,
+                                  font: { size: 14, weight: '500' }
+                                }
+                              },
+                              tooltip: {
+                                backgroundColor: getChartColors().tooltipBg,
+                                titleColor: getChartColors().tooltipText,
+                                bodyColor: getChartColors().tooltipText,
+                                callbacks: {
+                                  label: function(context) {
+                                    const valor = context.parsed;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = ((valor * 100) / total).toFixed(1);
+                                    return `${context.label}: $${valor.toLocaleString()} (${percentage}%)`;
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          chartType: 'doughnut',
+                          title: 'Análisis por Tipo de Gasto - Vista Completa',
+                          customContent: (
+                            <div className="space-y-6">
+                              {/* Métricas principales */}
+                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <FaBuilding className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                    <span className="text-blue-600 dark:text-blue-400 font-semibold">Gastos Proyecto</span>
+                                  </div>
+                                  <div className="text-3xl font-bold text-blue-800 dark:text-blue-300">
+                                    {chartData.analisisPorTipoGasto.metrics?.porcentajeProyecto || '0'}%
+                                  </div>
+                                  <div className="text-sm text-blue-600 dark:text-blue-400">
+                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} total
+                                  </div>
+                                  <div className="text-xs text-blue-500 dark:text-blue-400 mt-1">
+                                    {chartData.analisisPorTipoGasto.metrics?.cantidadProyecto || '0'} items
+                                  </div>
+                                </div>
+                                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <FaDesktop className="w-5 h-5 text-green-600 dark:text-green-400" />
+                                    <span className="text-green-600 dark:text-green-400 font-semibold">Administrativo</span>
+                                  </div>
+                                  <div className="text-3xl font-bold text-green-800 dark:text-green-300">
+                                    {chartData.analisisPorTipoGasto.metrics?.porcentajeAdministrativo || '0'}%
+                                  </div>
+                                  <div className="text-sm text-green-600 dark:text-green-400">
+                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} total
+                                  </div>
+                                  <div className="text-xs text-green-500 dark:text-green-400 mt-1">
+                                    {chartData.analisisPorTipoGasto.metrics?.cantidadAdministrativo || '0'} items
+                                  </div>
+                                </div>
+                                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <FaDollarSign className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                    <span className="text-purple-600 dark:text-purple-400 font-semibold">Valor Total</span>
+                                  </div>
+                                  <div className="text-3xl font-bold text-purple-800 dark:text-purple-300">
+                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.valorTotal || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                  </div>
+                                  <div className="text-sm text-purple-600 dark:text-purple-400">
+                                    {chartData.analisisPorTipoGasto.metrics?.cantidadTotal || '0'} suministros
+                                  </div>
+                                  <div className="text-xs text-purple-500 dark:text-purple-400 mt-1">
+                                    Promedio: ${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioGeneral || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                  </div>
+                                </div>
+                                <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <FaChartLine className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                                    <span className="text-orange-600 dark:text-orange-400 font-semibold">Distribución</span>
+                                  </div>
+                                  <div className="text-2xl font-bold text-orange-800 dark:text-orange-300">
+                                    {chartData.analisisPorTipoGasto.labels?.length || 0} tipos
+                                  </div>
+                                  <div className="text-sm text-orange-600 dark:text-orange-400">
+                                    clasificados correctamente
+                                  </div>
+                                  <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">
+                                    Balance: {chartData.analisisPorTipoGasto.metrics?.balanceString || 'Equilibrado'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Detalles por categoría */}
+                              <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
+                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
+                                  <FaChartPie className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                                  Desglose Detallado
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                    <h4 className="text-md font-medium text-blue-700 dark:text-blue-300 mb-2">Gastos de Proyecto</h4>
+                                    <div className="text-sm space-y-1">
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">Total invertido:</span>
+                                        <span className="font-medium">${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">Promedio por item:</span>
+                                        <span className="font-medium">${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">Cantidad de items:</span>
+                                        <span className="font-medium">{chartData.analisisPorTipoGasto.metrics?.cantidadProyecto || '0'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <h4 className="text-md font-medium text-green-700 dark:text-green-300 mb-2">Gastos Administrativos</h4>
+                                    <div className="text-sm space-y-1">
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">Total invertido:</span>
+                                        <span className="font-medium">${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">Promedio por item:</span>
+                                        <span className="font-medium">${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-gray-600 dark:text-gray-400">Cantidad de items:</span>
+                                        <span className="font-medium">{chartData.analisisPorTipoGasto.metrics?.cantidadAdministrativo || '0'}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Análisis de tendencias */}
+                              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                                <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-3 flex items-center gap-2">
+                                  <FaChartLine className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                                  Análisis de Distribución
+                                </h3>
+                                <div className="text-sm text-blue-700 dark:text-blue-300 space-y-2">
+                                  <p>
+                                    <strong>Interpretación:</strong> {chartData.analisisPorTipoGasto.metrics?.interpretacion || 'La distribución de gastos muestra el balance entre inversión en proyectos y costos administrativos.'}
+                                  </p>
+                                  <p>
+                                    <strong>Recomendación:</strong> {chartData.analisisPorTipoGasto.metrics?.recomendacion || 'Mantener un equilibrio saludable entre gastos operativos y de proyecto para optimizar la rentabilidad.'}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                        className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-lg transition-colors duration-200"
+                        title="Ver en pantalla completa"
+                      >
+                        <FaExpand className="w-4 h-4" />
+                      </button>
+                    </div>
+                    
+                    {/* KPIs principales */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 rounded-lg border border-blue-200 dark:border-blue-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FaBuilding className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                          <span className="text-blue-600 dark:text-blue-400 font-semibold text-sm">Gastos Proyecto</span>
+                        </div>
+                        <div className="text-2xl font-bold text-blue-800 dark:text-blue-300">
+                          {chartData.analisisPorTipoGasto.metrics?.porcentajeProyecto || '0'}%
+                        </div>
+                        <div className="text-xs text-blue-600 dark:text-blue-400">
+                          ${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} promedio
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 rounded-lg border border-green-200 dark:border-green-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FaDesktop className="w-4 h-4 text-green-600 dark:text-green-400" />
+                          <span className="text-green-600 dark:text-green-400 font-semibold text-sm">Gastos Administrativo</span>
+                        </div>
+                        <div className="text-2xl font-bold text-green-800 dark:text-green-300">
+                          {chartData.analisisPorTipoGasto.metrics?.porcentajeAdministrativo || '0'}%
+                        </div>
+                        <div className="text-xs text-green-600 dark:text-green-400">
+                          ${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} promedio
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 rounded-lg border border-purple-200 dark:border-purple-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FaDollarSign className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                          <span className="text-purple-600 dark:text-purple-400 font-semibold text-sm">Valor Total</span>
+                        </div>
+                        <div className="text-2xl font-bold text-purple-800 dark:text-purple-300">
+                          ${parseFloat(chartData.analisisPorTipoGasto.metrics?.valorTotal || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </div>
+                        <div className="text-xs text-purple-600 dark:text-purple-400">
+                          {chartData.analisisPorTipoGasto.metrics?.cantidadTotal || '0'} suministros
+                        </div>
+                      </div>
+                      
+                      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 rounded-lg border border-orange-200 dark:border-orange-700">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FaChartLine className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                          <span className="text-orange-600 dark:text-orange-400 font-semibold text-sm">Distribución</span>
+                        </div>
+                        <div className="text-sm font-bold text-orange-800 dark:text-orange-300">
+                          {chartData.analisisPorTipoGasto.labels?.length || 0} tipos
+                        </div>
+                        <div className="text-xs text-orange-600 dark:text-orange-400">
+                          clasificados
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Gráfica */}
+                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 h-80 border border-gray-200 dark:border-gray-700">
+                      <Doughnut 
+                        key={`tipo-gasto-${themeVersion}`}
+                        data={chartData.analisisPorTipoGasto} 
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'bottom',
+                              labels: {
+                                color: getChartColors().textColor,
+                                padding: 20,
+                                font: { size: 14, weight: '500' }
+                              }
+                            },
+                            tooltip: {
+                              backgroundColor: getChartColors().tooltipBg,
+                              titleColor: getChartColors().tooltipText,
+                              bodyColor: getChartColors().tooltipText,
+                              callbacks: {
+                                label: function(context) {
+                                  const valor = context.parsed;
+                                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                  const percentage = ((valor * 100) / total).toFixed(1);
+                                  return `${context.label}: $${valor.toLocaleString()} (${percentage}%)`;
+                                }
+                              }
+                            }
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* Gráficas Principales */}
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
                 
                 {/* Gráfica de Gastos por Mes */}
                 {selectedCharts.gastosPorMes && chartData.gastosPorMes && (
@@ -5767,9 +6443,11 @@ const Suministros = () => {
                   </div>
                 )}
 
+                </div>
+
                 {/* Mensaje cuando no hay gráficas seleccionadas */}
                 {!Object.values(selectedCharts).some(selected => selected) && (
-                  <div className="col-span-full bg-gray-50 dark:bg-dark-200 p-8 rounded-lg text-center">
+                  <div className="bg-gray-50 dark:bg-dark-200 p-8 rounded-lg text-center">
                     <FaChartBar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No hay gráficas seleccionadas</h3>
                     <p className="text-gray-600 dark:text-gray-400">Selecciona al menos una gráfica para visualizar los datos de suministros.</p>
@@ -5936,7 +6614,10 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                                  {getDisplayCategoria(suministro.tipo_suministro || suministro.categoria)}
+                                  {getDisplayCategoria(suministro.tipo_suministro || 
+                                    (typeof suministro.categoria === 'object' && suministro.categoria 
+                                      ? suministro.categoria.nombre 
+                                      : suministro.categoria), categoriasDinamicas)}
                                 </span>
                               </td>
                               <td className="px-6 py-4">
@@ -6003,7 +6684,10 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                              {getDisplayCategoria(suministro.tipo_suministro || suministro.categoria)}
+                              {getDisplayCategoria(suministro.tipo_suministro || 
+                                (typeof suministro.categoria === 'object' && suministro.categoria 
+                                  ? suministro.categoria.nombre 
+                                  : suministro.categoria), categoriasDinamicas)}
                             </span>
                           </td>
                           <td className="px-6 py-4">
@@ -6608,7 +7292,10 @@ const Suministros = () => {
                                 Categoría
                               </label>
                               <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {getDisplayCategoria(suministro.tipo_suministro || suministro.categoria)}
+                                {getDisplayCategoria(suministro.tipo_suministro || 
+                                  (typeof suministro.categoria === 'object' && suministro.categoria 
+                                    ? suministro.categoria.nombre 
+                                    : suministro.categoria), categoriasDinamicas)}
                               </p>
                             </div>
 
@@ -6721,7 +7408,10 @@ const Suministros = () => {
                         Categoría
                       </label>
                       <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.tipo_suministro || viewModal.suministro.categoria || 'No especificado'}
+                        {viewModal.suministro.tipo_suministro || 
+                         (typeof viewModal.suministro.categoria === 'object' && viewModal.suministro.categoria 
+                           ? viewModal.suministro.categoria.nombre 
+                           : viewModal.suministro.categoria) || 'No especificado'}
                       </p>
                     </div>
 

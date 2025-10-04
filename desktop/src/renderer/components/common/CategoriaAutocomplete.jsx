@@ -1,18 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { FaSearch, FaPlus, FaSpinner, FaTimes } from 'react-icons/fa';
-
-const CATEGORIAS_SUMINISTRO = {
-  'Material': 'Material',
-  'Herramienta': 'Herramienta',
-  'Equipo Ligero': 'Equipo Ligero',
-  'Acero': 'Acero',
-  'Cimbra': 'Cimbra',
-  'Ferretería': 'Ferretería',
-  'Servicio': 'Servicio',
-  'Consumible': 'Consumible',
-  'Maquinaria': 'Maquinaria',
-  'Concreto': 'Concreto'
-};
+import CategoriaSuministroModal from './CategoriaSuministroModal';
+import api from '../../services/api';
 
 const CategoriaAutocomplete = ({ 
   value, 
@@ -27,43 +16,78 @@ const CategoriaAutocomplete = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [filteredCategorias, setFilteredCategorias] = useState([]);
+  const [allCategorias, setAllCategorias] = useState([]);
   const [selectedCategoria, setSelectedCategoria] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [showModal, setShowModal] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   
   const inputRef = useRef(null);
   const dropdownRef = useRef(null);
   const debounceRef = useRef(null);
 
+  // Cargar categorías al montar el componente
+  useEffect(() => {
+    loadCategorias();
+  }, []);
+
+  // Cargar categorías desde la API
+  const loadCategorias = async () => {
+    try {
+      setIsLoading(true);
+      const response = await api.get('/config/categorias');
+      setAllCategorias(response.data || []);
+    } catch (error) {
+      console.error('Error al cargar categorías:', error);
+      setAllCategorias([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Inicializar la categoría seleccionada cuando hay un valor
   useEffect(() => {
-    if (value) {
-      const categoria = Object.entries(CATEGORIAS_SUMINISTRO).find(([key]) => key === value);
+    console.log('🔄 useEffect ejecutándose:', { 
+      value, 
+      allCategoriasLength: allCategorias.length, 
+      selectedCategoriaId: selectedCategoria?.id_categoria,
+      currentSearchTerm: searchTerm 
+    });
+    
+    if (value && allCategorias.length > 0) {
+      const categoria = allCategorias.find(cat => cat.id_categoria == value);
+      console.log('🔍 Buscando categoría con ID:', value, 'encontrada:', categoria);
+      
       if (categoria) {
-        setSelectedCategoria({ key: categoria[0], nombre: categoria[1] });
-        setSearchTerm(categoria[1]);
+        console.log('✅ Actualizando categoría seleccionada:', categoria);
+        setSelectedCategoria(categoria);
+        // Forzar actualización del searchTerm solo si es diferente
+        if (searchTerm !== categoria.nombre) {
+          setSearchTerm(categoria.nombre);
+        }
       }
-    } else {
+    } else if (value === null || value === '') {
+      console.log('🧹 Limpiando categoría seleccionada, value:', value);
       setSelectedCategoria(null);
       setSearchTerm('');
     }
-  }, [value]);
+  }, [value, allCategorias]); // Removido selectedCategoria y searchTerm de dependencias
 
   // Función para buscar categorías
   const searchCategorias = (term) => {
-    if (!term.trim()) {
+    if (!term || typeof term !== 'string' || !term.trim()) {
       setFilteredCategorias([]);
       return;
     }
 
-    const filtered = Object.entries(CATEGORIAS_SUMINISTRO)
-      .filter(([key, nombre]) =>
-        nombre.toLowerCase().includes(term.toLowerCase())
+    const filtered = allCategorias
+      .filter(categoria =>
+        categoria.activo && categoria.nombre && categoria.nombre.toLowerCase().includes(term.toLowerCase())
       )
-      .map(([key, nombre]) => ({
-        key,
-        nombre,
-        isExact: nombre.toLowerCase() === term.toLowerCase()
+      .map(categoria => ({
+        ...categoria,
+        isExact: categoria.nombre.toLowerCase() === term.toLowerCase()
       }))
       .sort((a, b) => {
         // Priorizar coincidencias exactas
@@ -78,8 +102,17 @@ const CategoriaAutocomplete = ({
 
   // Manejar cambio en el input de búsqueda
   const handleSearchChange = (e) => {
-    const term = e.target.value;
+    const term = e.target.value || '';
     setSearchTerm(term);
+    
+    // Solo limpiar la selección si el término está completamente vacío Y no coincide con la categoría seleccionada
+    if (!term.trim() && selectedCategoria) {
+      setSelectedCategoria(null);
+      if (onChange) {
+        onChange(null);
+      }
+    }
+    
     setShowDropdown(true);
     setHighlightedIndex(-1);
 
@@ -95,62 +128,85 @@ const CategoriaAutocomplete = ({
 
   // Manejar selección de categoría
   const handleCategoriaSelect = (categoria) => {
+    console.log('🎯 handleCategoriaSelect ejecutándose con:', categoria);
+    console.log('🎯 Estado actual antes:', { selectedCategoria: selectedCategoria?.nombre, searchTerm, value });
+    
+    // Actualizar estado local inmediatamente
     setSelectedCategoria(categoria);
-    setSearchTerm(categoria.nombre);
+    setSearchTerm(categoria.nombre); // Asegurar que se establece el nombre
     setShowDropdown(false);
     setFilteredCategorias([]);
     setHighlightedIndex(-1);
     
+    console.log('🎯 Estados actualizados localmente a:', categoria.nombre);
+    console.log('🎯 Llamando onChange con ID:', categoria.id_categoria);
+    
+    // Llamar a onChange inmediatamente
     if (onChange) {
-      onChange(categoria.key);
+      onChange(categoria.id_categoria);
+      console.log('🎯 onChange ejecutado con:', categoria.id_categoria);
     }
   };
 
-  // Manejar creación de nueva categoría
-  const handleCreateNew = async () => {
-    if (!searchTerm.trim() || isCreating) return;
+  // Manejar creación de nueva categoría - abrir modal
+  const handleCreateNew = () => {
+    const trimmedTerm = (searchTerm || '').trim();
+    if (!trimmedTerm || isCreating) return;
 
-    const newCategoriaName = searchTerm.trim();
-    
     // Verificar si ya existe
-    const existeCategoria = Object.values(CATEGORIAS_SUMINISTRO).some(
-      nombre => nombre.toLowerCase() === newCategoriaName.toLowerCase()
+    const existeCategoria = allCategorias.some(
+      categoria => categoria.nombre && categoria.nombre.toLowerCase() === trimmedTerm.toLowerCase()
     );
 
     if (existeCategoria) {
       return;
     }
 
-    setIsCreating(true);
+    setShowModal(true);
+    setShowDropdown(false);
+  };
 
+  // Guardar nueva categoría desde el modal
+  const handleSaveCategoria = async (categoriaData) => {
     try {
-      // Crear la key normalizada (sin espacios especiales)
-      const newKey = newCategoriaName.replace(/\s+/g, ' ').trim();
+      setIsCreating(true);
+      console.log('🆕 Creando nueva categoría:', categoriaData);
       
-      // Agregar la nueva categoría al objeto local
-      CATEGORIAS_SUMINISTRO[newKey] = newCategoriaName;
+      const response = await api.post('/config/categorias', categoriaData);
+      console.log('🆕 Respuesta completa de la API:', response);
+      
+      // La respuesta del backend viene en response.data
+      const newCategoria = response.data || response;
+      console.log('🆕 Nueva categoría extraída:', newCategoria);
 
-      const newCategoria = {
-        key: newKey,
-        nombre: newCategoriaName
-      };
+      // Validar que la respuesta tenga la estructura correcta
+      if (!newCategoria || !newCategoria.id_categoria || !newCategoria.nombre) {
+        console.error('🆕 Respuesta de API inválida:', newCategoria);
+        throw new Error('La respuesta de la API no tiene la estructura esperada');
+      }
 
+      console.log('🆕 Nueva categoría válida:', newCategoria);
+
+      // Actualizar lista de categorías
+      setAllCategorias(prev => [...prev, newCategoria]);
+
+      // Seleccionar la nueva categoría
       setSelectedCategoria(newCategoria);
-      setSearchTerm(newCategoriaName);
-      setShowDropdown(false);
-      setFilteredCategorias([]);
-      setHighlightedIndex(-1);
+      setSearchTerm(newCategoria.nombre || '');
 
+      console.log('🆕 Llamando onChange con nueva categoría ID:', newCategoria.id_categoria);
       if (onChange) {
-        onChange(newKey);
+        onChange(newCategoria.id_categoria);
       }
 
       if (onCreateNew) {
         onCreateNew(newCategoria);
       }
 
+      setShowModal(false);
     } catch (error) {
-      console.error('Error al crear nueva categoría:', error);
+      console.error('🆕 Error al crear categoría:', error);
+      throw error; // Re-lanzar para que el modal maneje el error
     } finally {
       setIsCreating(false);
     }
@@ -217,6 +273,7 @@ const CategoriaAutocomplete = ({
 
   // Limpiar selección
   const handleClear = () => {
+    console.log('🧹 Limpiando campo de categoría');
     setSelectedCategoria(null);
     setSearchTerm('');
     setShowDropdown(false);
@@ -224,7 +281,7 @@ const CategoriaAutocomplete = ({
     setHighlightedIndex(-1);
     
     if (onChange) {
-      onChange('');
+      onChange(null); // Enviar null en lugar de string vacío
     }
     
     inputRef.current?.focus();
@@ -236,12 +293,12 @@ const CategoriaAutocomplete = ({
         <input
           ref={inputRef}
           type="text"
-          value={searchTerm}
+          value={searchTerm || ''}
           onChange={handleSearchChange}
           onFocus={handleFocus}
           onBlur={handleBlur}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder}
+          placeholder={selectedCategoria ? selectedCategoria.nombre : placeholder}
           disabled={disabled}
           required={required}
           className={`w-full px-3 py-2 pr-10 border rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 ${
@@ -275,10 +332,15 @@ const CategoriaAutocomplete = ({
           ref={dropdownRef}
           className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-60 overflow-y-auto"
         >
-          {filteredCategorias.length > 0 ? (
+          {isLoading ? (
+            <div className="px-3 py-2 text-center">
+              <FaSpinner className="h-4 w-4 text-gray-400 animate-spin mx-auto" />
+              <span className="text-sm text-gray-500 dark:text-gray-400 ml-2">Cargando...</span>
+            </div>
+          ) : filteredCategorias.length > 0 ? (
             filteredCategorias.map((categoria, index) => (
               <div
-                key={categoria.key}
+                key={categoria.id_categoria}
                 onClick={() => handleCategoriaSelect(categoria)}
                 className={`px-3 py-2 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 ${
                   highlightedIndex === index
@@ -287,14 +349,29 @@ const CategoriaAutocomplete = ({
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-gray-900 dark:text-white font-medium">
-                    {categoria.nombre}
-                  </span>
-                  {categoria.isExact && (
-                    <span className="text-xs text-green-600 dark:text-green-400">
-                      Coincidencia exacta
+                  <div className="flex items-center space-x-2">
+                    <div 
+                      className="w-3 h-3 rounded-full" 
+                      style={{ backgroundColor: categoria.color }}
+                    ></div>
+                    <span className="text-gray-900 dark:text-white font-medium">
+                      {categoria.nombre}
                     </span>
-                  )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      categoria.tipo === 'Proyecto' 
+                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300'
+                        : 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-300'
+                    }`}>
+                      {categoria.tipo}
+                    </span>
+                    {categoria.isExact && (
+                      <span className="text-xs text-green-600 dark:text-green-400">
+                        Exacta
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))
@@ -323,6 +400,15 @@ const CategoriaAutocomplete = ({
           )}
         </div>
       )}
+
+      {/* Modal para crear categoría */}
+      <CategoriaSuministroModal
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
+        onSave={handleSaveCategoria}
+        initialData={{ nombre: (searchTerm || '').trim() }}
+        title="Crear Nueva Categoría"
+      />
 
       {/* Mensaje de error */}
       {error && (

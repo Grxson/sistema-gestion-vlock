@@ -386,8 +386,9 @@ class ApiService {
   }
 
   // Métodos para suministros
-  async getSuministros() {
-    return this.get('/suministros');
+  async getSuministros(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.get(`/suministros${queryString ? '?' + queryString : ''}`);
   }
 
   async getSuministroById(id) {
@@ -412,6 +413,10 @@ class ApiService {
 
   async getSuministrosByProyecto(idProyecto) {
     return this.get(`/suministros/proyecto/${idProyecto}`);
+  }
+
+  async getEstadisticasSuministrosPorTipo() {
+    return this.get('/suministros/estadisticas/tipo');
   }
 
   // Métodos para proveedores

@@ -4,9 +4,27 @@ const { verifyToken } = require('../middlewares/auth');
 // Obtener todos los suministros
 const getSuministros = async (req, res) => {
     try {
-        const { id_proyecto, proveedor, nombre, fecha_inicio, fecha_fin } = req.query;
+        const { id_proyecto, proveedor, nombre, fecha_inicio, fecha_fin, tipo_categoria } = req.query;
         
         let whereClause = {};
+        let includeClause = [
+            {
+                model: models.Proyectos,
+                as: 'proyecto',
+                attributes: ['nombre', 'ubicacion']
+            },
+            {
+                model: models.Proveedores,
+                as: 'proveedor',
+                attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
+            },
+            {
+                model: models.Categorias_suministro,
+                as: 'categoria',
+                attributes: ['id_categoria', 'nombre', 'tipo', 'color'],
+                where: {} // Se llenará condicionalmente
+            }
+        ];
         
         if (id_proyecto) {
             whereClause.id_proyecto = id_proyecto;
@@ -22,6 +40,14 @@ const getSuministros = async (req, res) => {
             whereClause.nombre = {
                 [models.sequelize.Sequelize.Op.like]: `%${nombre}%`
             };
+        }
+
+        // Filtro por tipo de categoría
+        if (tipo_categoria && ['Proyecto', 'Administrativo'].includes(tipo_categoria)) {
+            includeClause[2].where.tipo = tipo_categoria;
+        } else {
+            // Si no hay filtro específico, eliminar el where vacío
+            delete includeClause[2].where;
         }
         
         if (fecha_inicio && fecha_fin) {
@@ -40,18 +66,7 @@ const getSuministros = async (req, res) => {
         
         const suministros = await models.Suministros.findAll({
             where: whereClause,
-            include: [
-                {
-                    model: models.Proyectos,
-                    as: 'proyecto',
-                    attributes: ['nombre', 'ubicacion']
-                },
-                {
-                    model: models.Proveedores,
-                    as: 'proveedor',
-                    attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
-                }
-            ],
+            include: includeClause,
             order: [['fecha', 'DESC'], ['folio', 'DESC']]
         });
 
@@ -99,6 +114,11 @@ const getSuministroById = async (req, res) => {
                     model: models.Proveedores,
                     as: 'proveedor',
                     attributes: ['id_proveedor', 'nombre', 'tipo_proveedor', 'telefono']
+                },
+                {
+                    model: models.Categorias_suministro,
+                    as: 'categoria',
+                    attributes: ['id_categoria', 'nombre', 'tipo', 'color']
                 }
             ]
         });
@@ -403,6 +423,7 @@ const createMultipleSuministros = async (req, res) => {
                         const updatePayload = {
                             metodo_pago: metodo_pago || existente.metodo_pago,
                             tipo_suministro: san.tipo_suministro !== undefined ? san.tipo_suministro : existente.tipo_suministro,
+                            id_categoria_suministro: san.id_categoria_suministro !== undefined ? san.id_categoria_suministro : existente.id_categoria_suministro,
                             nombre: san.nombre !== undefined ? san.nombre : existente.nombre,
                             codigo_producto: san.codigo_producto !== undefined ? san.codigo_producto : existente.codigo_producto,
                             descripcion_detallada: san.descripcion_detallada !== undefined ? san.descripcion_detallada : existente.descripcion_detallada,
@@ -446,6 +467,7 @@ const createMultipleSuministros = async (req, res) => {
                             hora_fin_descarga,
                             observaciones: observaciones_generales,
                             tipo_suministro: suministroData.tipo_suministro || 'Material',
+                            id_categoria_suministro: suministroData.id_categoria_suministro || 1, // Campo faltante
                             nombre: suministroData.nombre,
                             codigo_producto: suministroData.codigo_producto,
                             descripcion_detallada: suministroData.descripcion_detallada,
@@ -466,7 +488,13 @@ const createMultipleSuministros = async (req, res) => {
                     }
                 } else {
                     // Crear nuevo suministro
-                    const creado = await models.Suministros.create({
+                    console.log('Datos para crear suministro:', {
+                        suministroData,
+                        id_categoria_procesado: suministroData.id_categoria_suministro || 1,
+                        tipo_suministro_procesado: suministroData.tipo_suministro || 'Material'
+                    });
+                    
+                    const datosCreacion = {
                         folio,
                         fecha,
                         id_proyecto,
@@ -480,6 +508,7 @@ const createMultipleSuministros = async (req, res) => {
                         hora_fin_descarga,
                         observaciones: observaciones_generales,
                         tipo_suministro: suministroData.tipo_suministro || 'Material',
+                        id_categoria_suministro: suministroData.id_categoria_suministro || 1, // Campo faltante
                         nombre: suministroData.nombre,
                         codigo_producto: suministroData.codigo_producto,
                         descripcion_detallada: suministroData.descripcion_detallada,
@@ -493,7 +522,11 @@ const createMultipleSuministros = async (req, res) => {
                         costo_total: calcularCostoTotal(suministroData.cantidad, suministroData.precio_unitario, include_iva),
                         include_iva: include_iva, // Guardar estado del IVA
                         estado: suministroData.estado || 'Pendiente'
-                    }, { transaction });
+                    };
+                    
+                    console.log('Datos completos para crear:', datosCreacion);
+                    
+                    const creado = await models.Suministros.create(datosCreacion, { transaction });
 
                     createdIds.push(creado.id_suministro);
                     results.push({ id_suministro: creado.id_suministro, action: 'created', ok: true });
@@ -814,6 +847,71 @@ const getEstadisticasSuministros = async (req, res) => {
     }
 };
 
+// Obtener estadísticas de suministros por tipo de categoría
+const getEstadisticasPorTipo = async (req, res) => {
+    try {
+        const { id_proyecto, fecha_inicio, fecha_fin } = req.query;
+        
+        let whereClause = {};
+        
+        if (id_proyecto) {
+            whereClause.id_proyecto = id_proyecto;
+        }
+        
+        if (fecha_inicio && fecha_fin) {
+            whereClause.fecha = {
+                [models.sequelize.Sequelize.Op.between]: [fecha_inicio, fecha_fin]
+            };
+        } else if (fecha_inicio) {
+            whereClause.fecha = {
+                [models.sequelize.Sequelize.Op.gte]: fecha_inicio
+            };
+        } else if (fecha_fin) {
+            whereClause.fecha = {
+                [models.sequelize.Sequelize.Op.lte]: fecha_fin
+            };
+        }
+
+        // Usar consulta SQL raw para mayor control
+        const query = `
+            SELECT 
+                c.tipo as tipo_categoria,
+                COUNT(s.id_suministro) as total_registros,
+                COALESCE(SUM(s.costo_total), 0) as total_costo,
+                COALESCE(AVG(s.costo_total), 0) as promedio_costo
+            FROM suministros s
+            LEFT JOIN categorias_suministro c ON s.id_categoria_suministro = c.id_categoria
+            WHERE 1=1
+            ${id_proyecto ? `AND s.id_proyecto = ${parseInt(id_proyecto)}` : ''}
+            ${fecha_inicio ? `AND s.fecha >= '${fecha_inicio}'` : ''}
+            ${fecha_fin ? `AND s.fecha <= '${fecha_fin}'` : ''}
+            GROUP BY c.tipo
+            ORDER BY total_costo DESC
+        `;
+
+        const [estadisticasTipo] = await models.sequelize.query(query, {
+            type: models.sequelize.QueryTypes.SELECT
+        });
+
+        // Asegurar que siempre retornemos un array
+        const estadisticasArray = Array.isArray(estadisticasTipo) ? estadisticasTipo : [estadisticasTipo].filter(Boolean);
+
+        res.json({
+            success: true,
+            data: {
+                por_tipo: estadisticasArray
+            }
+        });
+    } catch (error) {
+        console.error('Error al obtener estadísticas por tipo:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getSuministros,
     getSuministroById,
@@ -822,5 +920,6 @@ module.exports = {
     updateSuministro,
     deleteSuministro,
     getSuministrosByProyecto,
-    getEstadisticasSuministros
+    getEstadisticasSuministros,
+    getEstadisticasPorTipo
 };

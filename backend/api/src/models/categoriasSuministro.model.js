@@ -34,18 +34,26 @@ module.exports = (sequelize) => {
     orden: {
       type: DataTypes.INTEGER,
       defaultValue: 0
+    },
+    tipo: {
+      type: DataTypes.ENUM('Proyecto', 'Administrativo'),
+      allowNull: false,
+      defaultValue: 'Proyecto',
+      comment: 'Clasificación de la categoría: Proyecto (gastos de obra) o Administrativo (gastos de oficina)'
     }
   }, {
     tableName: 'categorias_suministro',
-    timestamps: true
+    timestamps: true,
+    createdAt: 'fecha_creacion',
+    updatedAt: 'fecha_actualizacion'
   });
 
   CategoriasSuministro.associate = function(models) {
-    // Comentado temporalmente para la beta - la tabla suministros no tiene id_categoria_suministro
-    // CategoriasSuministro.hasMany(models.Suministros, {
-    //   foreignKey: 'id_categoria_suministro',
-    //   as: 'suministros'
-    // });
+    // Asociación con suministros
+    CategoriasSuministro.hasMany(models.Suministros, {
+      foreignKey: 'id_categoria_suministro',
+      as: 'suministros'
+    });
   };
 
   return CategoriasSuministro;
