@@ -26,13 +26,7 @@ import {
   RectangleGroupIcon,
   CalculatorIcon,
   ChevronDownIcon,
-  ChevronUpIcon,
-  PlusIcon,
-  ListBulletIcon,
-  TagIcon,
-  DocumentDuplicateIcon,
-  ChartPieIcon,
-  CpuChipIcon
+  ChevronUpIcon
 } from '@heroicons/react/24/outline';
 
 
@@ -52,13 +46,7 @@ const navigationItems = [
     icon: TruckIcon, 
     current: false, 
     permissionModule: 'suministros',
-    hasSubmenu: true,
-    submenu: [
-      { name: 'Gestión de Suministros', href: '/suministros', icon: TruckIcon, description: 'Administrar inventario de suministros' },
-      { name: 'Recibos Agrupados', href: '/suministros/recibos', icon: DocumentTextIcon, description: 'Gestionar recibos de materiales' },
-      { name: 'Importar Suministros', href: '/suministros/importar', icon: DocumentDuplicateIcon, description: 'Importar desde archivos Excel' },
-      { name: 'Dashboard Suministros', href: '/suministros/dashboard', icon: ChartBarIcon, description: 'Estadísticas y reportes' }
-    ]
+    hasSubmenu: false
   },
   { name: 'Proveedores', href: '/proveedores', icon: BuildingStorefrontIcon, current: false, permissionModule: 'proveedores' },
   { 
@@ -67,14 +55,7 @@ const navigationItems = [
     icon: WrenchScrewdriverIcon, 
     current: false, 
     permissionModule: 'herramientas',
-    hasSubmenu: true,
-    submenu: [
-      { name: 'Inventario de Herramientas', href: '/herramientas', icon: WrenchScrewdriverIcon, description: 'Gestionar inventario de herramientas' },
-      { name: 'Préstamo de Herramientas', href: '/herramientas/prestamos', icon: UserGroupIcon, description: 'Control de préstamos a empleados' },
-      { name: 'Mantenimiento', href: '/herramientas/mantenimiento', icon: CogIcon, description: 'Programar y seguir mantenimientos' },
-      { name: 'Reportes de Herramientas', href: '/herramientas/reportes', icon: ChartBarIcon, description: 'Reportes de uso y estado' },
-      { name: 'Nueva Herramienta', href: '/herramientas/nueva', icon: PlusIcon, description: 'Registrar nueva herramienta', isAction: true }
-    ]
+    hasSubmenu: false
   },
   { 
     name: 'Presupuestos', 
@@ -82,15 +63,7 @@ const navigationItems = [
     icon: CalculatorIcon, 
     current: false, 
     permissionModule: 'presupuestos', 
-    hasSubmenu: true,
-    submenu: [
-      { name: 'Conceptos de Obra', href: '/presupuestos/conceptos', icon: ListBulletIcon, description: 'Gestionar catálogo de conceptos' },
-      { name: 'Precios Unitarios', href: '/presupuestos/precios', icon: TagIcon, description: 'Administrar precios regionales' },
-      { name: 'Presupuestos', href: '/presupuestos/listado', icon: DocumentDuplicateIcon, description: 'Crear y gestionar presupuestos' },
-      { name: 'Catálogos de Precios', href: '/presupuestos/catalogos', icon: ChartPieIcon, description: 'Administrar catálogos especializados' },
-      { name: 'Nuevo Presupuesto', href: '/presupuestos/nuevo', icon: PlusIcon, description: 'Crear presupuesto desde cero', isAction: true },
-      { name: 'IA para Presupuestos', href: '/presupuestos/ml', icon: CpuChipIcon, description: 'Análisis predictivo e inteligencia artificial', isAdvanced: true }
-    ]
+    hasSubmenu: false
   },
   { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false, permissionModule: 'reportes' },
   { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false, permissionModule: 'usuarios' },
