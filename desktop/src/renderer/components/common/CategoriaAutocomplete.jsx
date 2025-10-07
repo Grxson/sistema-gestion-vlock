@@ -301,12 +301,12 @@ const CategoriaAutocomplete = ({
           placeholder={selectedCategoria ? selectedCategoria.nombre : placeholder}
           disabled={disabled}
           required={required}
-          className={`w-full px-3 py-2 pr-10 border rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500 ${
+          className={`w-full px-3 py-2 pr-10 border rounded-md bg-white dark:bg-dark-100 focus:outline-none focus:ring-2 focus:ring-red-500 ${
             error 
-              ? 'border-red-500 dark:border-red-400' 
+              ? 'border-red-500 dark:border-red-400 text-gray-900 dark:text-white' 
               : selectedCategoria 
-                ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20' 
-                : 'border-gray-300 dark:border-gray-600'
+                ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/20 text-gray-900 dark:text-white' 
+                : 'border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white'
           } ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
         />
         

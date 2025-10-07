@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { STANDARD_ICONS } from '../constants/icons';
 import { 
   FaSearch, 
@@ -30,10 +30,13 @@ import {
   FaEye,
   FaListUl,
   FaExpand,
-  FaDesktop
+  FaDesktop,
+  FaImage
 } from 'react-icons/fa';
 import { formatCurrency } from '../utils/currency';
 import { formatNumber, formatNumberForChart, formatPercentage, formatUnidadMedida } from '../utils/formatters';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 import { validateFolioDuplicado } from '../utils/validationUtils';
 import ValidationModal from '../components/ui/ValidationModal';
 import { 
@@ -131,7 +134,7 @@ const ESTADOS_SUMINISTRO = {
   'Aprobado': { label: 'Aprobado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
   'Pedido': { label: 'Pedido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
   'En_Transito': { label: 'En Tránsito', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
-  'Entregado': { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+  'Entregado': { label: 'Entregado', color: 'bg->green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
   'Cancelado': { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' }
 };
 
@@ -237,6 +240,10 @@ const Suministros = () => {
     metrics: null,
     customContent: null
   });
+  
+  // Estado para el modal de análisis personalizado
+  const [analysisModal, setAnalysisModal] = useState(false);
+  const analysisExportRef = useRef(null);
   
   const [notificationModal, setNotificationModal] = useState({
     open: false,
@@ -434,11 +441,9 @@ const Suministros = () => {
   // Función para cargar categorías dinámicas desde la API
   const loadCategorias = useCallback(async () => {
     try {
-      console.log('🔄 Cargando categorías dinámicas...');
       const response = await api.get('/config/categorias');
       if (response.success) {
         const categoriasAPI = response.data || [];
-        console.log('✅ Categorías cargadas:', categoriasAPI.length);
         setCategoriasDinamicas(categoriasAPI);
         setCategorias(categoriasAPI); // También actualizar el estado categorias
       }
@@ -559,10 +564,11 @@ const Suministros = () => {
           chartDataProcessed.distribucionTipos = null;
         }
 
-        try {
-          chartDataProcessed.analisisPorTipoGasto = processAnalisisPorTipoGasto(filteredData);
-        } catch (error) {
-          console.error('❌ Error en analisisPorTipoGasto:', error);
+          try {
+            // Usar todos los suministros para que coincida con el Total Gastado general
+            chartDataProcessed.analisisPorTipoGasto = processAnalisisPorTipoGasto(suministrosData);
+          } catch (error) {
+            console.error('❌ Error en analisisPorTipoGasto:', error);
           chartDataProcessed.analisisPorTipoGasto = null;
         }
 
@@ -1191,7 +1197,6 @@ const Suministros = () => {
       const gastosPorTipo = {};
       const cantidadPorTipo = {};
       
-      console.log('🔍 Procesando análisis por tipo de gasto, datos recibidos:', data.length);
       
       data.forEach((suministro, index) => {
         try {
@@ -1230,19 +1235,17 @@ const Suministros = () => {
             }
           }
 
-          // Calcular valor usando costo_total si existe, sino calcular
+          // Usar la misma lógica que calculateTotal para consistencia
+          const costoTotal = parseFloat(suministro.costo_total);
           let valor = 0;
-          if (suministro.costo_total) {
-            valor = parseFloat(suministro.costo_total) || 0;
-          } else if (suministro.subtotal) {
-            valor = parseFloat(suministro.subtotal) || 0;
+          if (!isNaN(costoTotal) && costoTotal > 0) {
+            valor = Math.round(costoTotal * 100) / 100;
           } else {
             const cantidad = parseFloat(suministro.cantidad) || 0;
             const precio = parseFloat(suministro.precio_unitario) || 0;
-            valor = cantidad * precio;
+            valor = Math.round((cantidad * precio) * 100) / 100;
           }
           
-          console.log(`📊 ${index + 1}. ${suministro.nombre}: Categoría="${categoria}" (ID: ${suministro.id_categoria_suministro}) -> Tipo="${tipoGasto}" = $${valor.toFixed(2)}`);
           
           if (!gastosPorTipo[tipoGasto]) {
             gastosPorTipo[tipoGasto] = 0;
@@ -1261,10 +1264,6 @@ const Suministros = () => {
       const valores = tipos.map(tipo => gastosPorTipo[tipo]);
       const cantidades = tipos.map(tipo => cantidadPorTipo[tipo]);
 
-      console.log('📈 Resumen análisis por tipo:');
-      tipos.forEach((tipo, i) => {
-        console.log(`  ${tipo}: $${valores[i].toFixed(2)} (${cantidades[i]} items)`);
-      });
 
       if (tipos.length === 0) {
         console.log('⚠️ No se encontraron datos para procesar');
@@ -1288,15 +1287,6 @@ const Suministros = () => {
       const valorTotal = valores.reduce((sum, val) => sum + val, 0);
       const cantidadTotal = cantidades.reduce((sum, cant) => sum + cant, 0);
       
-      console.log('Resultado análisis por tipo de gasto:', {
-        tipos,
-        valores,
-        cantidades,
-        gastosPorTipo,
-        cantidadPorTipo,
-        valorTotal,
-        cantidadTotal
-      });
       
       return {
         labels: tipos,
@@ -2179,35 +2169,75 @@ const Suministros = () => {
 
   // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
   const processGastosPorCategoriaDetallado = (data) => {
+    
     const gastosPorCategoria = {};
     let totalGeneral = 0;
     
-    data.forEach(suministro => {
-      // Extraer nombre si categoria es un objeto
-      const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
-        ? suministro.categoria.nombre 
-        : suministro.categoria;
-      const categoria = categoriaNombre || suministro.tipo_suministro || 'Sin Categoría';
+    data.forEach((suministro, index) => {
+      // Usar múltiples fuentes para obtener la categoría
+      let categoria = 'Sin Categoría';
+      
+      // Prioridad de campos para categoría
+      if (suministro.id_categoria_suministro && categoriasDinamicas) {
+        const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
+        if (categoriaObj) {
+          categoria = categoriaObj.nombre;
+        }
+      } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
+        categoria = suministro.categoria.nombre;
+      } else if (suministro.categoria && typeof suministro.categoria === 'string') {
+        categoria = suministro.categoria;
+      } else if (suministro.tipo_suministro) {
+        categoria = suministro.tipo_suministro;
+      }
+      
+      // Calcular gasto
       const cantidad = parseFloat(suministro.cantidad) || 0;
-      const precio = parseFloat(suministro.precio_unitario) || 0;
+      const precio = parseFloat(suministro.precio_unitario) || parseFloat(suministro.cost_total) || parseFloat(suministro.subtotal) || 0;
       const gasto = cantidad * precio;
       
-      if (!gastosPorCategoria[categoria]) {
-        gastosPorCategoria[categoria] = 0;
+      if (gasto > 0) {
+        if (!gastosPorCategoria[categoria]) {
+          gastosPorCategoria[categoria] = 0;
+        }
+        gastosPorCategoria[categoria] += gasto;
+        totalGeneral += gasto;
       }
-      gastosPorCategoria[categoria] += gasto;
-      totalGeneral += gasto;
+      
     });
+
+
+
+    // Si no hay datos, retornar estructura por defecto
+    if (totalGeneral === 0) {
+      return {
+        labels: ['Sin datos'],
+        datasets: [{
+          label: 'Gasto por Categoría',
+          data: [0],
+          backgroundColor: ['rgba(156, 163, 175, 0.8)'],
+          borderColor: ['rgba(156, 163, 175, 1)'],
+          borderWidth: 2,
+          hoverOffset: 4
+        }],
+        metadata: {
+          totalGeneral: 0,
+          totalCategorias: 0,
+          detalles: []
+        }
+      };
+    }
 
     // Ordenar por gasto descendente
     const categoriasOrdenadas = Object.entries(gastosPorCategoria)
       .sort(([,a], [,b]) => b - a)
       .slice(0, 8); // Top 8 categorías
 
+
     // Calcular porcentajes
     const labels = categoriasOrdenadas.map(([categoria, gasto]) => {
       const porcentaje = ((gasto / totalGeneral) * 100).toFixed(1);
-      return `${categoria}\n$${formatCurrency(gasto)} (${porcentaje}%)`;
+      return `${categoria}`;
     });
 
     const valores = categoriasOrdenadas.map(([,gasto]) => gasto);
@@ -2224,7 +2254,7 @@ const Suministros = () => {
       'rgba(132, 204, 22, 0.8)',   // Lime
     ];
 
-    return {
+    const result = {
       labels: labels,
       datasets: [{
         label: 'Gasto por Categoría',
@@ -2241,10 +2271,12 @@ const Suministros = () => {
           categoria,
           gasto,
           porcentaje: porcentajes[index],
-          color: colores[index]
+          color: colores[index] || 'rgba(156, 163, 175, 0.8)'
         }))
       }
     };
+
+    return result;
   };
 
   // Nueva gráfica: Análisis de Frecuencia de Suministros (Estilo Tabla + Gráfica)
@@ -3396,6 +3428,324 @@ const Suministros = () => {
     }
   };
 
+  // Funciones para exportar el análisis personalizado
+  const exportAnalysisAsPNG = async () => {
+    if (!analysisExportRef.current) return;
+    
+    try {
+      const isDarkMode = document.documentElement.classList.contains('dark') || 
+                        window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
+      // Temporalmente remover restricciones de altura para capturar todo el contenido
+      const originalStyle = analysisExportRef.current.style.cssText;
+      const originalMaxHeight = analysisExportRef.current.style.maxHeight;
+      const originalOverflow = analysisExportRef.current.style.overflow;
+      
+      analysisExportRef.current.style.maxHeight = 'none';
+      analysisExportRef.current.style.overflow = 'visible';
+      analysisExportRef.current.style.height = 'auto';
+      
+      // Esperar un momento para que se apliquen los cambios
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const canvas = await html2canvas(analysisExportRef.current, {
+        backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+        scale: 2,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        height: analysisExportRef.current.scrollHeight,
+        width: analysisExportRef.current.scrollWidth,
+        scrollX: 0,
+        scrollY: 0,
+        ignoreElements: (element) => {
+          return element.dataset.exclude === 'true';
+        }
+      });
+      
+      // Restaurar estilos originales
+      analysisExportRef.current.style.cssText = originalStyle;
+      if (originalMaxHeight) analysisExportRef.current.style.maxHeight = originalMaxHeight;
+      if (originalOverflow) analysisExportRef.current.style.overflow = originalOverflow;
+      
+      const link = document.createElement('a');
+      link.download = `Analisis_Tipo_Gasto_${new Date().toISOString().split('T')[0]}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      
+      showSuccess('Exportación exitosa', 'El análisis se ha exportado como PNG correctamente');
+    } catch (error) {
+      console.error('Error al exportar PNG:', error);
+      showError('Error', 'No se pudo exportar la imagen PNG');
+    }
+  };
+
+  const exportAnalysisAsPDF = async () => {
+    if (!analysisExportRef.current) return;
+    
+    try {
+      const isDarkMode = document.documentElement.classList.contains('dark') || 
+                        window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
+      // Crear PDF con formato profesional
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      const contentWidth = pageWidth - (margin * 2);
+      
+      // Obtener datos del análisis
+      const metrics = chartData.analisisPorTipoGasto?.metrics;
+      if (!metrics) {
+        showError('Error', 'No hay datos disponibles para exportar');
+        return;
+      }
+      
+      // ===== HEADER PROFESIONAL =====
+      // Fondo del header
+      pdf.setFillColor(79, 70, 229); // Indigo
+      pdf.rect(0, 0, pageWidth, 40, 'F');
+      
+      // Logo/Icono (simulado con texto)
+      pdf.setTextColor(255, 255, 255);
+      pdf.setFontSize(20);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('📊', margin, 25);
+      
+      // Título principal
+      pdf.setFontSize(18);
+      pdf.text('ANÁLISIS POR TIPO DE GASTO', margin + 15, 20);
+      
+      // Subtítulo
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text('Clasificación entre gastos de Proyecto y Administrativos', margin + 15, 28);
+      
+      // Fecha y hora
+      const now = new Date();
+      const fechaHora = `${now.toLocaleDateString('es-MX')} - ${now.toLocaleTimeString('es-MX')}`;
+      pdf.setFontSize(10);
+      pdf.text(`Generado: ${fechaHora}`, pageWidth - margin - 60, 35);
+      
+      let currentY = 55;
+      
+      // ===== RESUMEN EJECUTIVO =====
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('RESUMEN EJECUTIVO', margin, currentY);
+      
+      currentY += 15;
+      
+      // Caja de total general
+      pdf.setFillColor(240, 240, 255);
+      pdf.setDrawColor(79, 70, 229);
+      pdf.rect(margin, currentY - 5, contentWidth, 25, 'FD');
+      
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('TOTAL GENERAL:', margin + 10, currentY + 5);
+      
+      pdf.setFontSize(18);
+      pdf.setTextColor(79, 70, 229);
+      const totalFormateado = `$${parseFloat(metrics.valorTotal).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+      pdf.text(totalFormateado, margin + 10, currentY + 15);
+      
+      pdf.setFontSize(12);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`${metrics.cantidadTotal} suministros totales`, pageWidth - margin - 50, currentY + 15);
+      
+      currentY += 40;
+      
+      // ===== DISTRIBUCIÓN POR TIPO =====
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('DISTRIBUCIÓN POR TIPO', margin, currentY);
+      
+      currentY += 15;
+      
+      // Gastos de Proyecto
+      pdf.setFillColor(59, 130, 246, 0.1);
+      pdf.setDrawColor(59, 130, 246);
+      pdf.rect(margin, currentY, contentWidth/2 - 5, 45, 'FD');
+      
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(59, 130, 246);
+      pdf.text('🏗️ GASTOS DE PROYECTO', margin + 5, currentY + 10);
+      
+      pdf.setFontSize(24);
+      pdf.text(`${metrics.porcentajeProyecto}%`, margin + 5, currentY + 22);
+      
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'normal');
+      const totalProyecto = `$${parseFloat(metrics.totalProyecto).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+      pdf.text(totalProyecto, margin + 5, currentY + 32);
+      
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`${metrics.cantidadProyecto} items`, margin + 5, currentY + 40);
+      
+      // Gastos Administrativos
+      pdf.setFillColor(16, 185, 129, 0.1);
+      pdf.setDrawColor(16, 185, 129);
+      pdf.rect(margin + contentWidth/2 + 5, currentY, contentWidth/2 - 5, 45, 'FD');
+      
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(16, 185, 129);
+      pdf.text('💼 GASTOS ADMINISTRATIVOS', margin + contentWidth/2 + 10, currentY + 10);
+      
+      pdf.setFontSize(24);
+      pdf.text(`${metrics.porcentajeAdministrativo}%`, margin + contentWidth/2 + 10, currentY + 22);
+      
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'normal');
+      const totalAdmin = `$${parseFloat(metrics.totalAdministrativo).toLocaleString('es-MX', {minimumFractionDigits: 2})}`;
+      pdf.text(totalAdmin, margin + contentWidth/2 + 10, currentY + 32);
+      
+      pdf.setFontSize(10);
+      pdf.setTextColor(100, 100, 100);
+      pdf.text(`${metrics.cantidadAdministrativo} items`, margin + contentWidth/2 + 10, currentY + 40);
+      
+      currentY += 60;
+      
+      // ===== ANÁLISIS Y RECOMENDACIONES =====
+      pdf.setTextColor(0, 0, 0);
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('ANÁLISIS Y RECOMENDACIONES', margin, currentY);
+      
+      currentY += 15;
+      
+      // Caja de interpretación
+      pdf.setFillColor(255, 251, 235);
+      pdf.setDrawColor(245, 158, 11);
+      pdf.rect(margin, currentY, contentWidth, 35, 'FD');
+      
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(245, 158, 11);
+      pdf.text('📊 INTERPRETACIÓN:', margin + 5, currentY + 10);
+      
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(0, 0, 0);
+      const interpretacion = metrics.interpretacion || `El ${metrics.porcentajeProyecto}% del presupuesto se destina a proyectos, indicando una fuerte inversión en desarrollo y construcción.`;
+      
+      // Dividir texto en líneas
+      const lines = pdf.splitTextToSize(interpretacion, contentWidth - 10);
+      pdf.text(lines, margin + 5, currentY + 20);
+      
+      currentY += 50;
+      
+      // Caja de recomendación
+      pdf.setFillColor(239, 246, 255);
+      pdf.setDrawColor(59, 130, 246);
+      pdf.rect(margin, currentY, contentWidth, 25, 'FD');
+      
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(59, 130, 246);
+      pdf.text('💡 RECOMENDACIÓN:', margin + 5, currentY + 10);
+      
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(0, 0, 0);
+      const recomendacion = metrics.recomendacion || 'Considere aumentar los gastos administrativos para mantener operaciones eficientes.';
+      const recLines = pdf.splitTextToSize(recomendacion, contentWidth - 10);
+      pdf.text(recLines, margin + 5, currentY + 18);
+      
+      currentY += 40;
+      
+      // ===== CAPTURA DE LA GRÁFICA =====
+      if (currentY + 80 > pageHeight - margin) {
+        pdf.addPage();
+        currentY = margin;
+      }
+      
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('GRÁFICA DETALLADA', margin, currentY);
+      
+      currentY += 10;
+      
+      // Capturar solo la gráfica
+      const originalStyle = analysisExportRef.current.style.cssText;
+      analysisExportRef.current.style.maxHeight = 'none';
+      analysisExportRef.current.style.overflow = 'visible';
+      analysisExportRef.current.style.height = 'auto';
+      
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      const canvas = await html2canvas(analysisExportRef.current, {
+        backgroundColor: isDarkMode ? '#1f2937' : '#ffffff',
+        scale: 1.5,
+        logging: false,
+        useCORS: true,
+        allowTaint: true,
+        height: analysisExportRef.current.scrollHeight,
+        width: analysisExportRef.current.scrollWidth,
+        scrollX: 0,
+        scrollY: 0
+      });
+      
+      analysisExportRef.current.style.cssText = originalStyle;
+      
+      const imgData = canvas.toDataURL('image/png');
+      const imgWidth = contentWidth;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      if (currentY + imgHeight > pageHeight - margin) {
+        const availableHeight = pageHeight - currentY - margin;
+        const scaledHeight = availableHeight;
+        const scaledWidth = (canvas.width * scaledHeight) / canvas.height;
+        
+        pdf.addImage(imgData, 'PNG', margin + (contentWidth - scaledWidth) / 2, currentY, scaledWidth, scaledHeight);
+      } else {
+        pdf.addImage(imgData, 'PNG', margin, currentY, imgWidth, imgHeight);
+      }
+      
+      // ===== FOOTER =====
+      const totalPages = pdf.internal.getNumberOfPages();
+      for (let i = 1; i <= totalPages; i++) {
+        pdf.setPage(i);
+        
+        // Línea separadora
+        pdf.setDrawColor(200, 200, 200);
+        pdf.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+        
+        // Información del footer
+        pdf.setFontSize(8);
+        pdf.setTextColor(100, 100, 100);
+        pdf.text('Sistema de Gestión Vlock - Análisis por Tipo de Gasto', margin, pageHeight - 8);
+        pdf.text(`Página ${i} de ${totalPages}`, pageWidth - margin - 20, pageHeight - 8);
+      }
+      
+      // Metadatos del PDF
+      pdf.setProperties({
+        title: 'Análisis por Tipo de Gasto',
+        subject: 'Reporte de distribución de gastos por tipo',
+        author: 'Sistema de Gestión Vlock',
+        creator: 'Sistema de Gestión Vlock',
+        keywords: 'análisis, gastos, proyecto, administrativo'
+      });
+      
+      pdf.save(`Analisis_Tipo_Gasto_${new Date().toISOString().split('T')[0]}.pdf`);
+      
+      showSuccess('Exportación exitosa', 'El análisis se ha exportado como PDF profesional correctamente');
+    } catch (error) {
+      console.error('Error al exportar PDF:', error);
+      showError('Error', 'No se pudo exportar el archivo PDF');
+    }
+  };
+
   const handleExportToExcel = async () => {
     try {
       // Agrupar suministros por folio para mantener consistencia
@@ -4086,10 +4436,10 @@ const Suministros = () => {
                   onChange={(e) => setFilters({...filters, categoria: e.target.value})}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
-                  <option value="">Todas las categorías</option>
-                  {categoriasDinamicas.map((categoria) => (
-                    <option key={categoria.id} value={categoria.id}>{categoria.nombre}</option>
-                  ))}
+                   <option value="">Todas las categorías</option>
+                   {categoriasDinamicas.map((categoria, index) => (
+                     <option key={`categoria-${categoria.id || categoria.id_categoria || index}`} value={categoria.id || categoria.id_categoria}>{categoria.nombre}</option>
+                   ))}
                 </select>
               </div>
 
@@ -4238,9 +4588,9 @@ const Suministros = () => {
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                   >
                     <option value="">Todos los tipos</option>
-                    {categoriasDinamicas.map((categoria) => (
-                      <option key={categoria.id} value={categoria.id}>{categoria.nombre}</option>
-                    ))}
+                     {categoriasDinamicas.map((categoria, index) => (
+                       <option key={`tipo-categoria-${categoria.id || categoria.id_categoria || index}`} value={categoria.id || categoria.id_categoria}>{categoria.nombre}</option>
+                     ))}
                   </select>
                 </div>
                 <div>
@@ -4604,279 +4954,183 @@ const Suministros = () => {
             ) : (
               <div className="space-y-8">
                 
-                {/* Sección Especial: Análisis por Tipo de Gasto */}
+                {/* Sección Especial: Análisis por Tipo de Gasto - REDISEÑADA */}
                 {(selectedCharts.analisisPorTipoGasto && chartData.analisisPorTipoGasto) && (
-                  <div className="bg-gradient-to-br from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl border-2 border-purple-200 dark:border-purple-700 p-6">
-                    <div className="flex items-center justify-between mb-6">
-                      <div className="flex items-center gap-4">
-                        <div className="bg-purple-100 dark:bg-purple-900/50 p-3 rounded-full">
-                          <FaChartPie className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+                  <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    {/* Header moderno */}
+                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+                            <FaChartPie className="w-7 h-7" />
+                          </div>
+                          <div>
+                            <h2 className="text-2xl font-bold">Análisis por Tipo de Gasto</h2>
+                            <p className="text-indigo-100 text-sm">Clasificación entre gastos de Proyecto y Administrativos</p>
+                          </div>
                         </div>
-                        <div>
-                          <h2 className="text-2xl font-bold text-purple-900 dark:text-purple-100">
-                            Análisis por Tipo de Gasto
-                          </h2>
-                          <p className="text-purple-700 dark:text-purple-300 text-sm">
-                            Clasificación entre gastos de Proyecto y Administrativos
-                          </p>
-                        </div>
+                        <button
+                          onClick={() => setAnalysisModal(true)}
+                          className="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-3 rounded-xl transition-all duration-200 hover:scale-105"
+                          title="Ver análisis completo"
+                        >
+                          <FaExpand className="w-5 h-5" />
+                        </button>
                       </div>
-                      <button
-                        onClick={() => setChartModal({
-                          isOpen: true,
-                          chartData: chartData.analisisPorTipoGasto,
-                          chartOptions: {
-                            responsive: true,
-                            maintainAspectRatio: false,
-                            plugins: {
-                              legend: {
-                                position: 'bottom',
-                                labels: {
-                                  color: getChartColors().textColor,
-                                  padding: 20,
-                                  font: { size: 14, weight: '500' }
-                                }
-                              },
-                              tooltip: {
-                                backgroundColor: getChartColors().tooltipBg,
-                                titleColor: getChartColors().tooltipText,
-                                bodyColor: getChartColors().tooltipText,
-                                callbacks: {
-                                  label: function(context) {
-                                    const valor = context.parsed;
-                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                    const percentage = ((valor * 100) / total).toFixed(1);
-                                    return `${context.label}: $${valor.toLocaleString()} (${percentage}%)`;
+                    </div>
+
+                    {/* Layout de 2 columnas */}
+                    <div className="p-6">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                        {/* Columna izquierda - Gráfica */}
+                        <div className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-6">
+                          <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4 text-center">Distribución Visual</h3>
+                          <div className="h-96">
+                            <Doughnut
+                              data={chartData.analisisPorTipoGasto}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                cutout: '50%',
+                                plugins: {
+                                  legend: {
+                                    position: 'bottom',
+                                    labels: {
+                                      color: getChartColors().textColor,
+                                      padding: 20,
+                                      font: { size: 16, weight: '600' },
+                                      usePointStyle: true,
+                                      pointStyle: 'circle'
+                                    }
+                                  },
+                                  tooltip: {
+                                    backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                                    titleColor: '#F9FAFB',
+                                    bodyColor: '#F9FAFB',
+                                    borderColor: 'rgba(99, 102, 241, 0.5)',
+                                    borderWidth: 1,
+                                    cornerRadius: 12,
+                                    padding: 16,
+                                    displayColors: true,
+                                    callbacks: {
+                                      label: function(context) {
+                                        const valor = context.parsed;
+                                        const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                        const percentage = ((valor * 100) / total).toFixed(1);
+                                        return `${context.label}: $${valor.toLocaleString('es-MX')} (${percentage}%)`;
+                                      }
+                                    }
                                   }
                                 }
-                              }
-                            }
-                          },
-                          chartType: 'doughnut',
-                          title: 'Análisis por Tipo de Gasto - Vista Completa',
-                          customContent: (
-                            <div className="space-y-6">
-                              {/* Métricas principales */}
-                              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <FaBuilding className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                    <span className="text-blue-600 dark:text-blue-400 font-semibold">Gastos Proyecto</span>
-                                  </div>
-                                  <div className="text-3xl font-bold text-blue-800 dark:text-blue-300">
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Columna derecha - Métricas y detalles */}
+                        <div className="space-y-6">
+                          {/* Total General destacado */}
+                          <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-6 rounded-xl border border-indigo-200 dark:border-indigo-700">
+                            <div className="text-center">
+                              <div className="text-sm font-semibold text-indigo-600 dark:text-indigo-400 mb-2">Total General</div>
+                              <div className="text-4xl font-bold text-indigo-800 dark:text-indigo-200 mb-2">
+                                ${parseFloat(chartData.analisisPorTipoGasto.metrics?.valorTotal || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                              </div>
+                              <div className="text-sm text-indigo-600 dark:text-indigo-400">
+                                {chartData.analisisPorTipoGasto.metrics?.cantidadTotal || '0'} suministros totales
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Métricas por tipo */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Gastos de Proyecto */}
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-5 rounded-xl border border-blue-200 dark:border-blue-700">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="bg-blue-500 p-2 rounded-lg">
+                                  <FaBuilding className="w-5 h-5 text-white" />
+                                </div>
+                                <span className="text-blue-700 dark:text-blue-300 font-semibold">Proyecto</span>
+                              </div>
+                              <div className="space-y-3">
+                                <div>
+                                  <div className="text-3xl font-bold text-blue-800 dark:text-blue-200">
                                     {chartData.analisisPorTipoGasto.metrics?.porcentajeProyecto || '0'}%
                                   </div>
-                                  <div className="text-sm text-blue-600 dark:text-blue-400">
-                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} total
-                                  </div>
-                                  <div className="text-xs text-blue-500 dark:text-blue-400 mt-1">
-                                    {chartData.analisisPorTipoGasto.metrics?.cantidadProyecto || '0'} items
-                                  </div>
+                                  <div className="text-xs text-blue-600 dark:text-blue-400">del total</div>
                                 </div>
-                                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-700">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <FaDesktop className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                    <span className="text-green-600 dark:text-green-400 font-semibold">Administrativo</span>
+                                <div>
+                                  <div className="text-lg font-bold text-blue-800 dark:text-blue-200">
+                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                   </div>
-                                  <div className="text-3xl font-bold text-green-800 dark:text-green-300">
-                                    {chartData.analisisPorTipoGasto.metrics?.porcentajeAdministrativo || '0'}%
-                                  </div>
-                                  <div className="text-sm text-green-600 dark:text-green-400">
-                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} total
-                                  </div>
-                                  <div className="text-xs text-green-500 dark:text-green-400 mt-1">
-                                    {chartData.analisisPorTipoGasto.metrics?.cantidadAdministrativo || '0'} items
-                                  </div>
+                                  <div className="text-xs text-blue-600 dark:text-blue-400">total invertido</div>
                                 </div>
-                                <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg border border-purple-200 dark:border-purple-700">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <FaDollarSign className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                                    <span className="text-purple-600 dark:text-purple-400 font-semibold">Valor Total</span>
-                                  </div>
-                                  <div className="text-3xl font-bold text-purple-800 dark:text-purple-300">
-                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.valorTotal || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                  </div>
-                                  <div className="text-sm text-purple-600 dark:text-purple-400">
-                                    {chartData.analisisPorTipoGasto.metrics?.cantidadTotal || '0'} suministros
-                                  </div>
-                                  <div className="text-xs text-purple-500 dark:text-purple-400 mt-1">
-                                    Promedio: ${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioGeneral || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                  </div>
-                                </div>
-                                <div className="bg-orange-50 dark:bg-orange-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-700">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <FaChartLine className="w-5 h-5 text-orange-600 dark:text-orange-400" />
-                                    <span className="text-orange-600 dark:text-orange-400 font-semibold">Distribución</span>
-                                  </div>
-                                  <div className="text-2xl font-bold text-orange-800 dark:text-orange-300">
-                                    {chartData.analisisPorTipoGasto.labels?.length || 0} tipos
-                                  </div>
-                                  <div className="text-sm text-orange-600 dark:text-orange-400">
-                                    clasificados correctamente
-                                  </div>
-                                  <div className="text-xs text-orange-500 dark:text-orange-400 mt-1">
-                                    Balance: {chartData.analisisPorTipoGasto.metrics?.balanceString || 'Equilibrado'}
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Detalles por categoría */}
-                              <div className="bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg">
-                                <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3 flex items-center gap-2">
-                                  <FaChartPie className="w-5 h-5 text-purple-600 dark:text-purple-400" />
-                                  Desglose Detallado
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div>
-                                    <h4 className="text-md font-medium text-blue-700 dark:text-blue-300 mb-2">Gastos de Proyecto</h4>
-                                    <div className="text-sm space-y-1">
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600 dark:text-gray-400">Total invertido:</span>
-                                        <span className="font-medium">${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600 dark:text-gray-400">Promedio por item:</span>
-                                        <span className="font-medium">${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600 dark:text-gray-400">Cantidad de items:</span>
-                                        <span className="font-medium">{chartData.analisisPorTipoGasto.metrics?.cantidadProyecto || '0'}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div>
-                                    <h4 className="text-md font-medium text-green-700 dark:text-green-300 mb-2">Gastos Administrativos</h4>
-                                    <div className="text-sm space-y-1">
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600 dark:text-gray-400">Total invertido:</span>
-                                        <span className="font-medium">${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600 dark:text-gray-400">Promedio por item:</span>
-                                        <span className="font-medium">${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                                      </div>
-                                      <div className="flex justify-between">
-                                        <span className="text-gray-600 dark:text-gray-400">Cantidad de items:</span>
-                                        <span className="font-medium">{chartData.analisisPorTipoGasto.metrics?.cantidadAdministrativo || '0'}</span>
-                                      </div>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-
-                              {/* Análisis de tendencias */}
-                              <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                                <h3 className="text-lg font-semibold text-blue-800 dark:text-blue-200 mb-3 flex items-center gap-2">
-                                  <FaChartLine className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                                  Análisis de Distribución
-                                </h3>
-                                <div className="text-sm text-blue-700 dark:text-blue-300 space-y-2">
-                                  <p>
-                                    <strong>Interpretación:</strong> {chartData.analisisPorTipoGasto.metrics?.interpretacion || 'La distribución de gastos muestra el balance entre inversión en proyectos y costos administrativos.'}
-                                  </p>
-                                  <p>
-                                    <strong>Recomendación:</strong> {chartData.analisisPorTipoGasto.metrics?.recomendacion || 'Mantener un equilibrio saludable entre gastos operativos y de proyecto para optimizar la rentabilidad.'}
-                                  </p>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-blue-600 dark:text-blue-400">Items:</span>
+                                  <span className="font-semibold text-blue-800 dark:text-blue-200">{chartData.analisisPorTipoGasto.metrics?.cantidadProyecto || '0'}</span>
                                 </div>
                               </div>
                             </div>
-                          )
-                        })}
-                        className="bg-purple-600 hover:bg-purple-700 text-white p-2 rounded-lg transition-colors duration-200"
-                        title="Ver en pantalla completa"
-                      >
-                        <FaExpand className="w-4 h-4" />
-                      </button>
-                    </div>
-                    
-                    {/* KPIs principales */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 rounded-lg border border-blue-200 dark:border-blue-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <FaBuilding className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                          <span className="text-blue-600 dark:text-blue-400 font-semibold text-sm">Gastos Proyecto</span>
-                        </div>
-                        <div className="text-2xl font-bold text-blue-800 dark:text-blue-300">
-                          {chartData.analisisPorTipoGasto.metrics?.porcentajeProyecto || '0'}%
-                        </div>
-                        <div className="text-xs text-blue-600 dark:text-blue-400">
-                          ${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} promedio
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 rounded-lg border border-green-200 dark:border-green-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <FaDesktop className="w-4 h-4 text-green-600 dark:text-green-400" />
-                          <span className="text-green-600 dark:text-green-400 font-semibold text-sm">Gastos Administrativo</span>
-                        </div>
-                        <div className="text-2xl font-bold text-green-800 dark:text-green-300">
-                          {chartData.analisisPorTipoGasto.metrics?.porcentajeAdministrativo || '0'}%
-                        </div>
-                        <div className="text-xs text-green-600 dark:text-green-400">
-                          ${parseFloat(chartData.analisisPorTipoGasto.metrics?.promedioAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})} promedio
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 rounded-lg border border-purple-200 dark:border-purple-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <FaDollarSign className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                          <span className="text-purple-600 dark:text-purple-400 font-semibold text-sm">Valor Total</span>
-                        </div>
-                        <div className="text-2xl font-bold text-purple-800 dark:text-purple-300">
-                          ${parseFloat(chartData.analisisPorTipoGasto.metrics?.valorTotal || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                        </div>
-                        <div className="text-xs text-purple-600 dark:text-purple-400">
-                          {chartData.analisisPorTipoGasto.metrics?.cantidadTotal || '0'} suministros
-                        </div>
-                      </div>
-                      
-                      <div className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm p-4 rounded-lg border border-orange-200 dark:border-orange-700">
-                        <div className="flex items-center gap-2 mb-2">
-                          <FaChartLine className="w-4 h-4 text-orange-600 dark:text-orange-400" />
-                          <span className="text-orange-600 dark:text-orange-400 font-semibold text-sm">Distribución</span>
-                        </div>
-                        <div className="text-sm font-bold text-orange-800 dark:text-orange-300">
-                          {chartData.analisisPorTipoGasto.labels?.length || 0} tipos
-                        </div>
-                        <div className="text-xs text-orange-600 dark:text-orange-400">
-                          clasificados
+
+                            {/* Gastos Administrativos */}
+                            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-xl border border-emerald-200 dark:border-emerald-700">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="bg-emerald-500 p-2 rounded-lg">
+                                  <FaDesktop className="w-5 h-5 text-white" />
+                                </div>
+                                <span className="text-emerald-700 dark:text-emerald-300 font-semibold">Administrativo</span>
+                              </div>
+                              <div className="space-y-3">
+                                <div>
+                                  <div className="text-3xl font-bold text-emerald-800 dark:text-emerald-200">
+                                    {chartData.analisisPorTipoGasto.metrics?.porcentajeAdministrativo || '0'}%
+                                  </div>
+                                  <div className="text-xs text-emerald-600 dark:text-emerald-400">del total</div>
+                                </div>
+                                <div>
+                                  <div className="text-lg font-bold text-emerald-800 dark:text-emerald-200">
+                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                  </div>
+                                  <div className="text-xs text-emerald-600 dark:text-emerald-400">total invertido</div>
+                                </div>
+                                <div className="flex justify-between text-sm">
+                                  <span className="text-emerald-600 dark:text-emerald-400">Items:</span>
+                                  <span className="font-semibold text-emerald-800 dark:text-emerald-200">{chartData.analisisPorTipoGasto.metrics?.cantidadAdministrativo || '0'}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Información adicional */}
+                          <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-xl border border-amber-200 dark:border-amber-700">
+                            <div className="flex items-center gap-3 mb-3">
+                              <div className="bg-amber-500 p-2 rounded-lg">
+                                <FaChartLine className="w-5 h-5 text-white" />
+                              </div>
+                              <span className="text-amber-700 dark:text-amber-300 font-semibold">Análisis de Balance</span>
+                            </div>
+                            <div className="space-y-2 text-sm">
+                              <div className="flex justify-between">
+                                <span className="text-amber-600 dark:text-amber-400">Tipos clasificados:</span>
+                                <span className="font-semibold text-amber-800 dark:text-amber-200">
+                                  {chartData.analisisPorTipoGasto.labels?.length || 0}
+                                </span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-amber-600 dark:text-amber-400">Balance:</span>
+                                <span className="font-semibold text-amber-800 dark:text-amber-200">
+                                  {chartData.analisisPorTipoGasto.metrics?.balanceString || 'Equilibrado'}
+                                </span>
+                              </div>
+                              <div className="mt-3 p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                                <div className="text-xs text-amber-700 dark:text-amber-300">
+                                  <strong>Interpretación:</strong> {chartData.analisisPorTipoGasto.metrics?.interpretacion || 'La distribución muestra el balance entre proyectos y gastos administrativos.'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    
-                    {/* Gráfica */}
-                    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 h-80 border border-gray-200 dark:border-gray-700">
-                      <Doughnut 
-                        key={`tipo-gasto-${themeVersion}`}
-                        data={chartData.analisisPorTipoGasto} 
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'bottom',
-                              labels: {
-                                color: getChartColors().textColor,
-                                padding: 20,
-                                font: { size: 14, weight: '500' }
-                              }
-                            },
-                            tooltip: {
-                              backgroundColor: getChartColors().tooltipBg,
-                              titleColor: getChartColors().tooltipText,
-                              bodyColor: getChartColors().tooltipText,
-                              callbacks: {
-                                label: function(context) {
-                                  const valor = context.parsed;
-                                  const total = context.dataset.data.reduce((a, b) => a + b, 0);
-                                  const percentage = ((valor * 100) / total).toFixed(1);
-                                  return `${context.label}: $${valor.toLocaleString()} (${percentage}%)`;
-                                }
-                              }
-                            }
-                          }
-                        }}
-                      />
                     </div>
                   </div>
                 )}
@@ -6298,27 +6552,43 @@ const Suministros = () => {
                       <div className="bg-gray-50 dark:bg-dark-200 p-6 rounded-lg">
                         <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Desglose Detallado</h4>
                         <div className="space-y-3 max-h-80 overflow-y-auto">
-                          {chartData.gastosPorCategoriaDetallado.metadata?.detalles?.map((detalle, index) => (
-                            <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
-                              <div className="flex items-center space-x-3">
-                                <div 
-                                  className="w-4 h-4 rounded-full" 
-                                  style={{ backgroundColor: detalle.color }}
-                                ></div>
-                                <span className="font-medium text-gray-900 dark:text-white text-sm">
-                                  {detalle.categoria}
-                                </span>
-                              </div>
-                              <div className="text-right">
-                                <div className="text-sm font-bold text-gray-900 dark:text-white">
-                                  {formatCurrency(detalle.gasto)}
+                          {chartData.gastosPorCategoriaDetallado.metadata?.detalles?.length > 0 ? (
+                            chartData.gastosPorCategoriaDetallado.metadata.detalles.map((detalle, index) => (
+                              <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded-lg shadow-sm">
+                                <div className="flex items-center space-x-3">
+                                  <div 
+                                    className="w-4 h-4 rounded-full" 
+                                    style={{ backgroundColor: detalle.color }}
+                                  ></div>
+                                  <span className="font-medium text-gray-900 dark:text-white text-sm">
+                                    {detalle.categoria}
+                                  </span>
                                 </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  {detalle.porcentaje}%
+                                <div className="text-right">
+                                  <div className="text-sm font-bold text-gray-900 dark:text-white">
+                                    {formatCurrency(detalle.gasto)}
+                                  </div>
+                                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                                    {detalle.porcentaje}%
+                                  </div>
                                 </div>
                               </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-8">
+                              <div className="text-gray-500 dark:text-gray-400 mb-2">
+                                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                </svg>
+                              </div>
+                              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                No hay datos de gastos por categoría
+                              </p>
+                              <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">
+                                Agrega suministros con precios para ver el análisis
+                              </p>
                             </div>
-                          ))}
+                          )}
                         </div>
                         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
                           <div className="flex justify-between items-center font-bold text-gray-900 dark:text-white">
@@ -7143,7 +7413,7 @@ const Suministros = () => {
         onClose={() => setNotificationModal({ open: false, message: '', type: 'success' })}
         message={notificationModal.message}
         type={notificationModal.type}
-        autoClose={true}
+        autoClose
         duration={4000}
       />
 
@@ -7556,6 +7826,217 @@ const Suministros = () => {
         customContent={chartModal.customContent}
       />
 
+      {/* Modal de Análisis Personalizado */}
+      {analysisModal && (
+        <div className="fixed inset-0 z-50 overflow-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-7xl max-h-[95vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
+                    <FaChartPie className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold">Análisis por Tipo de Gasto - Vista Completa</h2>
+                    <p className="text-indigo-100">Análisis detallado de la distribución de gastos</p>
+                  </div>
+                </div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={exportAnalysisAsPNG}
+                        className="bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl transition-all duration-200 flex items-center gap-2"
+                        title="Exportar como PNG"
+                      >
+                        <FaImage className="w-4 h-4" />
+                        <span className="text-sm font-medium">PNG</span>
+                      </button>
+                      <button
+                        onClick={exportAnalysisAsPDF}
+                        className="bg-white/20 hover:bg-white/30 backdrop-blur-sm px-4 py-2 rounded-xl transition-all duration-200 flex items-center gap-2"
+                        title="Exportar como PDF"
+                      >
+                        <FaFilePdf className="w-4 h-4" />
+                        <span className="text-sm font-medium">PDF</span>
+                      </button>
+                      <button 
+                        onClick={() => setAnalysisModal(false)}
+                        className="bg-white/20 hover:bg-white/30 backdrop-blur-sm p-3 rounded-xl transition-all duration-200"
+                      >
+                        <FaTimes className="w-5 h-5" />
+                      </button>
+                    </div>
+              </div>
+            </div>
+
+            {/* Contenido */}
+            <div ref={analysisExportRef} className="p-8 max-h-[calc(95vh-120px)] overflow-y-auto">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Gráfica */}
+                <div className="bg-gray-50 dark:bg-gray-700/50 rounded-2xl p-6">
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4">Distribución Visual</h3>
+                  <div className="h-96">
+                    <Doughnut
+                      data={chartData.analisisPorTipoGasto}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: '50%',
+                        plugins: {
+                          legend: {
+                            position: 'bottom',
+                            labels: {
+                              color: getChartColors().textColor,
+                              padding: 20,
+                              font: { size: 16, weight: '600' },
+                              usePointStyle: true,
+                              pointStyle: 'circle'
+                            }
+                          },
+                          tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.95)',
+                            titleColor: '#F9FAFB',
+                            bodyColor: '#F9FAFB',
+                            borderColor: 'rgba(99, 102, 241, 0.5)',
+                            borderWidth: 1,
+                            cornerRadius: 12,
+                            padding: 16,
+                            displayColors: true,
+                            callbacks: {
+                              label: function(context) {
+                                const valor = context.parsed;
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = ((valor * 100) / total).toFixed(1);
+                                return `${context.label}: $${valor.toLocaleString('es-MX')} (${percentage}%)`;
+                              }
+                            }
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Desglose Detallado */}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-4 flex items-center gap-2">
+                      <FaListUl className="w-5 h-5 text-indigo-600" />
+                      Desglose Detallado
+                    </h3>
+                    
+                    {/* Total General */}
+                    <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 p-6 rounded-xl border border-indigo-200 dark:border-indigo-700 mb-6">
+                      <div className="flex justify-between items-center">
+                        <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">Total General:</span>
+                        <span className="text-3xl font-bold text-indigo-600 dark:text-indigo-400">
+                          ${parseFloat(chartData.analisisPorTipoGasto.metrics?.valorTotal || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Total de suministros:</span>
+                        <span className="text-lg font-semibold text-gray-700 dark:text-gray-300">
+                          {chartData.analisisPorTipoGasto.metrics?.cantidadTotal || '0'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Gastos de Proyecto */}
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-700 mb-4">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-blue-500 p-2 rounded-lg">
+                          <FaBuilding className="w-5 h-5 text-white" />
+                        </div>
+                        <h4 className="text-lg font-bold text-blue-800 dark:text-blue-200">Gastos de Proyecto</h4>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                            {chartData.analisisPorTipoGasto.metrics?.porcentajeProyecto || '0'}%
+                          </div>
+                          <div className="text-sm text-blue-600 dark:text-blue-400">Porcentaje</div>
+                        </div>
+                        <div>
+                          <div className="text-xl font-bold text-blue-800 dark:text-blue-200">
+                            ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </div>
+                          <div className="text-sm text-blue-600 dark:text-blue-400">Total invertido</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-blue-800 dark:text-blue-200">
+                            {chartData.analisisPorTipoGasto.metrics?.cantidadProyecto || '0'}
+                          </div>
+                          <div className="text-sm text-blue-600 dark:text-blue-400">Items</div>
+                        </div>
+                        
+                      </div>
+                    </div>
+
+                    {/* Gastos Administrativos */}
+                    <div className="bg-emerald-50 dark:bg-emerald-900/20 p-6 rounded-xl border border-emerald-200 dark:border-emerald-700 mb-4">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="bg-emerald-500 p-2 rounded-lg">
+                          <FaDesktop className="w-5 h-5 text-white" />
+                        </div>
+                        <h4 className="text-lg font-bold text-emerald-800 dark:text-emerald-200">Gastos Administrativos</h4>
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                            {chartData.analisisPorTipoGasto.metrics?.porcentajeAdministrativo || '0'}%
+                          </div>
+                          <div className="text-sm text-emerald-600 dark:text-emerald-400">Porcentaje</div>
+                        </div>
+                        <div>
+                          <div className="text-xl font-bold text-emerald-800 dark:text-emerald-200">
+                            ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </div>
+                          <div className="text-sm text-emerald-600 dark:text-emerald-400">Total invertido</div>
+                        </div>
+                        <div>
+                          <div className="text-lg font-bold text-emerald-800 dark:text-emerald-200">
+                            {chartData.analisisPorTipoGasto.metrics?.cantidadAdministrativo || '0'}
+                          </div>
+                          <div className="text-sm text-emerald-600 dark:text-emerald-400">Items</div>
+                        </div>
+                        
+                      </div>
+                    </div>
+
+                    {/* Análisis y Recomendaciones */}
+                    <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-xl border border-amber-200 dark:border-amber-700">
+                      <h4 className="text-lg font-bold text-amber-800 dark:text-amber-200 mb-3 flex items-center gap-2">
+                        <FaChartLine className="w-5 h-5" />
+                        Análisis y Recomendaciones
+                      </h4>
+                      <div className="space-y-3 text-sm">
+                        <div>
+                          <span className="font-semibold text-amber-700 dark:text-amber-300">Interpretación:</span>
+                          <p className="text-amber-600 dark:text-amber-400 mt-1">
+                            {chartData.analisisPorTipoGasto.metrics?.interpretacion || 'La distribución de gastos muestra el balance entre inversión en proyectos y costos administrativos.'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-amber-700 dark:text-amber-300">Recomendación:</span>
+                          <p className="text-amber-600 dark:text-amber-400 mt-1">
+                            {chartData.analisisPorTipoGasto.metrics?.recomendacion || 'Mantener un equilibrio saludable entre gastos operativos y de proyecto para optimizar la rentabilidad.'}
+                          </p>
+                        </div>
+                        <div>
+                          <span className="font-semibold text-amber-700 dark:text-amber-300">Balance:</span>
+                          <p className="text-amber-600 dark:text-amber-400 mt-1">
+                            {chartData.analisisPorTipoGasto.metrics?.balanceString || 'Equilibrado'}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
