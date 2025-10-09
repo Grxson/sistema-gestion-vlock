@@ -850,7 +850,7 @@ export default function Dashboard() {
                       <div className="ml-4">
                         <p className="text-sm font-semibold text-gray-900 dark:text-white">{suministro.descripcion || 'Suministro'}</p>
                         <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {suministro.categoria || 'Material'} - {suministro.cantidad || 0} {suministro.unidad || 'unidades'}
+                          {suministro.categoria?.nombre || 'Material'} - {suministro.cantidad || 0} {suministro.unidad || 'unidades'}
                         </p>
                       </div>
                     </div>
