@@ -1,59 +1,51 @@
 import React, { useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
-import { 
-  RectangleGroupIcon,
-  PlusIcon,
-  MagnifyingGlassIcon,
-  UserIcon,
-  MapPinIcon,
-  CalendarIcon,
-  PencilIcon,
-  TrashIcon,
-  CheckCircleIcon,
-  ClockIcon,
-  XCircleIcon,
-  PlayCircleIcon
-} from '@heroicons/react/24/outline';
 import ConfirmationModal from '../components/modals/ConfirmationModal';
 import api from '../services/api';
-
-const ESTADOS = {
-  'Activo': {
-    label: 'Activo',
-    color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400',
-    icon: CheckCircleIcon
-  },
-  'Pausado': {
-    label: 'Pausado',
-    color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400',
-    icon: ClockIcon
-  },
-  'Finalizado': {
-    label: 'Finalizado',
-    color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400',
-    icon: XCircleIcon
-  }
-};
+import { formatDate } from '../utils/dateUtils';
+import {
+  RectangleGroupIcon,
+  PlusIcon,
+  PencilIcon,
+  TrashIcon,
+  MagnifyingGlassIcon,
+  FunnelIcon,
+  UserIcon,
+  CalendarIcon,
+  CheckCircleIcon,
+  XCircleIcon,
+  PauseCircleIcon,
+  MapPinIcon,
+  ChevronDownIcon,
+  ArrowsUpDownIcon
+} from '@heroicons/react/24/outline';
 
 const Proyectos = () => {
+  const { user } = useAuth();
+  const { isDarkMode } = useTheme();
+  const { showSuccess, showError, showWarning, showInfo } = useToast();
+  
   // Estados principales
   const [proyectos, setProyectos] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [showModal, setShowModal] = useState(false);
-  const [editingProyecto, setEditingProyecto] = useState(null);
-  
-  // Estados de filtros y paginación
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEstado, setSelectedEstado] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage] = useState(10);
-  const [paginationData, setPaginationData] = useState({
-    total: 0,
-    totalPages: 0,
-    currentPage: 1
-  });
+  const [showModal, setShowModal] = useState(false);
+  const [modalMode, setModalMode] = useState('create');
+  const [selectedProyecto, setSelectedProyecto] = useState(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [proyectoToDelete, setProyectoToDelete] = useState(null);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [paginationData, setPaginationData] = useState({ total: 0, totalPages: 1, currentPage: 1 });
+  
+  // Estados para cambio de estado
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [proyectoForStatusChange, setProyectoForStatusChange] = useState(null);
+  const [newStatus, setNewStatus] = useState('');
 
-  // Estados del formulario
   const [formData, setFormData] = useState({
     nombre: '',
     descripcion: '',
@@ -64,22 +56,22 @@ const Proyectos = () => {
     ubicacion: ''
   });
 
-  // Estados de confirmación
-  const [confirmModal, setConfirmModal] = useState({
-    show: false,
-    title: '',
-    message: '',
-    onConfirm: null,
-    type: 'danger'
-  });
-
-  const { showSuccess, showError } = useToast();
-
-  // Formatear fecha
-  const formatDate = (dateString) => {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES');
+  const ESTADOS = {
+    'Activo': { 
+      label: 'Activo', 
+      color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+      icon: CheckCircleIcon
+    },
+    'Pausado': { 
+      label: 'Pausado', 
+      color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+      icon: PauseCircleIcon
+    },
+    'Finalizado': { 
+      label: 'Finalizado', 
+      color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+      icon: XCircleIcon
+    }
   };
 
   // Cargar proyectos con paginación
@@ -145,24 +137,11 @@ const Proyectos = () => {
     loadProyectos(currentPage, itemsPerPage);
   }, [currentPage, itemsPerPage]);
 
-  // Funciones de filtros y búsqueda
-  const handleSearch = (event) => {
-    setSearchTerm(event.target.value);
-  };
-
-  const handleEstadoChange = (event) => {
-    setSelectedEstado(event.target.value);
-  };
-
-  const handleLimpiarFiltros = () => {
-    setSearchTerm('');
-    setSelectedEstado('');
-    setCurrentPage(1);
-  };
-
   // Funciones de paginación
+  const totalPages = paginationData.totalPages;
+
   const handlePageChange = (newPage) => {
-    if (newPage >= 1 && newPage <= paginationData.totalPages) {
+    if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
     }
   };
@@ -175,12 +154,6 @@ const Proyectos = () => {
       end,
       total: paginationData.total
     };
-  };
-
-  // Funciones del formulario
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e) => {
@@ -199,27 +172,27 @@ const Proyectos = () => {
       if (editingProyecto) {
         const response = await api.updateProyecto(editingProyecto.id_proyecto, submitData);
         if (response.success) {
-          await loadProyectos();
+          await cargarProyectos();
           resetForm();
           setShowModal(false);
-          showSuccess('Proyecto actualizado exitosamente');
+          showNotification('Proyecto actualizado exitosamente', 'success');
         } else {
-          showError('Error al actualizar el proyecto');
+          showNotification('Error al actualizar el proyecto', 'error');
         }
       } else {
         const response = await api.createProyecto(submitData);
         if (response.success) {
-          await loadProyectos();
+          await cargarProyectos();
           resetForm();
           setShowModal(false);
-          showSuccess('Proyecto creado exitosamente');
+          showNotification('Proyecto creado exitosamente', 'success');
         } else {
-          showError('Error al crear el proyecto');
+          showNotification('Error al crear el proyecto', 'error');
         }
       }
     } catch (error) {
       console.error('Error al guardar proyecto:', error);
-      showError('Error al guardar el proyecto');
+      showNotification('Error al guardar el proyecto', 'error');
     }
   };
 
@@ -237,44 +210,24 @@ const Proyectos = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (proyecto) => {
-    setConfirmModal({
-      show: true,
-      title: 'Confirmar eliminación',
-      message: `¿Estás seguro de que deseas eliminar el proyecto "${proyecto.nombre}"? Esta acción no se puede deshacer.`,
-      onConfirm: () => confirmDelete(proyecto.id_proyecto),
-      type: 'danger'
-    });
-  };
-
-  const confirmDelete = async (id) => {
-    try {
-      const response = await api.deleteProyecto(id);
-      if (response.success) {
-        await loadProyectos();
-        showSuccess('Proyecto eliminado exitosamente');
-      } else {
-        showError(response.message || 'Error al eliminar el proyecto');
+  const handleDelete = async (id, nombre) => {
+    if (window.confirm(`¿Estás seguro de que deseas eliminar el proyecto "${nombre}"?\n\nEsta acción no se puede deshacer.`)) {
+      try {
+        const response = await api.deleteProyecto(id);
+        if (response.success) {
+          await cargarProyectos();
+          showNotification('Proyecto eliminado exitosamente', 'success');
+        } else {
+          showNotification(response.message || 'Error al eliminar el proyecto', 'error');
+        }
+      } catch (error) {
+        console.error('Error al eliminar:', error);
+        showNotification('Error al eliminar el proyecto', 'error');
       }
-    } catch (error) {
-      console.error('Error al eliminar:', error);
-      showError('Error al eliminar el proyecto');
-    } finally {
-      setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' });
     }
   };
 
-  const handleStatusChange = (proyecto, nuevoEstado) => {
-    setConfirmModal({
-      show: true,
-      title: 'Confirmar cambio de estado',
-      message: `¿Deseas cambiar el estado del proyecto "${proyecto.nombre}" a "${nuevoEstado}"?`,
-      onConfirm: () => confirmStatusChange(proyecto, nuevoEstado),
-      type: 'warning'
-    });
-  };
-
-  const confirmStatusChange = async (proyecto, nuevoEstado) => {
+  const handleStatusChange = async (proyecto, nuevoEstado) => {
     try {
       const response = await api.updateProyecto(proyecto.id_proyecto, {
         ...proyecto,
@@ -282,16 +235,14 @@ const Proyectos = () => {
       });
       
       if (response.success) {
-        await loadProyectos();
-        showSuccess(`Estado del proyecto cambiado a "${nuevoEstado}"`);
+        await cargarProyectos();
+        showNotification(`Estado del proyecto cambiado a "${nuevoEstado}"`, 'success');
       } else {
-        showError('Error al cambiar el estado del proyecto');
+        showNotification('Error al cambiar el estado del proyecto', 'error');
       }
     } catch (error) {
       console.error('Error al cambiar estado:', error);
-      showError('Error al cambiar el estado del proyecto');
-    } finally {
-      setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'warning' });
+      showNotification('Error al cambiar el estado del proyecto', 'error');
     }
   };
 
@@ -307,6 +258,25 @@ const Proyectos = () => {
     });
     setEditingProyecto(null);
   };
+
+  const proyectosFiltrados = proyectos.filter(proyecto => {
+    const matchesSearch = proyecto.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         proyecto.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         proyecto.responsable?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesEstado = !filtroEstado || proyecto.estado === filtroEstado;
+    return matchesSearch && matchesEstado;
+  });
+
+  // Cálculos de paginación
+  const totalPages = Math.ceil(proyectosFiltrados.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const proyectosPaginados = proyectosFiltrados.slice(startIndex, endIndex);
+
+  // Resetear página cuando cambien los filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filtroEstado]);
 
   const getEstadoInfo = (estado) => {
     return ESTADOS[estado] || ESTADOS['Activo'];
@@ -324,12 +294,9 @@ const Proyectos = () => {
     );
   }
 
-  const paginationInfo = getPaginationInfo();
-
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-dark-200 p-6">
       <div className="max-w-7xl mx-auto">
-        
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -364,15 +331,15 @@ const Proyectos = () => {
                   type="text"
                   placeholder="Buscar proyectos..."
                   value={searchTerm}
-                  onChange={handleSearch}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
                 />
               </div>
             </div>
             <div className="w-full md:w-48">
               <select
-                value={selectedEstado}
-                onChange={handleEstadoChange}
+                value={filtroEstado}
+                onChange={(e) => setFiltroEstado(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
               >
                 <option value="">Todos los estados</option>
@@ -381,12 +348,6 @@ const Proyectos = () => {
                 <option value="Finalizado">Finalizado</option>
               </select>
             </div>
-            <button
-              onClick={handleLimpiarFiltros}
-              className="px-4 py-2 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors"
-            >
-              Limpiar
-            </button>
           </div>
         </div>
 
@@ -395,7 +356,7 @@ const Proyectos = () => {
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                Mostrando {paginationInfo.start} a {paginationInfo.end} de {paginationInfo.total} proyectos
+                Mostrando {startIndex + 1} a {Math.min(endIndex, proyectosFiltrados.length)} de {proyectosFiltrados.length} proyectos
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 Registros por página: {itemsPerPage}
@@ -404,16 +365,16 @@ const Proyectos = () => {
           </div>
         </div>
 
-        {/* Tabla de proyectos */}
-        <div className="bg-white dark:bg-dark-100 shadow-sm border border-gray-200 dark:border-gray-700 border-t-0 border-b-0">
-          {proyectos.length === 0 ? (
+        {/* Lista de proyectos */}
+        <div className={`bg-white dark:bg-dark-100 shadow-sm border border-gray-200 dark:border-gray-700 border-t-0 ${proyectosFiltrados.length <= itemsPerPage ? '' : 'border-b-0'}`}>
+          {proyectosFiltrados.length === 0 ? (
             <div className="p-8 text-center">
               <RectangleGroupIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
                 No se encontraron proyectos
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
-                {searchTerm || selectedEstado ? 'Intenta ajustar los filtros de búsqueda' : 'Comienza creando tu primer proyecto'}
+                {searchTerm || filtroEstado ? 'Intenta ajustar los filtros de búsqueda' : 'Comienza creando tu primer proyecto'}
               </p>
             </div>
           ) : (
@@ -442,7 +403,7 @@ const Proyectos = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
-                  {proyectos.map((proyecto) => {
+                  {proyectosPaginados.map((proyecto) => {
                     const estadoInfo = getEstadoInfo(proyecto.estado);
                     const IconEstado = estadoInfo.icon;
                     
@@ -516,7 +477,7 @@ const Proyectos = () => {
                               <PencilIcon className="h-4 w-4" />
                             </button>
                             <button
-                              onClick={() => handleDelete(proyecto)}
+                              onClick={() => handleDelete(proyecto.id_proyecto, proyecto.nombre)}
                               className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                               title="Eliminar proyecto"
                             >
@@ -532,178 +493,206 @@ const Proyectos = () => {
             </div>
           )}
         </div>
-
-        {/* Paginación */}
-        <div className="bg-white dark:bg-dark-100 rounded-b-xl shadow-sm border border-gray-200 dark:border-gray-700 border-t-0">
+          
+        )}
+        
+        {/* Paginación - siempre mostrar para mantener consistencia visual */}
+        <div className={`bg-white dark:bg-dark-100 shadow-sm border border-gray-200 dark:border-gray-700 border-t-0 ${proyectosFiltrados.length <= itemsPerPage ? 'rounded-b-xl' : 'rounded-b-xl'}`}>
           <div className="px-6 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
+            {proyectosFiltrados.length > itemsPerPage ? (
+              <div className="flex items-center justify-center space-x-2">
                 <button
-                  onClick={() => handlePageChange(currentPage - 1)}
+                  onClick={() => setCurrentPage(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors"
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-dark-200 hover:bg-gray-50 dark:hover:bg-dark-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
+                  <ChevronLeftIcon className="h-4 w-4 mr-1" />
                   Anterior
                 </button>
-                <span className="text-sm text-gray-600 dark:text-gray-400">
-                  Página {currentPage} de {paginationData.totalPages}
-                </span>
+                
+                <div className="flex items-center space-x-1">
+                  {[...Array(totalPages)].map((_, index) => {
+                    const page = index + 1;
+                    const isCurrentPage = page === currentPage;
+                    
+                    // Mostrar solo algunas páginas alrededor de la actual
+                    if (totalPages > 7 && Math.abs(page - currentPage) > 2 && page !== 1 && page !== totalPages) {
+                      if (page === currentPage - 3 || page === currentPage + 3) {
+                        return <span key={page} className="px-2 text-gray-400">...</span>;
+                      }
+                      if (Math.abs(page - currentPage) > 2) {
+                        return null;
+                      }
+                    }
+                    
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => setCurrentPage(page)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          isCurrentPage
+                            ? 'bg-primary-600 text-white'
+                            : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-dark-300'
+                        }`}
+                      >
+                        {page}
+                      </button>
+                    );
+                  })}
+                </div>
+                
                 <button
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === paginationData.totalPages}
-                  className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors"
+                  onClick={() => setCurrentPage(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-dark-200 hover:bg-gray-50 dark:hover:bg-dark-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   Siguiente
+                  <ChevronRightIcon className="h-4 w-4 ml-1" />
                 </button>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center justify-center">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {proyectosFiltrados.length === 0 ? 'Sin resultados para mostrar' : `${proyectosFiltrados.length} proyecto${proyectosFiltrados.length !== 1 ? 's' : ''} en total`}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
+        {/* Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+            <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl w-full max-w-lg">
+              <div className="p-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  {editingProyecto ? 'Editar Proyecto' : 'Nuevo Proyecto'}
+                </h3>
+                
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Nombre del Proyecto *
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.nombre}
+                      onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Descripción
+                    </label>
+                    <textarea
+                      value={formData.descripcion}
+                      onChange={(e) => setFormData({...formData, descripcion: e.target.value})}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Fecha de Inicio
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.fecha_inicio}
+                        onChange={(e) => setFormData({...formData, fecha_inicio: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        Fecha de Fin
+                      </label>
+                      <input
+                        type="date"
+                        value={formData.fecha_fin}
+                        onChange={(e) => setFormData({...formData, fecha_fin: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Estado
+                    </label>
+                    <select
+                      value={formData.estado}
+                      onChange={(e) => setFormData({...formData, estado: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    >
+                      <option value="Activo">Activo</option>
+                      <option value="Pausado">Pausado</option>
+                      <option value="Finalizado">Finalizado</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Responsable
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.responsable}
+                      onChange={(e) => setFormData({...formData, responsable: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Ubicación
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.ubicacion}
+                      onChange={(e) => setFormData({...formData, ubicacion: e.target.value})}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowModal(false);
+                        resetForm();
+                      }}
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+                    >
+                      {editingProyecto ? 'Guardar Cambios' : 'Crear Proyecto'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Notificaciones */}
+        {notification && (
+          <NotificationAlert
+            message={notification.message}
+            type={notification.type}
+            onClose={() => setNotification(null)}
+          />
+        )}
       </div>
-
-      {/* Modal de confirmación */}
-      <ConfirmationModal
-        isOpen={confirmModal.show}
-        onClose={() => setConfirmModal({ show: false, title: '', message: '', onConfirm: null, type: 'danger' })}
-        onConfirm={confirmModal.onConfirm}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        type={confirmModal.type}
-      />
-
-      {/* Modal de formulario */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                {editingProyecto ? 'Editar Proyecto' : 'Nuevo Proyecto'}
-              </h3>
-            </div>
-            
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Nombre del proyecto *
-                </label>
-                <input
-                  type="text"
-                  name="nombre"
-                  value={formData.nombre}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Descripción
-                </label>
-                <textarea
-                  name="descripcion"
-                  value={formData.descripcion}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Fecha de inicio
-                  </label>
-                  <input
-                    type="date"
-                    name="fecha_inicio"
-                    value={formData.fecha_inicio}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Fecha de fin
-                  </label>
-                  <input
-                    type="date"
-                    name="fecha_fin"
-                    value={formData.fecha_fin}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Responsable
-                  </label>
-                  <input
-                    type="text"
-                    name="responsable"
-                    value={formData.responsable}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Estado
-                  </label>
-                  <select
-                    name="estado"
-                    value={formData.estado}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                  >
-                    <option value="Activo">Activo</option>
-                    <option value="Pausado">Pausado</option>
-                    <option value="Finalizado">Finalizado</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Ubicación
-                </label>
-                <input
-                  type="text"
-                  name="ubicacion"
-                  value={formData.ubicacion}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                />
-              </div>
-
-              <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetForm();
-                    setShowModal(false);
-                  }}
-                  className="px-4 py-2 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
-                >
-                  {editingProyecto ? 'Actualizar' : 'Crear'} Proyecto
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
-};
-
-export default Proyectos;
+}

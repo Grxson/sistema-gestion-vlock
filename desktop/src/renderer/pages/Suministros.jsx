@@ -4013,19 +4013,30 @@ const Suministros = () => {
                          suministro.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.folio?.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Manejar categoría como objeto o string
+    const categoriaId = typeof suministro.categoria === 'object' && suministro.categoria 
+      ? suministro.categoria.id_categoria 
+      : suministro.id_categoria_suministro;
     const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
       ? suministro.categoria.nombre 
       : suministro.categoria;
-    const matchesCategoria = !filters.categoria || (suministro.tipo_suministro || categoriaNombre) === filters.categoria;
+      
+    const matchesCategoria = !filters.categoria || 
+                            categoriaId?.toString() === filters.categoria ||
+                            categoriaNombre === filters.categoria ||
+                            suministro.tipo_suministro === filters.categoria;
+                            
     const matchesEstado = !filters.estado || suministro.estado === filters.estado;
     const matchesProyecto = !filters.proyecto || suministro.id_proyecto?.toString() === filters.proyecto;
     const matchesProveedor = !filters.proveedor || 
                             suministro.proveedor === filters.proveedor ||
                             suministro.proveedor?.nombre === filters.proveedor;
     
-    // Nuevo filtro por tipo de categoría
-    const matchesTipoCategoria = !filters.tipo_categoria || 
-                                suministro.categoria?.tipo === filters.tipo_categoria;
+    // Filtro por tipo de categoría
+    const categoriaTipo = typeof suministro.categoria === 'object' && suministro.categoria 
+      ? suministro.categoria.tipo 
+      : null;
+    const matchesTipoCategoria = !filters.tipo_categoria || categoriaTipo === filters.tipo_categoria;
 
     return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto && 
            matchesProveedor && matchesTipoCategoria;
