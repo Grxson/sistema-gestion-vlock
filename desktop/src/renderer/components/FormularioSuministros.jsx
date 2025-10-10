@@ -287,7 +287,12 @@ export default function FormularioSuministros({
   const normalizeUnidadMedida = useCallback((unidadFromDB) => {
     if (!unidadFromDB) return 'pz';
     
-    // Fast path: Si ya es una clave válida
+    // Fast path: Si ya es una clave válida en las unidades dinámicas
+    if (unidades[unidadFromDB]) {
+      return unidadFromDB;
+    }
+    
+    // Fast path: Si ya es una clave válida en las unidades por defecto
     if (UNIDADES_MEDIDA[unidadFromDB]) {
       return unidadFromDB;
     }
@@ -312,13 +317,14 @@ export default function FormularioSuministros({
       return unidadKeys[unidadAsNumber];
     }
     
-    // Buscar por valor completo (última opción, más costosa)
-    const entry = unidadEntries.find(([key, value]) => 
+    // Buscar por valor completo en unidades dinámicas (última opción, más costosa)
+    const dynamicEntries = Object.entries(unidades);
+    const entry = dynamicEntries.find(([key, value]) => 
       value.toLowerCase() === lowerUnit
     );
     
     return entry ? entry[0] : 'pz';
-  }, [unidadMappingCache, unidadKeys, unidadEntries]);
+  }, [unidades, unidadMappingCache, unidadKeys, unidadEntries]);
   
   // Función optimizada para normalizar categoría
   const normalizeCategoria = useCallback((categoriaFromDB) => {
@@ -852,9 +858,9 @@ export default function FormularioSuministros({
     if (field === 'unidad_medida') {
       normalizedValue = normalizeUnidadMedida(value);
       
-      // Verificar que la unidad normalizada existe
-      if (!UNIDADES_MEDIDA[normalizedValue]) {
-        console.warn(`⚠️ Unidad normalizada "${normalizedValue}" no existe en UNIDADES_MEDIDA`);
+      // Verificar que la unidad normalizada existe en las unidades dinámicas o por defecto
+      if (!unidades[normalizedValue] && !UNIDADES_MEDIDA[normalizedValue]) {
+        console.warn(`⚠️ Unidad normalizada "${normalizedValue}" no existe en las unidades disponibles`);
         normalizedValue = 'pz'; // Fallback
       }
     } else if (field === 'id_categoria_suministro') {
@@ -1577,7 +1583,7 @@ export default function FormularioSuministros({
                     <select
                       value={(() => {
                         const currentValue = suministro.unidad_medida;
-                        const isValid = UNIDADES_MEDIDA[currentValue];
+                        const isValid = unidades[currentValue];
                         
                         // Solo log en desarrollo y con debugging habilitado, y evitar spam
                         if (process.env.NODE_ENV === 'development' && globalThis.debugForms && !isValid) {
@@ -1588,7 +1594,7 @@ export default function FormularioSuministros({
                       onChange={(e) => actualizarSuministro(suministro.id_temp, 'unidad_medida', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
-                      {Object.entries(UNIDADES_MEDIDA).map(([key, value]) => (
+                      {Object.entries(unidades).map(([key, value]) => (
                         <option key={key} value={key}>{value}</option>
                       ))}
                     </select>
