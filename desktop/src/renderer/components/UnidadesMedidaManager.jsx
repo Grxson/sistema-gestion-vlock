@@ -253,9 +253,9 @@ const UnidadesMedidaManager = ({ isOpen, onClose, onUnidadesUpdated }) => {
 
           {/* Lista de Unidades */}
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse border border-gray-200 dark:border-gray-700">
+            <table className="w-full border-collapse border border-gray-200 dark:border-gray-900/30">
               <thead>
-                <tr className="bg-gray-50 dark:bg-gray-800">
+                <tr className="bg-gray-50 dark:bg-gray-800/30">
                   <th className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-center text-sm font-medium text-gray-700 dark:text-gray-300">
                     #
                   </th>
@@ -291,7 +291,7 @@ const UnidadesMedidaManager = ({ isOpen, onClose, onUnidadesUpdated }) => {
                   </tr>
                 ) : (
                   unidades.map((unidad, index) => (
-                    <tr key={unidad.id_unidad} className="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <tr key={unidad.id_unidad} className="hover:bg-gray-50 dark:hover:bg-gray-900/30">
                       <td className="border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm text-gray-900 dark:text-white text-center font-mono">
                         {index + 1}
                       </td>
