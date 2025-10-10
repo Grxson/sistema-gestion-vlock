@@ -301,6 +301,53 @@ class ApiService {
     return this.get('/nomina/estadisticas');
   }
 
+  async getNominasPorEmpleado(idEmpleado) {
+    return this.get(`/nomina/empleado/${idEmpleado}`);
+  }
+
+  async getNominasPorSemana(idSemana) {
+    return this.get(`/nomina/semana/${idSemana}`);
+  }
+
+  async updateNomina(id, nominaData) {
+    return this.put(`/nomina/${id}`, nominaData);
+  }
+
+  async cambiarEstadoNomina(idNomina, estado) {
+    return this.put(`/nomina/${idNomina}/estado`, { estado });
+  }
+
+  async registrarPagoNomina(idNomina, pagoData) {
+    return this.post(`/nomina/${idNomina}/pago`, pagoData);
+  }
+
+  async getHistorialPagos(idEmpleado = null) {
+    const url = idEmpleado ? `/nomina/pagos/historial?id_empleado=${idEmpleado}` : '/nomina/pagos/historial';
+    return this.get(url);
+  }
+
+  async generarReciboPDF(idNomina) {
+    return this.get(`/nomina/${idNomina}/recibo`, {
+      responseType: 'blob'
+    });
+  }
+
+  async getInfoParaNomina() {
+    return this.get('/nomina/info-para-nomina');
+  }
+
+  async crearSemanaNomina(semanaData) {
+    return this.post('/nomina/semanas', semanaData);
+  }
+
+  async actualizarEstadoSemana(idSemana, estado) {
+    return this.put(`/nomina/semanas/${idSemana}/estado`, { estado });
+  }
+
+  async getHistorialNomina(idNomina) {
+    return this.get(`/nomina/${idNomina}/historial`);
+  }
+
   // Métodos para contratos
   async getContratos() {
     return this.get('/contratos');
