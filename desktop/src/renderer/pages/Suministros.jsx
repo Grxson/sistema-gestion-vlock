@@ -4279,70 +4279,70 @@ const Suministros = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Gestión de Suministros</h1>
-        <p className="text-gray-600 dark:text-gray-400">{import.meta.env.VITE_APP_DESCRIPTION || 'Administra materiales, herramientas y equipos para proyectos'}</p>
+    <div className="p-4">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Gestión de Suministros</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{import.meta.env.VITE_APP_DESCRIPTION || 'Administra materiales, herramientas y equipos para proyectos'}</p>
       </div>
 
-      {/* Tarjetas de estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      {/* Tarjetas de estadísticas compactas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {/* Total Gastado */}
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg shadow-md p-4 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-emerald-100 text-sm font-medium mb-1">Total Gastado</p>
-              <p className="text-2xl font-bold">
+              <p className="text-emerald-100 text-xs font-medium mb-1">Total Gastado</p>
+              <p className="text-xl font-bold">
                 {formatCurrency(stats.totalGastado)}
               </p>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <FaDollarSign className="h-6 w-6" />
+            <div className="bg-white bg-opacity-20 rounded-lg p-2">
+              <FaDollarSign className="h-5 w-5" />
             </div>
           </div>
         </div>
 
         {/* Total Suministros */}
-        <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-lg shadow-md p-4 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-indigo-100 text-sm font-medium mb-1">Total Suministros</p>
-              <p className="text-2xl font-bold">
+              <p className="text-indigo-100 text-xs font-medium mb-1">Total Suministros</p>
+              <p className="text-xl font-bold">
                 {stats.totalSuministros.toLocaleString()}
               </p>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <FaBox className="h-6 w-6" />
+            <div className="bg-white bg-opacity-20 rounded-lg p-2">
+              <FaBox className="h-5 w-5" />
             </div>
           </div>
         </div>
 
         {/* Proyectos Activos */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-md p-4 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-100 text-sm font-medium mb-1">Proyectos</p>
-              <p className="text-2xl font-bold">
+              <p className="text-purple-100 text-xs font-medium mb-1">Proyectos</p>
+              <p className="text-xl font-bold">
                 {stats.proyectosUnicos}
               </p>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <FaBuilding className="h-6 w-6" />
+            <div className="bg-white bg-opacity-20 rounded-lg p-2">
+              <FaBuilding className="h-5 w-5" />
             </div>
           </div>
         </div>
 
         {/* Proveedores */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md p-4 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-orange-100 text-sm font-medium mb-1">Proveedores</p>
-              <p className="text-2xl font-bold">
+              <p className="text-orange-100 text-xs font-medium mb-1">Proveedores</p>
+              <p className="text-xl font-bold">
                 {stats.proveedoresUnicos}
               </p>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <FaTruck className="h-6 w-6" />
+            <div className="bg-white bg-opacity-20 rounded-lg p-2">
+              <FaTruck className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -4353,12 +4353,12 @@ const Suministros = () => {
         filtroActivo={filters.tipo_categoria}
         onFiltroChange={handleFiltroTipoChange}
         estadisticas={estadisticasTipo}
-        className="mb-6"
+        className="mb-4"
       />
 
       {/* Información de filtros activos */}
       {(searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria) && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
               <span className="text-blue-700 dark:text-blue-300 font-medium">Vista filtrada:</span>
@@ -4383,81 +4383,81 @@ const Suministros = () => {
         </div>
       )}
 
-      {/* Controles superiores */}
-      <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
-        <div className="flex flex-col xl:flex-row gap-2 items-center justify-between">
+      {/* Controles superiores compactos */}
+      <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 mb-4">
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between">
           {/* Barra de búsqueda */}
           <div className="relative flex-1 max-w-lg">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
             <input
               type="text"
               placeholder="Buscar por nombre, código, folio o descripción..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500"
             />
           </div>
 
-          {/* Botones */}
-          <div className="flex-shrink-0 flex gap-2">
+          {/* Botones compactos */}
+          <div className="flex-shrink-0 flex gap-2 flex-wrap">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
             >
-              <FaFilter className="w-4 h-4" />
-              {showFilters ? 'Filtros' : 'Filtros'}
+              <FaFilter className="w-3 h-3" />
+              Filtros
               {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria) && (
-                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-1">
+                <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
                   {[filters.categoria, filters.estado, filters.proyecto, filters.proveedor, filters.tipo_categoria].filter(f => f).length}
                 </span>
               )}
-              {showFilters ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
+              {showFilters ? <FaChevronUp className="w-2 h-2" /> : <FaChevronDown className="w-2 h-2" />}
             </button>
             <button
               onClick={() => setShowCharts(!showCharts)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
             >
-              <FaChartBar className="w-4 h-4" />
-              {showCharts ? 'Ver Gráficas' : 'Ver Gráficas'}
-              {showCharts ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
+              <FaChartBar className="w-3 h-3" />
+              Gráficas
+              {showCharts ? <FaChevronUp className="w-2 h-2" /> : <FaChevronDown className="w-2 h-2" />}
             </button>
             <button
               onClick={() => setShowMultipleModal(true)}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
             >
-              <STANDARD_ICONS.CREATE className="w-4 h-4" />
+              <STANDARD_ICONS.CREATE className="w-3 h-3" />
               Nuevo Suministro
             </button>
             
             <button
               onClick={() => setShowUnidadesModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
               title="Gestionar Unidades de Medida"
             >
-              <FaRuler className="w-4 h-4" />
+              <FaRuler className="w-3 h-3" />
               Unidades
             </button>
           </div>
         </div>
       </div>
 
-      {/* Sección de Filtros */}
+      {/* Sección de Filtros ultra-compacta */}
       {showFilters && (
-        <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Filtros de Suministros</h2>
+        <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 mb-4">
+          <div className="mb-3">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">Filtros de Suministros</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Filtro por Proyecto */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <FaBuilding className="inline w-4 h-4 mr-2" />
-                  Proyecto ({proyectos.length} disponibles)
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <FaBuilding className="inline w-3 h-3 mr-1" />
+                  Proyecto ({proyectos.length})
                 </label>
                 <select
                   value={filters.proyecto}
                   onChange={(e) => setFilters({...filters, proyecto: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                   <option value="">Todos los proyectos</option>
                   {proyectos.map((proyecto) => {
@@ -4475,14 +4475,14 @@ const Suministros = () => {
 
               {/* Filtro por Categoría */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <FaBox className="inline w-4 h-4 mr-2" />
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <FaBox className="inline w-3 h-3 mr-1" />
                   Categoría
                 </label>
                 <select
                   value={filters.categoria}
                   onChange={(e) => setFilters({...filters, categoria: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                    <option value="">Todas las categorías</option>
                    {categoriasDinamicas.map((categoria, index) => (
@@ -4493,14 +4493,14 @@ const Suministros = () => {
 
               {/* Filtro por Estado */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <FaClock className="inline w-4 h-4 mr-2" />
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <FaClock className="inline w-3 h-3 mr-1" />
                   Estado
                 </label>
                 <select
                   value={filters.estado}
                   onChange={(e) => setFilters({...filters, estado: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                   <option value="">Todos los estados</option>
                   {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
@@ -4511,14 +4511,14 @@ const Suministros = () => {
 
               {/* Filtro por Proveedor */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <FaTruck className="inline w-4 h-4 mr-2" />
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <FaTruck className="inline w-3 h-3 mr-1" />
                   Proveedor
                 </label>
                 <select
                   value={filters.proveedor}
                   onChange={(e) => setFilters({...filters, proveedor: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                   <option value="">Todos los proveedores</option>
                   {proveedores.map((proveedor) => (
@@ -4534,14 +4534,14 @@ const Suministros = () => {
               </div>
             </div>
 
-            {/* Botón para limpiar filtros */}
+            {/* Botón para limpiar filtros compacto */}
             {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor) && (
-              <div className="mt-6 flex justify-end">
+              <div className="mt-3 flex justify-end">
                 <button
                   onClick={() => setFilters({categoria: '', estado: '', proyecto: '', proveedor: ''})}
-                  className="px-4 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 flex items-center gap-2 border border-red-300 dark:border-red-600"
+                  className="px-3 py-1.5 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 flex items-center gap-1.5 border border-red-300 dark:border-red-600"
                 >
-                  <FaTimes className="w-4 h-4" />
+                  <FaTimes className="w-3 h-3" />
                   Limpiar filtros
                 </button>
               </div>
