@@ -481,6 +481,18 @@ const Suministros = () => {
     loadUnidades(); // Recargar unidades cuando se actualicen
   }, [loadUnidades]);
 
+  // Función para manejar actualización de categorías
+  const handleCategoriasUpdated = useCallback(() => {
+    loadCategorias(); // Recargar categorías cuando se actualicen
+    // Si las gráficas están abiertas, recargarlas también
+    if (showCharts) {
+      console.log('🔄 Categorías actualizadas desde modal, recargando gráficas...');
+      setTimeout(() => {
+        loadChartData();
+      }, 500); // Pequeño delay para asegurar que las categorías se cargaron
+    }
+  }, [loadCategorias, showCharts]);
+
   // Función para cargar estadísticas por tipo
   const loadEstadisticasTipo = useCallback(async () => {
     setLoadingEstadisticas(true);
@@ -781,15 +793,31 @@ const Suministros = () => {
   // Procesar valor por categoría
   const processValorPorCategoria = (data) => {
     try {
+      console.log('🔄 Procesando valorPorCategoria con:', {
+        suministrosCount: data.length,
+        categoriasDinamicasCount: categoriasDinamicas?.length || 0
+      });
+      
       const valorPorCategoria = {};
       const cantidadPorCategoria = {};
       
       data.forEach(suministro => {
         try {
-          const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
-            ? suministro.categoria.nombre 
-            : suministro.categoria;
-          const categoria = suministro.tipo_suministro || categoriaNombre || 'Sin categoría';
+          // Usar categorías dinámicas como prioridad
+          let categoria = 'Sin categoría';
+          
+          if (suministro.id_categoria_suministro && categoriasDinamicas && categoriasDinamicas.length > 0) {
+            const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
+            if (categoriaObj) {
+              categoria = categoriaObj.nombre;
+            }
+          } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
+            categoria = suministro.categoria.nombre;
+          } else if (suministro.categoria && typeof suministro.categoria === 'string') {
+            categoria = suministro.categoria;
+          } else if (suministro.tipo_suministro) {
+            categoria = suministro.tipo_suministro;
+          }
           const cantidad = parseFloat(suministro.cantidad) || 0;
           const precio = parseFloat(suministro.precio_unitario) || 0;
           const valor = cantidad * precio;
@@ -1128,15 +1156,33 @@ const Suministros = () => {
   // Procesar distribución de tipos
   const processDistribucionTipos = (data) => {
     try {
+      console.log('🔄 Procesando distribucionTipos con:', {
+        suministrosCount: data.length,
+        categoriasDinamicasCount: categoriasDinamicas?.length || 0
+      });
+      
       const distribucionTipos = {};
       const valorPorTipo = {};
       
       data.forEach(suministro => {
         try {
-          const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
-            ? suministro.categoria.nombre 
-            : suministro.categoria;
-          const tipo = suministro.tipo_suministro || categoriaNombre || 'Sin tipo';
+          // Usar categorías dinámicas para obtener el tipo
+          let tipo = 'Sin tipo';
+          
+          if (suministro.id_categoria_suministro && categoriasDinamicas && categoriasDinamicas.length > 0) {
+            const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
+            if (categoriaObj) {
+              tipo = categoriaObj.tipo || categoriaObj.nombre; // Usar el tipo de la categoría
+            }
+          } else if (typeof suministro.categoria === 'object' && suministro.categoria?.tipo) {
+            tipo = suministro.categoria.tipo;
+          } else if (suministro.tipo_suministro) {
+            tipo = suministro.tipo_suministro;
+          } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
+            tipo = suministro.categoria.nombre;
+          } else if (suministro.categoria && typeof suministro.categoria === 'string') {
+            tipo = suministro.categoria;
+          }
           const cantidad = parseFloat(suministro.cantidad) || 0;
           const precio = parseFloat(suministro.precio_unitario) || 0;
           const valor = cantidad * precio;
@@ -1523,13 +1569,22 @@ const Suministros = () => {
     if (!categoriaAnalizar || categoriaAnalizar === 'Todos') {
       const categorias = {};
       data.forEach(suministro => {
-        // Asegurar que extraemos el nombre si categoria es un objeto
-        let cat = suministro.tipo_suministro;
-        if (!cat) {
-          cat = typeof suministro.categoria === 'object' && suministro.categoria 
-            ? suministro.categoria.nombre 
-            : suministro.categoria || 'Material';
+        // Usar categorías dinámicas como prioridad
+        let cat = 'Sin categoría';
+        
+        if (suministro.id_categoria_suministro && categoriasDinamicas && categoriasDinamicas.length > 0) {
+          const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
+          if (categoriaObj) {
+            cat = categoriaObj.nombre;
+          }
+        } else if (suministro.tipo_suministro) {
+          cat = suministro.tipo_suministro;
+        } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
+          cat = suministro.categoria.nombre;
+        } else if (suministro.categoria && typeof suministro.categoria === 'string') {
+          cat = suministro.categoria;
         }
+        
         categorias[cat] = (categorias[cat] || 0) + 1;
       });
       
@@ -1628,19 +1683,41 @@ const Suministros = () => {
       }
     });
     
-    // Unidades por defecto según categoría (usando categorías dinámicas si están disponibles)
-    const defaultUnidades = {
-      'Concreto': 'm³',
-      'Material': 'ton',
-      'Herramienta': 'hr',
-      'Servicio': 'hr',
-      'Equipo Ligero': 'hr',
-      'Maquinaria': 'hr',
-      'Consumible': 'pz',
-      'Acero': 'ton',
-      'Cimbra': 'm²',
-      'Ferretería': 'pz'
-    };
+    // Unidades por defecto según categoría (usando categorías dinámicas)
+    const defaultUnidades = {};
+    
+    // Generar unidades por defecto basadas en categorías dinámicas
+    if (categoriasDinamicas && categoriasDinamicas.length > 0) {
+      categoriasDinamicas.forEach(cat => {
+        // Asignar unidades por defecto basadas en el tipo de categoría
+        switch (cat.tipo) {
+          case 'Proyecto':
+            if (cat.nombre.toLowerCase().includes('concreto')) defaultUnidades[cat.nombre] = 'm³';
+            else if (cat.nombre.toLowerCase().includes('material')) defaultUnidades[cat.nombre] = 'ton';
+            else if (cat.nombre.toLowerCase().includes('herramienta')) defaultUnidades[cat.nombre] = 'hr';
+            else if (cat.nombre.toLowerCase().includes('equipo')) defaultUnidades[cat.nombre] = 'hr';
+            else if (cat.nombre.toLowerCase().includes('maquinaria')) defaultUnidades[cat.nombre] = 'hr';
+            else if (cat.nombre.toLowerCase().includes('acero')) defaultUnidades[cat.nombre] = 'ton';
+            else if (cat.nombre.toLowerCase().includes('cimbra')) defaultUnidades[cat.nombre] = 'm²';
+            else if (cat.nombre.toLowerCase().includes('ferretería')) defaultUnidades[cat.nombre] = 'pz';
+            else defaultUnidades[cat.nombre] = 'pz';
+            break;
+          case 'Administrativo':
+            if (cat.nombre.toLowerCase().includes('servicio')) defaultUnidades[cat.nombre] = 'hr';
+            else if (cat.nombre.toLowerCase().includes('consumible')) defaultUnidades[cat.nombre] = 'pz';
+            else defaultUnidades[cat.nombre] = 'pz';
+            break;
+          default:
+            defaultUnidades[cat.nombre] = 'pz';
+        }
+      });
+    } else {
+      // Fallback a valores hardcodeados si no hay categorías dinámicas
+      defaultUnidades['Material'] = 'ton';
+      defaultUnidades['Herramienta'] = 'hr';
+      defaultUnidades['Servicio'] = 'hr';
+      defaultUnidades['Consumible'] = 'pz';
+    }
 
     return Object.keys(unidades).length > 0 
       ? Object.keys(unidades).reduce((a, b) => unidades[a] > unidades[b] ? a : b)
@@ -1649,48 +1726,91 @@ const Suministros = () => {
 
   // Función auxiliar para obtener títulos apropiados
   const getTituloAnalisisTecnico = (categoria, unidad) => {
-    const configuraciones = {
-      'Concreto': {
-        titulo: 'Análisis Técnico - Volumen de Concreto por Especificación',
-        cantidad: `Volumen (${unidad})`
-      },
-      'Material': {
+    // Generar configuraciones dinámicamente basadas en categorías de la BD
+    const configuraciones = {};
+    
+    if (categoriasDinamicas && categoriasDinamicas.length > 0) {
+      categoriasDinamicas.forEach(cat => {
+        const nombre = cat.nombre.toLowerCase();
+        const tipo = cat.tipo;
+        
+        if (nombre.includes('concreto')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Volumen de ${cat.nombre} por Especificación`,
+            cantidad: `Volumen (${unidad})`
+          };
+        } else if (nombre.includes('material')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Cantidad de ${cat.nombre} por Tipo`,
+            cantidad: `Cantidad (${unidad})`
+          };
+        } else if (nombre.includes('herramienta')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Uso de ${cat.nombre}`,
+            cantidad: `Tiempo de Uso (${unidad})`
+          };
+        } else if (nombre.includes('equipo')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Uso de ${cat.nombre}`,
+            cantidad: `Horas de Operación (${unidad})`
+          };
+        } else if (nombre.includes('acero')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Cantidad de ${cat.nombre} por Especificación`,
+            cantidad: `Peso (${unidad})`
+          };
+        } else if (nombre.includes('cimbra')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Superficie de ${cat.nombre}`,
+            cantidad: `Área (${unidad})`
+          };
+        } else if (nombre.includes('ferretería')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Artículos de ${cat.nombre}`,
+            cantidad: `Cantidad (${unidad})`
+          };
+        } else if (nombre.includes('maquinaria')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Operación de ${cat.nombre}`,
+            cantidad: `Horas de Trabajo (${unidad})`
+          };
+        } else if (tipo === 'Administrativo' && nombre.includes('servicio')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - ${cat.nombre} Contratados`,
+            cantidad: `Horas de Servicio (${unidad})`
+          };
+        } else if (tipo === 'Administrativo' && nombre.includes('consumible')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - ${cat.nombre}`,
+            cantidad: `Cantidad (${unidad})`
+          };
+        } else {
+          // Configuración genérica para categorías no específicas
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - ${cat.nombre}`,
+            cantidad: `Cantidad (${unidad})`
+          };
+        }
+      });
+    } else {
+      // Fallback a configuraciones hardcodeadas
+      configuraciones['Material'] = {
         titulo: 'Análisis Técnico - Cantidad de Material por Tipo',
         cantidad: `Cantidad (${unidad})`
-      },
-      'Herramienta': {
+      };
+      configuraciones['Herramienta'] = {
         titulo: 'Análisis Técnico - Uso de Herramientas',
         cantidad: `Tiempo de Uso (${unidad})`
-      },
-      'Equipo Ligero': {
-        titulo: 'Análisis Técnico - Uso de Equipos Ligeros',
-        cantidad: `Horas de Operación (${unidad})`
-      },
-      'Acero': {
-        titulo: 'Análisis Técnico - Cantidad de Acero por Especificación',
-        cantidad: `Cantidad (${unidad})`
-      },
-      'Cimbra': {
-        titulo: 'Análisis Técnico - Superficie de Cimbra',
-        cantidad: `Superficie (${unidad})`
-      },
-      'Ferretería': {
-        titulo: 'Análisis Técnico - Artículos de Ferretería',
-        cantidad: `Cantidad (${unidad})`
-      },
-      'Maquinaria': {
-        titulo: 'Análisis Técnico - Operación de Maquinaria',
-        cantidad: `Horas de Trabajo (${unidad})`
-      },
-      'Servicio': {
+      };
+      configuraciones['Servicio'] = {
         titulo: 'Análisis Técnico - Servicios Contratados',
         cantidad: `Horas de Servicio (${unidad})`
-      },
-      'Consumible': {
+      };
+      configuraciones['Consumible'] = {
         titulo: 'Análisis Técnico - Materiales Consumibles',
         cantidad: `Cantidad (${unidad})`
-      }
-    };
+      };
+    }
 
     return configuraciones[categoria] || {
       titulo: `Análisis Técnico - ${categoria}`,
@@ -2197,6 +2317,11 @@ const Suministros = () => {
 
   // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
   const processGastosPorCategoriaDetallado = (data) => {
+    console.log('🔄 Procesando gastosPorCategoriaDetallado con:', {
+      suministrosCount: data.length,
+      categoriasDinamicasCount: categoriasDinamicas?.length || 0,
+      categoriasDinamicas: categoriasDinamicas?.slice(0, 3) // Mostrar solo las primeras 3 para debug
+    });
     
     const gastosPorCategoria = {};
     let totalGeneral = 0;
@@ -2206,10 +2331,13 @@ const Suministros = () => {
       let categoria = 'Sin Categoría';
       
       // Prioridad de campos para categoría
-      if (suministro.id_categoria_suministro && categoriasDinamicas) {
+      if (suministro.id_categoria_suministro && categoriasDinamicas && categoriasDinamicas.length > 0) {
         const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
         if (categoriaObj) {
           categoria = categoriaObj.nombre;
+          console.log(`✅ Categoría encontrada para suministro ${index}: ${categoria} (ID: ${suministro.id_categoria_suministro})`);
+        } else {
+          console.log(`❌ Categoría NO encontrada para suministro ${index} con ID: ${suministro.id_categoria_suministro}`);
         }
       } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
         categoria = suministro.categoria.nombre;
@@ -2802,6 +2930,33 @@ const Suministros = () => {
       loadChartData();
     }
   }, [chartFilters, showCharts]);
+
+  // 🔄 Sincronización automática: Recargar gráficas cuando cambien las categorías dinámicas
+  useEffect(() => {
+    if (showCharts && categoriasCargadas && categoriasDinamicas.length > 0) {
+      console.log('🔄 Categorías actualizadas, recargando gráficas...', categoriasDinamicas.length);
+      loadChartData();
+    }
+  }, [categoriasDinamicas, categoriasCargadas, showCharts]);
+
+  // 🔄 Sincronización automática: Recargar gráficas cuando cambien las unidades dinámicas
+  useEffect(() => {
+    if (showCharts && unidadesCargadas && unidadesDinamicas.length > 0) {
+      console.log('🔄 Unidades actualizadas, recargando gráficas...', unidadesDinamicas.length);
+      loadChartData();
+    }
+  }, [unidadesDinamicas, unidadesCargadas, showCharts]);
+
+  // 🔄 Sincronización específica: Forzar actualización de gráficas que usan categorías dinámicas
+  useEffect(() => {
+    if (showCharts && categoriasCargadas) {
+      console.log('🔄 Forzando actualización de gráficas con categorías...');
+      // Pequeño delay para asegurar que todas las dependencias estén listas
+      setTimeout(() => {
+        loadChartData();
+      }, 100);
+    }
+  }, [categoriasDinamicas, showCharts, categoriasCargadas]);
 
   // Función mejorada para verificar duplicados por folio y proveedor
   const checkForDuplicates = (newSuministro) => {
@@ -4821,15 +4976,6 @@ const Suministros = () => {
                           className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                         />
                         <span className="text-gray-700 dark:text-gray-300">Distribución por Categorías</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.tendenciaEntregas}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, tendenciaEntregas: e.target.checked})}
-                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Tendencia de Entregas</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
@@ -7263,6 +7409,7 @@ const Suministros = () => {
               proveedores={proveedores}
               categorias={categorias}
               unidades={unidadesMedida}
+              onCategoriesUpdated={handleCategoriasUpdated}
               initialData={editingRecibo}
             />
           </div>

@@ -99,7 +99,8 @@ export default function FormularioSuministros({
   proveedores = [],
   categorias = CATEGORIAS_SUMINISTRO,
   unidades = UNIDADES_MEDIDA,
-  initialData = null 
+  initialData = null,
+  onCategoriesUpdated = null // Nuevo callback para notificar actualizaciones de categorías
 }) {
   // Determinar valor inicial del IVA desde los datos cargados
   const initialIVAValue = useMemo(() => {
@@ -1474,6 +1475,7 @@ export default function FormularioSuministros({
                     </label>
                     <CategoriaAutocomplete
                       value={suministro.id_categoria_suministro}
+                      onCategoriesUpdated={onCategoriesUpdated}
                       onChange={(value) => {
                         console.log(`🎯 CategoriaAutocomplete onChange: ${value} para suministro ${suministro.id_temp}`);
                         console.log(`🎯 Tipo de valor recibido:`, typeof value, value);
