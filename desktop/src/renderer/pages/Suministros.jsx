@@ -74,6 +74,7 @@ import FormularioSuministros from '../components/FormularioSuministros';
 import SuministroDeleteConfirmModal from '../components/SuministroDeleteConfirmModal';
 import SuministroNotificationModal from '../components/SuministroNotificationModal';
 import FiltroTipoCategoria from '../components/common/FiltroTipoCategoria';
+import UnidadesMedidaManager from '../components/UnidadesMedidaManager';
 import { useToast } from '../contexts/ToastContext';
 
 // Importar testing suite para desarrollo
@@ -123,7 +124,7 @@ const ESTADOS_SUMINISTRO = {
   'Aprobado': { label: 'Aprobado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
   'Pedido': { label: 'Pedido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
   'En_Transito': { label: 'En Tránsito', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
-  'Entregado': { label: 'Entregado', color: 'bg->green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+  'Entregado': { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
   'Cancelado': { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' }
 };
 
@@ -165,8 +166,11 @@ const Suministros = () => {
   const [categoriasDinamicas, setCategoriasDinamicas] = useState([]); // Categorías desde API
   const [categoriasCargadas, setCategoriasCargadas] = useState(false); // Flag para saber si ya se cargaron
   const [unidadesMedida, setUnidadesMedida] = useState(UNIDADES_MEDIDA);
+  const [unidadesDinamicas, setUnidadesDinamicas] = useState([]); // Unidades desde API
+  const [unidadesCargadas, setUnidadesCargadas] = useState(false); // Flag para saber si ya se cargaron
   const [loading, setLoading] = useState(true);
   const [showMultipleModal, setShowMultipleModal] = useState(false);
+  const [showUnidadesModal, setShowUnidadesModal] = useState(false);
   const [editingSuministro, setEditingSuministro] = useState(null);
   const [editingRecibo, setEditingRecibo] = useState(null);
   const [expandedRecibos, setExpandedRecibos] = useState(new Set());
@@ -347,6 +351,7 @@ const Suministros = () => {
   useEffect(() => {
     loadData();
     loadCategorias();
+    loadUnidades();
   }, []);
 
   // Efecto para cerrar dropdown al hacer click fuera
@@ -446,6 +451,35 @@ const Suministros = () => {
       setCategoriasCargadas(false);
     }
   }, []);
+
+  // Función para cargar unidades de medida dinámicas desde la API
+  const loadUnidades = useCallback(async () => {
+    try {
+      const response = await api.get('/config/unidades');
+      if (response.success) {
+        const unidadesAPI = response.data || [];
+        setUnidadesDinamicas(unidadesAPI);
+        
+        // Convertir a formato compatible con el estado actual
+        const unidadesFormato = {};
+        unidadesAPI.forEach(unidad => {
+          unidadesFormato[unidad.simbolo] = `${unidad.nombre} (${unidad.simbolo})`;
+        });
+        setUnidadesMedida(unidadesFormato);
+        setUnidadesCargadas(true);
+        console.log('✅ Unidades cargadas dinámicamente:', unidadesAPI.length);
+      }
+    } catch (error) {
+      console.error('❌ Error cargando unidades:', error);
+      setUnidadesDinamicas([]);
+      setUnidadesCargadas(false);
+    }
+  }, []);
+
+  // Función para manejar actualización de unidades
+  const handleUnidadesUpdated = useCallback(() => {
+    loadUnidades(); // Recargar unidades cuando se actualicen
+  }, [loadUnidades]);
 
   // Función para cargar estadísticas por tipo
   const loadEstadisticasTipo = useCallback(async () => {
@@ -4394,6 +4428,15 @@ const Suministros = () => {
               <STANDARD_ICONS.CREATE className="w-4 h-4" />
               Nuevo Suministro
             </button>
+            
+            <button
+              onClick={() => setShowUnidadesModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+              title="Gestionar Unidades de Medida"
+            >
+              <FaRuler className="w-4 h-4" />
+              Unidades
+            </button>
           </div>
         </div>
       </div>
@@ -7420,6 +7463,13 @@ const Suministros = () => {
         type={notificationModal.type}
         autoClose
         duration={4000}
+      />
+
+      {/* Modal de Gestión de Unidades de Medida */}
+      <UnidadesMedidaManager
+        isOpen={showUnidadesModal}
+        onClose={() => setShowUnidadesModal(false)}
+        onUnidadesUpdated={handleUnidadesUpdated}
       />
 
       {/* Modal de Vista de Suministro/Recibo */}

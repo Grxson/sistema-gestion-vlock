@@ -76,8 +76,6 @@ if (unidadesController && typeof unidadesController.getUnidades === 'function') 
     router.delete('/unidades/:id', auth, unidadesController.deleteUnidad);
     console.log('✅ Ruta DELETE /unidades/:id registrada');
     
-    router.put('/unidades/reorder', auth, unidadesController.reorderUnidades);
-    console.log('✅ Ruta PUT /unidades/reorder registrada');
     
     console.log('✅ Rutas de unidades registradas correctamente');
   } catch (error) {
