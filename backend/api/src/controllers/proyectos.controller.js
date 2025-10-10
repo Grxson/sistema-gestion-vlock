@@ -174,6 +174,7 @@ const deleteProyecto = async (req, res) => {
         let gastosRelacionados = 0;
         let presupuestosRelacionados = 0;
         let empleadosRelacionados = 0;
+        let suministrosRelacionados = 0;
         
         try {
             // Verificar si tiene gastos relacionados
@@ -202,12 +203,22 @@ const deleteProyecto = async (req, res) => {
         } catch (error) {
             console.log('No se pudo verificar empleados:', error.message);
         }
+
+        try {
+            // Verificar si tiene suministros relacionados
+            if (models.Suministros) {
+                suministrosRelacionados = await models.Suministros.count({ where: { id_proyecto: id } });
+            }
+        } catch (error) {
+            console.log('No se pudo verificar suministros:', error.message);
+        }
         
         console.log('Gastos relacionados:', gastosRelacionados);
         console.log('Presupuestos relacionados:', presupuestosRelacionados);
         console.log('Empleados relacionados:', empleadosRelacionados);
+        console.log('Suministros relacionados:', suministrosRelacionados);
         
-        if (gastosRelacionados > 0 || presupuestosRelacionados > 0 || empleadosRelacionados > 0) {
+        if (gastosRelacionados > 0 || presupuestosRelacionados > 0 || empleadosRelacionados > 0 || suministrosRelacionados > 0) {
             let mensaje = 'No se puede eliminar el proyecto porque tiene los siguientes registros asociados: ';
             let asociados = [];
             
@@ -219,6 +230,9 @@ const deleteProyecto = async (req, res) => {
             }
             if (empleadosRelacionados > 0) {
                 asociados.push(`${empleadosRelacionados} empleado(s)`);
+            }
+            if (suministrosRelacionados > 0) {
+                asociados.push(`${suministrosRelacionados} suministro(s)`);
             }
             
             mensaje += asociados.join(', ');

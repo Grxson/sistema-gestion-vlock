@@ -97,18 +97,7 @@ ChartJS.register(
   Filler
 );
 
-const CATEGORIAS_SUMINISTRO = {
-  'Material': 'Material',
-  'Herramienta': 'Herramienta',
-  'Equipo Ligero': 'Equipo Ligero',
-  'Acero': 'Acero',
-  'Cimbra': 'Cimbra',
-  'Ferretería': 'Ferretería',
-  'Servicio': 'Servicio',
-  'Consumible': 'Consumible',
-  'Maquinaria': 'Maquinaria',
-  'Concreto': 'Concreto'
-};
+// CATEGORIAS_SUMINISTRO eliminada - ahora se cargan dinámicamente desde la API
 
 const UNIDADES_MEDIDA = {
   'pz': 'Pieza (pz)',
@@ -174,6 +163,7 @@ const Suministros = () => {
   const [proveedores, setProveedores] = useState([]);
   const [categorias, setCategorias] = useState([]); // Now using dynamic categories
   const [categoriasDinamicas, setCategoriasDinamicas] = useState([]); // Categorías desde API
+  const [categoriasCargadas, setCategoriasCargadas] = useState(false); // Flag para saber si ya se cargaron
   const [unidadesMedida, setUnidadesMedida] = useState(UNIDADES_MEDIDA);
   const [loading, setLoading] = useState(true);
   const [showMultipleModal, setShowMultipleModal] = useState(false);
@@ -446,11 +436,14 @@ const Suministros = () => {
         const categoriasAPI = response.data || [];
         setCategoriasDinamicas(categoriasAPI);
         setCategorias(categoriasAPI); // También actualizar el estado categorias
+        setCategoriasCargadas(true); // Marcar que las categorías se cargaron
+        console.log('✅ Categorías cargadas dinámicamente:', categoriasAPI.length);
       }
     } catch (error) {
       console.error('❌ Error cargando categorías:', error);
       setCategoriasDinamicas([]);
       setCategorias([]);
+      setCategoriasCargadas(false);
     }
   }, []);
 
@@ -1202,37 +1195,19 @@ const Suministros = () => {
         try {
           let tipoGasto = 'Sin clasificar';
           
-          // Obtener categoría desde la relación incluida o desde el ID
-          let categoria = null;
+          // Obtener categoría desde la relación incluida o desde el ID usando categorías dinámicas
+          let categoriaInfo = null;
           if (suministro.categoria && suministro.categoria.nombre) {
-            categoria = suministro.categoria.nombre;
-          } else if (suministro.id_categoria_suministro) {
-            // Mapeo directo basado en la migración conocida
-            const mapeoCategoriasId = {
-              1: 'Material',        // Proyecto
-              2: 'Herramienta',     // Proyecto  
-              3: 'Equipo_Ligero',   // Proyecto
-              4: 'Acero',           // Proyecto
-              5: 'Cimbra',          // Proyecto
-              6: 'Ferreteria',      // Proyecto
-              7: 'Maquinaria',      // Proyecto
-              8: 'Concreto',        // Proyecto
-              9: 'Servicio',        // Administrativo
-              10: 'Consumible'      // Administrativo
-            };
-            categoria = mapeoCategoriasId[suministro.id_categoria_suministro] || 'Sin_clasificar';
+            // Si ya viene la categoría completa, usarla
+            categoriaInfo = suministro.categoria;
+          } else if (suministro.id_categoria_suministro && categoriasDinamicas.length > 0) {
+            // Buscar en las categorías dinámicas cargadas
+            categoriaInfo = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
           }
           
-          // Clasificación por tipo de categoría
-          if (categoria) {
-            // Categorías de proyecto
-            if (['Material', 'Herramienta', 'Equipo_Ligero', 'Acero', 'Cimbra', 'Ferreteria', 'Maquinaria', 'Concreto'].includes(categoria)) {
-              tipoGasto = 'Proyecto';
-            } 
-            // Categorías administrativas
-            else if (['Servicio', 'Consumible'].includes(categoria)) {
-              tipoGasto = 'Administrativo';
-            }
+          // Clasificación por tipo de categoría usando el campo 'tipo' de la BD
+          if (categoriaInfo && categoriaInfo.tipo) {
+            tipoGasto = categoriaInfo.tipo; // 'Proyecto' o 'Administrativo' directamente desde la BD
           }
 
           // Usar la misma lógica que calculateTotal para consistencia
@@ -1619,15 +1594,18 @@ const Suministros = () => {
       }
     });
     
-    // Unidades por defecto según categoría
+    // Unidades por defecto según categoría (usando categorías dinámicas si están disponibles)
     const defaultUnidades = {
       'Concreto': 'm³',
       'Material': 'ton',
       'Herramienta': 'hr',
       'Servicio': 'hr',
-      'Equipo': 'hr',
+      'Equipo Ligero': 'hr',
       'Maquinaria': 'hr',
-      'Consumible': 'pz'
+      'Consumible': 'pz',
+      'Acero': 'ton',
+      'Cimbra': 'm²',
+      'Ferretería': 'pz'
     };
 
     return Object.keys(unidades).length > 0 
@@ -1650,17 +1628,33 @@ const Suministros = () => {
         titulo: 'Análisis Técnico - Uso de Herramientas',
         cantidad: `Tiempo de Uso (${unidad})`
       },
-      'Servicio': {
-        titulo: 'Análisis Técnico - Servicios Contratados',
-        cantidad: `Horas de Servicio (${unidad})`
-      },
-      'Equipo': {
-        titulo: 'Análisis Técnico - Uso de Equipos',
+      'Equipo Ligero': {
+        titulo: 'Análisis Técnico - Uso de Equipos Ligeros',
         cantidad: `Horas de Operación (${unidad})`
+      },
+      'Acero': {
+        titulo: 'Análisis Técnico - Cantidad de Acero por Especificación',
+        cantidad: `Cantidad (${unidad})`
+      },
+      'Cimbra': {
+        titulo: 'Análisis Técnico - Superficie de Cimbra',
+        cantidad: `Superficie (${unidad})`
+      },
+      'Ferretería': {
+        titulo: 'Análisis Técnico - Artículos de Ferretería',
+        cantidad: `Cantidad (${unidad})`
       },
       'Maquinaria': {
         titulo: 'Análisis Técnico - Operación de Maquinaria',
         cantidad: `Horas de Trabajo (${unidad})`
+      },
+      'Servicio': {
+        titulo: 'Análisis Técnico - Servicios Contratados',
+        cantidad: `Horas de Servicio (${unidad})`
+      },
+      'Consumible': {
+        titulo: 'Análisis Técnico - Materiales Consumibles',
+        cantidad: `Cantidad (${unidad})`
       }
     };
 
