@@ -408,6 +408,7 @@ const CategoriaAutocomplete = ({
         onSave={handleSaveCategoria}
         initialData={{ nombre: (searchTerm || '').trim() }}
         title="Crear Nueva Categoría"
+        existingCategories={allCategorias}
       />
 
       {/* Mensaje de error */}
