@@ -30,7 +30,9 @@ const Herramientas = () => {
   // Estados principales
   const [herramientas, setHerramientas] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [tableLoading, setTableLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
   const [selectedCategoria, setSelectedCategoria] = useState('');
   const [selectedEstado, setSelectedEstado] = useState('');
   const [selectedProyecto, setSelectedProyecto] = useState('');
@@ -95,14 +97,17 @@ const Herramientas = () => {
 
 
   // Cargar herramientas
-  const loadHerramientas = async (page = currentPage, limit = itemsPerPage, filters = {}) => {
-    setLoading(true);
+  const loadHerramientas = async (page = currentPage, limit = itemsPerPage, filters = {}, isInitialLoad = false) => {
+    if (isInitialLoad) {
+      setLoading(true);
+    } else {
+      setTableLoading(true);
+    }
+    
     try {
       const params = { page, limit };
-      if (searchTerm) params.search = searchTerm;
+      if (debouncedSearchTerm) params.search = debouncedSearchTerm;
       if (selectedCategoria) params.categoria = selectedCategoria;
-      if (selectedEstado) params.estado = selectedEstado;
-      if (selectedProyecto) params.proyecto = selectedProyecto;
       if (selectedEstado) params.estado = selectedEstado;
       if (selectedProyecto) params.proyecto = selectedProyecto;
       
@@ -129,21 +134,34 @@ const Herramientas = () => {
       console.error('Error al cargar herramientas:', error);
       setHerramientas([]);
     } finally {
-      setLoading(false);
+      if (isInitialLoad) {
+        setLoading(false);
+      } else {
+        setTableLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadHerramientas();
+    loadHerramientas(1, itemsPerPage, {}, true); // Carga inicial
     loadCategorias();
     loadProyectos();
   }, []);
 
-    // Reload data when filters change
+  // Debounce para el término de búsqueda
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // 300ms de delay
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  // Reload data when filters change (usando el término con debounce)
   useEffect(() => {
     setCurrentPage(1);
-    loadHerramientas(1, itemsPerPage);
-  }, [searchTerm, selectedCategoria, selectedEstado, selectedProyecto]);
+    loadHerramientas(1, itemsPerPage, {}, false); // No es carga inicial
+  }, [debouncedSearchTerm, selectedCategoria, selectedEstado, selectedProyecto]);
 
   // Con paginación del servidor, no necesitamos filtrar en el cliente
   const filteredHerramientas = herramientas;
@@ -156,14 +174,14 @@ const Herramientas = () => {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
-      loadHerramientas(newPage, itemsPerPage);
+      loadHerramientas(newPage, itemsPerPage, {}, false);
     }
   };
 
   const handleItemsPerPageChange = (newItemsPerPage) => {
     setItemsPerPage(newItemsPerPage);
     setCurrentPage(1); // Resetear a la primera página
-    loadHerramientas(1, newItemsPerPage);
+    loadHerramientas(1, newItemsPerPage, {}, false);
   };
 
   const getPaginationInfo = () => {
@@ -454,7 +472,19 @@ const Herramientas = () => {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
-                {paginatedHerramientas.map((herramienta) => {
+                {tableLoading ? (
+                  <tr>
+                    <td colSpan="7" className="px-4 py-8 text-center">
+                      <div className="flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-orange-500 mr-3"></div>
+                        <span className="text-sm text-gray-500 dark:text-gray-400">
+                          Buscando herramientas...
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedHerramientas.map((herramienta) => {
                   const estadoConfig = getEstadoConfig(herramienta.estado);
                   
                   return (
@@ -539,7 +569,8 @@ const Herramientas = () => {
                       </td>
                     </tr>
                   );
-                })}
+                  })
+                )}
               </tbody>
             </table>
           </div>

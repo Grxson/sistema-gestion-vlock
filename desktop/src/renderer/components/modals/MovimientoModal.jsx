@@ -1,5 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
+import { 
+  FaArrowUp, 
+  FaArrowDown, 
+  FaUndo, 
+  FaTrash, 
+  FaUser, 
+  FaCalendarAlt,
+  FaProjectDiagram,
+  FaInfoCircle,
+  FaCheckCircle,
+  FaTimes,
+  FaExchangeAlt
+} from 'react-icons/fa';
 
 const MovimientoModal = ({ isOpen, onClose, herramienta, proyectos = [], onSave }) => {
   const { user } = useAuth();
@@ -49,6 +62,7 @@ const MovimientoModal = ({ isOpen, onClose, herramienta, proyectos = [], onSave 
   });
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -68,33 +82,152 @@ const MovimientoModal = ({ isOpen, onClose, herramienta, proyectos = [], onSave 
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) {
-      setErrors(prev => ({ ...prev, [field]: null }));
+    validateField(field, value); // Validación en tiempo real
+    setShowPreview(false); // Reset preview when form changes
+  };
+
+  // Función para obtener el icono del tipo de movimiento
+  const getTipoIcon = (tipo) => {
+    switch (tipo) {
+      case 'Entrada': return <FaArrowUp className="text-green-500" />;
+      case 'Salida': return <FaArrowDown className="text-blue-500" />;
+      case 'Devolucion': return <FaUndo className="text-orange-500" />;
+      case 'Baja': return <FaTrash className="text-red-500" />;
+      default: return <FaInfoCircle className="text-gray-500" />;
     }
+  };
+
+  // Función para calcular el nuevo stock
+  const getNuevoStock = () => {
+    if (!herramienta || !formData.cantidad) return herramienta?.stock || 0;
+    
+    const cantidad = parseInt(formData.cantidad);
+    let nuevoStock = herramienta.stock;
+    
+    switch (formData.tipo_movimiento) {
+      case 'Entrada':
+        nuevoStock += cantidad;
+        break;
+      case 'Salida':
+      case 'Baja':
+        nuevoStock -= cantidad;
+        break;
+      case 'Devolucion':
+        nuevoStock += cantidad;
+        break;
+    }
+    
+    return Math.max(0, nuevoStock);
+  };
+
+  // Función para verificar si el formulario está listo para preview
+  const isFormReadyForPreview = () => {
+    return formData.tipo_movimiento && 
+           formData.cantidad && 
+           parseInt(formData.cantidad) > 0 &&
+           (!needsProject() || formData.id_proyecto) &&
+           formData.razon_movimiento &&
+           Object.keys(errors).length === 0; // No mostrar preview si hay errores
+  };
+
+  // Función para verificar si necesita proyecto
+  const needsProject = () => {
+    return formData.tipo_movimiento === 'Salida' || formData.tipo_movimiento === 'Devolucion';
+  };
+
+  // Función para verificar si necesita usuario receptor
+  const needsUsuarioReceptor = () => {
+    return formData.razon_movimiento === 'asignacion' || formData.razon_movimiento === 'prestamo';
   };
 
   const validateForm = () => {
     const newErrors = {};
     
+    // Validación de cantidad
     if (!formData.cantidad || isNaN(parseInt(formData.cantidad)) || parseInt(formData.cantidad) <= 0) {
       newErrors.cantidad = 'La cantidad debe ser un número positivo';
+    } else {
+      const cantidad = parseInt(formData.cantidad);
+      const stockActual = herramienta?.stock || 0;
+      
+      // Validar stock para salidas y bajas
+      if ((formData.tipo_movimiento === 'Salida' || formData.tipo_movimiento === 'Baja') && cantidad > stockActual) {
+        newErrors.cantidad = `No hay suficiente stock. Disponible: ${stockActual} unidades`;
+      }
     }
     
-    if (formData.tipo_movimiento === 'Salida' && parseInt(formData.cantidad) > herramienta?.stock) {
-      newErrors.cantidad = `La cantidad no puede ser mayor al stock disponible (${herramienta?.stock})`;
-    }
-    
+    // Validación de proyecto para salidas
     if (formData.tipo_movimiento === 'Salida' && !formData.id_proyecto) {
-      newErrors.id_proyecto = 'Debe seleccionar un proyecto para la salida';
+      newErrors.id_proyecto = 'Debe seleccionar un proyecto destino para la salida';
     }
     
-    if (formData.tipo_movimiento === 'Devolucion' && herramienta?.id_proyecto && !formData.id_proyecto) {
-      // Para devoluciones, usar el proyecto actual de la herramienta si no se especifica otro
-      setFormData(prev => ({ ...prev, id_proyecto: herramienta.id_proyecto }));
+    // Validación de proyecto para devoluciones
+    if (formData.tipo_movimiento === 'Devolucion' && !formData.id_proyecto) {
+      newErrors.id_proyecto = 'Debe seleccionar el proyecto de origen para la devolución';
+    }
+    
+    // Validación de usuario receptor para asignaciones/préstamos
+    if (needsUsuarioReceptor() && !formData.usuario_receptor?.trim()) {
+      newErrors.usuario_receptor = 'Debe especificar el encargado de la herramienta';
+    }
+    
+    // Validación de razón del movimiento
+    if (!formData.razon_movimiento) {
+      newErrors.razon_movimiento = 'Debe seleccionar una razón para el movimiento';
     }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  // Función para validar en tiempo real
+  const validateField = (field, value) => {
+    const newErrors = { ...errors };
+    
+    switch (field) {
+      case 'cantidad':
+        if (!value || isNaN(parseInt(value)) || parseInt(value) <= 0) {
+          newErrors.cantidad = 'La cantidad debe ser un número positivo';
+        } else {
+          const cantidad = parseInt(value);
+          const stockActual = herramienta?.stock || 0;
+          
+          if ((formData.tipo_movimiento === 'Salida' || formData.tipo_movimiento === 'Baja') && cantidad > stockActual) {
+            newErrors.cantidad = `No hay suficiente stock. Disponible: ${stockActual} unidades`;
+          } else {
+            delete newErrors.cantidad;
+          }
+        }
+        break;
+        
+      case 'id_proyecto':
+        if (needsProject() && !value) {
+          newErrors.id_proyecto = formData.tipo_movimiento === 'Salida' 
+            ? 'Debe seleccionar un proyecto destino' 
+            : 'Debe seleccionar el proyecto de origen';
+        } else {
+          delete newErrors.id_proyecto;
+        }
+        break;
+        
+      case 'usuario_receptor':
+        if (needsUsuarioReceptor() && !value?.trim()) {
+          newErrors.usuario_receptor = 'Debe especificar el encargado de la herramienta';
+        } else {
+          delete newErrors.usuario_receptor;
+        }
+        break;
+        
+      case 'razon_movimiento':
+        if (!value) {
+          newErrors.razon_movimiento = 'Debe seleccionar una razón para el movimiento';
+        } else {
+          delete newErrors.razon_movimiento;
+        }
+        break;
+    }
+    
+    setErrors(newErrors);
   };
 
   const handleSubmit = async (e) => {
@@ -143,190 +276,368 @@ const MovimientoModal = ({ isOpen, onClose, herramienta, proyectos = [], onSave 
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-dark-100 rounded-lg p-6 w-full max-w-md mx-4">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Registrar Movimiento
-          </h3>
+      <div className="bg-white dark:bg-dark-100 rounded-lg w-full max-w-2xl mx-4 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded-lg">
+              <FaExchangeAlt className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Registrar Movimiento
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                Gestión de inventario de herramientas
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+            title="Cerrar"
           >
-            ✕
+            <FaTimes className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </button>
         </div>
 
+        {/* Información de la herramienta */}
         {herramienta && (
-          <div className="mb-4 p-3 bg-gray-50 dark:bg-dark-100 rounded-lg">
-            <p className="font-medium text-gray-900 dark:text-white">{herramienta.nombre}</p>
-            <p className="text-sm text-gray-600 dark:text-gray-400">
-              Stock actual: {herramienta.stock} unidades
-            </p>
-            {herramienta.proyectos?.nombre && (
-              <p className="text-sm text-blue-600 dark:text-blue-400">
-                Asignado a: {herramienta.proyectos.nombre}
-              </p>
-            )}
+          <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-800 dark:to-gray-700">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white dark:bg-gray-800 rounded-lg shadow-sm">
+                  <FaUser className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {herramienta.nombre}
+                  </h4>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {herramienta.marca} • Serial: {herramienta.serial}
+                  </p>
+                  {herramienta.proyecto?.nombre && (
+                    <p className="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                      <FaProjectDiagram className="w-3 h-3" />
+                      {herramienta.proyecto.nombre}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {herramienta.stock}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  unidades disponibles
+                </div>
+              </div>
+            </div>
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
-          {errors.general && (
-            <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
-              {errors.general}
-            </div>
-          )}
-
-          {/* Tipo de Movimiento */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Tipo de Movimiento
-            </label>
-            <select
-              value={formData.tipo_movimiento}
-              onChange={(e) => {
-                const nuevoTipo = e.target.value;
-                handleInputChange('tipo_movimiento', nuevoTipo);
-                // Resetear campos específicos cuando cambie el tipo
-                setFormData(prev => ({
-                  ...prev,
-                  tipo_movimiento: nuevoTipo,
-                  razon_movimiento: '',
-                  usuario_receptor: '',
-                  fecha_devolucion_esperada: ''
-                }));
-              }}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-3 py-2 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-            >
-              <option value="Entrada">Entrada (Agregar stock)</option>
-              <option value="Salida">Salida (Préstamo/Uso)</option>
-              <option value="Devolucion">Devolución (Regresar de proyecto)</option>
-              <option value="Baja">Baja (Pérdida/Daño)</option>
-            </select>
-          </div>
-
-          {/* Cantidad */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Cantidad
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={formData.cantidad}
-              onChange={(e) => handleInputChange('cantidad', e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-3 py-2 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-              placeholder="Ingrese la cantidad"
-            />
-            {errors.cantidad && (
-              <p className="mt-1 text-sm text-red-600">{errors.cantidad}</p>
+        {/* Formulario */}
+        <div className="p-6">
+          <form onSubmit={handleSubmit}>
+            {errors.general && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                {errors.general}
+              </div>
             )}
-          </div>
 
-          {/* Proyecto (para salidas y devoluciones) */}
-          {(formData.tipo_movimiento === 'Salida' || formData.tipo_movimiento === 'Devolucion') && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                {formData.tipo_movimiento === 'Salida' ? 'Proyecto Destino' : 'Proyecto de Origen'}
+            {/* Sección 1: Tipo de Movimiento */}
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                Tipo de Movimiento
               </label>
-              <select
-                value={formData.id_proyecto}
-                onChange={(e) => handleInputChange('id_proyecto', e.target.value)}
-                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-3 py-2 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-              >
-                <option value="">Seleccionar proyecto...</option>
-                {proyectos.map((proyecto) => (
-                  <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
-                    {proyecto.nombre}
-                  </option>
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { value: 'Entrada', label: 'Entrada', desc: 'Agregar stock', icon: 'FaArrowUp', color: 'green' },
+                  { value: 'Salida', label: 'Salida', desc: 'Préstamo/Uso', icon: 'FaArrowDown', color: 'blue' },
+                  { value: 'Devolucion', label: 'Devolución', desc: 'Regresar stock', icon: 'FaUndo', color: 'orange' },
+                  { value: 'Baja', label: 'Baja', desc: 'Pérdida/Daño', icon: 'FaTrash', color: 'red' }
+                ].map((tipo) => (
+                  <button
+                    key={tipo.value}
+                    type="button"
+                    onClick={() => {
+                      handleInputChange('tipo_movimiento', tipo.value);
+                      // Resetear campos específicos cuando cambie el tipo
+                      setFormData(prev => ({
+                        ...prev,
+                        tipo_movimiento: tipo.value,
+                        razon_movimiento: '',
+                        usuario_receptor: '',
+                        fecha_devolucion_esperada: ''
+                      }));
+                    }}
+                    className={`p-4 border-2 rounded-lg text-left transition-all ${
+                      formData.tipo_movimiento === tipo.value
+                        ? `border-${tipo.color}-500 bg-${tipo.color}-50 dark:bg-${tipo.color}-900/20`
+                        : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {getTipoIcon(tipo.value)}
+                      <div>
+                        <div className="font-medium text-gray-900 dark:text-white">{tipo.label}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400">{tipo.desc}</div>
+                      </div>
+                    </div>
+                  </button>
                 ))}
-              </select>
-              {errors.id_proyecto && (
-                <p className="mt-1 text-sm text-red-600">{errors.id_proyecto}</p>
+              </div>
+            </div>
+
+            {/* Sección 2: Cantidad y Razón */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Cantidad */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Cantidad
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max={formData.tipo_movimiento === 'Salida' || formData.tipo_movimiento === 'Baja' ? herramienta?.stock : undefined}
+                  value={formData.cantidad}
+                  onChange={(e) => handleInputChange('cantidad', e.target.value)}
+                  className={`w-full border rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${
+                    errors.cantidad 
+                      ? 'border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/20' 
+                      : 'border-gray-300 dark:border-gray-600 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-dark-100'
+                  } text-gray-900 dark:text-white`}
+                  placeholder="Ej: 5"
+                />
+                {errors.cantidad ? (
+                  <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                      <span className="text-red-500">⚠️</span>
+                      {errors.cantidad}
+                    </p>
+                  </div>
+                ) : (
+                  (formData.tipo_movimiento === 'Salida' || formData.tipo_movimiento === 'Baja') && formData.cantidad && (
+                    <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <p className="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-1">
+                        <span className="text-blue-500">ℹ️</span>
+                        Máximo disponible: {herramienta?.stock} unidades
+                      </p>
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* Razón del Movimiento */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Razón del Movimiento
+                </label>
+                <select
+                  value={formData.razon_movimiento}
+                  onChange={(e) => handleInputChange('razon_movimiento', e.target.value)}
+                  className={`w-full border rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${
+                    errors.razon_movimiento 
+                      ? 'border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/20' 
+                      : 'border-gray-300 dark:border-gray-600 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-dark-100'
+                  } text-gray-900 dark:text-white`}
+                >
+                  <option value="">Seleccionar razón...</option>
+                  {razonesMovimiento[formData.tipo_movimiento]?.map((razon) => (
+                    <option key={razon.value} value={razon.value}>
+                      {razon.label}
+                    </option>
+                  ))}
+                </select>
+                {errors.razon_movimiento && (
+                  <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                    <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                      <span className="text-red-500">⚠️</span>
+                      {errors.razon_movimiento}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Sección 3: Proyecto y Usuario Receptor */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              {/* Proyecto (para salidas y devoluciones) */}
+              {needsProject() && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <FaProjectDiagram className="inline w-4 h-4 mr-1" />
+                    {formData.tipo_movimiento === 'Salida' ? 'Proyecto Destino' : 'Proyecto de Origen'}
+                  </label>
+                  <select
+                    value={formData.id_proyecto}
+                    onChange={(e) => handleInputChange('id_proyecto', e.target.value)}
+                    className={`w-full border rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${
+                      errors.id_proyecto 
+                        ? 'border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/20' 
+                        : 'border-gray-300 dark:border-gray-600 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-dark-100'
+                    } text-gray-900 dark:text-white`}
+                  >
+                    <option value="">Seleccionar proyecto...</option>
+                    {proyectos.map((proyecto) => (
+                      <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
+                        {proyecto.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.id_proyecto && (
+                    <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                        <span className="text-red-500">⚠️</span>
+                        {errors.id_proyecto}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Usuario receptor (para asignaciones y préstamos) */}
+              {needsUsuarioReceptor() && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    <FaUser className="inline w-4 h-4 mr-1" />
+                    Encargado de la Herramienta
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.usuario_receptor}
+                    onChange={(e) => handleInputChange('usuario_receptor', e.target.value)}
+                    className={`w-full border rounded-lg px-4 py-3 focus:outline-none focus:ring-2 ${
+                      errors.usuario_receptor 
+                        ? 'border-red-500 focus:ring-red-500 focus:border-red-500 bg-red-50 dark:bg-red-900/20' 
+                        : 'border-gray-300 dark:border-gray-600 focus:ring-orange-500 focus:border-orange-500 bg-white dark:bg-dark-100'
+                    } text-gray-900 dark:text-white`}
+                    placeholder="Nombre completo del responsable"
+                  />
+                  {errors.usuario_receptor && (
+                    <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                      <p className="text-sm text-red-600 dark:text-red-400 flex items-center gap-1">
+                        <span className="text-red-500">⚠️</span>
+                        {errors.usuario_receptor}
+                      </p>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          )}
 
-          {/* Razón específica del movimiento */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Razón del Movimiento
-            </label>
-            <select
-              value={formData.razon_movimiento}
-              onChange={(e) => handleInputChange('razon_movimiento', e.target.value)}
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-3 py-2 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-            >
-              <option value="">Seleccionar razón...</option>
-              {razonesMovimiento[formData.tipo_movimiento]?.map((razon) => (
-                <option key={razon.value} value={razon.value}>
-                  {razon.label}
-                </option>
-              ))}
-            </select>
-          </div>
+            {/* Preview del Impacto */}
+            {isFormReadyForPreview() && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-orange-50 to-amber-50 dark:from-orange-900/20 dark:to-amber-900/20 border border-orange-200 dark:border-orange-800 rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <FaInfoCircle className="w-4 h-4 text-orange-600 dark:text-orange-400" />
+                  <span className="font-medium text-orange-800 dark:text-orange-200">Vista Previa del Movimiento</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Stock Actual:</span>
+                    <div className="font-semibold text-gray-900 dark:text-white">{herramienta?.stock} unidades</div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Movimiento:</span>
+                    <div className="font-semibold text-gray-900 dark:text-white">
+                      {getTipoIcon(formData.tipo_movimiento)}
+                      <span className="ml-1">{formData.cantidad} unidades</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-gray-600 dark:text-gray-400">Nuevo Stock:</span>
+                    <div className={`font-semibold ${getNuevoStock() < 5 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                      {getNuevoStock()} unidades
+                    </div>
+                  </div>
+                </div>
+                {getNuevoStock() < 5 && (
+                  <div className="mt-2 text-xs text-red-600 dark:text-red-400">
+                    ⚠️ El stock quedará bajo (menos de 5 unidades)
+                  </div>
+                )}
+              </div>
+            )}
 
-          {/* Usuario receptor (solo para asignaciones) */}
-          {formData.razon_movimiento === 'asignacion' && (
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Usuario Receptor
-              </label>
-              <input
-                type="text"
-                value={formData.usuario_receptor}
-                onChange={(e) => handleInputChange('usuario_receptor', e.target.value)}
-                className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-3 py-2 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-                placeholder="Nombre del usuario asignado"
-              />
+            {/* Sección 4: Detalles y Notas */}
+            <div className="grid grid-cols-1 gap-6 mb-6">
+              {/* Detalle adicional */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Detalles Adicionales (Opcional)
+                </label>
+                <textarea
+                  value={formData.detalle_adicional}
+                  onChange={(e) => handleInputChange('detalle_adicional', e.target.value)}
+                  rows="3"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  placeholder="Información específica sobre el movimiento, condiciones, ubicación específica, etc."
+                />
+              </div>
+
+              {/* Notas */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Notas Generales (Opcional)
+                </label>
+                <textarea
+                  value={formData.notas}
+                  onChange={(e) => handleInputChange('notas', e.target.value)}
+                  rows="3"
+                  className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                  placeholder="Observaciones adicionales, responsable del movimiento, motivo específico, etc."
+                />
+              </div>
             </div>
-          )}
 
-          {/* Detalle adicional */}
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Detalles Adicionales
-            </label>
-            <textarea
-              value={formData.detalle_adicional}
-              onChange={(e) => handleInputChange('detalle_adicional', e.target.value)}
-              rows="2"
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-3 py-2 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-              placeholder="Información específica sobre el movimiento, condiciones, etc."
-            />
-          </div>
-
-          {/* Notas */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Notas Generales (Opcional)
-            </label>
-            <textarea
-              value={formData.notas}
-              onChange={(e) => handleInputChange('notas', e.target.value)}
-              rows="3"
-              className="w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-3 py-2 focus:outline-none focus:ring-orange-500 focus:border-orange-500"
-              placeholder="Detalles del movimiento, responsable, motivo, etc."
-            />
-          </div>
-
-          <div className="flex justify-end space-x-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Registrando...' : 'Registrar Movimiento'}
-            </button>
-          </div>
-        </form>
+            {/* Botones de Acción */}
+            <div className="flex justify-between items-center pt-6 border-t border-gray-200 dark:border-gray-700">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                {Object.keys(errors).length > 0 ? (
+                  <span className="flex items-center gap-1 text-red-600 dark:text-red-400">
+                    <span className="text-red-500">⚠️</span>
+                    {Object.keys(errors).length} error(es) por corregir
+                  </span>
+                ) : isFormReadyForPreview() ? (
+                  <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                    <FaCheckCircle className="w-4 h-4" />
+                    Formulario completo
+                  </span>
+                ) : (
+                  <span>Complete los campos requeridos</span>
+                )}
+              </div>
+              
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-6 py-3 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || !isFormReadyForPreview() || Object.keys(errors).length > 0}
+                  className="px-6 py-3 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium flex items-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Registrando...
+                    </>
+                  ) : (
+                    <>
+                      <FaCheckCircle className="w-4 h-4" />
+                      Registrar Movimiento
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );

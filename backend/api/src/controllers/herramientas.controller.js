@@ -156,13 +156,19 @@ const herramientasController = {
 
       const nuevaHerramienta = await models.herramientas.create(herramientaData);
       
-      // Obtener la herramienta creada con su categoría
+      // Obtener la herramienta creada con su categoría y proyecto
       const herramientaCompleta = await models.herramientas.findByPk(nuevaHerramienta.id_herramienta, {
         include: [
           {
             model: models.Categorias_herramienta,
             foreignKey: 'id_categoria_herr',
             attributes: ['id_categoria_herr', 'nombre', 'descripcion']
+          },
+          {
+            model: models.proyectos,
+            foreignKey: 'id_proyecto',
+            attributes: ['id_proyecto', 'nombre'],
+            required: false // LEFT JOIN para proyectos opcionales
           }
         ]
       });
@@ -199,13 +205,19 @@ const herramientasController = {
 
       await herramienta.update(herramientaData);
       
-      // Obtener la herramienta actualizada con su categoría
+      // Obtener la herramienta actualizada con su categoría y proyecto
       const herramientaActualizada = await models.herramientas.findByPk(id, {
         include: [
           {
             model: models.Categorias_herramienta,
             foreignKey: 'id_categoria_herr',
             attributes: ['id_categoria_herr', 'nombre', 'descripcion']
+          },
+          {
+            model: models.proyectos,
+            foreignKey: 'id_proyecto',
+            attributes: ['id_proyecto', 'nombre'],
+            required: false // LEFT JOIN para proyectos opcionales
           }
         ]
       });

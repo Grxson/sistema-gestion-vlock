@@ -28,6 +28,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   const [categorias, setCategorias] = useState([]);
   const [showConfirmDeleteHistory, setShowConfirmDeleteHistory] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
+  const [filtroMovimientos, setFiltroMovimientos] = useState('todos');
+  const [busquedaMovimientos, setBusquedaMovimientos] = useState('');
+  
 
   // Estados disponibles
   const estados = [
@@ -43,6 +46,26 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     if (!value) return '';
     return parseFloat(value).toLocaleString('es-MX');
   };
+
+  // Función para obtener la ubicación del proyecto por ID
+  const getProyectoUbicacion = (proyectoId) => {
+    // Convertir a número para comparar correctamente
+    const idNumerico = parseInt(proyectoId);
+    const proyecto = proyectos.find(p => p.id_proyecto === idNumerico);
+    return proyecto ? proyecto.ubicacion : '';
+  };
+
+  // Función para manejar el cambio de proyecto
+  const handleProyectoChange = (proyectoId) => {
+    const ubicacionProyecto = getProyectoUbicacion(proyectoId);
+    
+    setFormData(prev => ({
+      ...prev,
+      id_proyecto: proyectoId,
+      ubicacion: ubicacionProyecto // Autocompletar ubicación directamente
+    }));
+  };
+
 
   // Función para obtener categorías
   const fetchCategorias = async () => {
@@ -88,6 +111,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
       fetchCategorias();
       
       if (herramienta && (mode === 'edit' || mode === 'view' || mode === 'duplicate')) {
+        
         setFormData({
           id_categoria_herr: herramienta.id_categoria_herr || '',
           id_proyecto: herramienta.id_proyecto || '',
@@ -573,20 +597,158 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     });
   };
 
+  // Función para filtrar movimientos
+  const getMovimientosFiltrados = () => {
+    let movimientosFiltrados = movimientos;
+
+    // Filtrar por tipo
+    if (filtroMovimientos !== 'todos') {
+      movimientosFiltrados = movimientosFiltrados.filter(mov => mov.tipo_movimiento === filtroMovimientos);
+    }
+
+    // Filtrar por búsqueda
+    if (busquedaMovimientos.trim()) {
+      const busqueda = busquedaMovimientos.toLowerCase();
+      movimientosFiltrados = movimientosFiltrados.filter(mov => 
+        mov.razon_movimiento?.toLowerCase().includes(busqueda) ||
+        mov.usuario_receptor?.toLowerCase().includes(busqueda) ||
+        mov.proyectos?.nombre?.toLowerCase().includes(busqueda) ||
+        mov.notas?.toLowerCase().includes(busqueda)
+      );
+    }
+
+    return movimientosFiltrados;
+  };
+
+  // Función para obtener estadísticas de movimientos
+  const getEstadisticasMovimientos = () => {
+    const total = movimientos.length;
+    const entrada = movimientos.filter(m => m.tipo_movimiento === 'Entrada').length;
+    const salida = movimientos.filter(m => m.tipo_movimiento === 'Salida').length;
+    const devolucion = movimientos.filter(m => m.tipo_movimiento === 'Devolucion').length;
+    const baja = movimientos.filter(m => m.tipo_movimiento === 'Baja').length;
+
+    return { total, entrada, salida, devolucion, baja };
+  };
+
   if (!isOpen) return null;
 
   const isReadOnly = mode === 'view';
 
+  // Función para obtener el color del estado
+  const getEstadoColor = (estado) => {
+    switch (estado) {
+      case 1: return { bg: 'bg-green-100 dark:bg-green-900/20', text: 'text-green-800 dark:text-green-200', dot: 'bg-green-500' };
+      case 2: return { bg: 'bg-blue-100 dark:bg-blue-900/20', text: 'text-blue-800 dark:text-blue-200', dot: 'bg-blue-500' };
+      case 3: return { bg: 'bg-yellow-100 dark:bg-yellow-900/20', text: 'text-yellow-800 dark:text-yellow-200', dot: 'bg-yellow-500' };
+      case 4: return { bg: 'bg-orange-100 dark:bg-orange-900/20', text: 'text-orange-800 dark:text-orange-200', dot: 'bg-orange-500' };
+      case 5: return { bg: 'bg-red-100 dark:bg-red-900/20', text: 'text-red-800 dark:text-red-200', dot: 'bg-red-500' };
+      default: return { bg: 'bg-gray-100 dark:bg-gray-900/20', text: 'text-gray-800 dark:text-gray-200', dot: 'bg-gray-500' };
+    }
+  };
+
+  // Función para obtener el nombre del estado
+  const getEstadoNombre = (estado) => {
+    const estadoObj = estados.find(e => e.value === estado);
+    return estadoObj ? estadoObj.label : 'Desconocido';
+  };
+
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 overflow-y-auto h-screen w-screen z-50 flex items-start justify-center">
-      <div className="relative top-10 mx-auto p-6 border border-gray-300 dark:border-gray-700 max-w-6xl shadow-lg rounded-md bg-white dark:bg-dark-100 w-full md:w-auto">
-        <div className="mt-3">
-          <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-6">
-            {mode === 'create' && 'Nueva Herramienta'}
-            {mode === 'edit' && 'Editar Herramienta'}
-            {mode === 'view' && 'Detalles de la Herramienta'}
-            {mode === 'duplicate' && 'Duplicar Herramienta'}
-          </h3>
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 overflow-y-auto h-screen w-screen z-50 flex items-start justify-center p-4">
+      <div className="relative top-5 mx-auto p-0 border border-gray-300 dark:border-gray-700 max-w-6xl shadow-lg rounded-lg bg-white dark:bg-dark-100 w-full md:w-auto max-h-[90vh] flex flex-col">
+          {/* Header con resumen ejecutivo */}
+          {mode === 'view' && herramienta && (
+            <div className="bg-white dark:bg-gray-800 p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  {/* Imagen de la herramienta */}
+                  {formData.image_url && (
+                    <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-white dark:border-gray-600 shadow-sm">
+                      <img
+                        src={formData.image_url}
+                        alt={formData.nombre}
+                        className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
+                        onClick={() => setShowImageModal(true)}
+                      />
+                    </div>
+                  )}
+                  
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                      {formData.nombre}
+                    </h3>
+                    <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+                      <span>📦 {formData.marca}</span>
+                      <span>🔢 {formData.serial}</span>
+                      <span>💰 ${formatNumber(formData.costo)}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={onClose}
+                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                  title="Cerrar"
+                >
+                  <FaTimes className="w-5 h-5 text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
+              
+              {/* Métricas principales */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                {/* Stock actual */}
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Stock Actual</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{formData.stock}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">unidades</p>
+                </div>
+                
+                {/* Estado */}
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Estado</p>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${getEstadoColor(formData.estado).dot}`}></div>
+                    <p className={`text-sm font-medium ${getEstadoColor(formData.estado).text}`}>
+                      {getEstadoNombre(formData.estado)}
+                    </p>
+                  </div>
+                </div>
+                
+                {/* Último movimiento */}
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Último Movimiento</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                    {movimientos.length > 0 ? formatDateWithTime(movimientos[0].fecha_movimiento) : 'Sin movimientos'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {movimientos.length > 0 ? `${movimientos.length} movimiento${movimientos.length !== 1 ? 's' : ''}` : 'Sin actividad'}
+                  </p>
+                </div>
+                
+                {/* Ubicación */}
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Ubicación</p>
+                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                    {formData.ubicacion || 'No asignada'}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {herramienta?.proyecto?.nombre || 'Sin proyecto'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Contenido del modal */}
+          <div className="flex-1 overflow-y-auto">
+            <div className="p-6">
+            {mode !== 'view' && (
+              <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-6">
+                {mode === 'create' && 'Nueva Herramienta'}
+                {mode === 'edit' && 'Editar Herramienta'}
+                {mode === 'duplicate' && 'Duplicar Herramienta'}
+              </h3>
+            )}
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -741,25 +903,39 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                   <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Control de Inventario</h4>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Primera fila: Proyecto y Estado */}
+                    {/* Primera fila: Ubicación Principal */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Proyecto
+                        Ubicación Principal
                       </label>
                       <select
                         value={formData.id_proyecto || ''}
-                        onChange={(e) => handleInputChange('id_proyecto', e.target.value)}
+                        onChange={(e) => handleProyectoChange(e.target.value)}
                         disabled={isReadOnly}
                         className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
                           isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
                         }`}
                       >
-                        <option value="">Seleccionar proyecto...</option>
-                        {proyectos?.map((proyecto) => (
-                          <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
-                            {proyecto.nombre}
-                          </option>
-                        ))}
+                        <option value="">Seleccionar ubicación...</option>
+                        <optgroup label="Ubicaciones">
+                          {proyectos?.filter(p => 
+                            ['Bodega Central', 'Almacén Principal', 'Oficina Principal', 'Taller de Reparaciones', 'Pendiente de Ubicación'].includes(p.nombre)
+                          ).map(proyecto => (
+                            <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
+                              {proyecto.nombre}
+                            </option>
+                          ))}
+                        </optgroup>
+                        <optgroup label="Proyectos Activos">
+                          {proyectos?.filter(p => 
+                            !['Bodega Central', 'Almacén Principal', 'Oficina Principal', 'Taller de Reparaciones', 'Pendiente de Ubicación'].includes(p.nombre) && 
+                            p.estado === 'Activo'
+                          ).map(proyecto => (
+                            <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
+                              {proyecto.nombre}
+                            </option>
+                          ))}
+                        </optgroup>
                       </select>
                       {errors.id_proyecto && (
                         <p className="mt-1 text-sm text-red-600">{errors.id_proyecto}</p>
@@ -828,16 +1004,13 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                       <input
                         type="text"
                         value={formData.ubicacion || ''}
-                        onChange={(e) => handleInputChange('ubicacion', e.target.value)}
-                        readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                        placeholder="Ej: Almacén A - Rack 1"
+                        readOnly
+                        className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-dark-200 text-gray-900 dark:text-white rounded-md px-4 py-3 cursor-not-allowed"
+                        placeholder="Se autocompletará al seleccionar ubicación principal"
                       />
-                      {errors.ubicacion && (
-                        <p className="mt-1 text-sm text-red-600">{errors.ubicacion}</p>
-                      )}
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Este campo se llena automáticamente al seleccionar la ubicación principal
+                      </p>
                     </div>
                   </div>
 
@@ -892,7 +1065,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
                     {/* Resumen estadístico */}
                     {movimientos.length > 0 && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         {['Entrada', 'Salida', 'Devolucion', 'Baja'].map(tipo => {
                           const count = movimientos.filter(m => m.tipo_movimiento === tipo).length;
                           const total = movimientos.filter(m => m.tipo_movimiento === tipo)
@@ -915,6 +1088,32 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                             </div>
                           );
                         })}
+                      </div>
+                    )}
+
+                    {/* Filtros y búsqueda */}
+                    {movimientos.length > 0 && (
+                      <div className="flex flex-col md:flex-row gap-4 mb-6">
+                        <div className="flex-1">
+                          <input
+                            type="text"
+                            placeholder="Buscar en movimientos (razón, usuario, proyecto, notas)..."
+                            value={busquedaMovimientos}
+                            onChange={(e) => setBusquedaMovimientos(e.target.value)}
+                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        <select
+                          value={filtroMovimientos}
+                          onChange={(e) => setFiltroMovimientos(e.target.value)}
+                          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="todos">Todos los movimientos</option>
+                          <option value="Entrada">Entradas</option>
+                          <option value="Salida">Salidas</option>
+                          <option value="Devolucion">Devoluciones</option>
+                          <option value="Baja">Bajas</option>
+                        </select>
                       </div>
                     )}
                     
@@ -947,14 +1146,31 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
                         {/* Lista de movimientos */}
                         {movimientos.length === 0 ? (
-                          <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                            <FaExchangeAlt className="mx-auto h-12 w-12 mb-2 opacity-50" />
-                            <p>No hay movimientos registrados para esta herramienta</p>
-                            <p className="text-xs mt-2 opacity-75">Los movimientos aparecerán aquí cuando registres entradas, salidas o devoluciones</p>
+                          <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                            <FaExchangeAlt className="mx-auto h-16 w-16 mb-4 opacity-30" />
+                            <h5 className="text-lg font-medium mb-2">Sin movimientos registrados</h5>
+                            <p className="text-sm opacity-75">Los movimientos aparecerán aquí cuando registres entradas, salidas o devoluciones</p>
                           </div>
                         ) : (
-                      <div className="space-y-3 max-h-80 overflow-y-auto bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
-                        {movimientos.map((movimiento, index) => {
+                          <>
+                            {getMovimientosFiltrados().length === 0 ? (
+                              <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
+                                <FaExchangeAlt className="mx-auto h-12 w-12 mb-3 opacity-50" />
+                                <p className="font-medium mb-2">No se encontraron movimientos</p>
+                                <p className="text-sm opacity-75 mb-3">No hay movimientos que coincidan con los filtros aplicados</p>
+                                <button
+                                  onClick={() => {
+                                    setFiltroMovimientos('todos');
+                                    setBusquedaMovimientos('');
+                                  }}
+                                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                                >
+                                  Limpiar filtros
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="space-y-3 max-h-96 overflow-y-auto bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
+                                {getMovimientosFiltrados().map((movimiento, index) => {
                           const tipoConfig = getMovimientoConfig(movimiento.tipo_movimiento);
                           const descripcionContextual = getDescripcionMovimiento(movimiento);
                           
@@ -1110,8 +1326,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                               )}
                             </div>
                           );
-                        })}
-                          </div>
+                                })}
+                              </div>
+                            )}
+                          </>
                         )}
                       </>
                     )}
@@ -1232,7 +1450,8 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
               )}
             </div>
           </form>
-        </div>
+            </div>
+          </div>
       </div>
       
       {/* Modal de confirmación para eliminar historial */}
