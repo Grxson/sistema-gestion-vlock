@@ -1475,23 +1475,27 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
           className="fixed inset-0 bg-black bg-opacity-75 z-[60] flex items-center justify-center p-4"
           onClick={() => setShowImageModal(false)}
         >
-          <div className="relative w-full h-full max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+          <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
             <button
               onClick={() => setShowImageModal(false)}
-              className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
+              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
               title="Cerrar imagen"
             >
               <FaTimes className="h-5 w-5" />
             </button>
-            <img 
-              src={imagePreview || `http://localhost:4000${formData.image_url}`}
-              alt="Imagen expandida de la herramienta"
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-3 rounded-b-lg">
-              <p className="text-sm font-medium">{formData.nombre || 'Herramienta'}</p>
-              <p className="text-xs opacity-75">Clic fuera de la imagen para cerrar</p>
+            
+            {/* Contenedor de la imagen con el footer */}
+            <div className="relative shadow-2xl rounded-lg overflow-hidden">
+              <img 
+                src={imagePreview || `http://localhost:4000${formData.image_url}`}
+                alt="Imagen expandida de la herramienta"
+                className="max-w-full max-h-[80vh] object-contain"
+                onClick={(e) => e.stopPropagation()}
+              />
+              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-3">
+                <p className="text-sm font-medium">{formData.nombre || 'Herramienta'}</p>
+                <p className="text-xs opacity-75">Clic fuera de la imagen para cerrar</p>
+              </div>
             </div>
           </div>
         </div>
