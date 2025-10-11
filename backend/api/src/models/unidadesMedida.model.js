@@ -42,11 +42,11 @@ module.exports = (sequelize) => {
   });
 
   UnidadesMedida.associate = function(models) {
-    // Comentado temporalmente para la beta - la tabla suministros no tiene id_unidad_medida
-    // UnidadesMedida.hasMany(models.Suministros, {
-    //   foreignKey: 'id_unidad_medida',
-    //   as: 'suministros'
-    // });
+    // Relación con suministros
+    UnidadesMedida.hasMany(models.Suministros, {
+      foreignKey: 'id_unidad_medida',
+      as: 'suministros'
+    });
   };
 
   return UnidadesMedida;

@@ -68,10 +68,15 @@ module.exports = (sequelize) => {
       defaultValue: 0,
       comment: 'Cantidad del suministro'
     },
-    unidad_medida: {
-      type: DataTypes.STRING(20),
-      defaultValue: 'pz',
-      comment: 'Unidad de medida del suministro (pz, kg, m, m2, m3, ton, etc.)'
+    id_unidad_medida: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 1,
+      references: {
+        model: 'unidades_medida',
+        key: 'id_unidad'
+      },
+      comment: 'ID de la unidad de medida desde la tabla unidades_medida'
     },
     
     // Campos financieros
@@ -153,6 +158,12 @@ module.exports = (sequelize) => {
     Suministro.belongsTo(models.Categorias_suministro, {
       foreignKey: 'id_categoria_suministro',
       as: 'categoria'
+    });
+
+    // Relación con unidades de medida
+    Suministro.belongsTo(models.Unidades_medida, {
+      foreignKey: 'id_unidad_medida',
+      as: 'unidadMedida'
     });
   };
 

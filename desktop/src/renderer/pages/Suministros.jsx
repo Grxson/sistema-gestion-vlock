@@ -280,7 +280,13 @@ const Suministros = () => {
     comparativoHorasVsCosto: null,
     // Nuevas gráficas profesionales
     gastosPorCategoriaDetallado: null,
-    analisisFrecuenciaSuministros: null
+    analisisFrecuenciaSuministros: null,
+    // Gráficas de unidades de medida
+    distribucionUnidades: null,
+    cantidadPorUnidad: null,
+    valorPorUnidad: null,
+    analisisUnidadesMedida: null,
+    comparativoUnidades: null
   });
   const [chartFilters, setChartFilters] = useState({
     fechaInicio: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0], // Enero del año actual
@@ -330,7 +336,7 @@ const Suministros = () => {
     descripcion: '', // Campo de descripción detallada del formulario
     id_categoria_suministro: null, // Usar categorías dinámicas
     cantidad: '',
-    unidad_medida: 'pz', // Valor por defecto
+    id_unidad_medida: 1, // Valor por defecto (Pieza)
     precio_unitario: '',
     fecha_necesaria: '',
     estado: 'Solicitado',
@@ -521,6 +527,10 @@ const Suministros = () => {
       if (response.success) {
         const suministrosData = response.data || [];
         
+        // Debug: Verificar datos recibidos
+        console.log('📊 Datos recibidos para gráficas:', suministrosData.length, 'registros');
+        console.log('📊 Primer registro:', suministrosData[0]);
+        
         // Aplicar todos los filtros
         const filteredData = suministrosData.filter(suministro => {
           // Filtro por fechas
@@ -663,6 +673,7 @@ const Suministros = () => {
         // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
         try {
           chartDataProcessed.gastosPorCategoriaDetallado = processGastosPorCategoriaDetallado(filteredData);
+          console.log('📊 Gastos por categoría detallado procesado:', chartDataProcessed.gastosPorCategoriaDetallado);
         } catch (error) {
           console.error('❌ Error en gastosPorCategoriaDetallado:', error);
           chartDataProcessed.gastosPorCategoriaDetallado = null;
@@ -678,6 +689,7 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.distribucionUnidades = processDistribucionUnidades(filteredData);
+          console.log('📊 Distribución unidades procesada:', chartDataProcessed.distribucionUnidades);
         } catch (error) {
           console.error('❌ Error en distribucionUnidades:', error);
           chartDataProcessed.distribucionUnidades = null;
@@ -1622,7 +1634,7 @@ const Suministros = () => {
           costo: 0,
           entregas: 0,
           proyectos: new Set(),
-          unidad: suministro.unidad_medida || unidadPrincipal,
+          unidad: formatUnidadMedida(suministro.unidadMedida) || unidadPrincipal,
           nombreCompleto: suministro.nombre || codigo
         };
       }
@@ -1677,7 +1689,7 @@ const Suministros = () => {
   const getUnidadPrincipalCategoria = (categoria, datos) => {
     const unidades = {};
     datos.forEach(suministro => {
-      const unidad = suministro.unidad_medida;
+      const unidad = formatUnidadMedida(suministro.unidadMedida);
       if (unidad) {
         unidades[unidad] = (unidades[unidad] || 0) + 1;
       }
@@ -1886,11 +1898,10 @@ const Suministros = () => {
     const horasPorMes = {};
     
     // Filtrar solo suministros con unidad de medida en horas
-    const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
-    );
+    const datosHoras = data.filter(suministro => {
+      const unidad = suministro.unidadMedida?.simbolo || suministro.unidadMedida?.nombre || '';
+      return unidad.toLowerCase().includes('hr') || unidad.toLowerCase().includes('hora');
+    });
     
     datosHoras.forEach(suministro => {
       const fecha = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
@@ -1930,11 +1941,10 @@ const Suministros = () => {
     const horasPorEquipo = {};
     
     // Filtrar solo suministros con unidad de medida en horas
-    const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
-    );
+    const datosHoras = data.filter(suministro => {
+      const unidad = suministro.unidadMedida?.simbolo || suministro.unidadMedida?.nombre || '';
+      return unidad.toLowerCase().includes('hr') || unidad.toLowerCase().includes('hora');
+    });
     
     datosHoras.forEach(suministro => {
       const equipo = suministro.nombre || 'Sin nombre';
@@ -1970,11 +1980,10 @@ const Suministros = () => {
     const equiposData = {};
     
     // Filtrar solo suministros con unidad de medida en horas
-    const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
-    );
+    const datosHoras = data.filter(suministro => {
+      const unidad = suministro.unidadMedida?.simbolo || suministro.unidadMedida?.nombre || '';
+      return unidad.toLowerCase().includes('hr') || unidad.toLowerCase().includes('hora');
+    });
     
     datosHoras.forEach(suministro => {
       const equipo = suministro.nombre || 'Sin nombre';
@@ -2024,7 +2033,7 @@ const Suministros = () => {
     const unidadesPorTipo = {};
     
     data.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       
       if (!unidadesPorTipo[unidad]) {
         unidadesPorTipo[unidad] = 0;
@@ -2065,7 +2074,7 @@ const Suministros = () => {
     const cantidadesPorUnidad = {};
     
     data.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       const cantidad = parseFloat(suministro.cantidad) || 0;
       
       if (!cantidadesPorUnidad[unidad]) {
@@ -2098,7 +2107,7 @@ const Suministros = () => {
     const valoresPorUnidad = {};
     
     data.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       const valor = calculateTotal(suministro);
       
       if (!valoresPorUnidad[unidad]) {
@@ -2140,7 +2149,7 @@ const Suministros = () => {
     const analisisUnidades = {};
     
     data.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       const cantidad = parseFloat(suministro.cantidad) || 0;
       const valor = calculateTotal(suministro);
       
@@ -2189,7 +2198,7 @@ const Suministros = () => {
       return (suministro.tipo_suministro === 'Concreto' || 
               categoriaNombre === 'Concreto' ||
               suministro.nombre?.toLowerCase().includes('concreto')) &&
-             (suministro.unidad_medida === 'm³');
+             (suministro.unidadMedida?.simbolo === 'm³' || suministro.unidadMedida?.simbolo === 'm3');
     });
 
     // Agrupar por mes
@@ -2250,7 +2259,7 @@ const Suministros = () => {
     const analisisUnidades = {};
     
     datosAnalizar.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       const cantidad = parseFloat(suministro.cantidad) || 0;
       
       if (!analisisUnidades[unidad]) {
@@ -2330,27 +2339,21 @@ const Suministros = () => {
       // Usar múltiples fuentes para obtener la categoría
       let categoria = 'Sin Categoría';
       
-      // Prioridad de campos para categoría
-      if (suministro.id_categoria_suministro && categoriasDinamicas && categoriasDinamicas.length > 0) {
-        const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
-        if (categoriaObj) {
-          categoria = categoriaObj.nombre;
-          console.log(`✅ Categoría encontrada para suministro ${index}: ${categoria} (ID: ${suministro.id_categoria_suministro})`);
-        } else {
-          console.log(`❌ Categoría NO encontrada para suministro ${index} con ID: ${suministro.id_categoria_suministro}`);
-        }
-      } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
-        categoria = suministro.categoria.nombre;
-      } else if (suministro.categoria && typeof suministro.categoria === 'string') {
-        categoria = suministro.categoria;
-      } else if (suministro.tipo_suministro) {
-        categoria = suministro.tipo_suministro;
+      // Prioridad de campos para categoría - Usar la función helper
+      categoria = getDisplayCategoria(suministro.id_categoria_suministro || suministro.categoria, categoriasDinamicas);
+      
+      // Debug solo para los primeros registros
+      if (index < 5) {
+        console.log(`🔍 Suministro ${index}:`, {
+          id_categoria_suministro: suministro.id_categoria_suministro,
+          categoria_objeto: suministro.categoria,
+          categoria_final: categoria,
+          nombre: suministro.nombre
+        });
       }
       
-      // Calcular gasto
-      const cantidad = parseFloat(suministro.cantidad) || 0;
-      const precio = parseFloat(suministro.precio_unitario) || parseFloat(suministro.cost_total) || parseFloat(suministro.subtotal) || 0;
-      const gasto = cantidad * precio;
+      // Calcular gasto usando la función calculateTotal para consistencia
+      const gasto = calculateTotal(suministro);
       
       if (gasto > 0) {
         if (!gastosPorCategoria[categoria]) {
@@ -2409,6 +2412,14 @@ const Suministros = () => {
       'rgba(6, 182, 212, 0.8)',    // Cyan
       'rgba(132, 204, 22, 0.8)',   // Lime
     ];
+
+    // Debug: Mostrar resumen de datos procesados
+    console.log('📊 Resumen de gastos por categoría:', {
+      totalGeneral,
+      categoriasOrdenadas: categoriasOrdenadas.map(([cat, gasto]) => ({ categoria: cat, gasto, porcentaje: ((gasto / totalGeneral) * 100).toFixed(1) + '%' })),
+      labels,
+      valores
+    });
 
     const result = {
       labels: labels,
@@ -3102,7 +3113,7 @@ const Suministros = () => {
       nombre: templateSuministro.nombre,
       descripcion: templateSuministro.descripcion_detallada || '',
       id_categoria_suministro: templateSuministro.id_categoria_suministro || null,
-      unidad_medida: templateSuministro.unidad_medida || 'pz',
+      id_unidad_medida: templateSuministro.id_unidad_medida || 1,
       codigo_producto: templateSuministro.codigo_producto || '',
       precio_unitario: templateSuministro.precio_unitario || '',
       // Mantener los campos específicos del nuevo registro
@@ -3221,7 +3232,7 @@ const Suministros = () => {
         tipo_suministro: formData.tipo_suministro,
         codigo_producto: formData.codigo_producto,
         cantidad: cantidad,
-        unidad_medida: formData.unidad_medida,
+        id_unidad_medida: formData.id_unidad_medida,
         precio_unitario: precioUnitario,
         costo_total: costoTotal, // Añadir el costo total calculado
         fecha: formData.fecha_necesaria,
@@ -3368,8 +3379,8 @@ const Suministros = () => {
             if (suministroData.precio_unitario !== '' && suministroData.precio_unitario !== null && suministroData.precio_unitario !== undefined) {
               newItem.precio_unitario = normalizeNumber(suministroData.precio_unitario);
             }
-            if (suministroData.unidad_medida) {
-              newItem.unidad_medida = suministroData.unidad_medida;
+            if (suministroData.id_unidad_medida) {
+              newItem.id_unidad_medida = suministroData.id_unidad_medida;
             }
             if (suministroData.m3_perdidos !== '' && suministroData.m3_perdidos !== null && suministroData.m3_perdidos !== undefined) {
               newItem.m3_perdidos = normalizeNumber(suministroData.m3_perdidos);
@@ -4072,7 +4083,7 @@ const Suministros = () => {
           tipo_suministro: item.tipo_suministro,
           codigo_producto: item.codigo_producto,
           cantidad: item.cantidad,
-          unidad_medida: item.unidad_medida,
+          id_unidad_medida: item.id_unidad_medida,
           precio_unitario: item.precio_unitario,
           estado: item.estado,
           descripcion_detallada: item.descripcion_detallada,
@@ -4166,7 +4177,7 @@ const Suministros = () => {
       descripcion: '',
       id_categoria_suministro: null,
       cantidad: '',
-      unidad_medida: 'pz',
+      id_unidad_medida: 1,
       precio_unitario: '',
       fecha_necesaria: '',
       estado: 'Solicitado',
@@ -7091,13 +7102,13 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <div className="text-sm text-gray-900 dark:text-white">
-                                  {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
+                                  {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidadMedida)}
                                 </div>
                               </td>
                               <td className="px-6 py-4">
                                 <div>
                                   <div className="text-sm text-gray-900 dark:text-white">
-                                    {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidad_medida)}
+                                    {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidadMedida)}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
                                     Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -7171,13 +7182,13 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
+                              {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidadMedida)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm text-gray-900 dark:text-white">
-                                {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidad_medida)}
+                                {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidadMedida)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -7776,7 +7787,7 @@ const Suministros = () => {
                                 Cantidad
                               </label>
                               <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {formatNumber(suministro.cantidad || 0)} {suministro.unidad_medida || ''}
+                                {formatNumber(suministro.cantidad || 0)} {formatUnidadMedida(suministro.unidadMedida)}
                               </p>
                             </div>
 
@@ -7919,7 +7930,7 @@ const Suministros = () => {
                         Cantidad
                       </label>
                       <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {formatNumber(viewModal.suministro.cantidad || 0)} {viewModal.suministro.unidad_medida || ''}
+                        {formatNumber(viewModal.suministro.cantidad || 0)} {formatUnidadMedida(viewModal.suministro.unidadMedida)}
                       </p>
                     </div>
 

@@ -153,6 +153,7 @@ export default function FormularioSuministros({
       descripcion_detallada: '',
       cantidad: '',
       unidad_medida: 'pz',
+      id_unidad_medida: 1, // Default a 'pz' (Pieza, ID real: 1)
       precio_unitario: '',
       estado: 'Entregado',
       fecha_necesaria: getLocalDateString(),
@@ -276,6 +277,33 @@ export default function FormularioSuministros({
     'bote': 'pz',
     'botes': 'pz'
   }), []);
+
+  // Mapeo de símbolos a IDs de unidades de medida (basado en la base de datos local)
+  const unidadSymbolToId = useMemo(() => {
+    // Mapeo real basado en las unidades existentes en la base de datos local
+    const localMapping = {
+      'pz': 1,      // Pieza
+      'm³': 2,      // Metro cúbico
+      'm3': 2,      // Metro cúbico (alternativo)
+      'm²': 3,      // Metro cuadrado
+      'm2': 3,      // Metro cuadrado (alternativo)
+      'm': 4,       // Metro lineal
+      'ml': 5,      // Metro lineal (alt)
+      'kg': 6,      // Kilogramo
+      'ton': 7,     // Tonelada
+      'lt': 8,      // Litro
+      'gl': 9,      // Galón
+      'hr': 10,     // Hora
+      'día': 11,    // Día
+      'caja': 12,   // Caja
+      'saco': 13,   // Saco
+      'bote': 14,   // Bote
+      'rollo': 15,  // Rollo
+      'jgo': 16     // Juego
+    };
+    
+    return localMapping;
+  }, []);
 
   // Keys cacheadas para evitar recálculos
   const unidadKeys = useMemo(() => Object.keys(UNIDADES_MEDIDA), []);
@@ -759,6 +787,7 @@ export default function FormularioSuministros({
     descripcion_detallada: '',
     cantidad: '',
     unidad_medida: 'pz',
+    id_unidad_medida: 19, // Default a 'pza' (Pieza, ID real: 19)
     precio_unitario: '',
     estado: 'Entregado',
     fecha_necesaria: getLocalDateString(),
@@ -853,16 +882,40 @@ export default function FormularioSuministros({
   const actualizarSuministro = useCallback((id, field, value) => {
     console.log(`🔄 actualizarSuministro: ${id}, ${field}:`, value);
     
+    // Debug específico para unidades de medida (solo en desarrollo)
+    if (process.env.NODE_ENV === 'development' && field === 'unidad_medida') {
+      console.log(`🔍 Debug actualizarSuministro - unidad_medida:`, {
+        valor_recibido: value,
+        tipo_valor: typeof value,
+        unidades_disponibles: Object.keys(unidades),
+        es_valida_en_dinamicas: !!unidades[value],
+        es_valida_en_por_defecto: !!UNIDADES_MEDIDA[value]
+      });
+    }
+    
     // Normalizar ciertos campos antes de guardarlos
     let normalizedValue = value;
+    let additionalFields = {};
+    
     if (field === 'unidad_medida') {
-      normalizedValue = normalizeUnidadMedida(value);
-      
-      // Verificar que la unidad normalizada existe en las unidades dinámicas o por defecto
-      if (!unidades[normalizedValue] && !UNIDADES_MEDIDA[normalizedValue]) {
-        console.warn(`⚠️ Unidad normalizada "${normalizedValue}" no existe en las unidades disponibles`);
-        normalizedValue = 'pz'; // Fallback
+      // Solo normalizar si la unidad no es válida en las unidades dinámicas o por defecto
+      if (unidades[value] || UNIDADES_MEDIDA[value]) {
+        // La unidad ya es válida, no normalizar
+        normalizedValue = value;
+      } else {
+        // Solo normalizar si no es una unidad válida (para casos legacy o mal formateados)
+        normalizedValue = normalizeUnidadMedida(value);
+        
+        // Verificar que la unidad normalizada existe en las unidades dinámicas o por defecto
+        if (!unidades[normalizedValue] && !UNIDADES_MEDIDA[normalizedValue]) {
+          console.warn(`⚠️ Unidad normalizada "${normalizedValue}" no existe en las unidades disponibles`);
+          normalizedValue = 'pz'; // Fallback
+        }
       }
+      
+      // También actualizar el ID de unidad de medida
+      additionalFields.id_unidad_medida = unidadSymbolToId[normalizedValue] || 1;
+      
     } else if (field === 'id_categoria_suministro') {
       // Solo normalizar si el valor no es null/undefined
       if (value !== null && value !== undefined) {
@@ -875,6 +928,15 @@ export default function FormularioSuministros({
     
     console.log(`💾 Guardando en estado: ${field} = ${normalizedValue}`);
     
+    // Debug específico para unidades de medida después de normalización (solo en desarrollo)
+    if (process.env.NODE_ENV === 'development' && field === 'unidad_medida') {
+      console.log(`🔍 Debug después de normalización:`, {
+        valor_original: value,
+        valor_normalizado: normalizedValue,
+        cambio_ocurrio: value !== normalizedValue
+      });
+    }
+    
     // Actualizar estado de manera optimizada
     setSuministros(prev => {
       // Verificar si realmente hay cambio para evitar re-renders innecesarios
@@ -883,9 +945,20 @@ export default function FormularioSuministros({
         return prev; // Sin cambios, retornar el mismo array
       }
       
-      return prev.map(s => 
-        s.id_temp === id ? { ...s, [field]: normalizedValue } : s
-      );
+      return prev.map(s => {
+        if (s.id_temp === id) {
+          // Crear objeto con el campo principal y campos adicionales
+          const updatedItem = { ...s, [field]: normalizedValue };
+          
+          // Agregar campos adicionales si existen
+          Object.entries(additionalFields).forEach(([key, value]) => {
+            updatedItem[key] = value;
+          });
+          
+          return updatedItem;
+        }
+        return s;
+      });
     });
 
     // Activar autocompletado para nombres y códigos (con debounce implícito)
@@ -1092,22 +1165,39 @@ export default function FormularioSuministros({
           hora_fin_descarga: reciboInfo.hora_fin_descarga || '',
           observaciones_generales: reciboInfo.observaciones || ''
         },
-        suministros: suministros.map(s => ({
-          id_suministro: s.id_suministro || null, // Incluir ID si existe (para actualización)
-          id_categoria_suministro: s.id_categoria_suministro,
-          nombre: s.nombre,
-          codigo_producto: s.codigo_producto,
-          descripcion_detallada: s.descripcion_detallada,
-          cantidad: parseFloat(s.cantidad),
-          unidad_medida: s.unidad_medida,
-          precio_unitario: parseFloat(s.precio_unitario),
-          estado: s.estado,
-          fecha_necesaria: s.fecha_necesaria || reciboInfo.fecha, // ✅ Usar fecha individual o del recibo
-          observaciones: s.observaciones,
-          m3_perdidos: parseFloat(s.m3_perdidos) || 0,
-          m3_entregados: parseFloat(s.m3_entregados) || 0,
-          m3_por_entregar: parseFloat(s.m3_por_entregar) || 0
-        })),
+        suministros: suministros.map(s => {
+          // Mapear unidad de medida a ID
+          const unidadMedidaId = s.id_unidad_medida || 1; // Default a 'pz' (Pieza, ID real: 1)
+          
+          // Debug: Log de la unidad de medida antes de enviar (solo en desarrollo)
+          if (process.env.NODE_ENV === 'development') {
+            console.log('🔍 Debug unidad_medida:', {
+              suministro: s.nombre,
+              unidad_medida_original: s.unidad_medida,
+              id_unidad_medida: unidadMedidaId,
+              unidades_disponibles: Object.keys(unidades),
+              es_valida: !!unidades[s.unidad_medida]
+            });
+          }
+          
+          return {
+            id_suministro: s.id_suministro || null, // Incluir ID si existe (para actualización)
+            id_categoria_suministro: s.id_categoria_suministro,
+            nombre: s.nombre,
+            codigo_producto: s.codigo_producto,
+            descripcion_detallada: s.descripcion_detallada,
+            cantidad: parseFloat(s.cantidad),
+            unidad_medida: s.unidad_medida, // Mantener por compatibilidad temporal
+            id_unidad_medida: unidadMedidaId, // Nuevo campo con ID
+            precio_unitario: parseFloat(s.precio_unitario),
+            estado: s.estado,
+            fecha_necesaria: s.fecha_necesaria || reciboInfo.fecha, // ✅ Usar fecha individual o del recibo
+            observaciones: s.observaciones,
+            m3_perdidos: parseFloat(s.m3_perdidos) || 0,
+            m3_entregados: parseFloat(s.m3_entregados) || 0,
+            m3_por_entregar: parseFloat(s.m3_por_entregar) || 0
+          };
+        }),
         suministros_eliminados: suministrosEliminados, // IDs de suministros a eliminar
         include_iva: includeIVA, // Información sobre si incluir IVA
         es_individual: suministros.length === 1, // Determinar automáticamente si es individual o múltiple
