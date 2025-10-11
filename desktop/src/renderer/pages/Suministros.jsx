@@ -7630,231 +7630,183 @@ const Suministros = () => {
         onUnidadesUpdated={handleUnidadesUpdated}
       />
 
-      {/* Modal de Vista de Suministro/Recibo */}
+      {/* Modal de Vista de Suministro/Recibo - Diseño Minimalista */}
       {viewModal.open && (viewModal.suministro || viewModal.recibo) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-3">
-                  {viewModal.recibo && (
-                    <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
-                      <FaBoxes className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                        AGRUPADO ({viewModal.recibo.cantidad_items} artículos)
-                      </span>
-                    </div>
-                  )}
-                  {viewModal.suministro && !viewModal.recibo && (
-                    <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
-                      <FaBox className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                        INDIVIDUAL
-                      </span>
-                    </div>
-                  )}
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {viewModal.recibo ? 'Detalles del Recibo' : 'Detalles del Suministro'}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setViewModal({ open: false, suministro: null, recibo: null })}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                >
-                  <FaTimes className="w-6 h-6" />
-                </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                {viewModal.recibo ? (
+                  <div className="flex items-center gap-2">
+                    <FaBoxes className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      Recibo ({viewModal.recibo.cantidad_items} artículos)
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <FaBox className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      Suministro Individual
+                    </span>
+                  </div>
+                )}
               </div>
+              <button
+                onClick={() => setViewModal({ open: false, suministro: null, recibo: null })}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title="Cerrar"
+              >
+                <FaTimes className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
               
               {/* Vista de Recibo Agrupado */}
               {viewModal.recibo && (
                 <div className="space-y-6">
-                  {/* Información del Recibo */}
-                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-                      Información del Recibo
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Información Principal */}
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+                    <div className="grid grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Proveedor
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Proveedor</div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
                           {viewModal.recibo.proveedor}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Proyecto
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Proyecto</div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
                           {viewModal.recibo.proyecto}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Fecha
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Fecha</div>
+                        <div className="text-base text-gray-900 dark:text-white">
                           {formatDate(viewModal.recibo.fecha)}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Folio
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                          {viewModal.recibo.folio || 'No especificado'}
-                        </p>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Folio</div>
+                        <div className="text-base text-gray-900 dark:text-white">
+                          {viewModal.recibo.folio || 'Sin folio'}
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Total de Artículos
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                          {viewModal.recibo.cantidad_items}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Total del Recibo
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600 font-bold">
-                          {formatCurrency(viewModal.recibo.total)}
-                        </p>
+                    </div>
+                    
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Total de Artículos</div>
+                          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                            {viewModal.recibo.cantidad_items}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Total del Recibo</div>
+                          <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                            {formatCurrency(viewModal.recibo.total)}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Lista de Suministros */}
                   <div>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
-                        <FaListUl className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Listado de Suministros
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <FaListUl className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        ({viewModal.recibo.suministros.length} artículos)
+                        Artículos ({viewModal.recibo.suministros.length})
                       </h3>
                     </div>
-                    <div className="space-y-4">
+                    
+                    <div className="space-y-3">
                       {viewModal.recibo.suministros.map((suministro, index) => (
-                        <div key={suministro.id_suministro} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50/30 dark:bg-gray-800/20">
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="flex items-center justify-center w-6 h-6 bg-gray-100 dark:bg-gray-800 rounded-full border border-gray-300 dark:border-gray-600">
-                              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                                {index + 1}
-                              </span>
+                        <div key={suministro.id_suministro} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full">
+                                <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                  {index + 1}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900 dark:text-white">
+                                  {suministro.nombre || suministro.descripcion}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {suministro.codigo_producto || 'Sin código'}
+                                </div>
+                              </div>
                             </div>
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              Artículo {index + 1} de {viewModal.recibo.suministros.length}
-                            </span>
+                            <div className="text-right">
+                              <div className="font-bold text-lg text-gray-900 dark:text-white">
+                                {formatCurrency((suministro.cantidad || 0) * (suministro.precio_unitario || 0))}
+                              </div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {formatNumber(suministro.cantidad || 0)} {formatUnidadMedida(suministro.unidadMedida)}
+                              </div>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          
+                          <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Nombre
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {suministro.nombre || suministro.descripcion}
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Código
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {suministro.codigo_producto || 'No especificado'}
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Categoría
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                              <span className="text-gray-500 dark:text-gray-400">Categoría:</span>
+                              <span className="ml-2 text-gray-900 dark:text-white">
                                 {getDisplayCategoria(suministro.tipo_suministro || 
                                   (typeof suministro.categoria === 'object' && suministro.categoria 
                                     ? suministro.categoria.nombre 
                                     : suministro.categoria), categoriasDinamicas)}
-                              </p>
+                              </span>
                             </div>
-
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Cantidad
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {formatNumber(suministro.cantidad || 0)} {formatUnidadMedida(suministro.unidadMedida)}
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Precio Unitario
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                              <span className="text-gray-500 dark:text-gray-400">Precio unitario:</span>
+                              <span className="ml-2 text-gray-900 dark:text-white">
                                 {formatCurrency(suministro.precio_unitario || 0)}
-                              </p>
+                              </span>
                             </div>
-
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Subtotal
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600 font-semibold">
-                                {formatCurrency((suministro.cantidad || 0) * (suministro.precio_unitario || 0))}
-                              </p>
+                              <span className="text-gray-500 dark:text-gray-400">Estado:</span>
+                              <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                                suministro.estado === 'Entregado' 
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : suministro.estado === 'En Proceso'
+                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              }`}>
+                                {suministro.estado || 'No especificado'}
+                              </span>
                             </div>
-
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Estado
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  suministro.estado === 'Entregado' 
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                    : suministro.estado === 'En Proceso'
-                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                }`}>
-                                  {suministro.estado || 'No especificado'}
-                                </span>
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Fecha
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                              <span className="text-gray-500 dark:text-gray-400">Fecha:</span>
+                              <span className="ml-2 text-gray-900 dark:text-white">
                                 {formatDate(suministro.fecha || suministro.fecha_necesaria)}
-                              </p>
+                              </span>
                             </div>
                           </div>
-
-                          {suministro.descripcion_detallada && (
-                            <div className="mt-4">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Descripción Detallada
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {suministro.descripcion_detallada}
-                              </p>
-                            </div>
-                          )}
-
-                          {suministro.observaciones && (
-                            <div className="mt-4">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Observaciones
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {suministro.observaciones}
-                              </p>
+                          
+                          {(suministro.descripcion_detallada || suministro.observaciones) && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                              {suministro.descripcion_detallada && (
+                                <div className="mb-2">
+                                  <span className="text-sm text-gray-500 dark:text-gray-400">Descripción:</span>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                                    {suministro.descripcion_detallada}
+                                  </p>
+                                </div>
+                              )}
+                              {suministro.observaciones && (
+                                <div>
+                                  <span className="text-sm text-gray-500 dark:text-gray-400">Observaciones:</span>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                                    {suministro.observaciones}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -7866,160 +7818,143 @@ const Suministros = () => {
               
               {/* Vista de Suministro Individual */}
               {viewModal.suministro && !viewModal.recibo && (
-                <div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Nombre
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.nombre || 'No especificado'}
+                <div className="space-y-6">
+                  {/* Información Principal */}
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+                    <div className="mb-4">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                        {viewModal.suministro.nombre || 'Sin nombre'}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {viewModal.suministro.codigo_producto || 'Sin código'}
                       </p>
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Código
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.codigo_producto || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Categoría
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.tipo_suministro || 
-                         (typeof viewModal.suministro.categoria === 'object' && viewModal.suministro.categoria 
-                           ? viewModal.suministro.categoria.nombre 
-                           : viewModal.suministro.categoria) || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Proyecto
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.proyecto?.nombre || viewModal.suministro.proyecto || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Proveedor
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.proveedor?.nombre || viewModal.suministro.proveedor || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Folio Proveedor
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.folio_proveedor || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Cantidad
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {formatNumber(viewModal.suministro.cantidad || 0)} {formatUnidadMedida(viewModal.suministro.unidadMedida)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Precio Unitario
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {formatCurrency(viewModal.suministro.precio_unitario || 0)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Subtotal
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md font-semibold">
-                        {formatCurrency((viewModal.suministro.cantidad || 0) * (viewModal.suministro.precio_unitario || 0))}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Estado
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          viewModal.suministro.estado === 'Entregado' 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : viewModal.suministro.estado === 'En Proceso'
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                        }`}>
-                          {viewModal.suministro.estado || 'No especificado'}
-                        </span>
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Fecha
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {formatDate(viewModal.suministro.fecha || viewModal.suministro.fecha_necesaria)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Método de Pago
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.metodo_pago || 'No especificado'}
-                      </p>
+                    
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Categoría</div>
+                        <div className="text-base font-medium text-gray-900 dark:text-white">
+                          {getDisplayCategoria(viewModal.suministro.tipo_suministro || 
+                           (typeof viewModal.suministro.categoria === 'object' && viewModal.suministro.categoria 
+                             ? viewModal.suministro.categoria.nombre 
+                             : viewModal.suministro.categoria), categoriasDinamicas)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Proyecto</div>
+                        <div className="text-base font-medium text-gray-900 dark:text-white">
+                          {viewModal.suministro.proyecto?.nombre || viewModal.suministro.proyecto || 'Sin proyecto'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Proveedor</div>
+                        <div className="text-base font-medium text-gray-900 dark:text-white">
+                          {viewModal.suministro.proveedor?.nombre || viewModal.suministro.proveedor || 'Sin proveedor'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Estado</div>
+                        <div>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            viewModal.suministro.estado === 'Entregado' 
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : viewModal.suministro.estado === 'En Proceso'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                          }`}>
+                            {viewModal.suministro.estado || 'Sin estado'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-
-                  {viewModal.suministro.descripcion_detallada && (
-                    <div className="mt-6">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Descripción Detallada
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.descripcion_detallada}
-                      </p>
+                  
+                  {/* Información de Cantidades y Precios */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                      Cantidades y Precios
+                    </h4>
+                    <div className="grid grid-cols-3 gap-6">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+                          {formatNumber(viewModal.suministro.cantidad || 0)}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {formatUnidadMedida(viewModal.suministro.unidadMedida)}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                          {formatCurrency(viewModal.suministro.precio_unitario || 0)}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Precio unitario</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
+                          {formatCurrency((viewModal.suministro.cantidad || 0) * (viewModal.suministro.precio_unitario || 0))}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Total</div>
+                      </div>
                     </div>
-                  )}
-
-                  {viewModal.suministro.observaciones && (
-                    <div className="mt-6">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Observaciones
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.observaciones}
-                      </p>
+                  </div>
+                  
+                  {/* Información Adicional */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
+                        Información Adicional
+                      </h4>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Fecha</div>
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {formatDate(viewModal.suministro.fecha || viewModal.suministro.fecha_necesaria)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Método de Pago</div>
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {viewModal.suministro.metodo_pago || 'No especificado'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Folio Proveedor</div>
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {viewModal.suministro.folio_proveedor || 'Sin folio'}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  )}
+                    
+                    {(viewModal.suministro.descripcion_detallada || viewModal.suministro.observaciones) && (
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
+                          Notas
+                        </h4>
+                        <div className="space-y-3">
+                          {viewModal.suministro.descripcion_detallada && (
+                            <div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Descripción</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                                {viewModal.suministro.descripcion_detallada}
+                              </div>
+                            </div>
+                          )}
+                          {viewModal.suministro.observaciones && (
+                            <div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Observaciones</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                                {viewModal.suministro.observaciones}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              <div className="flex justify-end mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
-                <button
-                  onClick={() => setViewModal({ open: false, suministro: null, recibo: null })}
-                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200"
-                >
-                  Cerrar
-                </button>
-              </div>
             </div>
           </div>
         </div>
