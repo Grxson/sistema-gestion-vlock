@@ -74,6 +74,7 @@ import FormularioSuministros from '../components/FormularioSuministros';
 import SuministroDeleteConfirmModal from '../components/SuministroDeleteConfirmModal';
 import SuministroNotificationModal from '../components/SuministroNotificationModal';
 import FiltroTipoCategoria from '../components/common/FiltroTipoCategoria';
+import UnidadesMedidaManager from '../components/UnidadesMedidaManager';
 import { useToast } from '../contexts/ToastContext';
 
 // Importar testing suite para desarrollo
@@ -97,18 +98,7 @@ ChartJS.register(
   Filler
 );
 
-const CATEGORIAS_SUMINISTRO = {
-  'Material': 'Material',
-  'Herramienta': 'Herramienta',
-  'Equipo Ligero': 'Equipo Ligero',
-  'Acero': 'Acero',
-  'Cimbra': 'Cimbra',
-  'Ferretería': 'Ferretería',
-  'Servicio': 'Servicio',
-  'Consumible': 'Consumible',
-  'Maquinaria': 'Maquinaria',
-  'Concreto': 'Concreto'
-};
+// CATEGORIAS_SUMINISTRO eliminada - ahora se cargan dinámicamente desde la API
 
 const UNIDADES_MEDIDA = {
   'pz': 'Pieza (pz)',
@@ -134,7 +124,7 @@ const ESTADOS_SUMINISTRO = {
   'Aprobado': { label: 'Aprobado', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
   'Pedido': { label: 'Pedido', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300' },
   'En_Transito': { label: 'En Tránsito', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
-  'Entregado': { label: 'Entregado', color: 'bg->green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
+  'Entregado': { label: 'Entregado', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
   'Cancelado': { label: 'Cancelado', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' }
 };
 
@@ -174,9 +164,13 @@ const Suministros = () => {
   const [proveedores, setProveedores] = useState([]);
   const [categorias, setCategorias] = useState([]); // Now using dynamic categories
   const [categoriasDinamicas, setCategoriasDinamicas] = useState([]); // Categorías desde API
+  const [categoriasCargadas, setCategoriasCargadas] = useState(false); // Flag para saber si ya se cargaron
   const [unidadesMedida, setUnidadesMedida] = useState(UNIDADES_MEDIDA);
+  const [unidadesDinamicas, setUnidadesDinamicas] = useState([]); // Unidades desde API
+  const [unidadesCargadas, setUnidadesCargadas] = useState(false); // Flag para saber si ya se cargaron
   const [loading, setLoading] = useState(true);
   const [showMultipleModal, setShowMultipleModal] = useState(false);
+  const [showUnidadesModal, setShowUnidadesModal] = useState(false);
   const [editingSuministro, setEditingSuministro] = useState(null);
   const [editingRecibo, setEditingRecibo] = useState(null);
   const [expandedRecibos, setExpandedRecibos] = useState(new Set());
@@ -286,7 +280,13 @@ const Suministros = () => {
     comparativoHorasVsCosto: null,
     // Nuevas gráficas profesionales
     gastosPorCategoriaDetallado: null,
-    analisisFrecuenciaSuministros: null
+    analisisFrecuenciaSuministros: null,
+    // Gráficas de unidades de medida
+    distribucionUnidades: null,
+    cantidadPorUnidad: null,
+    valorPorUnidad: null,
+    analisisUnidadesMedida: null,
+    comparativoUnidades: null
   });
   const [chartFilters, setChartFilters] = useState({
     fechaInicio: new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0], // Enero del año actual
@@ -336,7 +336,7 @@ const Suministros = () => {
     descripcion: '', // Campo de descripción detallada del formulario
     id_categoria_suministro: null, // Usar categorías dinámicas
     cantidad: '',
-    unidad_medida: 'pz', // Valor por defecto
+    id_unidad_medida: 1, // Valor por defecto (Pieza)
     precio_unitario: '',
     fecha_necesaria: '',
     estado: 'Solicitado',
@@ -357,6 +357,7 @@ const Suministros = () => {
   useEffect(() => {
     loadData();
     loadCategorias();
+    loadUnidades();
   }, []);
 
   // Efecto para cerrar dropdown al hacer click fuera
@@ -446,13 +447,57 @@ const Suministros = () => {
         const categoriasAPI = response.data || [];
         setCategoriasDinamicas(categoriasAPI);
         setCategorias(categoriasAPI); // También actualizar el estado categorias
+        setCategoriasCargadas(true); // Marcar que las categorías se cargaron
+        console.log('✅ Categorías cargadas dinámicamente:', categoriasAPI.length);
       }
     } catch (error) {
       console.error('❌ Error cargando categorías:', error);
       setCategoriasDinamicas([]);
       setCategorias([]);
+      setCategoriasCargadas(false);
     }
   }, []);
+
+  // Función para cargar unidades de medida dinámicas desde la API
+  const loadUnidades = useCallback(async () => {
+    try {
+      const response = await api.get('/config/unidades');
+      if (response.success) {
+        const unidadesAPI = response.data || [];
+        setUnidadesDinamicas(unidadesAPI);
+        
+        // Convertir a formato compatible con el estado actual
+        const unidadesFormato = {};
+        unidadesAPI.forEach(unidad => {
+          unidadesFormato[unidad.simbolo] = `${unidad.nombre} (${unidad.simbolo})`;
+        });
+        setUnidadesMedida(unidadesFormato);
+        setUnidadesCargadas(true);
+        console.log('✅ Unidades cargadas dinámicamente:', unidadesAPI.length);
+      }
+    } catch (error) {
+      console.error('❌ Error cargando unidades:', error);
+      setUnidadesDinamicas([]);
+      setUnidadesCargadas(false);
+    }
+  }, []);
+
+  // Función para manejar actualización de unidades
+  const handleUnidadesUpdated = useCallback(() => {
+    loadUnidades(); // Recargar unidades cuando se actualicen
+  }, [loadUnidades]);
+
+  // Función para manejar actualización de categorías
+  const handleCategoriasUpdated = useCallback(() => {
+    loadCategorias(); // Recargar categorías cuando se actualicen
+    // Si las gráficas están abiertas, recargarlas también
+    if (showCharts) {
+      console.log('🔄 Categorías actualizadas desde modal, recargando gráficas...');
+      setTimeout(() => {
+        loadChartData();
+      }, 500); // Pequeño delay para asegurar que las categorías se cargaron
+    }
+  }, [loadCategorias, showCharts]);
 
   // Función para cargar estadísticas por tipo
   const loadEstadisticasTipo = useCallback(async () => {
@@ -481,6 +526,10 @@ const Suministros = () => {
       const response = await api.getSuministros();
       if (response.success) {
         const suministrosData = response.data || [];
+        
+        // Debug: Verificar datos recibidos
+        console.log('📊 Datos recibidos para gráficas:', suministrosData.length, 'registros');
+        console.log('📊 Primer registro:', suministrosData[0]);
         
         // Aplicar todos los filtros
         const filteredData = suministrosData.filter(suministro => {
@@ -624,6 +673,7 @@ const Suministros = () => {
         // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
         try {
           chartDataProcessed.gastosPorCategoriaDetallado = processGastosPorCategoriaDetallado(filteredData);
+          console.log('📊 Gastos por categoría detallado procesado:', chartDataProcessed.gastosPorCategoriaDetallado);
         } catch (error) {
           console.error('❌ Error en gastosPorCategoriaDetallado:', error);
           chartDataProcessed.gastosPorCategoriaDetallado = null;
@@ -639,6 +689,7 @@ const Suministros = () => {
 
         try {
           chartDataProcessed.distribucionUnidades = processDistribucionUnidades(filteredData);
+          console.log('📊 Distribución unidades procesada:', chartDataProcessed.distribucionUnidades);
         } catch (error) {
           console.error('❌ Error en distribucionUnidades:', error);
           chartDataProcessed.distribucionUnidades = null;
@@ -754,15 +805,31 @@ const Suministros = () => {
   // Procesar valor por categoría
   const processValorPorCategoria = (data) => {
     try {
+      console.log('🔄 Procesando valorPorCategoria con:', {
+        suministrosCount: data.length,
+        categoriasDinamicasCount: categoriasDinamicas?.length || 0
+      });
+      
       const valorPorCategoria = {};
       const cantidadPorCategoria = {};
       
       data.forEach(suministro => {
         try {
-          const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
-            ? suministro.categoria.nombre 
-            : suministro.categoria;
-          const categoria = suministro.tipo_suministro || categoriaNombre || 'Sin categoría';
+          // Usar categorías dinámicas como prioridad
+          let categoria = 'Sin categoría';
+          
+          if (suministro.id_categoria_suministro && categoriasDinamicas && categoriasDinamicas.length > 0) {
+            const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
+            if (categoriaObj) {
+              categoria = categoriaObj.nombre;
+            }
+          } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
+            categoria = suministro.categoria.nombre;
+          } else if (suministro.categoria && typeof suministro.categoria === 'string') {
+            categoria = suministro.categoria;
+          } else if (suministro.tipo_suministro) {
+            categoria = suministro.tipo_suministro;
+          }
           const cantidad = parseFloat(suministro.cantidad) || 0;
           const precio = parseFloat(suministro.precio_unitario) || 0;
           const valor = cantidad * precio;
@@ -1101,15 +1168,33 @@ const Suministros = () => {
   // Procesar distribución de tipos
   const processDistribucionTipos = (data) => {
     try {
+      console.log('🔄 Procesando distribucionTipos con:', {
+        suministrosCount: data.length,
+        categoriasDinamicasCount: categoriasDinamicas?.length || 0
+      });
+      
       const distribucionTipos = {};
       const valorPorTipo = {};
       
       data.forEach(suministro => {
         try {
-          const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
-            ? suministro.categoria.nombre 
-            : suministro.categoria;
-          const tipo = suministro.tipo_suministro || categoriaNombre || 'Sin tipo';
+          // Usar categorías dinámicas para obtener el tipo
+          let tipo = 'Sin tipo';
+          
+          if (suministro.id_categoria_suministro && categoriasDinamicas && categoriasDinamicas.length > 0) {
+            const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
+            if (categoriaObj) {
+              tipo = categoriaObj.tipo || categoriaObj.nombre; // Usar el tipo de la categoría
+            }
+          } else if (typeof suministro.categoria === 'object' && suministro.categoria?.tipo) {
+            tipo = suministro.categoria.tipo;
+          } else if (suministro.tipo_suministro) {
+            tipo = suministro.tipo_suministro;
+          } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
+            tipo = suministro.categoria.nombre;
+          } else if (suministro.categoria && typeof suministro.categoria === 'string') {
+            tipo = suministro.categoria;
+          }
           const cantidad = parseFloat(suministro.cantidad) || 0;
           const precio = parseFloat(suministro.precio_unitario) || 0;
           const valor = cantidad * precio;
@@ -1202,37 +1287,19 @@ const Suministros = () => {
         try {
           let tipoGasto = 'Sin clasificar';
           
-          // Obtener categoría desde la relación incluida o desde el ID
-          let categoria = null;
+          // Obtener categoría desde la relación incluida o desde el ID usando categorías dinámicas
+          let categoriaInfo = null;
           if (suministro.categoria && suministro.categoria.nombre) {
-            categoria = suministro.categoria.nombre;
-          } else if (suministro.id_categoria_suministro) {
-            // Mapeo directo basado en la migración conocida
-            const mapeoCategoriasId = {
-              1: 'Material',        // Proyecto
-              2: 'Herramienta',     // Proyecto  
-              3: 'Equipo_Ligero',   // Proyecto
-              4: 'Acero',           // Proyecto
-              5: 'Cimbra',          // Proyecto
-              6: 'Ferreteria',      // Proyecto
-              7: 'Maquinaria',      // Proyecto
-              8: 'Concreto',        // Proyecto
-              9: 'Servicio',        // Administrativo
-              10: 'Consumible'      // Administrativo
-            };
-            categoria = mapeoCategoriasId[suministro.id_categoria_suministro] || 'Sin_clasificar';
+            // Si ya viene la categoría completa, usarla
+            categoriaInfo = suministro.categoria;
+          } else if (suministro.id_categoria_suministro && categoriasDinamicas.length > 0) {
+            // Buscar en las categorías dinámicas cargadas
+            categoriaInfo = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
           }
           
-          // Clasificación por tipo de categoría
-          if (categoria) {
-            // Categorías de proyecto
-            if (['Material', 'Herramienta', 'Equipo_Ligero', 'Acero', 'Cimbra', 'Ferreteria', 'Maquinaria', 'Concreto'].includes(categoria)) {
-              tipoGasto = 'Proyecto';
-            } 
-            // Categorías administrativas
-            else if (['Servicio', 'Consumible'].includes(categoria)) {
-              tipoGasto = 'Administrativo';
-            }
+          // Clasificación por tipo de categoría usando el campo 'tipo' de la BD
+          if (categoriaInfo && categoriaInfo.tipo) {
+            tipoGasto = categoriaInfo.tipo; // 'Proyecto' o 'Administrativo' directamente desde la BD
           }
 
           // Usar la misma lógica que calculateTotal para consistencia
@@ -1514,13 +1581,22 @@ const Suministros = () => {
     if (!categoriaAnalizar || categoriaAnalizar === 'Todos') {
       const categorias = {};
       data.forEach(suministro => {
-        // Asegurar que extraemos el nombre si categoria es un objeto
-        let cat = suministro.tipo_suministro;
-        if (!cat) {
-          cat = typeof suministro.categoria === 'object' && suministro.categoria 
-            ? suministro.categoria.nombre 
-            : suministro.categoria || 'Material';
+        // Usar categorías dinámicas como prioridad
+        let cat = 'Sin categoría';
+        
+        if (suministro.id_categoria_suministro && categoriasDinamicas && categoriasDinamicas.length > 0) {
+          const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
+          if (categoriaObj) {
+            cat = categoriaObj.nombre;
+          }
+        } else if (suministro.tipo_suministro) {
+          cat = suministro.tipo_suministro;
+        } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
+          cat = suministro.categoria.nombre;
+        } else if (suministro.categoria && typeof suministro.categoria === 'string') {
+          cat = suministro.categoria;
         }
+        
         categorias[cat] = (categorias[cat] || 0) + 1;
       });
       
@@ -1558,7 +1634,7 @@ const Suministros = () => {
           costo: 0,
           entregas: 0,
           proyectos: new Set(),
-          unidad: suministro.unidad_medida || unidadPrincipal,
+          unidad: formatUnidadMedida(suministro.unidadMedida) || unidadPrincipal,
           nombreCompleto: suministro.nombre || codigo
         };
       }
@@ -1613,22 +1689,47 @@ const Suministros = () => {
   const getUnidadPrincipalCategoria = (categoria, datos) => {
     const unidades = {};
     datos.forEach(suministro => {
-      const unidad = suministro.unidad_medida;
+      const unidad = formatUnidadMedida(suministro.unidadMedida);
       if (unidad) {
         unidades[unidad] = (unidades[unidad] || 0) + 1;
       }
     });
     
-    // Unidades por defecto según categoría
-    const defaultUnidades = {
-      'Concreto': 'm³',
-      'Material': 'ton',
-      'Herramienta': 'hr',
-      'Servicio': 'hr',
-      'Equipo': 'hr',
-      'Maquinaria': 'hr',
-      'Consumible': 'pz'
-    };
+    // Unidades por defecto según categoría (usando categorías dinámicas)
+    const defaultUnidades = {};
+    
+    // Generar unidades por defecto basadas en categorías dinámicas
+    if (categoriasDinamicas && categoriasDinamicas.length > 0) {
+      categoriasDinamicas.forEach(cat => {
+        // Asignar unidades por defecto basadas en el tipo de categoría
+        switch (cat.tipo) {
+          case 'Proyecto':
+            if (cat.nombre.toLowerCase().includes('concreto')) defaultUnidades[cat.nombre] = 'm³';
+            else if (cat.nombre.toLowerCase().includes('material')) defaultUnidades[cat.nombre] = 'ton';
+            else if (cat.nombre.toLowerCase().includes('herramienta')) defaultUnidades[cat.nombre] = 'hr';
+            else if (cat.nombre.toLowerCase().includes('equipo')) defaultUnidades[cat.nombre] = 'hr';
+            else if (cat.nombre.toLowerCase().includes('maquinaria')) defaultUnidades[cat.nombre] = 'hr';
+            else if (cat.nombre.toLowerCase().includes('acero')) defaultUnidades[cat.nombre] = 'ton';
+            else if (cat.nombre.toLowerCase().includes('cimbra')) defaultUnidades[cat.nombre] = 'm²';
+            else if (cat.nombre.toLowerCase().includes('ferretería')) defaultUnidades[cat.nombre] = 'pz';
+            else defaultUnidades[cat.nombre] = 'pz';
+            break;
+          case 'Administrativo':
+            if (cat.nombre.toLowerCase().includes('servicio')) defaultUnidades[cat.nombre] = 'hr';
+            else if (cat.nombre.toLowerCase().includes('consumible')) defaultUnidades[cat.nombre] = 'pz';
+            else defaultUnidades[cat.nombre] = 'pz';
+            break;
+          default:
+            defaultUnidades[cat.nombre] = 'pz';
+        }
+      });
+    } else {
+      // Fallback a valores hardcodeados si no hay categorías dinámicas
+      defaultUnidades['Material'] = 'ton';
+      defaultUnidades['Herramienta'] = 'hr';
+      defaultUnidades['Servicio'] = 'hr';
+      defaultUnidades['Consumible'] = 'pz';
+    }
 
     return Object.keys(unidades).length > 0 
       ? Object.keys(unidades).reduce((a, b) => unidades[a] > unidades[b] ? a : b)
@@ -1637,32 +1738,91 @@ const Suministros = () => {
 
   // Función auxiliar para obtener títulos apropiados
   const getTituloAnalisisTecnico = (categoria, unidad) => {
-    const configuraciones = {
-      'Concreto': {
-        titulo: 'Análisis Técnico - Volumen de Concreto por Especificación',
-        cantidad: `Volumen (${unidad})`
-      },
-      'Material': {
+    // Generar configuraciones dinámicamente basadas en categorías de la BD
+    const configuraciones = {};
+    
+    if (categoriasDinamicas && categoriasDinamicas.length > 0) {
+      categoriasDinamicas.forEach(cat => {
+        const nombre = cat.nombre.toLowerCase();
+        const tipo = cat.tipo;
+        
+        if (nombre.includes('concreto')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Volumen de ${cat.nombre} por Especificación`,
+            cantidad: `Volumen (${unidad})`
+          };
+        } else if (nombre.includes('material')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Cantidad de ${cat.nombre} por Tipo`,
+            cantidad: `Cantidad (${unidad})`
+          };
+        } else if (nombre.includes('herramienta')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Uso de ${cat.nombre}`,
+            cantidad: `Tiempo de Uso (${unidad})`
+          };
+        } else if (nombre.includes('equipo')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Uso de ${cat.nombre}`,
+            cantidad: `Horas de Operación (${unidad})`
+          };
+        } else if (nombre.includes('acero')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Cantidad de ${cat.nombre} por Especificación`,
+            cantidad: `Peso (${unidad})`
+          };
+        } else if (nombre.includes('cimbra')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Superficie de ${cat.nombre}`,
+            cantidad: `Área (${unidad})`
+          };
+        } else if (nombre.includes('ferretería')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Artículos de ${cat.nombre}`,
+            cantidad: `Cantidad (${unidad})`
+          };
+        } else if (nombre.includes('maquinaria')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - Operación de ${cat.nombre}`,
+            cantidad: `Horas de Trabajo (${unidad})`
+          };
+        } else if (tipo === 'Administrativo' && nombre.includes('servicio')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - ${cat.nombre} Contratados`,
+            cantidad: `Horas de Servicio (${unidad})`
+          };
+        } else if (tipo === 'Administrativo' && nombre.includes('consumible')) {
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - ${cat.nombre}`,
+            cantidad: `Cantidad (${unidad})`
+          };
+        } else {
+          // Configuración genérica para categorías no específicas
+          configuraciones[cat.nombre] = {
+            titulo: `Análisis Técnico - ${cat.nombre}`,
+            cantidad: `Cantidad (${unidad})`
+          };
+        }
+      });
+    } else {
+      // Fallback a configuraciones hardcodeadas
+      configuraciones['Material'] = {
         titulo: 'Análisis Técnico - Cantidad de Material por Tipo',
         cantidad: `Cantidad (${unidad})`
-      },
-      'Herramienta': {
+      };
+      configuraciones['Herramienta'] = {
         titulo: 'Análisis Técnico - Uso de Herramientas',
         cantidad: `Tiempo de Uso (${unidad})`
-      },
-      'Servicio': {
+      };
+      configuraciones['Servicio'] = {
         titulo: 'Análisis Técnico - Servicios Contratados',
         cantidad: `Horas de Servicio (${unidad})`
-      },
-      'Equipo': {
-        titulo: 'Análisis Técnico - Uso de Equipos',
-        cantidad: `Horas de Operación (${unidad})`
-      },
-      'Maquinaria': {
-        titulo: 'Análisis Técnico - Operación de Maquinaria',
-        cantidad: `Horas de Trabajo (${unidad})`
-      }
-    };
+      };
+      configuraciones['Consumible'] = {
+        titulo: 'Análisis Técnico - Materiales Consumibles',
+        cantidad: `Cantidad (${unidad})`
+      };
+    }
 
     return configuraciones[categoria] || {
       titulo: `Análisis Técnico - ${categoria}`,
@@ -1738,11 +1898,10 @@ const Suministros = () => {
     const horasPorMes = {};
     
     // Filtrar solo suministros con unidad de medida en horas
-    const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
-    );
+    const datosHoras = data.filter(suministro => {
+      const unidad = suministro.unidadMedida?.simbolo || suministro.unidadMedida?.nombre || '';
+      return unidad.toLowerCase().includes('hr') || unidad.toLowerCase().includes('hora');
+    });
     
     datosHoras.forEach(suministro => {
       const fecha = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
@@ -1782,11 +1941,10 @@ const Suministros = () => {
     const horasPorEquipo = {};
     
     // Filtrar solo suministros con unidad de medida en horas
-    const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
-    );
+    const datosHoras = data.filter(suministro => {
+      const unidad = suministro.unidadMedida?.simbolo || suministro.unidadMedida?.nombre || '';
+      return unidad.toLowerCase().includes('hr') || unidad.toLowerCase().includes('hora');
+    });
     
     datosHoras.forEach(suministro => {
       const equipo = suministro.nombre || 'Sin nombre';
@@ -1822,11 +1980,10 @@ const Suministros = () => {
     const equiposData = {};
     
     // Filtrar solo suministros con unidad de medida en horas
-    const datosHoras = data.filter(suministro => 
-      suministro.unidad_medida === 'hr' || 
-      suministro.unidad_medida === 'hora' ||
-      suministro.unidad_medida === 'Hora (hr)'
-    );
+    const datosHoras = data.filter(suministro => {
+      const unidad = suministro.unidadMedida?.simbolo || suministro.unidadMedida?.nombre || '';
+      return unidad.toLowerCase().includes('hr') || unidad.toLowerCase().includes('hora');
+    });
     
     datosHoras.forEach(suministro => {
       const equipo = suministro.nombre || 'Sin nombre';
@@ -1876,7 +2033,7 @@ const Suministros = () => {
     const unidadesPorTipo = {};
     
     data.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       
       if (!unidadesPorTipo[unidad]) {
         unidadesPorTipo[unidad] = 0;
@@ -1917,7 +2074,7 @@ const Suministros = () => {
     const cantidadesPorUnidad = {};
     
     data.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       const cantidad = parseFloat(suministro.cantidad) || 0;
       
       if (!cantidadesPorUnidad[unidad]) {
@@ -1950,7 +2107,7 @@ const Suministros = () => {
     const valoresPorUnidad = {};
     
     data.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       const valor = calculateTotal(suministro);
       
       if (!valoresPorUnidad[unidad]) {
@@ -1992,7 +2149,7 @@ const Suministros = () => {
     const analisisUnidades = {};
     
     data.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       const cantidad = parseFloat(suministro.cantidad) || 0;
       const valor = calculateTotal(suministro);
       
@@ -2041,7 +2198,7 @@ const Suministros = () => {
       return (suministro.tipo_suministro === 'Concreto' || 
               categoriaNombre === 'Concreto' ||
               suministro.nombre?.toLowerCase().includes('concreto')) &&
-             (suministro.unidad_medida === 'm³');
+             (suministro.unidadMedida?.simbolo === 'm³' || suministro.unidadMedida?.simbolo === 'm3');
     });
 
     // Agrupar por mes
@@ -2102,7 +2259,7 @@ const Suministros = () => {
     const analisisUnidades = {};
     
     datosAnalizar.forEach(suministro => {
-      const unidad = suministro.unidad_medida || 'Sin especificar';
+      const unidad = formatUnidadMedida(suministro.unidadMedida) || 'Sin especificar';
       const cantidad = parseFloat(suministro.cantidad) || 0;
       
       if (!analisisUnidades[unidad]) {
@@ -2169,6 +2326,11 @@ const Suministros = () => {
 
   // Nueva gráfica: Gastos por Categoría con Porcentajes (Estilo Pastel Profesional)
   const processGastosPorCategoriaDetallado = (data) => {
+    console.log('🔄 Procesando gastosPorCategoriaDetallado con:', {
+      suministrosCount: data.length,
+      categoriasDinamicasCount: categoriasDinamicas?.length || 0,
+      categoriasDinamicas: categoriasDinamicas?.slice(0, 3) // Mostrar solo las primeras 3 para debug
+    });
     
     const gastosPorCategoria = {};
     let totalGeneral = 0;
@@ -2177,24 +2339,21 @@ const Suministros = () => {
       // Usar múltiples fuentes para obtener la categoría
       let categoria = 'Sin Categoría';
       
-      // Prioridad de campos para categoría
-      if (suministro.id_categoria_suministro && categoriasDinamicas) {
-        const categoriaObj = categoriasDinamicas.find(cat => cat.id_categoria == suministro.id_categoria_suministro);
-        if (categoriaObj) {
-          categoria = categoriaObj.nombre;
-        }
-      } else if (typeof suministro.categoria === 'object' && suministro.categoria?.nombre) {
-        categoria = suministro.categoria.nombre;
-      } else if (suministro.categoria && typeof suministro.categoria === 'string') {
-        categoria = suministro.categoria;
-      } else if (suministro.tipo_suministro) {
-        categoria = suministro.tipo_suministro;
+      // Prioridad de campos para categoría - Usar la función helper
+      categoria = getDisplayCategoria(suministro.id_categoria_suministro || suministro.categoria, categoriasDinamicas);
+      
+      // Debug solo para los primeros registros
+      if (index < 5) {
+        console.log(`🔍 Suministro ${index}:`, {
+          id_categoria_suministro: suministro.id_categoria_suministro,
+          categoria_objeto: suministro.categoria,
+          categoria_final: categoria,
+          nombre: suministro.nombre
+        });
       }
       
-      // Calcular gasto
-      const cantidad = parseFloat(suministro.cantidad) || 0;
-      const precio = parseFloat(suministro.precio_unitario) || parseFloat(suministro.cost_total) || parseFloat(suministro.subtotal) || 0;
-      const gasto = cantidad * precio;
+      // Calcular gasto usando la función calculateTotal para consistencia
+      const gasto = calculateTotal(suministro);
       
       if (gasto > 0) {
         if (!gastosPorCategoria[categoria]) {
@@ -2253,6 +2412,14 @@ const Suministros = () => {
       'rgba(6, 182, 212, 0.8)',    // Cyan
       'rgba(132, 204, 22, 0.8)',   // Lime
     ];
+
+    // Debug: Mostrar resumen de datos procesados
+    console.log('📊 Resumen de gastos por categoría:', {
+      totalGeneral,
+      categoriasOrdenadas: categoriasOrdenadas.map(([cat, gasto]) => ({ categoria: cat, gasto, porcentaje: ((gasto / totalGeneral) * 100).toFixed(1) + '%' })),
+      labels,
+      valores
+    });
 
     const result = {
       labels: labels,
@@ -2775,6 +2942,33 @@ const Suministros = () => {
     }
   }, [chartFilters, showCharts]);
 
+  // 🔄 Sincronización automática: Recargar gráficas cuando cambien las categorías dinámicas
+  useEffect(() => {
+    if (showCharts && categoriasCargadas && categoriasDinamicas.length > 0) {
+      console.log('🔄 Categorías actualizadas, recargando gráficas...', categoriasDinamicas.length);
+      loadChartData();
+    }
+  }, [categoriasDinamicas, categoriasCargadas, showCharts]);
+
+  // 🔄 Sincronización automática: Recargar gráficas cuando cambien las unidades dinámicas
+  useEffect(() => {
+    if (showCharts && unidadesCargadas && unidadesDinamicas.length > 0) {
+      console.log('🔄 Unidades actualizadas, recargando gráficas...', unidadesDinamicas.length);
+      loadChartData();
+    }
+  }, [unidadesDinamicas, unidadesCargadas, showCharts]);
+
+  // 🔄 Sincronización específica: Forzar actualización de gráficas que usan categorías dinámicas
+  useEffect(() => {
+    if (showCharts && categoriasCargadas) {
+      console.log('🔄 Forzando actualización de gráficas con categorías...');
+      // Pequeño delay para asegurar que todas las dependencias estén listas
+      setTimeout(() => {
+        loadChartData();
+      }, 100);
+    }
+  }, [categoriasDinamicas, showCharts, categoriasCargadas]);
+
   // Función mejorada para verificar duplicados por folio y proveedor
   const checkForDuplicates = (newSuministro) => {
     try {
@@ -2919,7 +3113,7 @@ const Suministros = () => {
       nombre: templateSuministro.nombre,
       descripcion: templateSuministro.descripcion_detallada || '',
       id_categoria_suministro: templateSuministro.id_categoria_suministro || null,
-      unidad_medida: templateSuministro.unidad_medida || 'pz',
+      id_unidad_medida: templateSuministro.id_unidad_medida || 1,
       codigo_producto: templateSuministro.codigo_producto || '',
       precio_unitario: templateSuministro.precio_unitario || '',
       // Mantener los campos específicos del nuevo registro
@@ -3038,7 +3232,7 @@ const Suministros = () => {
         tipo_suministro: formData.tipo_suministro,
         codigo_producto: formData.codigo_producto,
         cantidad: cantidad,
-        unidad_medida: formData.unidad_medida,
+        id_unidad_medida: formData.id_unidad_medida,
         precio_unitario: precioUnitario,
         costo_total: costoTotal, // Añadir el costo total calculado
         fecha: formData.fecha_necesaria,
@@ -3185,8 +3379,8 @@ const Suministros = () => {
             if (suministroData.precio_unitario !== '' && suministroData.precio_unitario !== null && suministroData.precio_unitario !== undefined) {
               newItem.precio_unitario = normalizeNumber(suministroData.precio_unitario);
             }
-            if (suministroData.unidad_medida) {
-              newItem.unidad_medida = suministroData.unidad_medida;
+            if (suministroData.id_unidad_medida) {
+              newItem.id_unidad_medida = suministroData.id_unidad_medida;
             }
             if (suministroData.m3_perdidos !== '' && suministroData.m3_perdidos !== null && suministroData.m3_perdidos !== undefined) {
               newItem.m3_perdidos = normalizeNumber(suministroData.m3_perdidos);
@@ -3889,7 +4083,7 @@ const Suministros = () => {
           tipo_suministro: item.tipo_suministro,
           codigo_producto: item.codigo_producto,
           cantidad: item.cantidad,
-          unidad_medida: item.unidad_medida,
+          id_unidad_medida: item.id_unidad_medida,
           precio_unitario: item.precio_unitario,
           estado: item.estado,
           descripcion_detallada: item.descripcion_detallada,
@@ -3983,7 +4177,7 @@ const Suministros = () => {
       descripcion: '',
       id_categoria_suministro: null,
       cantidad: '',
-      unidad_medida: 'pz',
+      id_unidad_medida: 1,
       precio_unitario: '',
       fecha_necesaria: '',
       estado: 'Solicitado',
@@ -4013,19 +4207,30 @@ const Suministros = () => {
                          suministro.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.folio?.toLowerCase().includes(searchTerm.toLowerCase());
     
+    // Manejar categoría como objeto o string
+    const categoriaId = typeof suministro.categoria === 'object' && suministro.categoria 
+      ? suministro.categoria.id_categoria 
+      : suministro.id_categoria_suministro;
     const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
       ? suministro.categoria.nombre 
       : suministro.categoria;
-    const matchesCategoria = !filters.categoria || (suministro.tipo_suministro || categoriaNombre) === filters.categoria;
+      
+    const matchesCategoria = !filters.categoria || 
+                            categoriaId?.toString() === filters.categoria ||
+                            categoriaNombre === filters.categoria ||
+                            suministro.tipo_suministro === filters.categoria;
+                            
     const matchesEstado = !filters.estado || suministro.estado === filters.estado;
     const matchesProyecto = !filters.proyecto || suministro.id_proyecto?.toString() === filters.proyecto;
     const matchesProveedor = !filters.proveedor || 
                             suministro.proveedor === filters.proveedor ||
                             suministro.proveedor?.nombre === filters.proveedor;
     
-    // Nuevo filtro por tipo de categoría
-    const matchesTipoCategoria = !filters.tipo_categoria || 
-                                suministro.categoria?.tipo === filters.tipo_categoria;
+    // Filtro por tipo de categoría
+    const categoriaTipo = typeof suministro.categoria === 'object' && suministro.categoria 
+      ? suministro.categoria.tipo 
+      : null;
+    const matchesTipoCategoria = !filters.tipo_categoria || categoriaTipo === filters.tipo_categoria;
 
     return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto && 
            matchesProveedor && matchesTipoCategoria;
@@ -4240,70 +4445,70 @@ const Suministros = () => {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Gestión de Suministros</h1>
-        <p className="text-gray-600 dark:text-gray-400">{import.meta.env.VITE_APP_DESCRIPTION || 'Administra materiales, herramientas y equipos para proyectos'}</p>
+    <div className="p-4">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">Gestión de Suministros</h1>
+        <p className="text-sm text-gray-600 dark:text-gray-400">{import.meta.env.VITE_APP_DESCRIPTION || 'Administra materiales, herramientas y equipos para proyectos'}</p>
       </div>
 
-      {/* Tarjetas de estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+      {/* Tarjetas de estadísticas compactas */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
         {/* Total Gastado */}
-        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-lg shadow-md p-4 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-emerald-100 text-sm font-medium mb-1">Total Gastado</p>
-              <p className="text-2xl font-bold">
+              <p className="text-emerald-100 text-xs font-medium mb-1">Total Gastado</p>
+              <p className="text-xl font-bold">
                 {formatCurrency(stats.totalGastado)}
               </p>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <FaDollarSign className="h-6 w-6" />
+            <div className="bg-white bg-opacity-20 rounded-lg p-2">
+              <FaDollarSign className="h-5 w-5" />
             </div>
           </div>
         </div>
 
         {/* Total Suministros */}
-        <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-lg shadow-md p-4 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-indigo-100 text-sm font-medium mb-1">Total Suministros</p>
-              <p className="text-2xl font-bold">
+              <p className="text-indigo-100 text-xs font-medium mb-1">Total Suministros</p>
+              <p className="text-xl font-bold">
                 {stats.totalSuministros.toLocaleString()}
               </p>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <FaBox className="h-6 w-6" />
+            <div className="bg-white bg-opacity-20 rounded-lg p-2">
+              <FaBox className="h-5 w-5" />
             </div>
           </div>
         </div>
 
         {/* Proyectos Activos */}
-        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow-md p-4 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-purple-100 text-sm font-medium mb-1">Proyectos</p>
-              <p className="text-2xl font-bold">
+              <p className="text-purple-100 text-xs font-medium mb-1">Proyectos</p>
+              <p className="text-xl font-bold">
                 {stats.proyectosUnicos}
               </p>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <FaBuilding className="h-6 w-6" />
+            <div className="bg-white bg-opacity-20 rounded-lg p-2">
+              <FaBuilding className="h-5 w-5" />
             </div>
           </div>
         </div>
 
         {/* Proveedores */}
-        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-xl shadow-lg p-6 text-white">
+        <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md p-4 text-white">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-orange-100 text-sm font-medium mb-1">Proveedores</p>
-              <p className="text-2xl font-bold">
+              <p className="text-orange-100 text-xs font-medium mb-1">Proveedores</p>
+              <p className="text-xl font-bold">
                 {stats.proveedoresUnicos}
               </p>
             </div>
-            <div className="bg-white bg-opacity-20 rounded-lg p-3">
-              <FaTruck className="h-6 w-6" />
+            <div className="bg-white bg-opacity-20 rounded-lg p-2">
+              <FaTruck className="h-5 w-5" />
             </div>
           </div>
         </div>
@@ -4314,12 +4519,12 @@ const Suministros = () => {
         filtroActivo={filters.tipo_categoria}
         onFiltroChange={handleFiltroTipoChange}
         estadisticas={estadisticasTipo}
-        className="mb-6"
+        className="mb-4"
       />
 
       {/* Información de filtros activos */}
       {(searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria) && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
               <span className="text-blue-700 dark:text-blue-300 font-medium">Vista filtrada:</span>
@@ -4344,72 +4549,81 @@ const Suministros = () => {
         </div>
       )}
 
-      {/* Controles superiores */}
-      <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">
-        <div className="flex flex-col xl:flex-row gap-2 items-center justify-between">
+      {/* Controles superiores compactos */}
+      <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 mb-4">
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between">
           {/* Barra de búsqueda */}
           <div className="relative flex-1 max-w-lg">
-            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" />
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
             <input
               type="text"
               placeholder="Buscar por nombre, código, folio o descripción..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500"
+              className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500"
             />
           </div>
 
-          {/* Botones */}
-          <div className="flex-shrink-0 flex gap-2">
+          {/* Botones compactos */}
+          <div className="flex-shrink-0 flex gap-2 flex-wrap">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
             >
-              <FaFilter className="w-4 h-4" />
-              {showFilters ? 'Filtros' : 'Filtros'}
+              <FaFilter className="w-3 h-3" />
+              Filtros
               {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria) && (
-                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full ml-1">
+                <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
                   {[filters.categoria, filters.estado, filters.proyecto, filters.proveedor, filters.tipo_categoria].filter(f => f).length}
                 </span>
               )}
-              {showFilters ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
+              {showFilters ? <FaChevronUp className="w-2 h-2" /> : <FaChevronDown className="w-2 h-2" />}
             </button>
             <button
               onClick={() => setShowCharts(!showCharts)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
             >
-              <FaChartBar className="w-4 h-4" />
-              {showCharts ? 'Ver Gráficas' : 'Ver Gráficas'}
-              {showCharts ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
+              <FaChartBar className="w-3 h-3" />
+              Gráficas
+              {showCharts ? <FaChevronUp className="w-2 h-2" /> : <FaChevronDown className="w-2 h-2" />}
             </button>
             <button
               onClick={() => setShowMultipleModal(true)}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+              className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
             >
-              <STANDARD_ICONS.CREATE className="w-4 h-4" />
+              <STANDARD_ICONS.CREATE className="w-3 h-3" />
               Nuevo Suministro
+            </button>
+            
+            <button
+              onClick={() => setShowUnidadesModal(true)}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
+              title="Gestionar Unidades de Medida"
+            >
+              <FaRuler className="w-3 h-3" />
+              Unidades
             </button>
           </div>
         </div>
       </div>
 
-      {/* Sección de Filtros */}
+      {/* Sección de Filtros ultra-compacta */}
       {showFilters && (
-        <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Filtros de Suministros</h2>
+        <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 mb-4">
+          <div className="mb-3">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">Filtros de Suministros</h2>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
               {/* Filtro por Proyecto */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <FaBuilding className="inline w-4 h-4 mr-2" />
-                  Proyecto ({proyectos.length} disponibles)
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <FaBuilding className="inline w-3 h-3 mr-1" />
+                  Proyecto ({proyectos.length})
                 </label>
                 <select
                   value={filters.proyecto}
                   onChange={(e) => setFilters({...filters, proyecto: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                   <option value="">Todos los proyectos</option>
                   {proyectos.map((proyecto) => {
@@ -4427,14 +4641,14 @@ const Suministros = () => {
 
               {/* Filtro por Categoría */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <FaBox className="inline w-4 h-4 mr-2" />
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <FaBox className="inline w-3 h-3 mr-1" />
                   Categoría
                 </label>
                 <select
                   value={filters.categoria}
                   onChange={(e) => setFilters({...filters, categoria: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                    <option value="">Todas las categorías</option>
                    {categoriasDinamicas.map((categoria, index) => (
@@ -4445,14 +4659,14 @@ const Suministros = () => {
 
               {/* Filtro por Estado */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <FaClock className="inline w-4 h-4 mr-2" />
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <FaClock className="inline w-3 h-3 mr-1" />
                   Estado
                 </label>
                 <select
                   value={filters.estado}
                   onChange={(e) => setFilters({...filters, estado: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                   <option value="">Todos los estados</option>
                   {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
@@ -4463,14 +4677,14 @@ const Suministros = () => {
 
               {/* Filtro por Proveedor */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  <FaTruck className="inline w-4 h-4 mr-2" />
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  <FaTruck className="inline w-3 h-3 mr-1" />
                   Proveedor
                 </label>
                 <select
                   value={filters.proveedor}
                   onChange={(e) => setFilters({...filters, proveedor: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
+                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
                 >
                   <option value="">Todos los proveedores</option>
                   {proveedores.map((proveedor) => (
@@ -4486,14 +4700,14 @@ const Suministros = () => {
               </div>
             </div>
 
-            {/* Botón para limpiar filtros */}
+            {/* Botón para limpiar filtros compacto */}
             {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor) && (
-              <div className="mt-6 flex justify-end">
+              <div className="mt-3 flex justify-end">
                 <button
                   onClick={() => setFilters({categoria: '', estado: '', proyecto: '', proveedor: ''})}
-                  className="px-4 py-2 text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 flex items-center gap-2 border border-red-300 dark:border-red-600"
+                  className="px-3 py-1.5 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 flex items-center gap-1.5 border border-red-300 dark:border-red-600"
                 >
-                  <FaTimes className="w-4 h-4" />
+                  <FaTimes className="w-3 h-3" />
                   Limpiar filtros
                 </button>
               </div>
@@ -4773,15 +4987,6 @@ const Suministros = () => {
                           className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
                         />
                         <span className="text-gray-700 dark:text-gray-300">Distribución por Categorías</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm">
-                        <input
-                          type="checkbox"
-                          checked={selectedCharts.tendenciaEntregas}
-                          onChange={(e) => setSelectedCharts({...selectedCharts, tendenciaEntregas: e.target.checked})}
-                          className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
-                        />
-                        <span className="text-gray-700 dark:text-gray-300">Tendencia de Entregas</span>
                       </label>
                       <label className="flex items-center space-x-2 cursor-pointer text-sm">
                         <input
@@ -6897,13 +7102,13 @@ const Suministros = () => {
                               </td>
                               <td className="px-6 py-4">
                                 <div className="text-sm text-gray-900 dark:text-white">
-                                  {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
+                                  {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidadMedida)}
                                 </div>
                               </td>
                               <td className="px-6 py-4">
                                 <div>
                                   <div className="text-sm text-gray-900 dark:text-white">
-                                    {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidad_medida)}
+                                    {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidadMedida)}
                                   </div>
                                   <div className="text-xs text-gray-500 dark:text-gray-400">
                                     Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -6977,13 +7182,13 @@ const Suministros = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="text-sm text-gray-900 dark:text-white">
-                              {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidad_medida)}
+                              {formatQuantityDisplay(suministro.cantidad)} {formatUnidadMedida(suministro.unidadMedida)}
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             <div>
                               <div className="text-sm text-gray-900 dark:text-white">
-                                {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidad_medida)}
+                                {formatPriceDisplay(suministro.precio_unitario)} / {formatUnidadMedida(suministro.unidadMedida)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 Total: {formatPriceDisplay(calculateTotal(suministro))}
@@ -7215,6 +7420,7 @@ const Suministros = () => {
               proveedores={proveedores}
               categorias={categorias}
               unidades={unidadesMedida}
+              onCategoriesUpdated={handleCategoriasUpdated}
               initialData={editingRecibo}
             />
           </div>
@@ -7417,231 +7623,190 @@ const Suministros = () => {
         duration={4000}
       />
 
-      {/* Modal de Vista de Suministro/Recibo */}
+      {/* Modal de Gestión de Unidades de Medida */}
+      <UnidadesMedidaManager
+        isOpen={showUnidadesModal}
+        onClose={() => setShowUnidadesModal(false)}
+        onUnidadesUpdated={handleUnidadesUpdated}
+      />
+
+      {/* Modal de Vista de Suministro/Recibo - Diseño Minimalista */}
       {viewModal.open && (viewModal.suministro || viewModal.recibo) && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-3">
-                  {viewModal.recibo && (
-                    <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
-                      <FaBoxes className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                        AGRUPADO ({viewModal.recibo.cantidad_items} artículos)
-                      </span>
-                    </div>
-                  )}
-                  {viewModal.suministro && !viewModal.recibo && (
-                    <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
-                      <FaBox className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                      <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
-                        INDIVIDUAL
-                      </span>
-                    </div>
-                  )}
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {viewModal.recibo ? 'Detalles del Recibo' : 'Detalles del Suministro'}
-                  </h2>
-                </div>
-                <button
-                  onClick={() => setViewModal({ open: false, suministro: null, recibo: null })}
-                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
-                >
-                  <FaTimes className="w-6 h-6" />
-                </button>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+              <div className="flex items-center gap-3">
+                {viewModal.recibo ? (
+                  <div className="flex items-center gap-2">
+                    <FaBoxes className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      Recibo ({viewModal.recibo.cantidad_items} artículos)
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <FaBox className="w-5 h-5 text-green-600 dark:text-green-400" />
+                    <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      Suministro Individual
+                    </span>
+                  </div>
+                )}
               </div>
+              <button
+                onClick={() => setViewModal({ open: false, suministro: null, recibo: null })}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
+                title="Cerrar"
+              >
+                <FaTimes className="w-6 h-6 text-gray-600 dark:text-gray-400" />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-100px)]">
               
               {/* Vista de Recibo Agrupado */}
               {viewModal.recibo && (
                 <div className="space-y-6">
-                  {/* Información del Recibo */}
-                  <div className="bg-gray-50 dark:bg-gray-800/50 rounded-lg p-4 border border-gray-200 dark:border-gray-700">
-                    <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4">
-                      Información del Recibo
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Información Principal */}
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+                    <div className="grid grid-cols-2 gap-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Proveedor
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Proveedor</div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
                           {viewModal.recibo.proveedor}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Proyecto
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Proyecto</div>
+                        <div className="text-lg font-semibold text-gray-900 dark:text-white">
                           {viewModal.recibo.proyecto}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Fecha
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Fecha</div>
+                        <div className="text-base text-gray-900 dark:text-white">
                           {formatDate(viewModal.recibo.fecha)}
-                        </p>
+                        </div>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Folio
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                          {viewModal.recibo.folio || 'No especificado'}
-                        </p>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Folio</div>
+                        <div className="text-base text-gray-900 dark:text-white">
+                          {viewModal.recibo.folio || 'Sin folio'}
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Total de Artículos
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                          {viewModal.recibo.cantidad_items}
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Total del Recibo
-                        </label>
-                        <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600 font-bold">
-                          {formatCurrency(viewModal.recibo.total)}
-                        </p>
+                    </div>
+                    
+                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Total de Artículos</div>
+                          <div className="text-2xl font-bold text-gray-900 dark:text-white">
+                            {viewModal.recibo.cantidad_items}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Total del Recibo</div>
+                          <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                            {formatCurrency(viewModal.recibo.total)}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Lista de Suministros */}
                   <div>
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-800 px-3 py-1 rounded-full border border-gray-200 dark:border-gray-700">
-                        <FaListUl className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                          Listado de Suministros
-                        </span>
-                      </div>
+                    <div className="flex items-center gap-2 mb-4">
+                      <FaListUl className="w-5 h-5 text-gray-500 dark:text-gray-400" />
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                        ({viewModal.recibo.suministros.length} artículos)
+                        Artículos ({viewModal.recibo.suministros.length})
                       </h3>
                     </div>
-                    <div className="space-y-4">
+                    
+                    <div className="space-y-3">
                       {viewModal.recibo.suministros.map((suministro, index) => (
-                        <div key={suministro.id_suministro} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50/30 dark:bg-gray-800/20">
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="flex items-center justify-center w-6 h-6 bg-gray-100 dark:bg-gray-800 rounded-full border border-gray-300 dark:border-gray-600">
-                              <span className="text-xs font-bold text-gray-700 dark:text-gray-300">
-                                {index + 1}
-                              </span>
+                        <div key={suministro.id_suministro} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-800">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex items-center gap-3">
+                              <div className="flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900 rounded-full">
+                                <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                  {index + 1}
+                                </span>
+                              </div>
+                              <div>
+                                <div className="font-semibold text-gray-900 dark:text-white">
+                                  {suministro.nombre || suministro.descripcion}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {suministro.codigo_producto || 'Sin código'}
+                                </div>
+                              </div>
                             </div>
-                            <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                              Artículo {index + 1} de {viewModal.recibo.suministros.length}
-                            </span>
+                            <div className="text-right">
+                              <div className="font-bold text-lg text-gray-900 dark:text-white">
+                                {formatCurrency((suministro.cantidad || 0) * (suministro.precio_unitario || 0))}
+                              </div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {formatNumber(suministro.cantidad || 0)} {formatUnidadMedida(suministro.unidadMedida)}
+                              </div>
+                            </div>
                           </div>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          
+                          <div className="grid grid-cols-2 gap-4 text-sm">
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Nombre
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {suministro.nombre || suministro.descripcion}
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Código
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {suministro.codigo_producto || 'No especificado'}
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Categoría
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                              <span className="text-gray-500 dark:text-gray-400">Categoría:</span>
+                              <span className="ml-2 text-gray-900 dark:text-white">
                                 {getDisplayCategoria(suministro.tipo_suministro || 
                                   (typeof suministro.categoria === 'object' && suministro.categoria 
                                     ? suministro.categoria.nombre 
                                     : suministro.categoria), categoriasDinamicas)}
-                              </p>
+                              </span>
                             </div>
-
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Cantidad
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {formatNumber(suministro.cantidad || 0)} {suministro.unidad_medida || ''}
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Precio Unitario
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                              <span className="text-gray-500 dark:text-gray-400">Precio unitario:</span>
+                              <span className="ml-2 text-gray-900 dark:text-white">
                                 {formatCurrency(suministro.precio_unitario || 0)}
-                              </p>
+                              </span>
                             </div>
-
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Subtotal
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600 font-semibold">
-                                {formatCurrency((suministro.cantidad || 0) * (suministro.precio_unitario || 0))}
-                              </p>
+                              <span className="text-gray-500 dark:text-gray-400">Estado:</span>
+                              <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${
+                                suministro.estado === 'Entregado' 
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                  : suministro.estado === 'En Proceso'
+                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                                  : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              }`}>
+                                {suministro.estado || 'No especificado'}
+                              </span>
                             </div>
-
                             <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Estado
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  suministro.estado === 'Entregado' 
-                                    ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                    : suministro.estado === 'En Proceso'
-                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                    : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                }`}>
-                                  {suministro.estado || 'No especificado'}
-                                </span>
-                              </p>
-                            </div>
-
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Fecha
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+                              <span className="text-gray-500 dark:text-gray-400">Fecha:</span>
+                              <span className="ml-2 text-gray-900 dark:text-white">
                                 {formatDate(suministro.fecha || suministro.fecha_necesaria)}
-                              </p>
+                              </span>
                             </div>
                           </div>
-
-                          {suministro.descripcion_detallada && (
-                            <div className="mt-4">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Descripción Detallada
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {suministro.descripcion_detallada}
-                              </p>
-                            </div>
-                          )}
-
-                          {suministro.observaciones && (
-                            <div className="mt-4">
-                              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                Observaciones
-                              </label>
-                              <p className="text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-900/20 p-3 rounded-md border border-gray-200 dark:border-gray-600">
-                                {suministro.observaciones}
-                              </p>
+                          
+                          {(suministro.descripcion_detallada || suministro.observaciones) && (
+                            <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                              {suministro.descripcion_detallada && (
+                                <div className="mb-2">
+                                  <span className="text-sm text-gray-500 dark:text-gray-400">Descripción:</span>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                                    {suministro.descripcion_detallada}
+                                  </p>
+                                </div>
+                              )}
+                              {suministro.observaciones && (
+                                <div>
+                                  <span className="text-sm text-gray-500 dark:text-gray-400">Observaciones:</span>
+                                  <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
+                                    {suministro.observaciones}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -7653,160 +7818,143 @@ const Suministros = () => {
               
               {/* Vista de Suministro Individual */}
               {viewModal.suministro && !viewModal.recibo && (
-                <div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Nombre
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.nombre || 'No especificado'}
+                <div className="space-y-6">
+                  {/* Información Principal */}
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-6">
+                    <div className="mb-4">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                        {viewModal.suministro.nombre || 'Sin nombre'}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        {viewModal.suministro.codigo_producto || 'Sin código'}
                       </p>
                     </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Código
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.codigo_producto || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Categoría
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.tipo_suministro || 
-                         (typeof viewModal.suministro.categoria === 'object' && viewModal.suministro.categoria 
-                           ? viewModal.suministro.categoria.nombre 
-                           : viewModal.suministro.categoria) || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Proyecto
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.proyecto?.nombre || viewModal.suministro.proyecto || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Proveedor
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.proveedor?.nombre || viewModal.suministro.proveedor || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Folio Proveedor
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.folio_proveedor || 'No especificado'}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Cantidad
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {formatNumber(viewModal.suministro.cantidad || 0)} {viewModal.suministro.unidad_medida || ''}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Precio Unitario
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {formatCurrency(viewModal.suministro.precio_unitario || 0)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Subtotal
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md font-semibold">
-                        {formatCurrency((viewModal.suministro.cantidad || 0) * (viewModal.suministro.precio_unitario || 0))}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Estado
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          viewModal.suministro.estado === 'Entregado' 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : viewModal.suministro.estado === 'En Proceso'
-                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                            : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                        }`}>
-                          {viewModal.suministro.estado || 'No especificado'}
-                        </span>
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Fecha
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {formatDate(viewModal.suministro.fecha || viewModal.suministro.fecha_necesaria)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Método de Pago
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.metodo_pago || 'No especificado'}
-                      </p>
+                    
+                    <div className="grid grid-cols-2 gap-6">
+                      <div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Categoría</div>
+                        <div className="text-base font-medium text-gray-900 dark:text-white">
+                          {getDisplayCategoria(viewModal.suministro.tipo_suministro || 
+                           (typeof viewModal.suministro.categoria === 'object' && viewModal.suministro.categoria 
+                             ? viewModal.suministro.categoria.nombre 
+                             : viewModal.suministro.categoria), categoriasDinamicas)}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Proyecto</div>
+                        <div className="text-base font-medium text-gray-900 dark:text-white">
+                          {viewModal.suministro.proyecto?.nombre || viewModal.suministro.proyecto || 'Sin proyecto'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Proveedor</div>
+                        <div className="text-base font-medium text-gray-900 dark:text-white">
+                          {viewModal.suministro.proveedor?.nombre || viewModal.suministro.proveedor || 'Sin proveedor'}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Estado</div>
+                        <div>
+                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                            viewModal.suministro.estado === 'Entregado' 
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : viewModal.suministro.estado === 'En Proceso'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                          }`}>
+                            {viewModal.suministro.estado || 'Sin estado'}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-
-                  {viewModal.suministro.descripcion_detallada && (
-                    <div className="mt-6">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Descripción Detallada
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.descripcion_detallada}
-                      </p>
+                  
+                  {/* Información de Cantidades y Precios */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg p-6 border border-gray-200 dark:border-gray-700">
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                      Cantidades y Precios
+                    </h4>
+                    <div className="grid grid-cols-3 gap-6">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-1">
+                          {formatNumber(viewModal.suministro.cantidad || 0)}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          {formatUnidadMedida(viewModal.suministro.unidadMedida)}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
+                          {formatCurrency(viewModal.suministro.precio_unitario || 0)}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Precio unitario</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-3xl font-bold text-green-600 dark:text-green-400 mb-1">
+                          {formatCurrency((viewModal.suministro.cantidad || 0) * (viewModal.suministro.precio_unitario || 0))}
+                        </div>
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Total</div>
+                      </div>
                     </div>
-                  )}
-
-                  {viewModal.suministro.observaciones && (
-                    <div className="mt-6">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Observaciones
-                      </label>
-                      <p className="text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
-                        {viewModal.suministro.observaciones}
-                      </p>
+                  </div>
+                  
+                  {/* Información Adicional */}
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
+                        Información Adicional
+                      </h4>
+                      <div className="space-y-3">
+                        <div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Fecha</div>
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {formatDate(viewModal.suministro.fecha || viewModal.suministro.fecha_necesaria)}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Método de Pago</div>
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {viewModal.suministro.metodo_pago || 'No especificado'}
+                          </div>
+                        </div>
+                        <div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">Folio Proveedor</div>
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {viewModal.suministro.folio_proveedor || 'Sin folio'}
+                          </div>
+                        </div>
+                      </div>
                     </div>
-                  )}
+                    
+                    {(viewModal.suministro.descripcion_detallada || viewModal.suministro.observaciones) && (
+                      <div>
+                        <h4 className="text-base font-semibold text-gray-900 dark:text-white mb-3">
+                          Notas
+                        </h4>
+                        <div className="space-y-3">
+                          {viewModal.suministro.descripcion_detallada && (
+                            <div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Descripción</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                                {viewModal.suministro.descripcion_detallada}
+                              </div>
+                            </div>
+                          )}
+                          {viewModal.suministro.observaciones && (
+                            <div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400 mb-1">Observaciones</div>
+                              <div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-700 p-3 rounded-md">
+                                {viewModal.suministro.observaciones}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
-              <div className="flex justify-end mt-6 pt-4 border-t border-gray-200 dark:border-gray-600">
-                <button
-                  onClick={() => setViewModal({ open: false, suministro: null, recibo: null })}
-                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors duration-200"
-                >
-                  Cerrar
-                </button>
-              </div>
             </div>
           </div>
         </div>

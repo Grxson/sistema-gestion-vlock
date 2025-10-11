@@ -102,69 +102,90 @@ export const formatTelefono = (telefono) => {
 
 /**
  * Formatea unidades de medida para display
- * @param {string} unidad - Unidad de medida
+ * @param {string|object} unidad - Unidad de medida (string legacy o objeto con estructura nueva)
  * @returns {string} - Unidad formateada
  */
 export const formatUnidadMedida = (unidad) => {
   if (!unidad) return 'N/A';
   
-  // Diccionario de abreviaciones comunes
-  const unidadesMap = {
-    // Peso
-    'kg': 'Kilogramos',
-    'g': 'Gramos',
-    'ton': 'Toneladas',
-    'lb': 'Libras',
-    
-    // Longitud
-    'm': 'Metros',
-    'cm': 'Centímetros',
-    'mm': 'Milímetros',
-    'km': 'Kilómetros',
-    'ft': 'Pies',
-    'in': 'Pulgadas',
-    
-    // Volumen
-    'l': 'Litros',
-    'ml': 'Mililitros',
-    'gal': 'Galones',
-    
-    // Área
-    'm2': 'Metros cuadrados',
-    'cm2': 'Centímetros cuadrados',
-    'ft2': 'Pies cuadrados',
-    
-    // Cantidad
-    'pz': 'Piezas',
-    'pza': 'Piezas',
-    'und': 'Unidades',
-    'unidad': 'Unidades',
-    'caja': 'Cajas',
-    'paquete': 'Paquetes',
-    'rollo': 'Rollos',
-    'saco': 'Sacos',
-    'bolsa': 'Bolsas',
-    
-    // Tiempo
-    'hr': 'Horas',
-    'min': 'Minutos',
-    'dia': 'Días',
-    'mes': 'Meses',
-    
-    // Otros
-    '%': 'Porcentaje',
-    'set': 'Conjunto'
-  };
-  
-  const unidadLower = unidad.toLowerCase().trim();
-  const unidadFormateada = unidadesMap[unidadLower];
-  
-  if (unidadFormateada) {
-    return unidadFormateada;
+  // Si es un objeto con la nueva estructura (unidadMedida)
+  if (typeof unidad === 'object' && unidad !== null) {
+    // Priorizar el símbolo si está disponible, sino el nombre
+    return unidad.simbolo || unidad.nombre || 'N/A';
   }
   
-  // Si no se encuentra en el diccionario, capitalizar la primera letra
-  return unidad.charAt(0).toUpperCase() + unidad.slice(1).toLowerCase();
+  // Si es un string (estructura legacy)
+  if (typeof unidad === 'string') {
+    // Diccionario de abreviaciones comunes
+    const unidadesMap = {
+      // Peso
+      'kg': 'Kilogramos',
+      'g': 'Gramos',
+      'ton': 'Toneladas',
+      'lb': 'Libras',
+      
+      // Longitud
+      'm': 'Metros',
+      'cm': 'Centímetros',
+      'mm': 'Milímetros',
+      'km': 'Kilómetros',
+      'ft': 'Pies',
+      'in': 'Pulgadas',
+      
+      // Volumen
+      'l': 'Litros',
+      'lt': 'Litros',
+      'ml': 'Mililitros',
+      'gal': 'Galones',
+      'gl': 'Galones',
+      
+      // Área
+      'm2': 'Metros cuadrados',
+      'm²': 'Metros cuadrados',
+      'cm2': 'Centímetros cuadrados',
+      'ft2': 'Pies cuadrados',
+      
+      // Volumen cúbico
+      'm3': 'Metros cúbicos',
+      'm³': 'Metros cúbicos',
+      
+      // Cantidad
+      'pz': 'Piezas',
+      'pza': 'Piezas',
+      'und': 'Unidades',
+      'unidad': 'Unidades',
+      'caja': 'Cajas',
+      'paquete': 'Paquetes',
+      'rollo': 'Rollos',
+      'saco': 'Sacos',
+      'bolsa': 'Bolsas',
+      'bote': 'Botes',
+      'jgo': 'Juegos',
+      
+      // Tiempo
+      'hr': 'Horas',
+      'min': 'Minutos',
+      'dia': 'Días',
+      'día': 'Días',
+      'mes': 'Meses',
+      
+      // Otros
+      '%': 'Porcentaje',
+      'set': 'Conjunto'
+    };
+    
+    const unidadLower = unidad.toLowerCase().trim();
+    const unidadFormateada = unidadesMap[unidadLower];
+    
+    if (unidadFormateada) {
+      return unidadFormateada;
+    }
+    
+    // Si no se encuentra en el diccionario, capitalizar la primera letra
+    return unidad.charAt(0).toUpperCase() + unidad.slice(1).toLowerCase();
+  }
+  
+  return 'N/A';
 };
 
 /**

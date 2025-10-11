@@ -1,13 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { FaBuilding, FaDesktop, FaFilter, FaTimes, FaChartPie } from 'react-icons/fa';
 
 const FiltroTipoCategoria = ({ 
   filtroActivo, 
   onFiltroChange, 
-  estadisticas = null,
   className = ""
 }) => {
-  const [showStats, setShowStats] = useState(false);
 
   const tiposFiltro = [
     {
@@ -66,88 +64,45 @@ const FiltroTipoCategoria = ({
     }
   };
 
-  const formatCurrency = (value) => {
-    if (!value || isNaN(value)) return '$0.00';
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(parseFloat(value));
-  };
-
-  const getEstadisticasPorTipo = (tipo) => {
-    if (!estadisticas?.por_tipo || !Array.isArray(estadisticas.por_tipo)) return null;
-    return estadisticas.por_tipo.find(stat => stat?.tipo_categoria === tipo) || null;
-  };
-
-  const formatSafeValue = (value, defaultValue = 0) => {
-    if (value === null || value === undefined || isNaN(value)) return defaultValue;
-    return parseFloat(value) || defaultValue;
-  };
-
-  const totalGeneral = estadisticas?.por_tipo?.reduce((sum, stat) => {
-    if (!stat || typeof stat.total_costo === 'undefined') return sum;
-    return sum + formatSafeValue(stat.total_costo, 0);
-  }, 0) || 0;
 
   return (
     <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-4 ${className}`}>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      {/* Header compacto */}
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center space-x-2">
-          <FaFilter className="text-gray-500" />
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+          <FaFilter className="text-gray-500 h-4 w-4" />
+          <h3 className="text-base font-semibold text-gray-900 dark:text-white">
             Filtrar por Tipo de Gasto
           </h3>
         </div>
-        {estadisticas && (
+        {filtroActivo && (
           <button
-            onClick={() => setShowStats(!showStats)}
-            className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            onClick={() => onFiltroChange(null)}
+            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex items-center space-x-1"
           >
-            {showStats ? 'Ocultar' : 'Ver'} estadísticas
+            <FaTimes className="h-3 w-3" />
+            <span>Limpiar</span>
           </button>
         )}
       </div>
 
-      {/* Botones de filtro */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+      {/* Botones de filtro ultra-compactos */}
+      <div className="flex gap-2 mb-2">
         {tiposFiltro.map((tipo) => {
           const isActive = (tipo.key === 'todos' && !filtroActivo) || tipo.key === filtroActivo;
           const Icon = tipo.icon;
-          const stats = tipo.key === 'todos' ? null : getEstadisticasPorTipo(tipo.key);
 
           return (
             <button
               key={tipo.key}
               onClick={() => handleFiltroClick(tipo.key)}
-              className={`p-4 border-2 rounded-lg text-left ${getColorClasses(tipo.color, isActive)}`}
+              className={`flex-1 p-2 border-2 rounded-lg text-center ${getColorClasses(tipo.color, isActive)}`}
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-2 mb-2">
-                    <Icon className="h-5 w-5" />
-                    <span className="font-medium">{tipo.label}</span>
-                  </div>
-                  <p className="text-sm opacity-75">{tipo.description}</p>
-                  
-                  {stats && showStats && (
-                    <div className="mt-2 text-sm">
-                      <div className="flex justify-between">
-                        <span>Registros:</span>
-                        <span className="font-medium">{formatSafeValue(stats.total_registros, 0)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Total:</span>
-                        <span className="font-medium">{formatCurrency(formatSafeValue(stats.total_costo, 0))}</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-                
+              <div className="flex flex-col items-center space-y-1">
+                <Icon className="h-4 w-4" />
+                <div className="text-xs font-medium">{tipo.label}</div>
                 {isActive && (
-                  <div className="ml-2">
-                    <div className="w-2 h-2 bg-current rounded-full"></div>
-                  </div>
+                  <div className="w-1.5 h-1.5 bg-current rounded-full"></div>
                 )}
               </div>
             </button>
@@ -155,64 +110,7 @@ const FiltroTipoCategoria = ({
         })}
       </div>
 
-      {/* Estadísticas resumen */}
-      {estadisticas && showStats && (
-        <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div>
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {formatSafeValue(getEstadisticasPorTipo('Proyecto')?.total_registros, 0)}
-              </div>
-              <div className="text-sm text-gray-500">Proyectos</div>
-            </div>
-            
-            <div>
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {formatSafeValue(getEstadisticasPorTipo('Administrativo')?.total_registros, 0)}
-              </div>
-              <div className="text-sm text-gray-500">Administrativos</div>
-            </div>
-            
-            <div>
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-                {formatCurrency(formatSafeValue(getEstadisticasPorTipo('Proyecto')?.total_costo, 0))}
-              </div>
-              <div className="text-sm text-gray-500">Total Proyecto</div>
-            </div>
-            
-            <div>
-              <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                {formatCurrency(formatSafeValue(getEstadisticasPorTipo('Administrativo')?.total_costo, 0))}
-              </div>
-              <div className="text-sm text-gray-500">Total Admin</div>
-            </div>
-          </div>
-          
-          <div className="mt-4 text-center">
-            <div className="text-xl font-bold text-gray-900 dark:text-white">
-              Total General: {formatCurrency(totalGeneral)}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* Filtro activo */}
-      {filtroActivo && (
-        <div className="mt-4 flex items-center justify-between bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600 dark:text-gray-300">Filtro activo:</span>
-            <span className="font-medium text-gray-900 dark:text-white">
-              {tiposFiltro.find(t => t.key === filtroActivo)?.label}
-            </span>
-          </div>
-          <button
-            onClick={() => onFiltroChange(null)}
-            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-          >
-            <FaTimes className="h-4 w-4" />
-          </button>
-        </div>
-      )}
     </div>
   );
 };

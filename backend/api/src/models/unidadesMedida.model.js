@@ -7,7 +7,16 @@ module.exports = (sequelize) => {
       primaryKey: true,
       autoIncrement: true
     },
-    codigo: {
+    nombre: {
+      type: DataTypes.STRING(50),
+      allowNull: false,
+      unique: true,
+      validate: {
+        notEmpty: true,
+        len: [1, 50]
+      }
+    },
+    simbolo: {
       type: DataTypes.STRING(10),
       allowNull: false,
       unique: true,
@@ -16,46 +25,28 @@ module.exports = (sequelize) => {
         len: [1, 10]
       }
     },
-    nombre: {
-      type: DataTypes.STRING(50),
-      allowNull: false,
-      validate: {
-        notEmpty: true,
-        len: [1, 50]
-      }
-    },
-    simbolo: {
-      type: DataTypes.STRING(10),
-      allowNull: true
-    },
     descripcion: {
       type: DataTypes.TEXT,
       allowNull: true
     },
     activo: {
       type: DataTypes.BOOLEAN,
+      allowNull: false,
       defaultValue: true
-    },
-    es_decimal: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true,
-      comment: 'Indica si la unidad permite valores decimales'
-    },
-    orden: {
-      type: DataTypes.INTEGER,
-      defaultValue: 0
     }
   }, {
     tableName: 'unidades_medida',
-    timestamps: true
+    timestamps: true,
+    createdAt: 'fecha_creacion',
+    updatedAt: 'fecha_actualizacion'
   });
 
   UnidadesMedida.associate = function(models) {
-    // Comentado temporalmente para la beta - la tabla suministros no tiene id_unidad_medida
-    // UnidadesMedida.hasMany(models.Suministros, {
-    //   foreignKey: 'id_unidad_medida',
-    //   as: 'suministros'
-    // });
+    // Relación con suministros
+    UnidadesMedida.hasMany(models.Suministros, {
+      foreignKey: 'id_unidad_medida',
+      as: 'suministros'
+    });
   };
 
   return UnidadesMedida;

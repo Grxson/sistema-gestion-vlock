@@ -23,6 +23,11 @@ const getSuministros = async (req, res) => {
                 as: 'categoria',
                 attributes: ['id_categoria', 'nombre', 'tipo', 'color'],
                 where: {} // Se llenará condicionalmente
+            },
+            {
+                model: models.Unidades_medida,
+                as: 'unidadMedida',
+                attributes: ['id_unidad', 'nombre', 'simbolo', 'descripcion']
             }
         ];
         
@@ -119,6 +124,11 @@ const getSuministroById = async (req, res) => {
                     model: models.Categorias_suministro,
                     as: 'categoria',
                     attributes: ['id_categoria', 'nombre', 'tipo', 'color']
+                },
+                {
+                    model: models.Unidades_medida,
+                    as: 'unidadMedida',
+                    attributes: ['id_unidad', 'nombre', 'simbolo', 'descripcion']
                 }
             ]
         });
@@ -199,7 +209,7 @@ const createSuministro = async (req, res) => {
             codigo_producto,
             descripcion_detallada,
             cantidad,
-            unidad_medida,
+            id_unidad_medida,
             m3_perdidos,
             m3_entregados,
             m3_por_entregar,
@@ -270,7 +280,7 @@ const createSuministro = async (req, res) => {
             codigo_producto,
             descripcion_detallada,
             cantidad: cantidad ? parseFloat(cantidad) : null,
-            unidad_medida: unidad_medida || 'pz',
+            id_unidad_medida: id_unidad_medida || 1,
             m3_perdidos: m3_perdidos ? parseFloat(m3_perdidos) : null,
             m3_entregados: m3_entregados ? parseFloat(m3_entregados) : null,
             m3_por_entregar: m3_por_entregar ? parseFloat(m3_por_entregar) : null,
@@ -294,6 +304,11 @@ const createSuministro = async (req, res) => {
                     model: models.Proyectos,
                     as: 'proyecto',
                     attributes: ['nombre', 'ubicacion']
+                },
+                {
+                    model: models.Unidades_medida,
+                    as: 'unidadMedida',
+                    attributes: ['id_unidad', 'nombre', 'simbolo', 'descripcion']
                 }
             ]
         });
@@ -371,7 +386,7 @@ const createMultipleSuministros = async (req, res) => {
         // Validar cada suministro
         for (let i = 0; i < suministros.length; i++) {
             const suministro = suministros[i];
-            if (!suministro.nombre || !suministro.cantidad || !suministro.unidad_medida || !suministro.precio_unitario) {
+            if (!suministro.nombre || !suministro.cantidad || !suministro.id_unidad_medida || !suministro.precio_unitario) {
                 return res.status(400).json({
                     success: false,
                     message: `Suministro ${i + 1}: Los campos nombre, cantidad, unidad de medida y precio son obligatorios`
@@ -428,7 +443,7 @@ const createMultipleSuministros = async (req, res) => {
                             codigo_producto: san.codigo_producto !== undefined ? san.codigo_producto : existente.codigo_producto,
                             descripcion_detallada: san.descripcion_detallada !== undefined ? san.descripcion_detallada : existente.descripcion_detallada,
                             cantidad: Object.prototype.hasOwnProperty.call(san, 'cantidad') ? san.cantidad : existente.cantidad,
-                            unidad_medida: san.unidad_medida !== undefined ? san.unidad_medida : existente.unidad_medida,
+                            id_unidad_medida: san.id_unidad_medida !== undefined ? san.id_unidad_medida : existente.id_unidad_medida,
                             m3_perdidos: Object.prototype.hasOwnProperty.call(san, 'm3_perdidos') ? san.m3_perdidos : existente.m3_perdidos,
                             m3_entregados: Object.prototype.hasOwnProperty.call(san, 'm3_entregados') ? san.m3_entregados : existente.m3_entregados,
                             m3_por_entregar: Object.prototype.hasOwnProperty.call(san, 'm3_por_entregar') ? san.m3_por_entregar : existente.m3_por_entregar,
@@ -472,7 +487,7 @@ const createMultipleSuministros = async (req, res) => {
                             codigo_producto: suministroData.codigo_producto,
                             descripcion_detallada: suministroData.descripcion_detallada,
                             cantidad: parseFloat(suministroData.cantidad),
-                            unidad_medida: suministroData.unidad_medida,
+                            id_unidad_medida: suministroData.id_unidad_medida || 1, // Default a 'pz' (Pieza, ID real: 1)
                             m3_perdidos: suministroData.m3_perdidos ? parseFloat(suministroData.m3_perdidos) : null,
                             m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
                             m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
@@ -494,6 +509,15 @@ const createMultipleSuministros = async (req, res) => {
                         tipo_suministro_procesado: suministroData.tipo_suministro || 'Material'
                     });
                     
+                    // Debug: Log de la unidad de medida recibida (solo en desarrollo)
+                    if (process.env.NODE_ENV === 'development') {
+                        console.log('🔍 Backend Debug unidad_medida:', {
+                            suministro: suministroData.nombre,
+                            id_unidad_medida_recibida: suministroData.id_unidad_medida,
+                            tipo: typeof suministroData.id_unidad_medida
+                        });
+                    }
+                    
                     const datosCreacion = {
                         folio,
                         fecha,
@@ -513,7 +537,7 @@ const createMultipleSuministros = async (req, res) => {
                         codigo_producto: suministroData.codigo_producto,
                         descripcion_detallada: suministroData.descripcion_detallada,
                         cantidad: parseFloat(suministroData.cantidad),
-                        unidad_medida: suministroData.unidad_medida,
+                        id_unidad_medida: suministroData.id_unidad_medida || 1, // Default a 'pz' (Pieza, ID real: 1)
                         m3_perdidos: suministroData.m3_perdidos ? parseFloat(suministroData.m3_perdidos) : null,
                         m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
                         m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
@@ -551,6 +575,11 @@ const createMultipleSuministros = async (req, res) => {
                         model: models.Proveedores,
                         as: 'proveedor',
                         attributes: ['nombre', 'tipo_proveedor', 'telefono']
+                    },
+                    {
+                        model: models.Unidades_medida,
+                        as: 'unidadMedida',
+                        attributes: ['id_unidad', 'nombre', 'simbolo', 'descripcion']
                     }
                 ]
             });
@@ -709,6 +738,11 @@ const updateSuministro = async (req, res) => {
                     model: models.Proyectos,
                     as: 'proyecto',
                     attributes: ['nombre', 'ubicacion']
+                },
+                {
+                    model: models.Unidades_medida,
+                    as: 'unidadMedida',
+                    attributes: ['id_unidad', 'nombre', 'simbolo', 'descripcion']
                 }
             ]
         });
@@ -768,6 +802,11 @@ const getSuministrosByProyecto = async (req, res) => {
                     model: models.Proyectos,
                     as: 'proyecto',
                     attributes: ['nombre', 'ubicacion']
+                },
+                {
+                    model: models.Unidades_medida,
+                    as: 'unidadMedida',
+                    attributes: ['id_unidad', 'nombre', 'simbolo', 'descripcion']
                 }
             ],
             order: [['fecha', 'DESC'], ['folio', 'DESC']]

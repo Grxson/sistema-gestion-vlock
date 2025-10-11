@@ -11,7 +11,8 @@ const CategoriaAutocomplete = ({
   placeholder = "Buscar categoría...",
   disabled = false,
   required = false,
-  error = null
+  error = null,
+  onCategoriesUpdated = null // Nuevo callback para notificar actualizaciones
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -201,6 +202,11 @@ const CategoriaAutocomplete = ({
 
       if (onCreateNew) {
         onCreateNew(newCategoria);
+      }
+
+      // 🔄 Notificar que las categorías se actualizaron
+      if (onCategoriesUpdated) {
+        onCategoriesUpdated();
       }
 
       setShowModal(false);
@@ -408,6 +414,7 @@ const CategoriaAutocomplete = ({
         onSave={handleSaveCategoria}
         initialData={{ nombre: (searchTerm || '').trim() }}
         title="Crear Nueva Categoría"
+        existingCategories={allCategorias}
       />
 
       {/* Mensaje de error */}

@@ -5,7 +5,7 @@ const getUnidades = async (req, res) => {
   try {
     const unidades = await Unidades_medida.findAll({
       where: { activo: true },
-      order: [['orden', 'ASC'], ['nombre', 'ASC']]
+      order: [['nombre', 'ASC']]
     });
 
     res.json({
@@ -25,7 +25,7 @@ const getUnidades = async (req, res) => {
 const getAllUnidades = async (req, res) => {
   try {
     const unidades = await Unidades_medida.findAll({
-      order: [['orden', 'ASC'], ['nombre', 'ASC']]
+      order: [['nombre', 'ASC']]
     });
 
     res.json({
@@ -44,22 +44,19 @@ const getAllUnidades = async (req, res) => {
 // Crear nueva unidad de medida
 const createUnidad = async (req, res) => {
   try {
-    const { codigo, nombre, simbolo, descripcion, es_decimal, orden } = req.body;
+    const { nombre, simbolo, descripcion } = req.body;
 
-    if (!codigo || !nombre) {
+    if (!nombre || !simbolo) {
       return res.status(400).json({
         success: false,
-        message: 'El código y nombre de la unidad son requeridos'
+        message: 'El nombre y símbolo de la unidad son requeridos'
       });
     }
 
     const unidad = await Unidades_medida.create({
-      codigo,
       nombre,
       simbolo,
-      descripcion,
-      es_decimal,
-      orden
+      descripcion
     });
 
     res.status(201).json({
@@ -73,7 +70,7 @@ const createUnidad = async (req, res) => {
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(400).json({
         success: false,
-        message: 'Ya existe una unidad con ese código'
+        message: 'Ya existe una unidad con ese nombre o símbolo'
       });
     }
 
@@ -88,7 +85,7 @@ const createUnidad = async (req, res) => {
 const updateUnidad = async (req, res) => {
   try {
     const { id } = req.params;
-    const { codigo, nombre, simbolo, descripcion, es_decimal, orden, activo } = req.body;
+    const { nombre, simbolo, descripcion, activo } = req.body;
 
     const unidad = await Unidades_medida.findByPk(id);
     if (!unidad) {
@@ -99,12 +96,9 @@ const updateUnidad = async (req, res) => {
     }
 
     await unidad.update({
-      codigo,
       nombre,
       simbolo,
       descripcion,
-      es_decimal,
-      orden,
       activo
     });
 
@@ -119,7 +113,7 @@ const updateUnidad = async (req, res) => {
     if (error.name === 'SequelizeUniqueConstraintError') {
       return res.status(400).json({
         success: false,
-        message: 'Ya existe una unidad con ese código'
+        message: 'Ya existe una unidad con ese nombre o símbolo'
       });
     }
 
@@ -146,7 +140,7 @@ const deleteUnidad = async (req, res) => {
     // Verificar si hay suministros usando esta unidad
     const { Suministros } = require('../models');
     const suministrosCount = await Suministros.count({
-      where: { id_unidad_medida: id }
+      where: { unidad_medida: unidad.simbolo }
     });
 
     if (suministrosCount > 0) {
@@ -173,44 +167,10 @@ const deleteUnidad = async (req, res) => {
   }
 };
 
-// Reordenar unidades de medida
-const reorderUnidades = async (req, res) => {
-  try {
-    const { unidades } = req.body; // Array de { id, orden }
-
-    if (!Array.isArray(unidades)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Se requiere un array de unidades con sus nuevos órdenes'
-      });
-    }
-
-    // Actualizar el orden de cada unidad
-    for (const item of unidades) {
-      await Unidades_medida.update(
-        { orden: item.orden },
-        { where: { id_unidad: item.id } }
-      );
-    }
-
-    res.json({
-      success: true,
-      message: 'Orden de unidades actualizado exitosamente'
-    });
-  } catch (error) {
-    console.error('Error al reordenar unidades:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error al reordenar las unidades de medida'
-    });
-  }
-};
-
 module.exports = {
   getUnidades,
   getAllUnidades,
   createUnidad,
   updateUnidad,
-  deleteUnidad,
-  reorderUnidades
+  deleteUnidad
 };
