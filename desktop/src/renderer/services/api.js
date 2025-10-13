@@ -744,6 +744,38 @@ class ApiService {
     return this.post('/herramientas/movimientos', movimientoData);
   }
 
+  async uploadHerramientaImage(id, imageFile) {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    
+    return this.request(`/herramientas/${id}/upload-image`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`
+        // No incluir Content-Type para que el navegador establezca el boundary automáticamente
+      },
+      body: formData
+    });
+  }
+
+  async deleteHerramientaImage(id) {
+    return this.request(`/herramientas/${id}/delete-image`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`
+      }
+    });
+  }
+
+  async deleteMovimientosHerramienta(id) {
+    return this.request(`/herramientas/${id}/movimientos`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`
+      }
+    });
+  }
+
   // Utilidades
   /**
    * Verifica si el usuario está autenticado y el token es válido

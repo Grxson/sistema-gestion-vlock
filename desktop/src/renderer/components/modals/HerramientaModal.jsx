@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSave, FaTimes, FaTools, FaHistory, FaExchangeAlt, FaExclamationTriangle, FaBoxOpen, FaShare, FaUndo, FaTrash } from "react-icons/fa";
 import ConfirmationModal from './ConfirmationModal';
+import api from '../../services/api';
 
 const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefresh, proyectos = [] }) => {
   const [formData, setFormData] = useState({
@@ -78,12 +79,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   // Función para obtener categorías
   const fetchCategorias = async () => {
     try {
-      const response = await fetch('http://localhost:4000/api/herramientas/categorias', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const result = await response.json();
+      const result = await api.getCategoriasHerramientas();
       if (result.success) {
         setCategorias(result.data);
       }
@@ -98,12 +94,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     
     setLoadingMovimientos(true);
     try {
-      const response = await fetch(`http://localhost:4000/api/herramientas/${herramientaId}/movimientos`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const result = await response.json();
+      const result = await api.getMovimientosHerramienta(herramientaId);
       if (result.success) {
         setMovimientos(result.data);
       }
@@ -340,20 +331,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   const handleImageUpload = async (herramientaId) => {
     if (!selectedImage) return null;
 
-    const formData = new FormData();
-    formData.append('image', selectedImage);
-
     try {
       setUploadingImage(true);
-      const response = await fetch(`http://localhost:4000/api/herramientas/${herramientaId}/upload-image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      const result = await response.json();
+      const result = await api.uploadHerramientaImage(herramientaId, selectedImage);
       
       if (result.success) {
         return result.data.image_url;
@@ -372,15 +352,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   // Función para eliminar imagen
   const handleImageDelete = async (herramientaId) => {
     try {
-      const response = await fetch(`http://localhost:4000/api/herramientas/${herramientaId}/delete-image`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = await response.json();
+      const result = await api.deleteHerramientaImage(herramientaId);
       
       if (result.success) {
         setFormData(prev => ({ ...prev, image_url: '' }));
@@ -572,33 +544,13 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   };
 
   const eliminarHistorialMovimientos = async () => {
-
     try {
       setLoadingMovimientos(true);
-      const token = localStorage.getItem('token');
       
       console.log('Iniciando eliminación del historial...');
       console.log('ID de herramienta:', herramienta.id_herramienta);
-      console.log('Token presente:', !!token);
       
-      const response = await fetch(`http://localhost:4000/api/herramientas/${herramienta.id_herramienta}/movimientos`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('Status de respuesta:', response.status);
-      console.log('Response OK:', response.ok);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error del servidor:', errorText);
-        throw new Error(`Error del servidor (${response.status}): ${errorText}`);
-      }
-
-      const result = await response.json();
+      const result = await api.deleteMovimientosHerramienta(herramienta.id_herramienta);
       console.log('Respuesta del servidor:', result);
       
       if (result.success) {        
@@ -1372,7 +1324,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                   <div className="w-full h-64 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-900/30 mb-4">
                     {imagePreview || formData.image_url ? (
                       <img 
-                        src={imagePreview || `http://localhost:4000${formData.image_url}`}
+                        src={imagePreview || `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${formData.image_url}`}
                         alt="Preview"
                         className={`max-w-full max-h-full object-contain rounded-lg ${
                           isReadOnly && (imagePreview || formData.image_url) 
@@ -1509,7 +1461,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
               <FaTimes className="h-5 w-5" />
             </button>
             <img 
-              src={imagePreview || `http://localhost:4000${formData.image_url}`}
+              src={imagePreview || `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${formData.image_url}`}
               alt="Imagen expandida de la herramienta"
               className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
