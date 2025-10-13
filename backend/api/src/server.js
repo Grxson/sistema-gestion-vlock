@@ -1,6 +1,5 @@
 const app = require('./app');
 const dotenv = require('dotenv');
-const { initDB } = require('./seeders/init');
 dotenv.config();
 
 const PORT = process.env.PORT || 4000;
