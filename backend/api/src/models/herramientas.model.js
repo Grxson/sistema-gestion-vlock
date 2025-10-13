@@ -31,6 +31,12 @@ module.exports = (sequelize) => {
       type: DataTypes.INTEGER,
       defaultValue: 0
     },
+    stock_inicial: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+      comment: 'Stock inicial de la herramienta al momento de registro'
+    },
     estado: {
       type: DataTypes.INTEGER,
       allowNull: false,

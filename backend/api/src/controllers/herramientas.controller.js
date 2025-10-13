@@ -127,6 +127,15 @@ const herramientasController = {
         });
       }
 
+      // Debug: Log de los datos que se devuelven
+      console.log('🔍 Datos de herramienta devueltos:', {
+        id: herramienta.id_herramienta,
+        nombre: herramienta.nombre,
+        stock: herramienta.stock,
+        stock_inicial: herramienta.stock_inicial,
+        rawData: herramienta.dataValues
+      });
+
       res.json({
         success: true,
         data: herramienta
@@ -188,6 +197,14 @@ const herramientasController = {
       const { id } = req.params;
       const herramientaData = req.body;
 
+      // Debug: Log de los datos recibidos
+      console.log('🔍 Datos recibidos para actualizar herramienta:', {
+        id,
+        herramientaData,
+        stock_inicial: herramientaData.stock_inicial,
+        stock: herramientaData.stock
+      });
+
       const herramienta = await models.herramientas.findByPk(id);
       
       if (!herramienta) {
@@ -197,7 +214,22 @@ const herramientasController = {
         });
       }
 
+      // Debug: Log de los datos antes de actualizar
+      console.log('🔍 Datos actuales de la herramienta:', {
+        id_herramienta: herramienta.id_herramienta,
+        stock_inicial_actual: herramienta.stock_inicial,
+        stock_actual: herramienta.stock
+      });
+
       await herramienta.update(herramientaData);
+
+      // Debug: Log de los datos después de actualizar
+      await herramienta.reload();
+      console.log('🔍 Datos después de actualizar:', {
+        id_herramienta: herramienta.id_herramienta,
+        stock_inicial_nuevo: herramienta.stock_inicial,
+        stock_nuevo: herramienta.stock
+      });
       
       // Obtener la herramienta actualizada con su categoría
       const herramientaActualizada = await models.herramientas.findByPk(id, {
@@ -359,7 +391,12 @@ const herramientasController = {
       switch (movimientoData.tipo_movimiento) {
         case 'Entrada':
           nuevoStock += cantidad;
-          await herramienta.update({ stock: nuevoStock });
+          // Para entradas, también actualizar el stock inicial
+          const nuevoStockInicial = herramienta.stock_inicial + cantidad;
+          await herramienta.update({ 
+            stock: nuevoStock,
+            stock_inicial: nuevoStockInicial
+          });
           break;
         case 'Salida':
           if (nuevoStock < cantidad) {
