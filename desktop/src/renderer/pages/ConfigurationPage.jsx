@@ -84,7 +84,8 @@ const ConfigurationPage = () => {
 
   const loadConfigurations = async () => {
     try {
-      const response = await fetch('http://localhost:4000/api/config/user-settings', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/config/user-settings`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
@@ -106,7 +107,8 @@ const ConfigurationPage = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('http://localhost:4000/api/config/user-settings', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/config/user-settings`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

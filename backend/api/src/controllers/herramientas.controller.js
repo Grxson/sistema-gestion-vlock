@@ -505,6 +505,25 @@ const herramientasController = {
     try {
       const { id } = req.params;
       
+      // Debug logs detallados
+      console.log('🔍 Upload image request - inicio:', {
+        id,
+        contentType: req.headers['content-type'],
+        contentLength: req.headers['content-length'],
+        method: req.method,
+        url: req.url,
+        hasBody: !!req.body,
+        bodySize: req.body ? Object.keys(req.body).length : 0,
+        hasFile: !!req.file,
+        hasFiles: !!req.files,
+        fileInfo: req.file ? {
+          fieldname: req.file.fieldname,
+          originalname: req.file.originalname,
+          mimetype: req.file.mimetype,
+          size: req.file.size
+        } : null
+      });
+      
       // Verificar que la herramienta existe
       const herramienta = await models.herramientas.findByPk(id);
       if (!herramienta) {
@@ -516,11 +535,27 @@ const herramientasController = {
 
       // Verificar que se subió un archivo
       if (!req.file) {
+        console.log('❌ No file received - detalle completo:', {
+          reqFile: req.file,
+          reqFiles: req.files,
+          bodyKeys: req.body ? Object.keys(req.body) : [],
+          contentType: req.headers['content-type'],
+          contentLength: req.headers['content-length'],
+          allHeaders: req.headers
+        });
         return res.status(400).json({
           success: false,
           message: 'No se proporcionó ningún archivo'
         });
       }
+
+      console.log('✅ File received successfully:', {
+        fieldname: req.file.fieldname,
+        originalname: req.file.originalname,
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype
+      });
 
       // Construir la URL de la imagen
       const imageUrl = `/uploads/herramientas/${req.file.filename}`;

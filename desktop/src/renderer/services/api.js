@@ -745,17 +745,50 @@ class ApiService {
   }
 
   async uploadHerramientaImage(id, imageFile) {
+    console.log('🔍 Frontend - uploadHerramientaImage:', {
+      id,
+      imageFile,
+      fileName: imageFile?.name,
+      fileSize: imageFile?.size,
+      fileType: imageFile?.type
+    });
+
     const formData = new FormData();
     formData.append('image', imageFile);
     
-    return this.request(`/herramientas/${id}/upload-image`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.getToken()}`
-        // No incluir Content-Type para que el navegador establezca el boundary automáticamente
-      },
-      body: formData
-    });
+    // Debug: verificar que el FormData tiene el archivo
+    console.log('🔍 Frontend - FormData entries:');
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value);
+    }
+    
+    // Usar fetch directamente para evitar que el método request modifique headers
+    const url = `${this.baseURL}/herramientas/${id}/upload-image`;
+    const token = this.getToken();
+    
+    console.log('🔍 Frontend - Using direct fetch for upload');
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+          // NO incluir Content-Type para que el navegador establezca multipart/form-data automáticamente
+        },
+        body: formData
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Error al subir imagen');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('🔍 Frontend - Upload error:', error);
+      throw error;
+    }
   }
 
   async deleteHerramientaImage(id) {

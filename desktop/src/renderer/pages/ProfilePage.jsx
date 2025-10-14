@@ -109,7 +109,8 @@ const ProfilePage = () => {
     setErrors({});
 
     try {
-      const response = await fetch('http://localhost:4000/api/auth/update-profile', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/auth/update-profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -154,7 +155,8 @@ const ProfilePage = () => {
     setErrors({});
 
     try {
-      const response = await fetch('http://localhost:4000/api/auth/change-password', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/auth/change-password`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

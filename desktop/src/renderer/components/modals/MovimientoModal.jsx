@@ -114,7 +114,8 @@ const MovimientoModal = ({ isOpen, onClose, herramienta, proyectos = [], onSave 
         id_usuario: user?.id_usuario
       };
 
-      const response = await fetch('http://localhost:4000/api/herramientas/movimientos', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/herramientas/movimientos`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

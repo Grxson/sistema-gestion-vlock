@@ -94,33 +94,18 @@ const Herramientas = () => {
 
 
 
-  // Cargar herramientas
-  const loadHerramientas = async (page = currentPage, limit = itemsPerPage, filters = {}) => {
+  // Cargar todas las herramientas (sin filtros del servidor)
+  const loadHerramientas = async () => {
     setLoading(true);
     try {
-      const params = { page, limit };
-      if (searchTerm) params.search = searchTerm;
-      if (selectedCategoria) params.categoria = selectedCategoria;
-      if (selectedEstado) params.estado = selectedEstado;
-      if (selectedProyecto) params.proyecto = selectedProyecto;
-      if (selectedEstado) params.estado = selectedEstado;
-      if (selectedProyecto) params.proyecto = selectedProyecto;
-      
-      console.log('Cargando herramientas usando apiService...', params);
-      const result = await apiService.getHerramientas(params);
+      console.log('Cargando herramientas usando apiService...');
+      // Pasar un límite alto para obtener todas las herramientas
+      const result = await apiService.getHerramientas({ limit: 1000 });
       console.log('Respuesta completa del API:', result);
       
       if (result && result.success) {
         console.log('Herramientas cargadas:', result.data);
         setHerramientas(result.data || []);
-        // Guardar datos de paginación del API
-        if (result.pagination) {
-          setPaginationData({
-            total: result.pagination.total,
-            totalPages: result.pagination.totalPages,
-            currentPage: result.pagination.currentPage
-          });
-        }
       } else {
         console.error('Error en la respuesta de la API:', result);
         setHerramientas([]);
@@ -139,40 +124,67 @@ const Herramientas = () => {
     loadProyectos();
   }, []);
 
-    // Reload data when filters change
+  // Efecto para resetear la página cuando cambien los filtros o búsqueda
   useEffect(() => {
     setCurrentPage(1);
-    loadHerramientas(1, itemsPerPage);
   }, [searchTerm, selectedCategoria, selectedEstado, selectedProyecto]);
 
-  // Con paginación del servidor, no necesitamos filtrar en el cliente
-  const filteredHerramientas = herramientas;
+  // Filtrado local de herramientas (búsqueda en tiempo real)
+  const filteredHerramientas = herramientas.filter(herramienta => {
+    const matchesSearch = !searchTerm || 
+      herramienta.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      herramienta.marca?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      herramienta.serial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      herramienta.modelo?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesCategoria = !selectedCategoria || 
+      herramienta.id_categoria_herr?.toString() === selectedCategoria;
+    
+    const matchesEstado = !selectedEstado || 
+      herramienta.estado?.toString() === selectedEstado;
+    
+    const matchesProyecto = !selectedProyecto || 
+      herramienta.id_proyecto?.toString() === selectedProyecto;
+    
+    return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto;
+  });
 
-  // Paginación usando datos del API
-  const totalPages = paginationData.totalPages;
-  const paginatedHerramientas = herramientas; // El API ya devuelve los datos paginados
+  // Calcular paginación basada en herramientas filtradas
+  const totalFilteredItems = filteredHerramientas.length;
+  const calculatedTotalPages = Math.ceil(totalFilteredItems / itemsPerPage);
+  
+  // Asegurar que currentPage esté dentro del rango válido
+  const validCurrentPage = Math.max(1, Math.min(currentPage, calculatedTotalPages || 1));
+  if (validCurrentPage !== currentPage) {
+    setCurrentPage(validCurrentPage);
+  }
+  
+  // Aplicar paginación a las herramientas filtradas
+  const startIndex = (validCurrentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedHerramientas = filteredHerramientas.slice(startIndex, endIndex);
+  
+  const totalPages = calculatedTotalPages;
 
   // Funciones para manejar paginación avanzada
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
-      loadHerramientas(newPage, itemsPerPage);
     }
   };
 
   const handleItemsPerPageChange = (newItemsPerPage) => {
     setItemsPerPage(newItemsPerPage);
     setCurrentPage(1); // Resetear a la primera página
-    loadHerramientas(1, newItemsPerPage);
   };
 
   const getPaginationInfo = () => {
-    const start = Math.min((currentPage - 1) * itemsPerPage + 1, paginationData.total);
-    const end = Math.min(currentPage * itemsPerPage, paginationData.total);
+    const start = Math.min((currentPage - 1) * itemsPerPage + 1, totalFilteredItems);
+    const end = Math.min(currentPage * itemsPerPage, totalFilteredItems);
     return {
       start,
       end,
-      total: paginationData.total
+      total: totalFilteredItems
     };
   };
 
@@ -215,7 +227,8 @@ const Herramientas = () => {
       // Primero eliminar el historial de movimientos si existe
       try {
         const token = localStorage.getItem('token');
-        await fetch(`http://localhost:4000/api/herramientas/${herramientaId}/movimientos`, {
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+        await fetch(`${apiUrl}/herramientas/${herramientaId}/movimientos`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -592,7 +605,7 @@ const Herramientas = () => {
       </div>
 
       {/* Componente de Paginación */}
-      {paginationData.total > 0 && (
+      {totalFilteredItems > 0 && (
         <div className="bg-white dark:bg-gray-800 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
           {/* Información de registros */}
           <div className="text-sm text-gray-700 dark:text-gray-300">

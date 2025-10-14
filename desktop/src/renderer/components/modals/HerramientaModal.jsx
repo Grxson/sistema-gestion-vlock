@@ -202,6 +202,17 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
         }
       }
       
+      // Autocompletar ubicación cuando se selecciona un proyecto
+      if (field === 'id_proyecto' && value !== '') {
+        const proyectoSeleccionado = proyectos.find(p => p.id_proyecto.toString() === value);
+        if (proyectoSeleccionado && proyectoSeleccionado.ubicacion) {
+          // Solo autocompletar si el campo de ubicación está vacío
+          if (!newData.ubicacion || newData.ubicacion === '') {
+            newData.ubicacion = proyectoSeleccionado.ubicacion;
+          }
+        }
+      }
+      
       return newData;
     });
     
@@ -310,9 +321,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
         return;
       }
 
-      // Validar tamaño (5MB máximo)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('El archivo es demasiado grande. El tamaño máximo es 5MB');
+      // Validar tamaño (10MB máximo)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('El archivo es demasiado grande. El tamaño máximo es 10MB');
         return;
       }
 
@@ -342,7 +353,20 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
       }
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Error al subir la imagen: ' + error.message);
+      
+      // Manejar errores específicos
+      let errorMessage = 'Error al subir la imagen';
+      if (error.message.includes('413') || error.message.includes('Payload Too Large')) {
+        errorMessage = 'El archivo es demasiado grande. El tamaño máximo permitido es 10MB';
+      } else if (error.message.includes('400')) {
+        errorMessage = 'Formato de archivo no válido. Solo se permiten imágenes (JPEG, PNG, GIF, WebP)';
+      } else if (error.message.includes('500')) {
+        errorMessage = 'Error interno del servidor. Intenta nuevamente';
+      } else {
+        errorMessage = `Error al subir la imagen: ${error.message}`;
+      }
+      
+      alert(errorMessage);
       return null;
     } finally {
       setUploadingImage(false);
@@ -1025,11 +1049,8 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         type="text"
                         value={formData.ubicacion || ''}
                         onChange={(e) => handleInputChange('ubicacion', e.target.value)}
-                        readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                        placeholder="Ej: Almacén A - Rack 1"
+                        className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500"
+                        placeholder="Ej: Almacén A - Rack 1 (se autocompleta al seleccionar proyecto)"
                       />
                       {errors.ubicacion && (
                         <p className="mt-1 text-sm text-red-600">{errors.ubicacion}</p>
@@ -1452,7 +1473,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
           className="fixed inset-0 bg-black bg-opacity-75 z-[60] flex items-center justify-center p-4"
           onClick={() => setShowImageModal(false)}
         >
-          <div className="relative w-full h-full max-w-[90vw] max-h-[90vh] flex items-center justify-center">
+          <div className="relative flex flex-col items-center justify-center max-w-[90vw] max-h-[90vh]">
             <button
               onClick={() => setShowImageModal(false)}
               className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
@@ -1463,10 +1484,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
             <img 
               src={imagePreview || `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${formData.image_url}`}
               alt="Imagen expandida de la herramienta"
-              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl"
+              className="max-w-full max-h-[calc(90vh-80px)] object-contain rounded-t-lg shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             />
-            <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-50 text-white p-3 rounded-b-lg">
+            <div className="bg-black bg-opacity-50 text-white p-3 rounded-b-lg w-full text-center">
               <p className="text-sm font-medium">{formData.nombre || 'Herramienta'}</p>
               <p className="text-xs opacity-75">Clic fuera de la imagen para cerrar</p>
             </div>

@@ -131,7 +131,7 @@ const ConnectionMonitor = () => {
           <div className="flex items-center">
             <span className="mr-2">🖥️</span>
             <span className="font-medium">Backend API:</span>
-            <span className="ml-2 text-sm text-gray-500">http://localhost:4000</span>
+            <span className="ml-2 text-sm text-gray-500">{import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}</span>
           </div>
           <span className={`px-2 py-1 rounded text-xs font-medium ${backendInfo.className}`}>
             {backendInfo.text}
