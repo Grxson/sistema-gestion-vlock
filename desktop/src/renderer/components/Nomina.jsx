@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import apiService from '../services/api';
+import nominasServices from '../services/nominas';
 import { formatCurrency } from '../utils/currency';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
-import NominaWizard from './NominaWizard';
+import NominaWizardSimplificado from './NominaWizardSimplificado';
 import {
   PlusIcon,
   CalendarIcon,
@@ -24,6 +25,7 @@ export default function Nomina() {
   
   const [nominas, setNominas] = useState([]);
   const [empleados, setEmpleados] = useState([]);
+  const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
   const [selectedNomina, setSelectedNomina] = useState(null);
@@ -42,25 +44,29 @@ export default function Nomina() {
     try {
       setLoading(true);
       
-      // Fetch empleados
-      const empleadosData = await apiService.getEmpleados();
-      const empleadosArray = empleadosData?.empleados || empleadosData?.data || [];
+      // Inicializar servicios de nóminas
+      await nominasServices.inicializar();
       
-      // Filtrar solo empleados activos
-      const empleadosActivos = Array.isArray(empleadosArray) 
-        ? empleadosArray.filter(emp => emp.activo === true || emp.activo === 1)
-        : [];
-      
+      // Fetch empleados usando el nuevo servicio
+      const empleadosActivos = await nominasServices.empleados.getEmpleadosActivos();
       setEmpleados(empleadosActivos);
       
-      // Fetch nominas
+      // Fetch nominas usando el nuevo servicio
       try {
-        const nominasData = await apiService.getNominas();
-        const nominasArray = nominasData?.nominas || nominasData?.data || [];
-        setNominas(Array.isArray(nominasArray) ? nominasArray : []);
+        const nominasResponse = await nominasServices.nominas.getAll();
+        setNominas(nominasResponse.data || []);
       } catch (error) {
         console.log('Nomina endpoint not available yet');
         setNominas([]);
+      }
+
+      // Cargar estadísticas
+      try {
+        const estadisticasData = await nominasServices.empleados.getEstadisticasEmpleados();
+        setEstadisticas(estadisticasData);
+      } catch (error) {
+        console.log('Error loading statistics:', error);
+        setEstadisticas(null);
       }
 
     } catch (error) {
@@ -71,12 +77,6 @@ export default function Nomina() {
     }
   };
 
-  const getCurrentPeriod = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
-  };
 
   if (loading) {
     return (
@@ -120,7 +120,7 @@ export default function Nomina() {
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Empleados Activos</dt>
                   <dd className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {Array.isArray(empleados) ? empleados.length : 0}
+                    {estadisticas?.totalActivos || 0}
                   </dd>
                 </dl>
               </div>
@@ -138,7 +138,7 @@ export default function Nomina() {
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Nóminas Procesadas</dt>
                   <dd className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {Array.isArray(nominas) ? nominas.length : 0}
+                    {nominas.length}
                   </dd>
                 </dl>
               </div>
@@ -156,7 +156,7 @@ export default function Nomina() {
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Período Actual</dt>
                   <dd className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {getCurrentPeriod()}
+                    {nominasServices.getPeriodoActual()}
                   </dd>
                 </dl>
               </div>
@@ -174,14 +174,7 @@ export default function Nomina() {
                 <dl>
                   <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Salarios Mensuales</dt>
                   <dd className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {Array.isArray(empleados) 
-                      ? formatCurrency(empleados.reduce((sum, emp) => {
-                          // Obtener el pago diario del empleado o del contrato
-                          const pagoDiario = emp.pago_diario || emp.contrato?.salario_diario || 0;
-                          return sum + (parseFloat(pagoDiario) || 0);
-                        }, 0) * 30) // Multiplicar por 30 días para obtener salario mensual
-                      : formatCurrency(0)
-                    }
+                    {formatCurrency(estadisticas?.totalSalariosMensuales || 0)}
                   </dd>
                 </dl>
               </div>
@@ -351,20 +344,17 @@ export default function Nomina() {
                           <button
                             onClick={async () => {
                               try {
-                                const pdfResponse = await apiService.generarReciboPDF(nomina.id_nomina);
-                                if (pdfResponse) {
-                                  const blob = new Blob([pdfResponse], { type: 'application/pdf' });
-                                  const url = window.URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.style.display = 'none';
-                                  a.href = url;
-                                  a.download = `nomina_${nomina.empleado?.nombre || 'empleado'}_${nomina.periodo || 'periodo'}.pdf`;
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  window.URL.revokeObjectURL(url);
-                                  document.body.removeChild(a);
-                                  showSuccess('PDF Descargado', 'Recibo de nómina descargado exitosamente');
-                                }
+                                const blob = await nominasServices.nominas.generarReciboPDF(nomina.id_nomina || nomina.id);
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.style.display = 'none';
+                                a.href = url;
+                                a.download = `nomina_${nomina.empleado?.nombre || 'empleado'}_${nomina.periodo || 'periodo'}.pdf`;
+                                document.body.appendChild(a);
+                                a.click();
+                                window.URL.revokeObjectURL(url);
+                                document.body.removeChild(a);
+                                showSuccess('PDF Descargado', 'Recibo de nómina descargado exitosamente');
                               } catch (error) {
                                 console.error('Error downloading PDF:', error);
                                 showError('Error', 'No se pudo descargar el PDF del recibo');
@@ -394,8 +384,8 @@ export default function Nomina() {
         </div>
       </div>
 
-      {/* Nomina Wizard */}
-      <NominaWizard 
+      {/* Nomina Wizard Simplificado */}
+      <NominaWizardSimplificado 
         isOpen={showWizard}
         onClose={() => setShowWizard(false)}
         onSuccess={handleNominaSuccess}

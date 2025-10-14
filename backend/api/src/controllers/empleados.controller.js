@@ -132,7 +132,8 @@ const createEmpleado = async (req, res) => {
             id_contrato,
             id_oficio,
             id_proyecto,
-            pago_diario
+            pago_diario,
+            rfc
         } = req.body;
 
         // Validaciones básicas
@@ -169,7 +170,8 @@ const createEmpleado = async (req, res) => {
             id_proyecto: id_proyecto || null,
             pago_diario: pago_diario || null,
             activo: true,
-            fecha_alta: new Date()
+            fecha_alta: new Date(),
+            rfc
         });
 
         res.status(201).json({
@@ -197,7 +199,8 @@ const updateEmpleado = async (req, res) => {
         const { 
             nombre, apellido, nss, telefono, contacto_emergencia, 
             telefono_emergencia, banco, cuenta_bancaria, id_contrato, 
-            id_oficio, id_proyecto, pago_diario, activo, fecha_alta, fecha_baja
+            id_oficio, id_proyecto, pago_diario, activo, fecha_alta, fecha_baja, 
+            rfc
         } = req.body;
 
         // Verificar si existe el empleado
@@ -225,7 +228,8 @@ const updateEmpleado = async (req, res) => {
             pago_diario: pago_diario === '' ? null : (pago_diario !== undefined ? pago_diario : empleado.pago_diario),
             activo: activo !== undefined ? activo : empleado.activo,
             fecha_alta: fecha_alta || empleado.fecha_alta,
-            fecha_baja: fecha_baja === '' ? null : (fecha_baja !== undefined ? fecha_baja : empleado.fecha_baja)
+            fecha_baja: fecha_baja === '' ? null : (fecha_baja !== undefined ? fecha_baja : empleado.fecha_baja),
+            rfc: rfc !== undefined ? rfc : empleado.rfc
         });
 
         // Obtener el empleado actualizado con todas las relaciones
