@@ -4,7 +4,8 @@ import nominasServices from '../services/nominas';
 import { formatCurrency } from '../utils/currency';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
-import NominaWizardSimplificado from './NominaWizardSimplificado';
+import NominaWizard from './NominaWizard';
+import EmpleadoCard from './ui/EmpleadoCard';
 import {
   PlusIcon,
   CalendarIcon,
@@ -16,7 +17,7 @@ import {
   ExclamationTriangleIcon,
   EyeIcon,
   PencilIcon,
-  TrashIcon
+  TrashIcon,
 } from '@heroicons/react/24/outline';
 
 export default function Nomina() {
@@ -30,11 +31,13 @@ export default function Nomina() {
   const [showWizard, setShowWizard] = useState(false);
   const [selectedNomina, setSelectedNomina] = useState(null);
   const [showNominaDetails, setShowNominaDetails] = useState(false);
+  const [viewMode, setViewMode] = useState('cards');
 
   // Funciones de utilidad
   const handleNominaSuccess = () => {
     fetchData(); // Recargar datos después de procesar nómina
   };
+
 
   useEffect(() => {
     fetchData();
@@ -52,9 +55,11 @@ export default function Nomina() {
       setEmpleados(empleadosActivos);
       
       // Fetch nominas usando el nuevo servicio
+      let nominasData = [];
       try {
         const nominasResponse = await nominasServices.nominas.getAll();
-        setNominas(nominasResponse.data || []);
+        nominasData = nominasResponse.data || [];
+        setNominas(nominasData);
       } catch (error) {
         console.log('Nomina endpoint not available yet');
         setNominas([]);
@@ -68,6 +73,8 @@ export default function Nomina() {
         console.log('Error loading statistics:', error);
         setEstadisticas(null);
       }
+
+
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -90,309 +97,318 @@ export default function Nomina() {
   }
 
   return (
-    <div className="space-y-6 bg-gray-50 dark:bg-dark-50 min-h-screen p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Gestión de Nómina</h1>
-          <p className="mt-2 text-gray-600 dark:text-gray-400">
-            Procesa y gestiona las nóminas de los empleados de manera eficiente
-          </p>
-        </div>
-        <button
-          onClick={() => setShowWizard(true)}
-          className="inline-flex items-center px-6 py-3 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 transition-all duration-200 transform hover:scale-105"
-        >
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Procesar Nómina
-        </button>
-      </div>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-dark-100 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <UserGroupIcon className="h-8 w-8 text-blue-600" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Empleados Activos</dt>
-                  <dd className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {estadisticas?.totalActivos || 0}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-dark-100 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <DocumentTextIcon className="h-8 w-8 text-green-600" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Nóminas Procesadas</dt>
-                  <dd className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {nominas.length}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-dark-100 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <CalendarIcon className="h-8 w-8 text-purple-600" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Período Actual</dt>
-                  <dd className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {nominasServices.getPeriodoActual()}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-dark-100 overflow-hidden shadow-sm rounded-lg border border-gray-200 dark:border-gray-700">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <CurrencyDollarIcon className="h-8 w-8 text-green-600" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate">Total Salarios Mensuales</dt>
-                  <dd className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {formatCurrency(estadisticas?.totalSalariosMensuales || 0)}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Empleados Table */}
-      <div className="bg-white dark:bg-dark-100 shadow-sm overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="px-6 py-5">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center">
-            <UserGroupIcon className="h-6 w-6 mr-2 text-primary-600" />
-            Empleados Activos para Nómina
-          </h3>
-          
-          {Array.isArray(empleados) && empleados.filter(empleado => empleado.activo === 1 || empleado.activo === true).length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Empleado
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Oficio
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Pago Diario
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Proyecto
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
-                  {empleados.filter(empleado => empleado.activo === 1 || empleado.activo === true).map((empleado, index) => (
-                    <tr key={empleado.id_empleado || `empleado-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors duration-150">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="h-12 w-12 flex-shrink-0">
-                            <div className="h-12 w-12 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center shadow-sm">
-                              <span className="text-primary-600 dark:text-primary-400 font-medium text-sm">
-                                {empleado.nombre?.charAt(0)?.toUpperCase()}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white">
-                              {empleado.nombre} {empleado.apellido}
-                            </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                              NSS: {empleado.nss}
-                            </div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {empleado.oficio?.nombre || 'Sin oficio'}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
-                          {empleado.oficio?.descripcion || ''}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
-                        {formatCurrency(empleado.pago_diario || empleado.contrato?.salario_diario || 0)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {empleado.proyecto?.nombre || 'Sin proyecto'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <ExclamationTriangleIcon className="mx-auto h-16 w-16 text-yellow-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No hay empleados activos</h3>
-              <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
-                Necesitas tener empleados activos para poder procesar la nómina. Agrega o activa empleados en el módulo de empleados.
+    <div className="min-h-screen bg-white dark:bg-dark-50">
+      {/* Header Minimalista */}
+      <div className="bg-white dark:bg-dark-50 border-b border-gray-100 dark:border-gray-800 sticky top-0 z-10">
+        <div className="px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                Nóminas
+              </h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {empleados.length} empleados activos
               </p>
             </div>
-          )}
+            <button
+              onClick={() => setShowWizard(true)}
+              className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+            >
+              <PlusIcon className="h-4 w-4 mr-2" />
+              Nueva Nómina
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* Historial de Nóminas */}
-      <div className="bg-white dark:bg-dark-100 shadow-sm overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="px-6 py-5">
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-6 flex items-center">
-            <DocumentTextIcon className="h-6 w-6 mr-2 text-green-600" />
-            Historial de Nóminas
-          </h3>
-          
-          {nominas.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Empleado
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Período
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Monto
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Estado
-                    </th>
-                    <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      Acciones
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
-                  {nominas.map((nomina, index) => (
-                    <tr key={nomina.id || nomina.id_nomina || `nomina-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-800">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                        {typeof nomina.empleado === 'object' && nomina.empleado ? 
-                          `${nomina.empleado.nombre || ''} ${nomina.empleado.apellido || ''}`.trim() : 
-                          nomina.empleado || 'Sin empleado'
-                        }
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                        {nomina.periodo}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
-                        {formatCurrency(nomina.monto)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          nomina.estado === 'Pagado' 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                            : nomina.estado === 'Aprobada'
-                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                        }`}>
-                          {nomina.estado}
+      <div className="px-6 py-6 space-y-6">
+
+        {/* Métricas Simples */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                <UserGroupIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Empleados</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {empleados.filter(e => e.activo).length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center">
+              <div className="p-2 bg-green-100 dark:bg-green-900/30 rounded-lg">
+                <DocumentTextIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Nóminas</p>
+                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                  {nominas.length}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center">
+              <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-lg">
+                <CurrencyDollarIcon className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Mensual</p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {formatCurrency(estadisticas?.totalSalariosMensuales || 0)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+
+        {/* Sección de Empleados Simplificada */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+                Empleados Activos
+              </h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => setViewMode('cards')}
+                  className={`p-2 rounded-lg text-sm font-medium transition-colors ${
+                    viewMode === 'cards' 
+                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Cards
+                </button>
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`p-2 rounded-lg text-sm font-medium transition-colors ${
+                    viewMode === 'table' 
+                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
+                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  Tabla
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="p-6">
+              
+              {Array.isArray(empleados) && empleados.filter(empleado => empleado.activo === 1 || empleado.activo === true).length > 0 ? (
+                viewMode === 'cards' ? (
+                  /* Vista de Cards */
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {empleados.filter(empleado => empleado.activo === 1 || empleado.activo === true).map((empleado, index) => (
+                      <EmpleadoCard
+                        key={empleado.id_empleado || `empleado-${index}`}
+                        empleado={empleado}
+                        onView={(emp) => {
+                          setSelectedNomina(null);
+                          // Aquí podrías abrir un modal de detalles del empleado
+                        }}
+                        onEdit={(emp) => {
+                          // Aquí podrías abrir el modal de edición
+                        }}
+                        showActions={true}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  /* Vista de Tabla Simplificada */
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Empleado
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Oficio
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Pago Diario
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Proyecto
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Acciones
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {empleados.filter(empleado => empleado.activo === 1 || empleado.activo === true).map((empleado, index) => (
+                          <tr key={empleado.id_empleado || `empleado-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center">
+                                <div className="h-10 w-10 flex-shrink-0">
+                                  <div className="h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                                    <span className="text-primary-600 dark:text-primary-400 font-medium text-sm">
+                                      {empleado.nombre?.charAt(0)?.toUpperCase()}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="ml-4">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {empleado.nombre} {empleado.apellido}
+                                  </div>
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {empleado.nss || 'Sin NSS'} • {empleado.rfc || 'Sin RFC'}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {empleado.oficio?.nombre || 'Sin oficio'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {formatCurrency(empleado.pago_diario || empleado.contrato?.salario_diario || 0)}
+                              </div>
+                              <div className={`text-xs ${
+                                (empleado.pago_diario || empleado.contrato?.salario_diario) 
+                                  ? 'text-green-600 dark:text-green-400' 
+                                  : 'text-red-600 dark:text-red-400'
+                              }`}>
+                                {(empleado.pago_diario || empleado.contrato?.salario_diario) 
+                                  ? 'Configurado' 
+                                  : 'Sin configurar'
+                                }
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                              {empleado.proyecto?.nombre || 'Sin proyecto'}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex space-x-2">
+                                <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
+                                  <EyeIcon className="h-4 w-4" />
+                                </button>
+                                <button className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300">
+                                  <PencilIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : (
+                <div className="text-center py-12">
+                  <ExclamationTriangleIcon className="mx-auto h-16 w-16 text-yellow-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No hay empleados activos</h3>
+                  <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+                    Necesitas tener empleados activos para poder procesar la nómina. Agrega o activa empleados en el módulo de empleados.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Historial de Nóminas Simplificado */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+              Historial de Nóminas
+            </h2>
+          </div>
+          <div className="p-6">
+            {nominas.length > 0 ? (
+              <div className="space-y-3">
+                {nominas.slice(0, 5).map((nomina, index) => (
+                  <div key={nomina.id || index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <div className="h-8 w-8 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
+                        <span className="text-primary-600 dark:text-primary-400 text-sm font-medium">
+                          {typeof nomina.empleado === 'object' && nomina.empleado ? 
+                            nomina.empleado.nombre?.charAt(0)?.toUpperCase() : 'E'}
                         </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
-                          <button
-                            onClick={() => {
-                              setSelectedNomina(nomina);
-                              setShowNominaDetails(true);
-                            }}
-                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                            title="Ver detalles"
-                          >
-                            <EyeIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => {
-                              // TODO: Implementar edición de nómina
-                              showInfo('Próximamente', 'La edición de nóminas estará disponible pronto');
-                            }}
-                            className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
-                            title="Editar"
-                          >
-                            <PencilIcon className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={async () => {
-                              try {
-                                const blob = await nominasServices.nominas.generarReciboPDF(nomina.id_nomina || nomina.id);
-                                const url = window.URL.createObjectURL(blob);
-                                const a = document.createElement('a');
-                                a.style.display = 'none';
-                                a.href = url;
-                                a.download = `nomina_${nomina.empleado?.nombre || 'empleado'}_${nomina.periodo || 'periodo'}.pdf`;
-                                document.body.appendChild(a);
-                                a.click();
-                                window.URL.revokeObjectURL(url);
-                                document.body.removeChild(a);
-                                showSuccess('PDF Descargado', 'Recibo de nómina descargado exitosamente');
-                              } catch (error) {
-                                console.error('Error downloading PDF:', error);
-                                showError('Error', 'No se pudo descargar el PDF del recibo');
-                              }
-                            }}
-                            className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
-                            title="Descargar PDF"
-                          >
-                            <DocumentTextIcon className="h-4 w-4" />
-                          </button>
+                      </div>
+                      <div>
+                        <div className="text-sm font-medium text-gray-900 dark:text-white">
+                          {typeof nomina.empleado === 'object' && nomina.empleado ? 
+                            `${nomina.empleado.nombre || ''} ${nomina.empleado.apellido || ''}`.trim() : 
+                            nomina.empleado || 'Sin empleado'}
                         </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <BanknotesIcon className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">Sin historial de nóminas</h3>
-              <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
-                Aún no se han procesado nóminas. Procesa la primera nómina para comenzar a ver el historial.
-              </p>
-            </div>
-          )}
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {nomina.periodo || 'Sin período'} • {formatCurrency(nomina.monto_total || nomina.monto || 0)}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                        nomina.estado === 'Pagado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                        nomina.estado === 'Aprobada' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                      }`}>
+                        {nomina.estado}
+                      </span>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const blob = await nominasServices.nominas.generarReciboPDF(nomina.id_nomina || nomina.id);
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `recibo-nomina-${nomina.id_nomina || nomina.id}.pdf`;
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                            showSuccess('Éxito', 'Recibo descargado correctamente');
+                          } catch (error) {
+                            console.error('Error downloading PDF:', error);
+                            showError('Error', 'No se pudo descargar el recibo');
+                          }
+                        }}
+                        className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors duration-200"
+                      >
+                        <DocumentTextIcon className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {nominas.length > 5 && (
+                  <div className="text-center pt-2">
+                    <button className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+                      Ver todas las nóminas ({nominas.length})
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400 mb-3" />
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Aún no hay nóminas procesadas
+                </p>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Nomina Wizard Simplificado */}
-      <NominaWizardSimplificado 
-        isOpen={showWizard}
-        onClose={() => setShowWizard(false)}
-        onSuccess={handleNominaSuccess}
-        empleados={empleados}
-      />
+        {/* Nomina Wizard Simplificado */}
+        <NominaWizard 
+          isOpen={showWizard}
+          onClose={() => setShowWizard(false)}
+          onSuccess={handleNominaSuccess}
+          empleados={empleados}
+        />
 
-      {/* Modal de Detalles de Nómina - Placeholder para futuras implementaciones */}
+        {/* Modal de Detalles de Nómina - Placeholder para futuras implementaciones */}
       {showNominaDetails && selectedNomina && (
         <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
           <div className="relative mx-auto p-0 border border-gray-200 dark:border-gray-700 w-full max-w-2xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">

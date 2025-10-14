@@ -66,10 +66,13 @@ class ApiService {
   }
 
   // Configurar headers con autenticación
-  getHeaders(includeAuth = true) {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
+  getHeaders(includeAuth = true, options = {}) {
+    const headers = {};
+
+    // Solo agregar Content-Type para JSON si no es un blob
+    if (options.responseType !== 'blob') {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (includeAuth) {
       const token = this.getToken();
@@ -93,7 +96,7 @@ class ApiService {
     const url = `${this.baseURL}${endpoint}`;
     const config = {
       ...options,
-      headers: this.getHeaders(options.auth !== false),
+      headers: this.getHeaders(options.auth !== false, options),
     };
 
     // Para depuración
@@ -159,8 +162,26 @@ class ApiService {
       }
 
       // Procesar respuesta exitosa
-      const data = await response.json();
-      console.log(`[API:${requestId}] 📦 Datos recibidos (${Object.keys(data).length} propiedades)`);
+      let data;
+      const contentType = response.headers.get('content-type');
+      
+      console.log(`[API:${requestId}] 🔍 Content-Type: ${contentType}`);
+      console.log(`[API:${requestId}] 🔍 ResponseType: ${options.responseType}`);
+      console.log(`[API:${requestId}] 🔍 Is Blob: ${options.responseType === 'blob'}`);
+      console.log(`[API:${requestId}] 🔍 Is PDF: ${contentType?.includes('application/pdf')}`);
+      
+      if (options.responseType === 'blob' || contentType?.includes('application/pdf')) {
+        console.log(`[API:${requestId}] 📄 Procesando como blob...`);
+        data = await response.blob();
+        console.log(`[API:${requestId}] 📄 Blob recibido:`, data);
+        console.log(`[API:${requestId}] 📄 Tamaño: ${data.size} bytes`);
+        console.log(`[API:${requestId}] 📄 Tipo: ${data.type}`);
+      } else {
+        console.log(`[API:${requestId}] 📦 Procesando como JSON...`);
+        data = await response.json();
+        console.log(`[API:${requestId}] 📦 Datos recibidos (${Object.keys(data).length} propiedades)`);
+      }
+      
       return data;
       
     } catch (error) {

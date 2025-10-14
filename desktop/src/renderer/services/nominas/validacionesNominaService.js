@@ -255,14 +255,17 @@ export class ValidacionesNominaService {
       return { esValido: false, errores, advertencias };
     }
 
-    if (!empleado.activo) {
+    // Validar que el empleado esté activo
+    if (!empleado.activo && empleado.activo !== 1 && empleado.activo !== true) {
       errores.push('El empleado debe estar activo');
     }
 
+    // Validar datos básicos requeridos
     if (!empleado.nombre || !empleado.apellido) {
       errores.push('Nombre y apellido son requeridos');
     }
 
+    // Advertencias para datos opcionales (no bloquean el procesamiento)
     if (!empleado.nss) {
       advertencias.push('NSS no registrado');
     }
@@ -271,20 +274,21 @@ export class ValidacionesNominaService {
       advertencias.push('RFC no registrado');
     }
 
+    // El pago diario se puede configurar durante el proceso de nómina
     const pagoDiario = empleado.pago_diario || 
                       empleado.contrato?.salario_diario || 
                       empleado.salario_diario || 
                       empleado.salario_base_personal || 0;
 
     if (pagoDiario <= 0) {
-      errores.push('Pago diario no configurado o inválido');
+      advertencias.push('Pago diario no configurado - se solicitará durante el procesamiento');
     }
 
-    if (!empleado.id_proyecto) {
+    if (!empleado.id_proyecto && !empleado.proyecto?.id_proyecto) {
       advertencias.push('No tiene proyecto asignado');
     }
 
-    if (!empleado.id_oficio) {
+    if (!empleado.id_oficio && !empleado.oficio?.id_oficio) {
       advertencias.push('No tiene oficio asignado');
     }
 

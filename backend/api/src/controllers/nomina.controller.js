@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { calcularNomina } = require('../utils/nominaCalculator');
 const { registrarCambioNomina } = require('./nominaHistorial.controller');
+const { generarReciboPDF } = require('./nominaPDF.controller');
 const sequelize = require('../config/db');
 
 /**
@@ -113,7 +114,9 @@ const createNomina = async (req, res) => {
             horas_extra,
             deducciones_adicionales,
             bonos,
-            aplicar_isr
+            aplicar_isr,
+            aplicar_imss,
+            aplicar_infonavit
         } = req.body;
 
         // Validaciones básicas
@@ -130,6 +133,8 @@ const createNomina = async (req, res) => {
         const deduccionesAdicionalesNum = parseFloat(deducciones_adicionales || 0);
         const bonosNum = parseFloat(bonos || 0);
         const aplicarISR = aplicar_isr !== false; // Por defecto aplica ISR a menos que se especifique false
+        const aplicarIMSS = aplicar_imss !== false; // Por defecto aplica IMSS a menos que se especifique false
+        const aplicarInfonavit = aplicar_infonavit !== false; // Por defecto aplica Infonavit a menos que se especifique false
 
         // Utilizar la función de cálculo de nómina
         const resultado = calcularNomina(
@@ -138,6 +143,8 @@ const createNomina = async (req, res) => {
             horasExtraNum,
             bonosNum,
             aplicarISR,
+            aplicarIMSS,
+            aplicarInfonavit,
             deduccionesAdicionalesNum
         );
 
@@ -326,7 +333,7 @@ const registrarPagoNomina = async (req, res) => {
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
  */
-const generarReciboPDF = async (req, res) => {
+const generarReciboPDFOld = async (req, res) => {
     try {
         const { id_nomina } = req.params;
 

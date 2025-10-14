@@ -96,24 +96,36 @@ export class NominaService {
    */
   static async procesarNomina(nominaData) {
     try {
+      console.log('🚀 [NOMINA_SERVICE] Iniciando procesamiento de nómina');
+      console.log('🚀 [NOMINA_SERVICE] Datos recibidos:', nominaData);
+      
       // Validar datos requeridos
       const camposRequeridos = ['id_empleado', 'id_semana', 'id_proyecto', 'dias_laborados', 'pago_por_dia'];
       const camposFaltantes = camposRequeridos.filter(campo => !nominaData[campo]);
       
+      console.log('🔍 [NOMINA_SERVICE] Campos requeridos:', camposRequeridos);
+      console.log('🔍 [NOMINA_SERVICE] Campos faltantes:', camposFaltantes);
+      
       if (camposFaltantes.length > 0) {
+        console.error('❌ [NOMINA_SERVICE] Campos faltantes:', camposFaltantes);
         throw new Error(`Campos requeridos faltantes: ${camposFaltantes.join(', ')}`);
       }
 
+      console.log('✅ [NOMINA_SERVICE] Validación exitosa, enviando a API...');
       const response = await ApiService.post('/nomina', nominaData);
+      console.log('✅ [NOMINA_SERVICE] Respuesta de API:', response);
       
       // Limpiar caché
       this.clearCache();
       
-      return {
+      const result = {
         success: true,
-        data: response.data || response,
+        data: response, // Mantener la estructura completa de la respuesta
         message: response.message || 'Nómina procesada exitosamente'
       };
+      
+      console.log('✅ [NOMINA_SERVICE] Resultado final:', result);
+      return result;
     } catch (error) {
       console.error('Error processing nomina:', error);
       throw this.handleError(error);
@@ -223,21 +235,25 @@ export class NominaService {
    */
   static async generarReciboPDF(id) {
     try {
-      const response = await fetch(`/api/nomina/${id}/recibo`, {
-        method: 'GET',
+      console.log('📄 [NominaService] Generando PDF para nómina ID:', id);
+      
+      const response = await ApiService.get(`/nomina/${id}/recibo`, {
+        responseType: 'blob',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/pdf'
+          'Accept': 'application/pdf'
         }
       });
 
-      if (!response.ok) {
-        throw new Error(`Error al generar PDF: ${response.statusText}`);
-      }
-
-      return await response.blob();
+      console.log('📄 [NominaService] Respuesta recibida:', response);
+      console.log('📄 [NominaService] Tipo de respuesta:', typeof response);
+      console.log('📄 [NominaService] Es Blob:', response instanceof Blob);
+      console.log('📄 [NominaService] Constructor:', response?.constructor?.name);
+      console.log('📄 [NominaService] Tamaño:', response?.size || 'N/A');
+      console.log('📄 [NominaService] Tipo MIME:', response?.type || 'N/A');
+      
+      return response;
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      console.error('❌ [NominaService] Error generating PDF:', error);
       throw this.handleError(error);
     }
   }
