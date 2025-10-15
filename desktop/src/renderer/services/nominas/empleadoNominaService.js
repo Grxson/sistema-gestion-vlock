@@ -226,25 +226,56 @@ export class EmpleadoNominaService {
         this.getEmpleadosSinPago()
       ]);
 
-      const totalSalariosMensuales = empleadosConPago.reduce((sum, emp) => {
-        const pagoDiario = emp.pago_diario || 
-                          emp.contrato?.salario_diario || 
-                          emp.salario_diario || 
-                          emp.salario_base_personal || 0;
-        return sum + (pagoDiario * 30); // 30 días por mes
-      }, 0);
+      // Intentar obtener el total real de nóminas del mes actual
+      let totalNominasMesActual = 0;
+      try {
+        const nominasMesActual = await this.getNominasMesActual();
+        totalNominasMesActual = nominasMesActual.reduce((sum, nomina) => {
+          return sum + (parseFloat(nomina.monto_total) || 0);
+        }, 0);
+      } catch (error) {
+        console.log('No se pudieron obtener nóminas del mes actual');
+      }
+
+      // Calcular promedio de salario diario para estadísticas (sin multiplicar por 30)
+      const promedioSalarioDiario = empleadosConPago.length > 0 ? 
+        empleadosConPago.reduce((sum, emp) => {
+          const pagoDiario = emp.pago_diario || 
+                            emp.contrato?.salario_diario || 
+                            emp.salario_diario || 
+                            emp.salario_base_personal || 0;
+          return sum + pagoDiario;
+        }, 0) / empleadosConPago.length : 0;
 
       return {
         totalActivos: empleadosActivos.length,
         conPagoConfigurado: empleadosConPago.length,
         sinPagoConfigurado: empleadosSinPago.length,
-        totalSalariosMensuales,
-        promedioSalarioMensual: empleadosConPago.length > 0 ? 
-          totalSalariosMensuales / empleadosConPago.length : 0
+        totalSalariosMensuales: totalNominasMesActual, // Solo nóminas reales del mes
+        promedioSalarioMensual: promedioSalarioDiario * 30, // Para estadísticas generales
+        promedioSalarioDiario: promedioSalarioDiario
       };
     } catch (error) {
       console.error('Error getting employee statistics:', error);
       throw this.handleError(error);
+    }
+  }
+
+  /**
+   * Obtener nóminas del mes actual
+   * @returns {Promise<Array>} Nóminas del mes actual
+   */
+  static async getNominasMesActual() {
+    try {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = now.getMonth() + 1; // getMonth() es 0-indexado
+      
+      const response = await ApiService.get(`/nomina?year=${year}&month=${month}`);
+      return response.data || response || [];
+    } catch (error) {
+      console.error('Error getting current month nominas:', error);
+      return [];
     }
   }
 

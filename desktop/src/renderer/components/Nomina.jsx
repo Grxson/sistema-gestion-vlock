@@ -5,6 +5,7 @@ import { formatCurrency } from '../utils/currency';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import NominaWizard from './NominaWizard';
+import ChartsSection from './ui/ChartsSection';
 import EmpleadoCard from './ui/EmpleadoCard';
 import {
   PlusIcon,
@@ -18,6 +19,7 @@ import {
   EyeIcon,
   PencilIcon,
   TrashIcon,
+  ChartBarIcon,
 } from '@heroicons/react/24/outline';
 
 export default function Nomina() {
@@ -30,6 +32,7 @@ export default function Nomina() {
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
   const [selectedNomina, setSelectedNomina] = useState(null);
+  const [showCharts, setShowCharts] = useState(false);
   const [showNominaDetails, setShowNominaDetails] = useState(false);
   const [viewMode, setViewMode] = useState('cards');
 
@@ -110,13 +113,22 @@ export default function Nomina() {
                 {empleados.length} empleados activos
               </p>
             </div>
-            <button
-              onClick={() => setShowWizard(true)}
-              className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-            >
-              <PlusIcon className="h-4 w-4 mr-2" />
-              Nueva Nómina
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowCharts(!showCharts)}
+                className="inline-flex items-center px-4 py-2 bg-gray-600 hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-400 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              >
+                <ChartBarIcon className="h-4 w-4 mr-2" />
+                {showCharts ? 'Ocultar Gráficas' : 'Ver Gráficas'}
+              </button>
+              <button
+                onClick={() => setShowWizard(true)}
+                className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+              >
+                <PlusIcon className="h-4 w-4 mr-2" />
+                Nueva Nómina
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -168,6 +180,15 @@ export default function Nomina() {
           </div>
         </div>
 
+        {/* Sección de Gráficas */}
+        {showCharts && (
+          <ChartsSection 
+            empleados={empleados}
+            nominas={nominas}
+            estadisticas={estadisticas}
+            loading={loading}
+          />
+        )}
 
         {/* Sección de Empleados Simplificada */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">

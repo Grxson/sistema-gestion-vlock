@@ -5,6 +5,109 @@ const SemanaNomina = models.Semanas_nomina;
 const PagoNomina = models.Pagos_nomina;
 const Proyecto = models.Proyectos;
 
+// Función para convertir números a letra
+function convertirNumeroALetra(numero) {
+    const unidades = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+    const decenas = ['', '', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+    const especiales = ['', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'];
+    const centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+    
+    if (numero === 0) return 'cero pesos M.N.';
+    if (numero < 0) return 'menos ' + convertirNumeroALetra(-numero);
+    
+    // Separar parte entera y centavos
+    let parteEntera = Math.floor(numero);
+    const centavos = Math.round((numero - parteEntera) * 100);
+    
+    let resultado = '';
+    
+    // Miles
+    if (parteEntera >= 1000) {
+        const miles = Math.floor(parteEntera / 1000);
+        if (miles === 1) {
+            resultado += 'mil ';
+        } else {
+            resultado += convertirParteEntera(miles) + ' mil ';
+        }
+        parteEntera %= 1000;
+    }
+    
+    // Centenas
+    if (parteEntera >= 100) {
+        const centena = Math.floor(parteEntera / 100);
+        if (centena === 1 && parteEntera % 100 === 0) {
+            resultado += 'cien ';
+        } else {
+            resultado += centenas[centena] + ' ';
+        }
+        parteEntera %= 100;
+    }
+    
+    // Decenas y unidades
+    if (parteEntera >= 20) {
+        const decena = Math.floor(parteEntera / 10);
+        const unidad = parteEntera % 10;
+        resultado += decenas[decena];
+        if (unidad > 0) {
+            resultado += ' y ' + unidades[unidad];
+        }
+        resultado += ' ';
+    } else if (parteEntera >= 11) {
+        resultado += especiales[parteEntera - 10] + ' ';
+    } else if (parteEntera >= 1) {
+        resultado += unidades[parteEntera] + ' ';
+    }
+    
+    // Agregar "pesos"
+    resultado += 'pesos';
+    
+    // Agregar centavos si existen
+    if (centavos > 0) {
+        resultado += ' ' + centavos + '/100';
+    }
+    
+    return resultado.trim() + ' M.N.';
+}
+
+// Función auxiliar para convertir parte entera (sin recursión infinita)
+function convertirParteEntera(numero) {
+    const unidades = ['', 'uno', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve'];
+    const decenas = ['', '', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
+    const especiales = ['', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'];
+    const centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
+    
+    let resultado = '';
+    let num = numero; // Crear variable local para modificar
+    
+    // Centenas
+    if (num >= 100) {
+        const centena = Math.floor(num / 100);
+        if (centena === 1 && num % 100 === 0) {
+            resultado += 'cien ';
+        } else {
+            resultado += centenas[centena] + ' ';
+        }
+        num %= 100;
+    }
+    
+    // Decenas y unidades
+    if (num >= 20) {
+        const decena = Math.floor(num / 10);
+        const unidad = num % 10;
+        resultado += decenas[decena];
+        if (unidad > 0) {
+            resultado += ' y ' + unidades[unidad];
+        }
+        resultado += ' ';
+    } else if (num >= 11) {
+        resultado += especiales[num - 10] + ' ';
+    } else if (num >= 1) {
+        resultado += unidades[num] + ' ';
+    }
+    
+    return resultado.trim();
+}
+
 /**
  * Generar recibo de nómina en PDF con diseño profesional
  * @param {Object} req - Objeto de solicitud
@@ -99,9 +202,9 @@ const generarReciboPDF = async (req, res) => {
         try {
             const logoPath = path.join(__dirname, '..', 'public', 'images', 'vlock_logo.png');
             if (fs.existsSync(logoPath)) {
-                // Posicionar logo en esquina superior derecha
-                const logoWidth = 50;
-                const logoHeight = 55;
+                // Posicionar logo en esquina superior derecha - MÁS GRANDE
+                const logoWidth = 80; // Aumentado de 50 a 80
+                const logoHeight = 88; // Aumentado proporcionalmente
                 const logoX = pageWidth - margin - logoWidth;
                 const logoY = margin;
                 
@@ -152,7 +255,7 @@ const generarReciboPDF = async (req, res) => {
         // ID del empleado y nombre
         doc.fontSize(9)
            .font('Helvetica-Bold')
-           .text(`ID Empleado: ${empleado.id_empleado} - ${nombreCompleto}`, empCol1X, currentY);
+           .text(`Nombre: ${nombreCompleto}`, empCol1X, currentY);
         
         currentY += 12;
         
@@ -266,10 +369,11 @@ const generarReciboPDF = async (req, res) => {
         
         currentY += 15;
         
-        // Horas extra (si aplica) - usar el cálculo del sistema
+        // Horas extra (si aplica) - usar el cálculo real del sistema
         if (nomina.horas_extra && nomina.horas_extra > 0) {
-            // El sistema ya calcula las horas extra, usar el monto que está en la nómina
-            const montoHorasExtra = salarioBase * 0.1; // 10% del salario base como ejemplo, ajustar según el cálculo real del sistema
+            // Calcular el monto real de horas extra: horas * (pago_por_dia / 8) * 2 (doble tiempo)
+            const pagoPorHora = parseFloat(nomina.pago_por_dia) / 8; // 8 horas por día
+            const montoHorasExtra = parseFloat(nomina.horas_extra) * pagoPorHora * 2; // Doble tiempo
             doc.text('P', col1X, currentY)
                .text('002', col2X, currentY)
                .text('Horas Extra', col3X, currentY)
@@ -287,8 +391,14 @@ const generarReciboPDF = async (req, res) => {
         }
         
         // Total de percepciones - usar el cálculo del sistema
-        // El total debe ser: salario base + bonos (las horas extra ya están incluidas en el salario base si aplican)
-        const totalPercepciones = salarioBase + (parseFloat(nomina.bonos) || 0);
+        // Calcular horas extra si aplican
+        let montoHorasExtra = 0;
+        if (nomina.horas_extra && nomina.horas_extra > 0) {
+            const pagoPorHora = parseFloat(nomina.pago_por_dia) / 8;
+            montoHorasExtra = parseFloat(nomina.horas_extra) * pagoPorHora * 2;
+        }
+        
+        const totalPercepciones = salarioBase + montoHorasExtra + (parseFloat(nomina.bonos) || 0);
         
         currentY += 10;
         doc.fontSize(9)
@@ -324,44 +434,54 @@ const generarReciboPDF = async (req, res) => {
         
         currentY += 10;
         
-        // Deducciones - usar los datos exactos del sistema
+        // Deducciones - usar los datos exactos de la nómina
         if (nomina.deducciones && nomina.deducciones > 0) {
-            // Obtener el desglose completo de deducciones del sistema
-            // Si no hay desglose, dividir proporcionalmente como antes
-            const totalDeducciones = parseFloat(nomina.deducciones);
+            let contadorDeduccion = 1;
             
-            // Intentar obtener el desglose del cálculo si está disponible
-            // Por ahora, usar una distribución típica: 60% ISR, 30% IMSS, 10% Infonavit
-            const montoISR = totalDeducciones * 0.6;
-            const montoIMSS = totalDeducciones * 0.3;
-            const montoInfonavit = totalDeducciones * 0.1;
-            
-            // Mostrar ISR
-            if (montoISR > 0) {
+            // Mostrar ISR solo si está aplicado
+            if (nomina.aplicar_isr && nomina.deducciones_isr && nomina.deducciones_isr > 0) {
                 doc.fontSize(8)
                    .font('Helvetica')
-                   .text('001', col1X, currentY)
+                   .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
                    .text('045', col2X, currentY)
                    .text('ISR', col3X, currentY)
-                   .text(`$${montoISR.toFixed(2)}`, col4X, currentY);
+                   .text(`$${parseFloat(nomina.deducciones_isr).toFixed(2)}`, col4X, currentY);
                 currentY += 15;
+                contadorDeduccion++;
             }
             
-            // Mostrar IMSS
-            if (montoIMSS > 0) {
-                doc.text('002', col1X, currentY)
+            // Mostrar IMSS solo si está aplicado
+            if (nomina.aplicar_imss && nomina.deducciones_imss && nomina.deducciones_imss > 0) {
+                doc.fontSize(8)
+                   .font('Helvetica')
+                   .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
                    .text('052', col2X, currentY)
                    .text('IMSS', col3X, currentY)
-                   .text(`$${montoIMSS.toFixed(2)}`, col4X, currentY);
+                   .text(`$${parseFloat(nomina.deducciones_imss).toFixed(2)}`, col4X, currentY);
                 currentY += 15;
+                contadorDeduccion++;
             }
             
-            // Mostrar Infonavit
-            if (montoInfonavit > 0) {
-                doc.text('003', col1X, currentY)
+            // Mostrar Infonavit solo si está aplicado
+            if (nomina.aplicar_infonavit && nomina.deducciones_infonavit && nomina.deducciones_infonavit > 0) {
+                doc.fontSize(8)
+                   .font('Helvetica')
+                   .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
                    .text('053', col2X, currentY)
                    .text('Infonavit', col3X, currentY)
-                   .text(`$${montoInfonavit.toFixed(2)}`, col4X, currentY);
+                   .text(`$${parseFloat(nomina.deducciones_infonavit).toFixed(2)}`, col4X, currentY);
+                currentY += 15;
+                contadorDeduccion++;
+            }
+            
+            // Mostrar deducciones adicionales si existen
+            if (nomina.deducciones_adicionales && nomina.deducciones_adicionales > 0) {
+                doc.fontSize(8)
+                   .font('Helvetica')
+                   .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+                   .text('999', col2X, currentY)
+                   .text('Adicionales', col3X, currentY)
+                   .text(`$${parseFloat(nomina.deducciones_adicionales).toFixed(2)}`, col4X, currentY);
             }
         }
 
@@ -389,12 +509,13 @@ const generarReciboPDF = async (req, res) => {
            .text(`${totalPercepciones.toFixed(2)}`, resumenCol2X, currentY);
         
         currentY += 15;
-        doc.text(`Descuentos $:`, resumenCol1X, currentY)
-           .text(`${totalDeducciones.toFixed(2)}`, resumenCol2X, currentY);
         
-        currentY += 15;
-        doc.text(`Retenciones $:`, resumenCol1X, currentY)
-           .text(`${totalDeducciones.toFixed(2)}`, resumenCol2X, currentY);
+        // Solo mostrar deducciones si realmente hay alguna aplicada
+        if (totalDeducciones > 0) {
+            doc.text(`Descuentos $:`, resumenCol1X, currentY)
+               .text(`${totalDeducciones.toFixed(2)}`, resumenCol2X, currentY);
+            currentY += 15;
+        }
         
         currentY += 15;
         doc.fontSize(10)
@@ -406,57 +527,56 @@ const generarReciboPDF = async (req, res) => {
         doc.text(`Neto del recibo $:`, resumenCol1X, currentY)
            .text(`${totalNeto.toFixed(2)}`, resumenCol2X, currentY);
 
-        currentY += 20; // Reducir espacio antes de firmas
+        currentY += 20; // Reducir espacio antes del importe en letra
 
-        // ===== FIRMAS =====
+        // ===== IMPORTE CON LETRA =====
+        const montoEnLetra = convertirNumeroALetra(parseFloat(nomina.monto_total));
+        doc.fontSize(9)
+           .font('Helvetica-Bold')
+           .text('Importe con letra:', margin, currentY);
+        
+        currentY += 15;
+        
+        doc.fontSize(8)
+           .font('Helvetica')
+           .text(montoEnLetra, margin, currentY, { align: 'left', width: pageWidth - 2 * margin });
+        
+        currentY += 70; // Más espacio antes de la firma (aumentado de 30 a 50)
+
+        // ===== FIRMA DEL EMPLEADO =====
         doc.fontSize(10)
            .font('Helvetica-Bold')
-           .text('FIRMAS:', margin, currentY);
+           .text('FIRMA DEL EMPLEADO:', margin, currentY);
         
-        currentY += 15; // Reducir espacio después del título
+        currentY += 25; // Más espacio después del título (aumentado de 20 a 25)
         
-        // Firma del empleado - reducir tamaño para una página
-        const firmaWidth = 150;
-        const firmaHeight = 50;
-        const leftFirmaX = margin;
-        const rightFirmaX = margin + 250; // Separación entre firmas
+        // Línea horizontal para firma - centrada
+        const firmaWidth = 200;
+        const firmaX = (pageWidth - firmaWidth) / 2; // Centrar horizontalmente
         
-        // Cuadro para firma del empleado
-        doc.rect(leftFirmaX, currentY, firmaWidth, firmaHeight)
+        // Línea horizontal para firma
+        doc.moveTo(firmaX, currentY)
+           .lineTo(firmaX + firmaWidth, currentY)
            .lineWidth(1)
            .strokeColor('#000000')
            .stroke();
         
-        doc.fontSize(8)
+        currentY += 25; // Más espacio después de la línea (aumentado de 20 a 25)
+        
+        doc.fontSize(10)
            .font('Helvetica')
-           .text('FIRMA DEL EMPLEADO', leftFirmaX + 5, currentY + 5, { align: 'center', width: firmaWidth - 10 });
-        
-        doc.fontSize(8)
-           .text(nombreCompleto, leftFirmaX + 5, currentY + 45, { align: 'center', width: firmaWidth - 10 });
-        
-        // Cuadro para firma del responsable
-        doc.rect(rightFirmaX, currentY, firmaWidth, firmaHeight)
-           .lineWidth(1)
-           .strokeColor('#000000')
-           .stroke();
-        
-        const nombreResponsable = req.usuario ? 
-            `${req.usuario.nombre_usuario.toUpperCase()}` : 
-            'RESPONSABLE DE NÓMINA';
-        
-        doc.fontSize(8)
-           .font('Helvetica')
-           .text('FIRMA DEL RESPONSABLE', rightFirmaX + 5, currentY + 5, { align: 'center', width: firmaWidth - 10 });
-        
-        doc.fontSize(8)
-           .text(nombreResponsable, rightFirmaX + 5, currentY + 45, { align: 'center', width: firmaWidth - 10 });
+           .text(nombreCompleto, firmaX, currentY, { align: 'center', width: firmaWidth });
 
-        // Pie de página - posicionar al final absoluto de la página
-        const piePageY = pageHeight - margin - 20; // 20px desde el fondo
+        // Pie de página - posicionar más abajo (reducir margen desde el fondo)
+        const piePageY = pageHeight - margin - 10; // Reducido de 20 a 10px desde el fondo
         
         doc.fontSize(7)
            .font('Helvetica')
            .text(`Documento generado el ${fechaFormateada} a las ${horaFormateada}`, margin, piePageY - 15, { align: 'center', width: pageWidth - 2 * margin });
+        
+        const nombreResponsable = req.usuario ? 
+            `${req.usuario.nombre_usuario.toUpperCase()}` : 
+            'Vlock Constructora';
         
         doc.fontSize(7)
            .text(`Emitido por: ${nombreResponsable}`, margin, piePageY, { align: 'center', width: pageWidth - 2 * margin });

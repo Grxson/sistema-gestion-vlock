@@ -83,13 +83,18 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
   const calcularNomina = async () => {
     if (!formData.selectedEmpleado) return;
 
+    // No calcular si hay campos vacíos temporalmente
+    if (formData.diasLaborados === '' || formData.horasExtra === '' || formData.bonos === '' || formData.deduccionesAdicionales === '') {
+      return;
+    }
+
     try {
       const datosNomina = {
-        diasLaborados: formData.diasLaborados,
+        diasLaborados: formData.diasLaborados || 1,
         pagoPorDia: formData.pago_por_dia || formData.selectedEmpleado.pago_diario || formData.selectedEmpleado.contrato?.salario_diario || 0,
-        horasExtra: formData.horasExtra,
-        bonos: formData.bonos,
-        deduccionesAdicionales: formData.deduccionesAdicionales,
+        horasExtra: formData.horasExtra || 0,
+        bonos: formData.bonos || 0,
+        deduccionesAdicionales: formData.deduccionesAdicionales || 0,
         aplicarISR: formData.aplicarISR,
         aplicarIMSS: formData.aplicarIMSS,
         aplicarInfonavit: formData.aplicarInfonavit
@@ -518,7 +523,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                           min="1"
                           max="4"
                           value={formData.semanaNum}
-                          onChange={(e) => updateFormData({ semanaNum: parseInt(e.target.value) || 1 })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              // Permitir campo vacío temporalmente
+                              updateFormData({ semanaNum: '' });
+                            } else {
+                              const num = parseInt(value);
+                              if (!isNaN(num) && num >= 1 && num <= 4) {
+                                updateFormData({ semanaNum: num });
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                            if (e.target.value === '' || e.target.value === '0') {
+                              updateFormData({ semanaNum: 1 });
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                         />
                       </div>
@@ -532,7 +554,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                           min="1"
                           max="31"
                           value={formData.diasLaborados}
-                          onChange={(e) => updateFormData({ diasLaborados: parseInt(e.target.value) || 1 })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              // Permitir campo vacío temporalmente
+                              updateFormData({ diasLaborados: '' });
+                            } else {
+                              const num = parseInt(value);
+                              if (!isNaN(num) && num >= 1 && num <= 31) {
+                                updateFormData({ diasLaborados: num });
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                            if (e.target.value === '' || e.target.value === '0') {
+                              updateFormData({ diasLaborados: 1 });
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                         />
                       </div>
@@ -635,7 +674,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                             min="0"
                             step="0.5"
                             value={formData.horasExtra}
-                            onChange={(e) => updateFormData({ horasExtra: parseFloat(e.target.value) || 0 })}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '') {
+                                // Permitir campo vacío temporalmente
+                                updateFormData({ horasExtra: '' });
+                              } else {
+                                const num = parseFloat(value);
+                                if (!isNaN(num) && num >= 0) {
+                                  updateFormData({ horasExtra: num });
+                                }
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                              if (e.target.value === '') {
+                                updateFormData({ horasExtra: 0 });
+                              }
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                           />
                         </div>
@@ -649,7 +705,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                             min="0"
                             step="0.01"
                             value={formData.bonos}
-                            onChange={(e) => updateFormData({ bonos: parseFloat(e.target.value) || 0 })}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '') {
+                                // Permitir campo vacío temporalmente
+                                updateFormData({ bonos: '' });
+                              } else {
+                                const num = parseFloat(value);
+                                if (!isNaN(num) && num >= 0) {
+                                  updateFormData({ bonos: num });
+                                }
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                              if (e.target.value === '') {
+                                updateFormData({ bonos: 0 });
+                              }
+                            }}
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                           />
                         </div>
@@ -664,7 +737,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                           min="0"
                           step="0.01"
                           value={formData.deduccionesAdicionales}
-                          onChange={(e) => updateFormData({ deduccionesAdicionales: parseFloat(e.target.value) || 0 })}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              // Permitir campo vacío temporalmente
+                              updateFormData({ deduccionesAdicionales: '' });
+                            } else {
+                              const num = parseFloat(value);
+                              if (!isNaN(num) && num >= 0) {
+                                updateFormData({ deduccionesAdicionales: num });
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                            if (e.target.value === '') {
+                              updateFormData({ deduccionesAdicionales: 0 });
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                         />
                       </div>
@@ -756,6 +846,34 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                           <span className="font-medium text-red-600 dark:text-red-400">
                             -{formatCurrency(calculoNomina.deducciones.total)}
                           </span>
+                        </div>
+                        
+                        {/* Desglose de deducciones */}
+                        <div className="ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                          {calculoNomina.deducciones.isr > 0 && (
+                            <div className="flex justify-between">
+                              <span>ISR ({((calculoNomina.deducciones.isr / calculoNomina.subtotal) * 100).toFixed(2)}%):</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.isr)}</span>
+                            </div>
+                          )}
+                          {calculoNomina.deducciones.imss > 0 && (
+                            <div className="flex justify-between">
+                              <span>IMSS ({((calculoNomina.deducciones.imss / calculoNomina.subtotal) * 100).toFixed(2)}%):</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.imss)}</span>
+                            </div>
+                          )}
+                          {calculoNomina.deducciones.infonavit > 0 && (
+                            <div className="flex justify-between">
+                              <span>Infonavit ({((calculoNomina.deducciones.infonavit / calculoNomina.subtotal) * 100).toFixed(2)}%):</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.infonavit)}</span>
+                            </div>
+                          )}
+                          {calculoNomina.deducciones.adicionales > 0 && (
+                            <div className="flex justify-between">
+                              <span>Adicionales:</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.adicionales)}</span>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex justify-between border-t-2 border-green-300 dark:border-green-600 pt-2">

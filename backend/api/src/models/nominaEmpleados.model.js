@@ -33,6 +33,30 @@ module.exports = (sequelize) => {
     deducciones: {
       type: DataTypes.DECIMAL(10,2)
     },
+    deducciones_isr: {
+      type: DataTypes.DECIMAL(10,2)
+    },
+    deducciones_imss: {
+      type: DataTypes.DECIMAL(10,2)
+    },
+    deducciones_infonavit: {
+      type: DataTypes.DECIMAL(10,2)
+    },
+    deducciones_adicionales: {
+      type: DataTypes.DECIMAL(10,2)
+    },
+    aplicar_isr: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    aplicar_imss: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    aplicar_infonavit: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
     bonos: {
       type: DataTypes.DECIMAL(10,2)
     },

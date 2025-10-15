@@ -157,6 +157,13 @@ const createNomina = async (req, res) => {
             pago_por_dia: pagoPorDiaNum,
             horas_extra: horasExtraNum,
             deducciones: resultado.deducciones.total,
+            deducciones_isr: resultado.deducciones.isr,
+            deducciones_imss: resultado.deducciones.imss,
+            deducciones_infonavit: resultado.deducciones.infonavit,
+            deducciones_adicionales: resultado.deducciones.adicionales,
+            aplicar_isr: aplicarISR,
+            aplicar_imss: aplicarIMSS,
+            aplicar_infonavit: aplicarInfonavit,
             bonos: bonosNum,
             monto_total: resultado.montoTotal,
             estado: 'Pendiente'
