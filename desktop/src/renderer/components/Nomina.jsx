@@ -4,8 +4,9 @@ import nominasServices from '../services/nominas';
 import { formatCurrency } from '../utils/currency';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
-import NominaWizard from './NominaWizard';
+import NominaWizardSimplificado from './NominaWizard';
 import ChartsSection from './ui/ChartsSection';
+import AdeudosHistorial from './ui/AdeudosHistorial';
 import EmpleadoCard from './ui/EmpleadoCard';
 import {
   PlusIcon,
@@ -35,6 +36,8 @@ export default function Nomina() {
   const [showCharts, setShowCharts] = useState(false);
   const [showNominaDetails, setShowNominaDetails] = useState(false);
   const [viewMode, setViewMode] = useState('cards');
+  const [showAdeudosHistorial, setShowAdeudosHistorial] = useState(false);
+  const [selectedEmpleadoAdeudos, setSelectedEmpleadoAdeudos] = useState(null);
 
   // Funciones de utilidad
   const handleNominaSuccess = () => {
@@ -120,6 +123,16 @@ export default function Nomina() {
               >
                 <ChartBarIcon className="h-4 w-4 mr-2" />
                 {showCharts ? 'Ocultar Gráficas' : 'Ver Gráficas'}
+              </button>
+              <button
+                onClick={() => {
+                  setSelectedEmpleadoAdeudos(null);
+                  setShowAdeudosHistorial(true);
+                }}
+                className="inline-flex items-center px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+              >
+                <ExclamationTriangleIcon className="h-4 w-4 mr-2" />
+                Ver Adeudos
               </button>
               <button
                 onClick={() => setShowWizard(true)}
@@ -422,7 +435,7 @@ export default function Nomina() {
         </div>
 
         {/* Nomina Wizard Simplificado */}
-        <NominaWizard 
+        <NominaWizardSimplificado 
           isOpen={showWizard}
           onClose={() => setShowWizard(false)}
           onSuccess={handleNominaSuccess}
@@ -502,6 +515,14 @@ export default function Nomina() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Historial de Adeudos */}
+      {showAdeudosHistorial && (
+        <AdeudosHistorial
+          empleado={selectedEmpleadoAdeudos}
+          onClose={() => setShowAdeudosHistorial(false)}
+        />
       )}
     </div>
   );

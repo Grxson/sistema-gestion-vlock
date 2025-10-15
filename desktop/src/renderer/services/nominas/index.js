@@ -4,6 +4,7 @@ import { CalculadoraNominaService } from './calculadoraNominaService.js';
 import { EmpleadoNominaService } from './empleadoNominaService.js';
 import { ReportesNominaService } from './reportesNominaService.js';
 import { ValidacionesNominaService } from './validacionesNominaService.js';
+import AdeudosService from './adeudosService.js';
 
 /**
  * Clase principal para servicios de nóminas
@@ -20,6 +21,7 @@ class NominasServices {
     this.empleados = EmpleadoNominaService;
     this.reportes = ReportesNominaService;
     this.validaciones = ValidacionesNominaService;
+    this.adeudos = AdeudosService;
   }
 
   /**

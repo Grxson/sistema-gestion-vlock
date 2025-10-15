@@ -64,6 +64,11 @@ module.exports = (sequelize) => {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false
     },
+    monto_pagado: {
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      comment: 'Monto realmente pagado al empleado (puede ser menor al monto_total en caso de pago parcial)'
+    },
     estado: {
       type: DataTypes.ENUM('Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'),
       defaultValue: 'Pendiente'

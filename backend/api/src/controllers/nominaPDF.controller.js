@@ -520,17 +520,44 @@ const generarReciboPDF = async (req, res) => {
         currentY += 15;
         doc.fontSize(10)
            .font('Helvetica-Bold')
-           .text(`Total a Pagar $:`, resumenCol1X, currentY)
+           .text(`Total de la Nómina $:`, resumenCol1X, currentY)
            .text(`${totalNeto.toFixed(2)}`, resumenCol2X, currentY);
         
+        // Verificar si es un pago parcial
+        const montoPagado = parseFloat(nomina.monto_pagado) || 0;
+        const esPagoParcial = montoPagado > 0 && montoPagado < totalNeto;
+        
+        if (esPagoParcial) {
+            currentY += 15;
+            doc.fontSize(10)
+               .font('Helvetica-Bold')
+               .fillColor('#0066CC') // Azul para destacar
+               .text(`Monto a Pagar $:`, resumenCol1X, currentY)
+               .text(`${montoPagado.toFixed(2)}`, resumenCol2X, currentY);
+            
+            currentY += 15;
+            doc.fontSize(10)
+               .font('Helvetica-Bold')
+               .fillColor('#CC0000') // Rojo para adeudo
+               .text(`Adeudo Pendiente $:`, resumenCol1X, currentY)
+               .text(`${(totalNeto - montoPagado).toFixed(2)}`, resumenCol2X, currentY);
+               
+            // Restaurar color negro
+            doc.fillColor('#000000');
+        }
+        
         currentY += 15;
-        doc.text(`Neto del recibo $:`, resumenCol1X, currentY)
-           .text(`${totalNeto.toFixed(2)}`, resumenCol2X, currentY);
+        doc.fontSize(10)
+           .font('Helvetica-Bold')
+           .text(`Neto del recibo $:`, resumenCol1X, currentY)
+           .text(`${esPagoParcial ? montoPagado.toFixed(2) : totalNeto.toFixed(2)}`, resumenCol2X, currentY);
 
         currentY += 20; // Reducir espacio antes del importe en letra
 
         // ===== IMPORTE CON LETRA =====
-        const montoEnLetra = convertirNumeroALetra(parseFloat(nomina.monto_total));
+        // Usar el monto que realmente se está pagando (puede ser parcial)
+        const montoParaLetra = esPagoParcial ? montoPagado : parseFloat(nomina.monto_total);
+        const montoEnLetra = convertirNumeroALetra(montoParaLetra);
         doc.fontSize(9)
            .font('Helvetica-Bold')
            .text('Importe con letra:', margin, currentY);

@@ -47,14 +47,19 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     horasExtra: 0,
     bonos: 0,
     deduccionesAdicionales: 0,
-    aplicarISR: true,
-    aplicarIMSS: true,
-    aplicarInfonavit: true
+    aplicarISR: false,
+    aplicarIMSS: false,
+    aplicarInfonavit: false,
+    // Nuevos campos para pagos parciales
+    pagoParcial: false,
+    montoAPagar: 0,
+    liquidarAdeudos: false
   });
 
   // Cálculos de nómina
   const [calculoNomina, setCalculoNomina] = useState(null);
   const [validacion, setValidacion] = useState(null);
+  const [adeudosEmpleado, setAdeudosEmpleado] = useState(0);
 
   // Filtrar empleados por búsqueda
   const empleadosFiltrados = Array.isArray(empleados) 
@@ -77,8 +82,23 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
   useEffect(() => {
     if (formData.selectedEmpleado) {
       validarDatos();
+      cargarAdeudosEmpleado();
     }
-  }, [formData]);
+  }, [formData.selectedEmpleado]);
+
+  // Cargar adeudos del empleado seleccionado
+  const cargarAdeudosEmpleado = async () => {
+    if (!formData.selectedEmpleado) return;
+    
+    try {
+      const { adeudos } = nominasServices;
+      const totalAdeudos = await adeudos.getTotalAdeudosPendientes(formData.selectedEmpleado.id_empleado);
+      setAdeudosEmpleado(totalAdeudos);
+    } catch (error) {
+      console.error('Error loading employee debts:', error);
+      setAdeudosEmpleado(0);
+    }
+  };
 
   const calcularNomina = async () => {
     if (!formData.selectedEmpleado) return;
@@ -136,10 +156,15 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
       deduccionesAdicionales: 0,
       aplicarISR: true,
       aplicarIMSS: true,
-      aplicarInfonavit: true
+      aplicarInfonavit: true,
+      // Nuevos campos para pagos parciales
+      pagoParcial: false,
+      montoAPagar: 0,
+      liquidarAdeudos: false
     });
     setCalculoNomina(null);
     setValidacion(null);
+    setAdeudosEmpleado(0);
     setCurrentStep(1);
   };
 
@@ -222,7 +247,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
         deducciones_adicionales: formData.deduccionesAdicionales || 0,
         aplicar_isr: formData.aplicarISR,
         aplicar_imss: formData.aplicarIMSS,
-        aplicar_infonavit: formData.aplicarInfonavit
+        aplicar_infonavit: formData.aplicarInfonavit,
+        // Datos de pago parcial
+        pago_parcial: formData.pagoParcial,
+        monto_a_pagar: formData.pagoParcial ? formData.montoAPagar : null,
+        liquidar_adeudos: formData.liquidarAdeudos
       };
 
       console.log('🚀 [WIZARD] Datos preparados para nómina:', nominaData);
@@ -801,6 +830,127 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                     </div>
                   </div>
 
+                  {/* Sección de Pagos Parciales */}
+                  {formData.selectedEmpleado && calculoNomina && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <h5 className="text-sm font-semibold text-yellow-900 dark:text-yellow-200 mb-3 flex items-center">
+                        <BanknotesIcon className="h-4 w-4 mr-2" />
+                        Opciones de Pago
+                      </h5>
+                      
+                      <div className="space-y-4">
+                        {/* Mostrar adeudos pendientes */}
+                        {adeudosEmpleado > 0 && (
+                          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                                Adeudos Pendientes:
+                              </span>
+                              <span className="text-sm font-bold text-red-900 dark:text-red-100">
+                                {formatCurrency(adeudosEmpleado)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Opción de pago parcial */}
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="pagoParcial"
+                            checked={formData.pagoParcial}
+                            onChange={(e) => {
+                              updateFormData({ 
+                                pagoParcial: e.target.checked,
+                                montoAPagar: e.target.checked ? Math.round(calculoNomina.montoTotal * 100) / 100 : 0
+                              });
+                            }}
+                            className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor="pagoParcial" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            Realizar pago parcial
+                          </label>
+                        </div>
+
+                        {/* Campo de monto a pagar */}
+                        {formData.pagoParcial && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Monto a Pagar (Máximo: {formatCurrency(calculoNomina.montoTotal)})
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max={calculoNomina.montoTotal}
+                              step="0.01"
+                              value={formData.montoAPagar}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '') {
+                                  updateFormData({ montoAPagar: '' });
+                                } else {
+                                  // Limpiar el valor de cualquier formato local
+                                  const cleanValue = value.replace(',', '.');
+                                  const num = parseFloat(cleanValue);
+                                  if (!isNaN(num) && num >= 0 && num <= calculoNomina.montoTotal) {
+                                    // Redondear a 2 decimales
+                                    const roundedNum = Math.round(num * 100) / 100;
+                                    updateFormData({ montoAPagar: roundedNum });
+                                  }
+                                }
+                              }}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  updateFormData({ montoAPagar: 0 });
+                                } else {
+                                  // Limpiar y asegurar que siempre tenga máximo 2 decimales
+                                  const cleanValue = e.target.value.replace(',', '.');
+                                  const num = parseFloat(cleanValue);
+                                  if (!isNaN(num)) {
+                                    const roundedNum = Math.round(num * 100) / 100;
+                                    updateFormData({ montoAPagar: roundedNum });
+                                  }
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-yellow-500 focus:border-yellow-500 dark:bg-gray-700 dark:text-white"
+                              placeholder="0.00"
+                            />
+                            {formData.montoAPagar > 0 && (
+                              <div className="mt-2 text-xs text-yellow-700 dark:text-yellow-300">
+                                <div className="flex justify-between">
+                                  <span>Monto a pagar:</span>
+                                  <span className="font-medium">{formatCurrency(formData.montoAPagar)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Quedará a deber:</span>
+                                  <span className="font-medium text-red-600 dark:text-red-400">
+                                    {formatCurrency(Math.round((calculoNomina.montoTotal - formData.montoAPagar) * 100) / 100)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Opción de liquidar adeudos */}
+                        {adeudosEmpleado > 0 && (
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="liquidarAdeudos"
+                              checked={formData.liquidarAdeudos}
+                              onChange={(e) => updateFormData({ liquidarAdeudos: e.target.checked })}
+                              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                            />
+                            <label htmlFor="liquidarAdeudos" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                              Liquidar adeudos pendientes (${formatCurrency(adeudosEmpleado)})
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Vista previa del cálculo */}
                   {calculoNomina && (
                     <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
@@ -877,11 +1027,35 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                         </div>
                         
                         <div className="flex justify-between border-t-2 border-green-300 dark:border-green-600 pt-2">
-                          <span className="font-bold text-lg text-green-900 dark:text-green-200">Total a Pagar:</span>
+                          <span className="font-bold text-lg text-green-900 dark:text-green-200">
+                            {formData.pagoParcial ? 'Total a Pagar (Parcial):' : 'Total a Pagar:'}
+                          </span>
                           <span className="font-bold text-lg text-green-600 dark:text-green-400">
-                            {formatCurrency(calculoNomina.montoTotal)}
+                            {formatCurrency(formData.pagoParcial ? formData.montoAPagar : calculoNomina.montoTotal)}
                           </span>
                         </div>
+                        
+                        {/* Mostrar información adicional si es pago parcial */}
+                        {formData.pagoParcial && (
+                          <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                            <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                              <div className="flex justify-between mb-1">
+                                <span>Total de la nómina:</span>
+                                <span className="font-medium">{formatCurrency(calculoNomina.montoTotal)}</span>
+                              </div>
+                              <div className="flex justify-between mb-1">
+                                <span>Monto a pagar:</span>
+                                <span className="font-medium text-green-600">{formatCurrency(formData.montoAPagar)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Quedará a deber:</span>
+                                <span className="font-medium text-red-600">
+                                  {formatCurrency(Math.round((calculoNomina.montoTotal - formData.montoAPagar) * 100) / 100)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -903,6 +1077,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                         <p className="text-blue-700 dark:text-blue-300">
                           {formData.selectedEmpleado.oficio?.nombre || 'Sin oficio'}
                         </p>
+                        {adeudosEmpleado > 0 && (
+                          <p className="text-red-600 dark:text-red-400 font-medium mt-1">
+                            ⚠️ Adeudos pendientes: {formatCurrency(adeudosEmpleado)}
+                          </p>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1008,11 +1187,35 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                       </div>
                       
                       <div className="flex justify-between border-t-2 border-gray-300 dark:border-gray-600 pt-3">
-                        <span className="font-bold text-xl text-gray-900 dark:text-white">Total a Pagar:</span>
+                        <span className="font-bold text-xl text-gray-900 dark:text-white">
+                          {formData.pagoParcial ? 'Total a Pagar (Parcial):' : 'Total a Pagar:'}
+                        </span>
                         <span className="font-bold text-xl text-green-600 dark:text-green-400">
-                          {formatCurrency(calculoNomina.montoTotal)}
+                          {formatCurrency(formData.pagoParcial ? formData.montoAPagar : calculoNomina.montoTotal)}
                         </span>
                       </div>
+                      
+                      {/* Mostrar información adicional si es pago parcial en el resumen */}
+                      {formData.pagoParcial && (
+                        <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                          <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                            <div className="flex justify-between mb-1">
+                              <span>Total de la nómina:</span>
+                              <span className="font-medium">{formatCurrency(calculoNomina.montoTotal)}</span>
+                            </div>
+                            <div className="flex justify-between mb-1">
+                              <span>Monto a pagar:</span>
+                              <span className="font-medium text-green-600">{formatCurrency(formData.montoAPagar)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Quedará a deber:</span>
+                              <span className="font-medium text-red-600">
+                                {formatCurrency(Math.round((calculoNomina.montoTotal - formData.montoAPagar) * 100) / 100)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1228,6 +1431,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
           </div>
         </div>
       )}
+
     </div>
   );
 };
