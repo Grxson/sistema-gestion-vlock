@@ -14,9 +14,11 @@ router.get('/empleado/:idEmpleado/total-pendientes', adeudosController.getTotalA
 router.get('/pendientes', adeudosController.getAllAdeudosPendientes);
 router.get('/estadisticas', adeudosController.getEstadisticasAdeudos);
 
-// Rutas para gestión de adeudos (solo admin y gerente)
+// Rutas para gestión de adeudos (accesibles para todos los usuarios autenticados)
+router.put('/:idAdeudo', adeudosController.actualizarAdeudo);
+router.put('/:idAdeudo/liquidar', adeudosController.liquidarAdeudo);
+
+// Rutas para creación de adeudos (solo admin y gerente - creación manual)
 router.post('/', verifyRole(['admin', 'gerente']), adeudosController.crearAdeudo);
-router.put('/:idAdeudo', verifyRole(['admin', 'gerente']), adeudosController.actualizarAdeudo);
-router.put('/:idAdeudo/liquidar', verifyRole(['admin', 'gerente']), adeudosController.liquidarAdeudo);
 
 module.exports = router;
