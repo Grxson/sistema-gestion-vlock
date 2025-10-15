@@ -81,29 +81,14 @@ const Proyectos = () => {
     return date.toLocaleDateString('es-ES');
   };
 
-  // Cargar proyectos
+  // Cargar todos los proyectos (sin filtros del servidor)
   const loadProyectos = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
-      if (selectedEstado) params.append('estado', selectedEstado);
-      params.append('page', currentPage);
-      params.append('limit', itemsPerPage);
-
-      const result = await api.getProyectos(params.toString());
+      const result = await api.getProyectos();
       
       if (result && result.success) {
         setProyectos(result.data || []);
-        
-        if (result.pagination) {
-          setTotalPages(result.pagination.totalPages);
-          setTotalItems(result.pagination.total);
-        } else {
-          const allItems = result.data || [];
-          setTotalItems(allItems.length);
-          setTotalPages(Math.ceil(allItems.length / itemsPerPage) || 1);
-        }
       } else {
         showError('Error al cargar proyectos');
       }
@@ -118,15 +103,11 @@ const Proyectos = () => {
   // Efectos
   useEffect(() => {
     loadProyectos();
-  }, [currentPage, itemsPerPage]);
+  }, []);
 
+  // Efecto para resetear la página cuando cambien los filtros o búsqueda
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      setCurrentPage(1);
-      loadProyectos();
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
+    setCurrentPage(1);
   }, [searchTerm, selectedEstado]);
 
   // Funciones de filtros y búsqueda
@@ -292,10 +273,43 @@ const Proyectos = () => {
   };
 
   // Cálculos de paginación
+  // Filtrado local de proyectos (búsqueda en tiempo real)
+  const filteredProyectos = proyectos.filter(proyecto => {
+    const matchesSearch = !searchTerm || 
+      proyecto.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      proyecto.responsable?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      proyecto.ubicacion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      proyecto.descripcion?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesEstado = !selectedEstado || proyecto.estado === selectedEstado;
+    
+    return matchesSearch && matchesEstado;
+  });
+
+  // Calcular paginación basada en proyectos filtrados
+  const totalFilteredItems = filteredProyectos.length;
+  const calculatedTotalPages = Math.ceil(totalFilteredItems / itemsPerPage);
+  
+  // Actualizar totalPages si es diferente
+  if (calculatedTotalPages !== totalPages) {
+    setTotalPages(calculatedTotalPages);
+  }
+  
+  // Asegurar que currentPage esté dentro del rango válido
+  const validCurrentPage = Math.max(1, Math.min(currentPage, calculatedTotalPages || 1));
+  if (validCurrentPage !== currentPage) {
+    setCurrentPage(validCurrentPage);
+  }
+  
+  // Aplicar paginación a los proyectos filtrados
+  const startIndex = (validCurrentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedProyectos = filteredProyectos.slice(startIndex, endIndex);
+
   const getPaginationInfo = () => {
-    const start = Math.min((currentPage - 1) * itemsPerPage + 1, totalItems);
-    const end = Math.min(currentPage * itemsPerPage, totalItems);
-    return { start, end, total: totalItems };
+    const start = Math.min((currentPage - 1) * itemsPerPage + 1, totalFilteredItems);
+    const end = Math.min(currentPage * itemsPerPage, totalFilteredItems);
+    return { start, end, total: totalFilteredItems };
   };
 
   const paginationInfo = getPaginationInfo();
@@ -401,7 +415,7 @@ const Proyectos = () => {
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-dark-100 divide-y divide-gray-200 dark:divide-gray-700">
-                {proyectos.length === 0 ? (
+                {paginatedProyectos.length === 0 ? (
                   <tr>
                     <td colSpan="6" className="px-8 py-12 text-center">
                       <RectangleGroupIcon className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
@@ -411,7 +425,7 @@ const Proyectos = () => {
                     </td>
                   </tr>
                 ) : (
-                  proyectos.map((proyecto) => {
+                  paginatedProyectos.map((proyecto) => {
                     const estadoInfo = getEstadoInfo(proyecto.estado);
                     const IconEstado = estadoInfo.icon;
                     
@@ -522,7 +536,7 @@ const Proyectos = () => {
           </div>
           
           {/* Paginación integrada */}
-          {totalItems > 0 && (
+          {totalFilteredItems > 0 && (
             <div className="bg-white dark:bg-gray-800 px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-center justify-between gap-4">
               {/* Información de registros */}
               <div className="text-sm text-gray-700 dark:text-gray-300">

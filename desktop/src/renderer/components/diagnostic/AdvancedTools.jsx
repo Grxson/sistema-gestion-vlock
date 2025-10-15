@@ -86,7 +86,8 @@ const AdvancedTools = () => {
       // 3. Verificar conectividad backend
       console.log('🌐 Verificando conectividad con backend...');
       try {
-        const response = await fetch('http://localhost:4000/api/health', { 
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+        const response = await fetch(`${apiUrl}/health`, { 
           method: 'GET',
           timeout: 5000 
         });

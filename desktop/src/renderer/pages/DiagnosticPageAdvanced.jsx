@@ -50,7 +50,8 @@ const DiagnosticPageAdvanced = () => {
       const startTime = performance.now();
       
       // Verificar backend
-      const response = await fetch('http://localhost:4000/api/health');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/health`);
       const endTime = performance.now();
       const responseTime = Math.round(endTime - startTime);
       
@@ -62,7 +63,7 @@ const DiagnosticPageAdvanced = () => {
         
         // Intentar verificar base de datos
         try {
-          const dbResponse = await fetch('http://localhost:4000/api/db/health');
+          const dbResponse = await fetch(`${apiUrl}/db/health`);
           if (dbResponse.ok) {
             setSystemHealth(prev => ({ ...prev, database: 'healthy' }));
             addToLog('Base de datos conectada correctamente', 'success');
@@ -305,7 +306,7 @@ const DiagnosticPageAdvanced = () => {
               🚀 Backend API
             </h4>
             <div className="text-sm space-y-1">
-              <div className="text-gray-600 dark:text-gray-400">URL: http://localhost:4000/api</div>
+              <div className="text-gray-600 dark:text-gray-400">URL: {import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}</div>
               <div className="text-gray-600 dark:text-gray-400">Estado: <span className={getStatusColor(systemHealth.backend)}>
                 {getStatusIcon(systemHealth.backend)} {systemHealth.backend}
               </span></div>

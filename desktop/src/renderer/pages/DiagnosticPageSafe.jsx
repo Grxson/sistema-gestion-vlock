@@ -30,7 +30,8 @@ const DiagnosticPage = () => {
   // Función simple para verificar conectividad
   const checkConnection = async () => {
     try {
-      const response = await fetch('http://localhost:4000/api/health');
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
+      const response = await fetch(`${apiUrl}/health`);
       if (response.ok) {
         alert('✅ Conexión exitosa al backend');
       } else {

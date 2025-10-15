@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import apiService from '../services/api';
+import nominasServices from '../services/nominas';
 import { formatCurrency } from '../utils/currency';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
@@ -15,10 +15,11 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ArrowRightIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  CalculatorIcon
 } from '@heroicons/react/24/outline';
 
-const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
+const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
   const { isDarkMode } = useTheme();
   const { showSuccess, showError, showInfo } = useToast();
   
@@ -28,69 +29,115 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [pagoInput, setPagoInput] = useState('500.00');
   
+  // Generar período actual automáticamente
+  const generarPeriodoActual = () => {
+    const ahora = new Date();
+    const año = ahora.getFullYear();
+    const mes = ahora.getMonth() + 1; // getMonth() devuelve 0-11, necesitamos 1-12
+    return `${año}-${mes.toString().padStart(2, '0')}`;
+  };
+
   // Datos del formulario
   const [formData, setFormData] = useState({
-    selectedPeriodo: '',
-    diasLaborados: 30,
+    selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
     semanaNum: 1,
     selectedEmpleado: null,
     searchTerm: '',
+    diasLaborados: 6,
     horasExtra: 0,
     bonos: 0,
     deduccionesAdicionales: 0,
-    aplicarISR: true
+    aplicarISR: false,
+    aplicarIMSS: false,
+    aplicarInfonavit: false,
+    // Nuevos campos para pagos parciales
+    pagoParcial: false,
+    montoAPagar: 0,
+    liquidarAdeudos: false
   });
 
   // Cálculos de nómina
   const [calculoNomina, setCalculoNomina] = useState(null);
+  const [validacion, setValidacion] = useState(null);
+  const [adeudosEmpleado, setAdeudosEmpleado] = useState(0);
 
   // Filtrar empleados por búsqueda
   const empleadosFiltrados = Array.isArray(empleados) 
     ? empleados.filter(emp => 
         emp.nombre?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
         emp.apellido?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
-        emp.nss?.includes(formData.searchTerm)
+        emp.nss?.includes(formData.searchTerm) ||
+        emp.rfc?.toLowerCase().includes(formData.searchTerm.toLowerCase())
       )
     : [];
 
   // Calcular nómina cuando cambian los datos relevantes
   useEffect(() => {
-    if (formData.selectedEmpleado && formData.diasLaborados) {
+    if (formData.selectedEmpleado && formData.diasLaborados && formData.pago_por_dia) {
       calcularNomina();
     }
-  }, [formData.selectedEmpleado, formData.diasLaborados, formData.horasExtra, formData.bonos, formData.deduccionesAdicionales, formData.aplicarISR]);
+  }, [formData.selectedEmpleado, formData.diasLaborados, formData.horasExtra, formData.bonos, formData.deduccionesAdicionales, formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
 
-  const calcularNomina = () => {
+  // Validar datos cuando cambian
+  useEffect(() => {
+    if (formData.selectedEmpleado) {
+      validarDatos();
+      cargarAdeudosEmpleado();
+    }
+  }, [formData.selectedEmpleado]);
+
+  // Cargar adeudos del empleado seleccionado
+  const cargarAdeudosEmpleado = async () => {
+    if (!formData.selectedEmpleado) return;
+    
+    try {
+      const { adeudos } = nominasServices;
+      const totalAdeudos = await adeudos.getTotalAdeudosPendientes(formData.selectedEmpleado.id_empleado);
+      setAdeudosEmpleado(totalAdeudos);
+    } catch (error) {
+      console.error('Error loading employee debts:', error);
+      setAdeudosEmpleado(0);
+    }
+  };
+
+  const calcularNomina = async () => {
     if (!formData.selectedEmpleado) return;
 
-    const pagoDiario = formData.selectedEmpleado.pago_diario || formData.selectedEmpleado.contrato?.salario_diario || 0;
-    const diasLaborados = parseFloat(formData.diasLaborados) || 0;
-    const horasExtra = parseFloat(formData.horasExtra) || 0;
-    const bonos = parseFloat(formData.bonos) || 0;
-    const deduccionesAdicionales = parseFloat(formData.deduccionesAdicionales) || 0;
+    // No calcular si hay campos vacíos temporalmente
+    if (formData.diasLaborados === '' || formData.horasExtra === '' || formData.bonos === '' || formData.deduccionesAdicionales === '') {
+      return;
+    }
 
-    // Cálculo básico
-    const salarioBase = diasLaborados * pagoDiario;
-    const montoHorasExtra = horasExtra * (pagoDiario / 8); // Asumiendo 8 horas por día
-    const subtotal = salarioBase + montoHorasExtra + bonos;
-    
-    // ISR básico (simplificado)
-    const isr = formData.aplicarISR ? subtotal * 0.15 : 0; // 15% simplificado
-    const totalDeducciones = isr + deduccionesAdicionales;
-    const montoTotal = subtotal - totalDeducciones;
+    try {
+      const datosNomina = {
+        diasLaborados: formData.diasLaborados || 1,
+        pagoPorDia: formData.pago_por_dia || formData.selectedEmpleado.pago_diario || formData.selectedEmpleado.contrato?.salario_diario || 0,
+        horasExtra: formData.horasExtra || 0,
+        bonos: formData.bonos || 0,
+        deduccionesAdicionales: formData.deduccionesAdicionales || 0,
+        aplicarISR: formData.aplicarISR,
+        aplicarIMSS: formData.aplicarIMSS,
+        aplicarInfonavit: formData.aplicarInfonavit
+      };
 
-    setCalculoNomina({
-      salarioBase,
-      montoHorasExtra,
-      bonos,
-      subtotal,
-      deducciones: {
-        isr,
-        adicionales: deduccionesAdicionales,
-        total: totalDeducciones
-      },
-      montoTotal
-    });
+      const calculo = await nominasServices.calculadora.calcularNomina(datosNomina);
+      setCalculoNomina(calculo);
+    } catch (error) {
+      console.error('Error calculating nomina:', error);
+      setCalculoNomina(null);
+    }
+  };
+
+  const validarDatos = async () => {
+    if (!formData.selectedEmpleado) return;
+
+    try {
+      const validacionResult = await nominasServices.validaciones.validarEmpleado(formData.selectedEmpleado);
+      setValidacion(validacionResult);
+    } catch (error) {
+      console.error('Error validating data:', error);
+      setValidacion(null);
+    }
   };
 
   const updateFormData = (updates) => {
@@ -99,17 +146,25 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
 
   const resetForm = () => {
     setFormData({
-      selectedPeriodo: '',
-      diasLaborados: 30,
+      selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
       semanaNum: 1,
       selectedEmpleado: null,
       searchTerm: '',
+      diasLaborados: 6,
       horasExtra: 0,
       bonos: 0,
       deduccionesAdicionales: 0,
-      aplicarISR: true
+      aplicarISR: true,
+      aplicarIMSS: true,
+      aplicarInfonavit: true,
+      // Nuevos campos para pagos parciales
+      pagoParcial: false,
+      montoAPagar: 0,
+      liquidarAdeudos: false
     });
     setCalculoNomina(null);
+    setValidacion(null);
+    setAdeudosEmpleado(0);
     setCurrentStep(1);
   };
 
@@ -127,6 +182,7 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
     }
 
     setShowPagoModal(false);
+    updateFormData({ pago_por_dia: pagoValue });
     await procesarNominaConPago(pagoValue);
   };
 
@@ -136,7 +192,7 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
   };
 
   const nextStep = () => {
-    if (currentStep < 4) {
+    if (currentStep < 2) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -150,12 +206,18 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
   const isStepValid = (step) => {
     switch (step) {
       case 1:
-        return formData.selectedPeriodo;
+        return formData.selectedPeriodo && formData.selectedEmpleado && formData.diasLaborados > 0;
       case 2:
-        return formData.selectedEmpleado && formData.diasLaborados > 0;
-      case 3:
-        // El paso 3 es opcional, siempre es válido si se llegó aquí
-        return true;
+        // Permitir procesar si hay cálculo y no hay errores críticos (solo advertencias)
+        const isValid = calculoNomina && validacion && validacion.esValido && validacion.errores.length === 0;
+        console.log('🔍 Validando paso 2:', {
+          calculoNomina: !!calculoNomina,
+          validacion: !!validacion,
+          esValido: validacion?.esValido,
+          errores: validacion?.errores?.length || 0,
+          isValid
+        });
+        return isValid;
       default:
         return true;
     }
@@ -163,6 +225,10 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
 
   const procesarNominaConPago = async (pagoIngresado) => {
     try {
+      console.log('🚀 [WIZARD] Iniciando procesamiento con pago');
+      console.log('🚀 [WIZARD] Pago ingresado:', pagoIngresado);
+      console.log('🚀 [WIZARD] Empleado:', formData.selectedEmpleado);
+      
       setProcessingNomina(true);
       showInfo('Procesando', `Generando nómina para ${formData.selectedEmpleado.nombre} ${formData.selectedEmpleado.apellido}...`);
       
@@ -179,98 +245,176 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
         horas_extra: formData.horasExtra || 0,
         bonos: formData.bonos || 0,
         deducciones_adicionales: formData.deduccionesAdicionales || 0,
-        aplicar_isr: formData.aplicarISR
+        aplicar_isr: formData.aplicarISR,
+        aplicar_imss: formData.aplicarIMSS,
+        aplicar_infonavit: formData.aplicarInfonavit,
+        // Datos de pago parcial
+        pago_parcial: formData.pagoParcial,
+        monto_a_pagar: formData.pagoParcial ? formData.montoAPagar : null,
+        liquidar_adeudos: formData.liquidarAdeudos
       };
 
+      console.log('🚀 [WIZARD] Datos preparados para nómina:', nominaData);
       await procesarNominaFinal(nominaData);
     } catch (error) {
-      console.error('Error processing nomina:', error);
+      console.error('❌ [WIZARD] Error processing nomina:', error);
       showError('Error de procesamiento', error.message || 'Error al procesar la nómina');
       setProcessingNomina(false);
     }
   };
 
   const procesarNomina = async () => {
+    console.log('🚀 [WIZARD] Función procesarNomina llamada');
+    console.log('🚀 [WIZARD] formData:', formData);
+    
     // Validar que tenemos los datos básicos necesarios
     if (!formData.selectedEmpleado || !formData.diasLaborados || !formData.selectedPeriodo) {
+      console.error('❌ [WIZARD] Datos incompletos:', {
+        selectedEmpleado: !!formData.selectedEmpleado,
+        diasLaborados: formData.diasLaborados,
+        selectedPeriodo: formData.selectedPeriodo
+      });
       showError('Datos incompletos', 'Por favor completa todos los campos requeridos');
       return;
     }
 
+    console.log('✅ [WIZARD] Validación básica exitosa');
+    
     // Validar y preparar datos para la nómina
     const pagoDiario = formData.selectedEmpleado.pago_diario || 
                       formData.selectedEmpleado.contrato?.salario_diario || 
                       formData.selectedEmpleado.salario_diario || 
                       formData.selectedEmpleado.salario_base_personal || 0;
 
+    console.log('💰 [WIZARD] Pago diario encontrado:', pagoDiario);
+
     // Si el pago diario es 0 o null, mostrar modal para solicitar el valor
     if (!pagoDiario || pagoDiario <= 0) {
+      console.log('💰 [WIZARD] Pago diario no configurado, mostrando modal');
       setShowPagoModal(true);
       return;
     }
 
+    console.log('✅ [WIZARD] Pago diario configurado, procesando directamente');
     // Si tiene pago diario, procesar directamente
     await procesarNominaConPago(pagoDiario);
   };
 
   const procesarNominaFinal = async (nominaData) => {
     try {
-
-      // Debug: Mostrar datos que se van a enviar
-      console.log('Datos de nómina a enviar:', nominaData);
-      console.log('Empleado seleccionado:', formData.selectedEmpleado);
+      console.log('🚀 [WIZARD] Iniciando procesamiento de nómina final');
+      console.log('🚀 [WIZARD] Datos de nómina:', nominaData);
       
-      // Validar que todos los campos obligatorios estén presentes
-      if (!nominaData.id_empleado || nominaData.id_empleado <= 0) {
-        throw new Error('ID de empleado no válido');
-      }
-      if (!nominaData.id_semana || nominaData.id_semana <= 0) {
-        throw new Error('ID de semana no válido');
-      }
-      if (!nominaData.id_proyecto || nominaData.id_proyecto <= 0) {
-        throw new Error('ID de proyecto no válido');
-      }
-      if (!nominaData.dias_laborados || nominaData.dias_laborados <= 0) {
-        throw new Error('Días laborados no válidos');
-      }
-      if (!nominaData.pago_por_dia || nominaData.pago_por_dia <= 0) {
-        throw new Error('Pago por día no válido');
+      // Validar datos antes de procesar
+      console.log('🔍 [WIZARD] Validando datos de nómina...');
+      const validacionDatos = await nominasServices.validaciones.validarDatosNomina(nominaData);
+      console.log('🔍 [WIZARD] Resultado validación:', validacionDatos);
+      
+      if (!validacionDatos.esValida) {
+        console.error('❌ [WIZARD] Validación falló:', validacionDatos.errores);
+        showError('Datos inválidos', validacionDatos.errores.join(', '));
+        setProcessingNomina(false);
+        return;
       }
 
-      const response = await apiService.procesarNomina(nominaData);
+      console.log('✅ [WIZARD] Validación exitosa, procesando nómina...');
+      // Procesar nómina usando el servicio
+      const response = await nominasServices.nominas.procesarNomina(nominaData);
+      console.log('✅ [WIZARD] Respuesta del procesamiento:', response);
       
       showSuccess('¡Éxito!', `Nómina generada exitosamente para ${formData.selectedEmpleado.nombre} ${formData.selectedEmpleado.apellido}`);
       
       // Generar PDF si es posible
-      if (response?.data?.id_nomina) {
+      console.log('📄 [WIZARD] Verificando si se puede generar PDF...');
+      console.log('📄 [WIZARD] response completa:', response);
+      console.log('📄 [WIZARD] response.data:', response?.data);
+      console.log('📄 [WIZARD] response.data.nomina:', response?.data?.nomina);
+      console.log('📄 [WIZARD] response.data.data:', response?.data?.data);
+      console.log('📄 [WIZARD] response?.data?.id_nomina:', response?.data?.id_nomina);
+      console.log('📄 [WIZARD] response?.data?.data?.nomina?.id_nomina:', response?.data?.data?.nomina?.id_nomina);
+      
+      // Obtener el ID de la nómina de la estructura correcta
+      const idNomina = response?.data?.nomina?.id_nomina || 
+                      response?.data?.id_nomina || 
+                      response?.data?.data?.nomina?.id_nomina;
+      console.log('📄 [WIZARD] ID de nómina extraído:', idNomina);
+      
+      if (idNomina) {
         try {
           showInfo('Generando PDF', 'Creando recibo de nómina...');
           
-          const pdfResponse = await fetch(`/api/nomina/${response.data.id_nomina}/recibo`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`,
-              'Content-Type': 'application/pdf'
-            }
-          });
-
-          if (pdfResponse.ok) {
-            const blob = await pdfResponse.blob();
-            const url = window.URL.createObjectURL(blob);
+          console.log('📄 Intentando generar PDF para nómina ID:', idNomina);
+          const pdfBlob = await nominasServices.nominas.generarReciboPDF(idNomina);
+          
+          console.log('📄 PDF recibido:', pdfBlob);
+          console.log('📄 Tipo de PDF:', typeof pdfBlob);
+          console.log('📄 Es Blob:', pdfBlob instanceof Blob);
+          console.log('📄 Constructor:', pdfBlob?.constructor?.name);
+          console.log('📄 Tamaño del PDF:', pdfBlob?.size || 'N/A');
+          console.log('📄 Tipo MIME:', pdfBlob?.type || 'N/A');
+          console.log('📄 Propiedades del objeto:', Object.keys(pdfBlob || {}));
+          
+          if (!pdfBlob) {
+            throw new Error('No se recibió ningún PDF');
+          }
+          
+          if (!(pdfBlob instanceof Blob)) {
+            console.error('❌ El objeto recibido no es un Blob válido:', pdfBlob);
+            throw new Error('El objeto recibido no es un Blob válido');
+          }
+          
+          if (pdfBlob.size === 0) {
+            throw new Error('El PDF recibido está vacío');
+          }
+          
+          // Crear nombre de archivo seguro
+          const nombreArchivo = `nomina_${formData.selectedEmpleado.nombre.replace(/\s+/g, '_')}_${formData.selectedEmpleado.apellido.replace(/\s+/g, '_')}_${formData.selectedPeriodo}.pdf`;
+          console.log('📄 Nombre de archivo:', nombreArchivo);
+          
+          // Crear URL del blob
+          const url = window.URL.createObjectURL(pdfBlob);
+          console.log('📄 URL creada:', url);
+          
+          // Intentar descarga automática
+          try {
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
-            a.download = `nomina_${formData.selectedEmpleado.nombre}_${formData.selectedEmpleado.apellido}_${formData.selectedPeriodo}.pdf`;
+            a.download = nombreArchivo;
+            a.target = '_blank'; // Abrir en nueva pestaña como fallback
+            
+            // Agregar al DOM y hacer clic
             document.body.appendChild(a);
+            console.log('📄 Elemento agregado al DOM, haciendo clic...');
             a.click();
-            window.URL.revokeObjectURL(url);
-            document.body.removeChild(a);
-
-            showSuccess('PDF Generado', `Recibo de nómina descargado para ${formData.selectedEmpleado.nombre} ${formData.selectedEmpleado.apellido}`);
+            
+            // Limpiar después de un delay
+            setTimeout(() => {
+              window.URL.revokeObjectURL(url);
+              if (document.body.contains(a)) {
+                document.body.removeChild(a);
+              }
+              console.log('📄 Recursos limpiados');
+            }, 2000);
+            
+          } catch (downloadError) {
+            console.error('❌ Error en descarga automática:', downloadError);
+            
+            // Fallback: Abrir en nueva ventana
+            console.log('📄 Intentando fallback: abrir en nueva ventana');
+            window.open(url, '_blank');
+            
+            // Limpiar después de un delay
+            setTimeout(() => {
+              window.URL.revokeObjectURL(url);
+            }, 5000);
           }
+
+          showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
         } catch (pdfError) {
-          console.warn('Error al generar PDF:', pdfError);
-          showInfo('PDF no disponible', 'La nómina se procesó pero no se pudo generar el PDF automáticamente');
+          console.error('❌ Error detallado al generar PDF:', pdfError);
+          console.error('❌ Stack trace:', pdfError.stack);
+          showError('Error al generar PDF', `No se pudo generar el PDF: ${pdfError.message}`);
         }
       }
       
@@ -284,25 +428,16 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
     }
   };
 
-  const getCurrentPeriod = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
-  };
-
   const steps = [
-    { id: 1, name: 'Período', icon: CalendarIcon },
-    { id: 2, name: 'Empleado', icon: UserGroupIcon },
-    { id: 3, name: 'Cálculo', icon: CurrencyDollarIcon },
-    { id: 4, name: 'Confirmar', icon: CheckCircleIcon }
+    { id: 1, name: 'Configuración', icon: CalendarIcon },
+    { id: 2, name: 'Confirmar', icon: CheckCircleIcon }
   ];
 
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-      <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-4xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
+      <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-5xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
         {/* Header del Wizard */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
@@ -312,7 +447,7 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
               </div>
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Procesar Nómina - Paso {currentStep} de 4
+                  Procesar Nómina - Paso {currentStep} de 2
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {steps[currentStep - 1]?.name}
@@ -329,7 +464,7 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
 
           {/* Indicador de pasos */}
           <div className="mt-4">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-center">
               {steps.map((step, index) => {
                 const Icon = step.icon;
                 const isActive = currentStep === step.id;
@@ -373,417 +508,590 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
 
         {/* Contenido del Wizard */}
         <div className="p-6">
-          {/* Paso 1: Selección de Período */}
+          {/* Paso 1: Configuración */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <div className="text-center">
                 <CalendarIcon className="mx-auto h-12 w-12 text-primary-600 dark:text-primary-400 mb-4" />
                 <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  Selecciona el Período
+                  Configurar Nómina
                 </h4>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Elige el período para el cual se procesará la nómina
+                  Selecciona el período, empleado y configura los parámetros de la nómina
                 </p>
               </div>
 
-              <div className="max-w-md mx-auto space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Período (Año-Mes)
-                  </label>
-                  <input
-                    type="month"
-                    value={formData.selectedPeriodo}
-                    onChange={(e) => updateFormData({ selectedPeriodo: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="Selecciona el período"
-                  />
-                </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Columna izquierda: Configuración básica */}
+                <div className="space-y-6">
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                      <CalendarIcon className="h-4 w-4 mr-2 text-primary-600" />
+                      Período y Semana
+                    </h5>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Período (Año-Mes)
+                        </label>
+                        <input
+                          type="month"
+                          value={formData.selectedPeriodo}
+                          onChange={(e) => updateFormData({ selectedPeriodo: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        />
+                      </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Semana del Período (1-4)
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="4"
-                    value={formData.semanaNum}
-                    onChange={(e) => updateFormData({ semanaNum: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="Número de semana (1-4)"
-                  />
-                </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Semana del Período (1-4)
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="4"
+                          value={formData.semanaNum}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              // Permitir campo vacío temporalmente
+                              updateFormData({ semanaNum: '' });
+                            } else {
+                              const num = parseInt(value);
+                              if (!isNaN(num) && num >= 1 && num <= 4) {
+                                updateFormData({ semanaNum: num });
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                            if (e.target.value === '' || e.target.value === '0') {
+                              updateFormData({ semanaNum: 1 });
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        />
+                      </div>
 
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      <CalendarIcon className="h-5 w-5 text-blue-400" />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Días Laborados
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={formData.diasLaborados}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              // Permitir campo vacío temporalmente
+                              updateFormData({ diasLaborados: '' });
+                            } else {
+                              const num = parseInt(value);
+                              if (!isNaN(num) && num >= 1 && num <= 31) {
+                                updateFormData({ diasLaborados: num });
+                              }
+                            }
+                          }}
+                          onBlur={(e) => {
+                            // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                            if (e.target.value === '' || e.target.value === '0') {
+                              updateFormData({ diasLaborados: 1 });
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        />
+                      </div>
                     </div>
-                    <div className="ml-3">
-                      <p className="text-sm text-blue-800 dark:text-blue-200">
-                        <strong>Período actual:</strong> {getCurrentPeriod()}
-                      </p>
-                      <p className="text-sm text-blue-600 dark:text-blue-300">
-                        Selecciona el mes y año correspondiente al período de pago
-                      </p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                      <UserGroupIcon className="h-4 w-4 mr-2 text-primary-600" />
+                      Seleccionar Empleado
+                    </h5>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Buscar Empleado
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.searchTerm}
+                          onChange={(e) => updateFormData({ searchTerm: e.target.value })}
+                          placeholder="Buscar por nombre, apellido, NSS o RFC..."
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        />
+                      </div>
+
+                      {/* Lista de empleados filtrados */}
+                      {formData.searchTerm && (
+                        <div className="max-h-60 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                          {empleadosFiltrados.length > 0 ? (
+                            empleadosFiltrados.map((empleado, index) => (
+                              <div
+                                key={empleado.id_empleado || `filtered-empleado-${index}`}
+                                onClick={() => {
+                                  updateFormData({ 
+                                    selectedEmpleado: empleado,
+                                    searchTerm: '',
+                                    pago_por_dia: empleado.pago_diario || empleado.contrato?.salario_diario || 0
+                                  });
+                                }}
+                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0 ${
+                                  formData.selectedEmpleado?.id_empleado === empleado.id_empleado 
+                                    ? 'bg-primary-50 dark:bg-primary-900/20' 
+                                    : ''
+                                }`}
+                              >
+                                <div className="h-10 w-10 bg-primary-500 rounded-full flex items-center justify-center">
+                                  <span className="text-white font-medium text-sm">
+                                    {empleado.nombre?.charAt(0)?.toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="ml-3 flex-1">
+                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {empleado.nombre} {empleado.apellido}
+                                  </p>
+                                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    NSS: {empleado.nss} • RFC: {empleado.rfc}
+                                  </p>
+                                  <p className={`text-xs font-medium ${
+                                    (empleado.pago_diario || empleado.contrato?.salario_diario)
+                                      ? 'text-green-600 dark:text-green-400'
+                                      : 'text-red-600 dark:text-red-400'
+                                  }`}>
+                                    {(empleado.pago_diario || empleado.contrato?.salario_diario)
+                                      ? `${formatCurrency(empleado.pago_diario || empleado.contrato?.salario_diario)} por día`
+                                      : '⚠️ Sin pago configurado'
+                                    }
+                                  </p>
+                                </div>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                              No se encontraron empleados
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          )}
 
-          {/* Paso 2: Selección de Empleado */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <UserGroupIcon className="mx-auto h-12 w-12 text-primary-600 dark:text-primary-400 mb-4" />
-                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  Selecciona el Empleado
-                </h4>
-                <p className="text-gray-500 dark:text-gray-400">
-                  Busca y selecciona el empleado para procesar su nómina
-                </p>
-              </div>
+                {/* Columna derecha: Configuración adicional y vista previa */}
+                <div className="space-y-6">
+                  {/* Configuración adicional */}
+                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                    <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
+                      <CalculatorIcon className="h-4 w-4 mr-2 text-primary-600" />
+                      Configuración Adicional (Opcional)
+                    </h5>
+                    
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Horas Extra
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            value={formData.horasExtra}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '') {
+                                // Permitir campo vacío temporalmente
+                                updateFormData({ horasExtra: '' });
+                              } else {
+                                const num = parseFloat(value);
+                                if (!isNaN(num) && num >= 0) {
+                                  updateFormData({ horasExtra: num });
+                                }
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                              if (e.target.value === '') {
+                                updateFormData({ horasExtra: 0 });
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                          />
+                        </div>
 
-              <div className="max-w-2xl mx-auto space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Buscar Empleado
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.searchTerm}
-                    onChange={(e) => updateFormData({ searchTerm: e.target.value })}
-                    placeholder="Buscar por nombre, apellido o NSS..."
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                  />
-                </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Bonos
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.bonos}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '') {
+                                // Permitir campo vacío temporalmente
+                                updateFormData({ bonos: '' });
+                              } else {
+                                const num = parseFloat(value);
+                                if (!isNaN(num) && num >= 0) {
+                                  updateFormData({ bonos: num });
+                                }
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                              if (e.target.value === '') {
+                                updateFormData({ bonos: 0 });
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                          />
+                        </div>
+                      </div>
 
-                {/* Lista de empleados filtrados */}
-                {formData.searchTerm && (
-                  <div className="max-h-60 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
-                    {empleadosFiltrados.length > 0 ? (
-                      empleadosFiltrados.map((empleado, index) => (
-                        <div
-                          key={empleado.id_empleado || `filtered-empleado-${index}`}
-                          onClick={() => {
-                            updateFormData({ 
-                              selectedEmpleado: empleado,
-                              searchTerm: ''
-                            });
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Deducciones Adicionales
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={formData.deduccionesAdicionales}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            if (value === '') {
+                              // Permitir campo vacío temporalmente
+                              updateFormData({ deduccionesAdicionales: '' });
+                            } else {
+                              const num = parseFloat(value);
+                              if (!isNaN(num) && num >= 0) {
+                                updateFormData({ deduccionesAdicionales: num });
+                              }
+                            }
                           }}
-                          className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0 ${
-                            formData.selectedEmpleado?.id_empleado === empleado.id_empleado 
-                              ? 'bg-primary-50 dark:bg-primary-900/20' 
-                              : ''
-                          }`}
-                        >
-                          <div className="h-10 w-10 bg-primary-500 rounded-full flex items-center justify-center">
-                            <span className="text-white font-medium text-sm">
-                              {empleado.nombre?.charAt(0)?.toUpperCase()}
+                          onBlur={(e) => {
+                            // Solo restaurar valor por defecto cuando pierde el foco y está vacío
+                            if (e.target.value === '') {
+                              updateFormData({ deduccionesAdicionales: 0 });
+                            }
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                        />
+                      </div>
+
+                      {/* Opciones fiscales */}
+                      <div className="space-y-3">
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="aplicarISR"
+                            checked={formData.aplicarISR}
+                            onChange={(e) => updateFormData({ aplicarISR: e.target.checked })}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor="aplicarISR" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            Aplicar ISR
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="aplicarIMSS"
+                            checked={formData.aplicarIMSS}
+                            onChange={(e) => updateFormData({ aplicarIMSS: e.target.checked })}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor="aplicarIMSS" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            Aplicar IMSS
+                          </label>
+                        </div>
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="aplicarInfonavit"
+                            checked={formData.aplicarInfonavit}
+                            onChange={(e) => updateFormData({ aplicarInfonavit: e.target.checked })}
+                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor="aplicarInfonavit" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            Aplicar Infonavit
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sección de Pagos Parciales */}
+                  {formData.selectedEmpleado && calculoNomina && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                      <h5 className="text-sm font-semibold text-yellow-900 dark:text-yellow-200 mb-3 flex items-center">
+                        <BanknotesIcon className="h-4 w-4 mr-2" />
+                        Opciones de Pago
+                      </h5>
+                      
+                      <div className="space-y-4">
+                        {/* Mostrar adeudos pendientes */}
+                        {adeudosEmpleado > 0 && (
+                          <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-red-700 dark:text-red-300">
+                                Adeudos Pendientes:
+                              </span>
+                              <span className="text-sm font-bold text-red-900 dark:text-red-100">
+                                {formatCurrency(adeudosEmpleado)}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Opción de pago parcial */}
+                        <div className="flex items-center">
+                          <input
+                            type="checkbox"
+                            id="pagoParcial"
+                            checked={formData.pagoParcial}
+                            onChange={(e) => {
+                              updateFormData({ 
+                                pagoParcial: e.target.checked,
+                                montoAPagar: e.target.checked ? Math.round(calculoNomina.montoTotal * 100) / 100 : 0
+                              });
+                            }}
+                            className="h-4 w-4 text-yellow-600 focus:ring-yellow-500 border-gray-300 rounded"
+                          />
+                          <label htmlFor="pagoParcial" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                            Realizar pago parcial
+                          </label>
+                        </div>
+
+                        {/* Campo de monto a pagar */}
+                        {formData.pagoParcial && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                              Monto a Pagar (Máximo: {formatCurrency(calculoNomina.montoTotal)})
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              max={calculoNomina.montoTotal}
+                              step="0.01"
+                              value={formData.montoAPagar}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                if (value === '') {
+                                  updateFormData({ montoAPagar: '' });
+                                } else {
+                                  // Limpiar el valor de cualquier formato local
+                                  const cleanValue = value.replace(',', '.');
+                                  const num = parseFloat(cleanValue);
+                                  if (!isNaN(num) && num >= 0 && num <= calculoNomina.montoTotal) {
+                                    // Redondear a 2 decimales
+                                    const roundedNum = Math.round(num * 100) / 100;
+                                    updateFormData({ montoAPagar: roundedNum });
+                                  }
+                                }
+                              }}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  updateFormData({ montoAPagar: 0 });
+                                } else {
+                                  // Limpiar y asegurar que siempre tenga máximo 2 decimales
+                                  const cleanValue = e.target.value.replace(',', '.');
+                                  const num = parseFloat(cleanValue);
+                                  if (!isNaN(num)) {
+                                    const roundedNum = Math.round(num * 100) / 100;
+                                    updateFormData({ montoAPagar: roundedNum });
+                                  }
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-yellow-500 focus:border-yellow-500 dark:bg-gray-700 dark:text-white"
+                              placeholder="0.00"
+                            />
+                            {formData.montoAPagar > 0 && (
+                              <div className="mt-2 text-xs text-yellow-700 dark:text-yellow-300">
+                                <div className="flex justify-between">
+                                  <span>Monto a pagar:</span>
+                                  <span className="font-medium">{formatCurrency(formData.montoAPagar)}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span>Quedará a deber:</span>
+                                  <span className="font-medium text-red-600 dark:text-red-400">
+                                    {formatCurrency(Math.round((calculoNomina.montoTotal - formData.montoAPagar) * 100) / 100)}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Opción de liquidar adeudos */}
+                        {adeudosEmpleado > 0 && (
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id="liquidarAdeudos"
+                              checked={formData.liquidarAdeudos}
+                              onChange={(e) => updateFormData({ liquidarAdeudos: e.target.checked })}
+                              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                            />
+                            <label htmlFor="liquidarAdeudos" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                              Liquidar adeudos pendientes (${formatCurrency(adeudosEmpleado)})
+                            </label>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vista previa del cálculo */}
+                  {calculoNomina && (
+                    <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
+                      <h5 className="text-sm font-semibold text-green-900 dark:text-green-200 mb-3 flex items-center">
+                        <CalculatorIcon className="h-4 w-4 mr-2" />
+                        Vista Previa del Cálculo:
+                      </h5>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-green-700 dark:text-green-300">Salario Base:</span>
+                          <span className="font-medium text-green-900 dark:text-green-100">
+                            {formatCurrency(calculoNomina.salarioBase)}
+                          </span>
+                        </div>
+                        
+                        {calculoNomina.montoHorasExtra > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-green-700 dark:text-green-300">Horas Extra:</span>
+                            <span className="font-medium text-green-900 dark:text-green-100">
+                              {formatCurrency(calculoNomina.montoHorasExtra)}
                             </span>
                           </div>
-                          <div className="ml-3 flex-1">
-                            <p className="text-sm font-medium text-gray-900 dark:text-white">
-                              {empleado.nombre} {empleado.apellido}
-                            </p>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                              NSS: {empleado.nss} • {empleado.oficio?.nombre || 'Sin oficio'}
-                            </p>
-                            <p className={`text-xs font-medium ${
-                              (empleado.pago_diario || empleado.contrato?.salario_diario)
-                                ? 'text-green-600 dark:text-green-400'
-                                : 'text-red-600 dark:text-red-400'
-                            }`}>
-                              {(empleado.pago_diario || empleado.contrato?.salario_diario)
-                                ? `${formatCurrency(empleado.pago_diario || empleado.contrato?.salario_diario)} por día`
-                                : '⚠️ Sin pago configurado'
-                              }
-                            </p>
+                        )}
+                        
+                        {calculoNomina.bonos > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-green-700 dark:text-green-300">Bonos:</span>
+                            <span className="font-medium text-green-900 dark:text-green-100">
+                              {formatCurrency(calculoNomina.bonos)}
+                            </span>
                           </div>
+                        )}
+                        
+                        <div className="flex justify-between border-t border-green-200 dark:border-green-700 pt-2">
+                          <span className="font-medium text-green-900 dark:text-green-200">Subtotal:</span>
+                          <span className="font-medium text-green-900 dark:text-green-200">
+                            {formatCurrency(calculoNomina.subtotal)}
+                          </span>
                         </div>
-                      ))
-                    ) : (
-                      <div className="p-4 text-center text-gray-500 dark:text-gray-400">
-                        No se encontraron empleados
+                        
+                        <div className="flex justify-between">
+                          <span className="text-red-600 dark:text-red-400">Deducciones:</span>
+                          <span className="font-medium text-red-600 dark:text-red-400">
+                            -{formatCurrency(calculoNomina.deducciones.total)}
+                          </span>
+                        </div>
+                        
+                        {/* Desglose de deducciones */}
+                        <div className="ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400">
+                          {calculoNomina.deducciones.isr > 0 && (
+                            <div className="flex justify-between">
+                              <span>ISR ({((calculoNomina.deducciones.isr / calculoNomina.subtotal) * 100).toFixed(2)}%):</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.isr)}</span>
+                            </div>
+                          )}
+                          {calculoNomina.deducciones.imss > 0 && (
+                            <div className="flex justify-between">
+                              <span>IMSS ({((calculoNomina.deducciones.imss / calculoNomina.subtotal) * 100).toFixed(2)}%):</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.imss)}</span>
+                            </div>
+                          )}
+                          {calculoNomina.deducciones.infonavit > 0 && (
+                            <div className="flex justify-between">
+                              <span>Infonavit ({((calculoNomina.deducciones.infonavit / calculoNomina.subtotal) * 100).toFixed(2)}%):</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.infonavit)}</span>
+                            </div>
+                          )}
+                          {calculoNomina.deducciones.adicionales > 0 && (
+                            <div className="flex justify-between">
+                              <span>Adicionales:</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.adicionales)}</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        <div className="flex justify-between border-t-2 border-green-300 dark:border-green-600 pt-2">
+                          <span className="font-bold text-lg text-green-900 dark:text-green-200">
+                            {formData.pagoParcial ? 'Total a Pagar (Parcial):' : 'Total a Pagar:'}
+                          </span>
+                          <span className="font-bold text-lg text-green-600 dark:text-green-400">
+                            {formatCurrency(formData.pagoParcial ? formData.montoAPagar : calculoNomina.montoTotal)}
+                          </span>
+                        </div>
+                        
+                        {/* Mostrar información adicional si es pago parcial */}
+                        {formData.pagoParcial && (
+                          <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                            <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                              <div className="flex justify-between mb-1">
+                                <span>Total de la nómina:</span>
+                                <span className="font-medium">{formatCurrency(calculoNomina.montoTotal)}</span>
+                              </div>
+                              <div className="flex justify-between mb-1">
+                                <span>Monto a pagar:</span>
+                                <span className="font-medium text-green-600">{formatCurrency(formData.montoAPagar)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Quedará a deber:</span>
+                                <span className="font-medium text-red-600">
+                                  {formatCurrency(Math.round((calculoNomina.montoTotal - formData.montoAPagar) * 100) / 100)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
 
-                {/* Empleado seleccionado */}
-                {formData.selectedEmpleado && (
-                  <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border border-green-200 dark:border-green-800">
-                    <h5 className="text-sm font-semibold text-green-900 dark:text-green-200 mb-2 flex items-center">
-                      <CheckCircleIcon className="h-4 w-4 mr-2" />
-                      Empleado Seleccionado:
-                    </h5>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
-                      <div>
-                        <span className="text-green-700 dark:text-green-300">Nombre:</span>
-                        <p className="font-medium text-green-900 dark:text-green-100">
+                  {/* Empleado seleccionado */}
+                  {formData.selectedEmpleado && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                      <h5 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-2 flex items-center">
+                        <CheckCircleIcon className="h-4 w-4 mr-2" />
+                        Empleado Seleccionado:
+                      </h5>
+                      <div className="text-sm">
+                        <p className="font-medium text-blue-900 dark:text-blue-100">
                           {formData.selectedEmpleado.nombre} {formData.selectedEmpleado.apellido}
                         </p>
-                      </div>
-                      <div>
-                        <span className="text-green-700 dark:text-green-300">NSS:</span>
-                        <p className="font-medium text-green-900 dark:text-green-100">
-                          {formData.selectedEmpleado.nss}
+                        <p className="text-blue-700 dark:text-blue-300">
+                          NSS: {formData.selectedEmpleado.nss} • RFC: {formData.selectedEmpleado.rfc}
                         </p>
-                      </div>
-                      <div>
-                        <span className="text-green-700 dark:text-green-300">Oficio:</span>
-                        <p className="font-medium text-green-900 dark:text-green-100">
+                        <p className="text-blue-700 dark:text-blue-300">
                           {formData.selectedEmpleado.oficio?.nombre || 'Sin oficio'}
                         </p>
-                      </div>
-                      <div>
-                        <span className="text-green-700 dark:text-green-300">Pago Diario:</span>
-                        <p className={`font-medium ${
-                          (formData.selectedEmpleado.pago_diario || formData.selectedEmpleado.contrato?.salario_diario) 
-                            ? 'text-green-600 dark:text-green-400' 
-                            : 'text-red-600 dark:text-red-400'
-                        }`}>
-                          {(formData.selectedEmpleado.pago_diario || formData.selectedEmpleado.contrato?.salario_diario) 
-                            ? formatCurrency(formData.selectedEmpleado.pago_diario || formData.selectedEmpleado.contrato?.salario_diario)
-                            : '⚠️ No configurado'
-                          }
-                        </p>
-                        {!(formData.selectedEmpleado.pago_diario || formData.selectedEmpleado.contrato?.salario_diario) && (
-                          <p className="text-xs text-red-600 dark:text-red-400 mt-1">
-                            Se solicitará al procesar la nómina
+                        {adeudosEmpleado > 0 && (
+                          <p className="text-red-600 dark:text-red-400 font-medium mt-1">
+                            ⚠️ Adeudos pendientes: {formatCurrency(adeudosEmpleado)}
                           </p>
                         )}
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Días laborados */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Días Laborados
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="31"
-                    value={formData.diasLaborados}
-                    onChange={(e) => updateFormData({ diasLaborados: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                    placeholder="Días trabajados en el período"
-                  />
+                  )}
                 </div>
               </div>
             </div>
           )}
 
-          {/* Paso 3: Cálculo de Nómina */}
-          {currentStep === 3 && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <CurrencyDollarIcon className="mx-auto h-12 w-12 text-primary-600 dark:text-primary-400 mb-4" />
-                <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-                  Configuración Adicional (Opcional)
-                </h4>
-                <p className="text-gray-500 dark:text-gray-400">
-                  Configura montos adicionales y deducciones si aplican
-                </p>
-                <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
-                  <span className="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>
-                  Todos los campos son opcionales
-                </div>
-              </div>
-
-              <div className="max-w-2xl mx-auto space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      <span>Horas Extra</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(opcional)</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.5"
-                      value={formData.horasExtra}
-                      onChange={(e) => updateFormData({ horasExtra: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                      placeholder="0 (sin horas extra)"
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Solo si el empleado trabajó horas adicionales
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      <span>Bonos</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(opcional)</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.bonos}
-                      onChange={(e) => updateFormData({ bonos: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                      placeholder="0.00 (sin bonos)"
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Bonos por desempeño, productividad, etc.
-                    </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      <span>Deducciones Adicionales</span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">(opcional)</span>
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={formData.deduccionesAdicionales}
-                      onChange={(e) => updateFormData({ deduccionesAdicionales: parseFloat(e.target.value) || 0 })}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                      placeholder="0.00 (sin deducciones)"
-                    />
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      Deducciones especiales o adelantos
-                    </p>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                      <div className="flex items-start">
-                        <input
-                          type="checkbox"
-                          id="aplicarISR"
-                          checked={formData.aplicarISR}
-                          onChange={(e) => updateFormData({ aplicarISR: e.target.checked })}
-                          className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded mt-1"
-                        />
-                        <div className="ml-3">
-                          <label htmlFor="aplicarISR" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Aplicar ISR (Impuesto Sobre la Renta)
-                          </label>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            Se aplicará un 15% sobre el subtotal de la nómina. 
-                            <span className="text-primary-600 dark:text-primary-400 font-medium">
-                              Por defecto está activado.
-                            </span>
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Vista previa del cálculo */}
-                {calculoNomina && (
-                  <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-                    <h5 className="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
-                      <CurrencyDollarIcon className="h-4 w-4 mr-2 text-primary-600" />
-                      Vista Previa del Cálculo:
-                    </h5>
-                    <div className="space-y-2 text-sm">
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Salario Base:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(calculoNomina.salarioBase)}
-                        </span>
-                      </div>
-                      
-                      {/* Horas Extra - siempre mostrar */}
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Horas Extra:
-                          {calculoNomina.montoHorasExtra === 0 && (
-                            <span className="text-xs text-gray-400 ml-1">(sin horas extra)</span>
-                          )}
-                        </span>
-                        <span className={`font-medium ${
-                          calculoNomina.montoHorasExtra > 0 
-                            ? 'text-gray-900 dark:text-white' 
-                            : 'text-gray-400 dark:text-gray-500'
-                        }`}>
-                          {formatCurrency(calculoNomina.montoHorasExtra)}
-                        </span>
-                      </div>
-                      
-                      {/* Bonos - siempre mostrar */}
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">
-                          Bonos:
-                          {calculoNomina.bonos === 0 && (
-                            <span className="text-xs text-gray-400 ml-1">(sin bonos)</span>
-                          )}
-                        </span>
-                        <span className={`font-medium ${
-                          calculoNomina.bonos > 0 
-                            ? 'text-gray-900 dark:text-white' 
-                            : 'text-gray-400 dark:text-gray-500'
-                        }`}>
-                          {formatCurrency(calculoNomina.bonos)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-2">
-                        <span className="font-medium text-gray-900 dark:text-white">Subtotal:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(calculoNomina.subtotal)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex justify-between">
-                        <span className="text-red-600 dark:text-red-400">
-                          Deducciones:
-                          <span className="text-xs text-gray-400 ml-1">
-                            ({formatCurrency(calculoNomina.deducciones.isr)} ISR + {formatCurrency(calculoNomina.deducciones.adicionales)} adicionales)
-                          </span>
-                        </span>
-                        <span className="font-medium text-red-600 dark:text-red-400">
-                          -{formatCurrency(calculoNomina.deducciones.total)}
-                        </span>
-                      </div>
-                      
-                      <div className="flex justify-between border-t-2 border-gray-300 dark:border-gray-600 pt-2">
-                        <span className="font-bold text-lg text-gray-900 dark:text-white">Total a Pagar:</span>
-                        <span className="font-bold text-lg text-green-600 dark:text-green-400">
-                          {formatCurrency(calculoNomina.montoTotal)}
-                        </span>
-                      </div>
-                      
-                      {/* Nota informativa */}
-                      <div className="mt-3 p-2 bg-blue-50 dark:bg-blue-900/20 rounded text-xs text-blue-800 dark:text-blue-200">
-                        💡 <strong>Nota:</strong> Los campos opcionales (horas extra, bonos, deducciones) se muestran en gris cuando no aplican.
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* Botón para saltar configuración */}
-                <div className="text-center pt-4">
-                  <button
-                    onClick={nextStep}
-                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors duration-200"
-                  >
-                    <span className="mr-2">💡</span>
-                    Saltar configuración (usar solo salario base)
-                  </button>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Puedes omitir los campos opcionales y procesar la nómina con solo el salario base
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Paso 4: Confirmación */}
-          {currentStep === 4 && (
+          {/* Paso 2: Confirmación */}
+          {currentStep === 2 && (
             <div className="space-y-6">
               <div className="text-center">
                 <CheckCircleIcon className="mx-auto h-12 w-12 text-green-600 dark:text-green-400 mb-4" />
@@ -795,39 +1103,168 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
                 </p>
               </div>
 
-              <div className="max-w-2xl mx-auto space-y-4">
+              <div className="max-w-4xl mx-auto space-y-6">
                 {/* Resumen de datos */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <h5 className="text-sm font-semibold text-blue-900 dark:text-blue-200 mb-3">
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-lg border border-blue-200 dark:border-blue-800">
+                  <h5 className="text-lg font-semibold text-blue-900 dark:text-blue-200 mb-4">
                     Resumen de la Nómina:
                   </h5>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="grid grid-cols-2 gap-6">
                     <div>
-                      <span className="text-blue-700 dark:text-blue-300">Empleado:</span>
+                      <h6 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">Empleado</h6>
                       <p className="font-medium text-blue-900 dark:text-blue-100">
                         {formData.selectedEmpleado?.nombre} {formData.selectedEmpleado?.apellido}
                       </p>
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        NSS: {formData.selectedEmpleado?.nss} • RFC: {formData.selectedEmpleado?.rfc}
+                      </p>
                     </div>
                     <div>
-                      <span className="text-blue-700 dark:text-blue-300">Período:</span>
+                      <h6 className="text-sm font-medium text-blue-700 dark:text-blue-300 mb-2">Período</h6>
                       <p className="font-medium text-blue-900 dark:text-blue-100">
                         {formData.selectedPeriodo} - Semana {formData.semanaNum}
                       </p>
-                    </div>
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-300">Días Laborados:</span>
-                      <p className="font-medium text-blue-900 dark:text-blue-100">
-                        {formData.diasLaborados} días
-                      </p>
-                    </div>
-                    <div>
-                      <span className="text-blue-700 dark:text-blue-300">Total a Pagar:</span>
-                      <p className="font-bold text-green-600 dark:text-green-400">
-                        {calculoNomina ? formatCurrency(calculoNomina.montoTotal) : '$0.00'}
+                      <p className="text-sm text-blue-700 dark:text-blue-300">
+                        {formData.diasLaborados} días laborados
                       </p>
                     </div>
                   </div>
                 </div>
+
+                {/* Cálculo detallado */}
+                {calculoNomina && (
+                  <div className="bg-gray-50 dark:bg-gray-800 p-6 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <h5 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
+                      <CalculatorIcon className="h-5 w-5 mr-2 text-primary-600" />
+                      Desglose del Cálculo:
+                    </h5>
+                    <div className="space-y-3">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Salario Base ({formData.diasLaborados} días):</span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {formatCurrency(calculoNomina.salarioBase)}
+                        </span>
+                      </div>
+                      
+                      {calculoNomina.montoHorasExtra > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Horas Extra:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {formatCurrency(calculoNomina.montoHorasExtra)}
+                          </span>
+                        </div>
+                      )}
+                      
+                      {calculoNomina.bonos > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-600 dark:text-gray-400">Bonos:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {formatCurrency(calculoNomina.bonos)}
+                          </span>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-3">
+                        <span className="font-medium text-gray-900 dark:text-white">Subtotal:</span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {formatCurrency(calculoNomina.subtotal)}
+                        </span>
+                      </div>
+                      
+                      <div className="flex justify-between">
+                        <span className="text-red-600 dark:text-red-400">
+                          Deducciones:
+                          <span className="text-xs text-gray-400 ml-1">
+                            (ISR: {formatCurrency(calculoNomina.deducciones.isr)}, 
+                            IMSS: {formatCurrency(calculoNomina.deducciones.imss)}, 
+                            Infonavit: {formatCurrency(calculoNomina.deducciones.infonavit)}, 
+                            Adicionales: {formatCurrency(calculoNomina.deducciones.adicionales)})
+                          </span>
+                        </span>
+                        <span className="font-medium text-red-600 dark:text-red-400">
+                          -{formatCurrency(calculoNomina.deducciones.total)}
+                        </span>
+                      </div>
+                      
+                      <div className="flex justify-between border-t-2 border-gray-300 dark:border-gray-600 pt-3">
+                        <span className="font-bold text-xl text-gray-900 dark:text-white">
+                          {formData.pagoParcial ? 'Total a Pagar (Parcial):' : 'Total a Pagar:'}
+                        </span>
+                        <span className="font-bold text-xl text-green-600 dark:text-green-400">
+                          {formatCurrency(formData.pagoParcial ? formData.montoAPagar : calculoNomina.montoTotal)}
+                        </span>
+                      </div>
+                      
+                      {/* Mostrar información adicional si es pago parcial en el resumen */}
+                      {formData.pagoParcial && (
+                        <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                          <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                            <div className="flex justify-between mb-1">
+                              <span>Total de la nómina:</span>
+                              <span className="font-medium">{formatCurrency(calculoNomina.montoTotal)}</span>
+                            </div>
+                            <div className="flex justify-between mb-1">
+                              <span>Monto a pagar:</span>
+                              <span className="font-medium text-green-600">{formatCurrency(formData.montoAPagar)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Quedará a deber:</span>
+                              <span className="font-medium text-red-600">
+                                {formatCurrency(Math.round((calculoNomina.montoTotal - formData.montoAPagar) * 100) / 100)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Validaciones */}
+                {validacion && (
+                  <div className={`p-4 rounded-lg border ${
+                    validacion.esValida 
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                  }`}>
+                    <div className="flex items-center mb-2">
+                      {validacion.esValida ? (
+                        <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
+                      ) : (
+                        <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
+                      )}
+                      <h6 className={`font-medium ${
+                        validacion.esValida 
+                          ? 'text-green-900 dark:text-green-200'
+                          : 'text-red-900 dark:text-red-200'
+                      }`}>
+                        {validacion.esValida ? 'Validación Exitosa' : 'Problemas de Validación'}
+                      </h6>
+                    </div>
+                    
+                    {validacion.errores.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-1">Errores:</p>
+                        <ul className="text-sm text-red-700 dark:text-red-400 list-disc list-inside">
+                          {validacion.errores.map((error, index) => (
+                            <li key={index}>{error}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {validacion.advertencias.length > 0 && (
+                      <div>
+                        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1">Advertencias:</p>
+                        <ul className="text-sm text-yellow-700 dark:text-yellow-400 list-disc list-inside">
+                          {validacion.advertencias.map((advertencia, index) => (
+                            <li key={index}>{advertencia}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Advertencia */}
                 <div className="bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg border border-yellow-200 dark:border-yellow-800">
@@ -867,7 +1304,7 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
               Cancelar
             </button>
             
-            {currentStep < 4 ? (
+            {currentStep < 2 ? (
               <button
                 onClick={nextStep}
                 disabled={!isStepValid(currentStep) || processingNomina}
@@ -879,7 +1316,7 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
             ) : (
               <button
                 onClick={procesarNomina}
-                disabled={processingNomina}
+                disabled={processingNomina || !validacion?.esValido || validacion?.errores?.length > 0}
                 className="flex items-center px-6 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
               >
                 {processingNomina && (
@@ -994,8 +1431,9 @@ const NominaWizard = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
           </div>
         </div>
       )}
+
     </div>
   );
 };
 
-export default NominaWizard;
+export default NominaWizardSimplificado;

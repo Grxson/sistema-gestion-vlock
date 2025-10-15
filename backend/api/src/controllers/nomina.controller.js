@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { calcularNomina } = require('../utils/nominaCalculator');
 const { registrarCambioNomina } = require('./nominaHistorial.controller');
+const { generarReciboPDF } = require('./nominaPDF.controller');
 const sequelize = require('../config/db');
 
 /**
@@ -113,7 +114,13 @@ const createNomina = async (req, res) => {
             horas_extra,
             deducciones_adicionales,
             bonos,
-            aplicar_isr
+            aplicar_isr,
+            aplicar_imss,
+            aplicar_infonavit,
+            // Nuevos campos para pagos parciales
+            pago_parcial = false,
+            monto_a_pagar = null,
+            liquidar_adeudos = false
         } = req.body;
 
         // Validaciones básicas
@@ -130,6 +137,8 @@ const createNomina = async (req, res) => {
         const deduccionesAdicionalesNum = parseFloat(deducciones_adicionales || 0);
         const bonosNum = parseFloat(bonos || 0);
         const aplicarISR = aplicar_isr !== false; // Por defecto aplica ISR a menos que se especifique false
+        const aplicarIMSS = aplicar_imss !== false; // Por defecto aplica IMSS a menos que se especifique false
+        const aplicarInfonavit = aplicar_infonavit !== false; // Por defecto aplica Infonavit a menos que se especifique false
 
         // Utilizar la función de cálculo de nómina
         const resultado = calcularNomina(
@@ -138,8 +147,22 @@ const createNomina = async (req, res) => {
             horasExtraNum,
             bonosNum,
             aplicarISR,
+            aplicarIMSS,
+            aplicarInfonavit,
             deduccionesAdicionalesNum
         );
+
+        // Determinar el monto a pagar
+        let montoAPagar = resultado.montoTotal;
+        let montoAdeudo = 0;
+
+        if (pago_parcial && monto_a_pagar !== null) {
+            const montoParcial = parseFloat(monto_a_pagar);
+            if (montoParcial > 0 && montoParcial < resultado.montoTotal) {
+                montoAPagar = montoParcial;
+                montoAdeudo = resultado.montoTotal - montoParcial;
+            }
+        }
 
         // Crear la nueva nómina
         const nuevaNomina = await NominaEmpleado.create({
@@ -150,11 +173,60 @@ const createNomina = async (req, res) => {
             pago_por_dia: pagoPorDiaNum,
             horas_extra: horasExtraNum,
             deducciones: resultado.deducciones.total,
+            deducciones_isr: resultado.deducciones.isr,
+            deducciones_imss: resultado.deducciones.imss,
+            deducciones_infonavit: resultado.deducciones.infonavit,
+            deducciones_adicionales: resultado.deducciones.adicionales,
+            aplicar_isr: aplicarISR,
+            aplicar_imss: aplicarIMSS,
+            aplicar_infonavit: aplicarInfonavit,
             bonos: bonosNum,
             monto_total: resultado.montoTotal,
+            monto_pagado: montoAPagar, // Nuevo campo para el monto realmente pagado
             estado: 'Pendiente'
             // Ya no necesitamos especificar createdAt y updatedAt porque la base de datos usa valores por defecto
         });
+
+        // Crear adeudo si es pago parcial
+        if (montoAdeudo > 0) {
+            // Calcular explícitamente el monto pendiente
+            const montoPendienteCalculado = resultado.montoTotal - montoAPagar;
+            
+            console.log('🔍 [CONTROLLER] Creando adeudo:', {
+                monto_adeudo: resultado.montoTotal,
+                monto_pagado: montoAPagar,
+                monto_pendiente: montoPendienteCalculado,
+                estado: montoAPagar > 0 ? 'Parcial' : 'Pendiente'
+            });
+            
+            await models.Adeudo_empleado.create({
+                id_empleado,
+                id_nomina: nuevaNomina.id_nomina,
+                monto_adeudo: resultado.montoTotal, // Monto total que se debe
+                monto_pagado: montoAPagar, // Monto que se está pagando ahora
+                monto_pendiente: montoPendienteCalculado, // Calcular explícitamente
+                estado: montoAPagar > 0 ? 'Parcial' : 'Pendiente', // Determinar estado explícitamente
+                observaciones: `Pago parcial de nómina ${nuevaNomina.id_nomina}. Total: $${resultado.montoTotal.toFixed(2)}, Pagado: $${montoAPagar.toFixed(2)}, Pendiente: $${montoPendienteCalculado.toFixed(2)}`
+            });
+        }
+
+        // Liquidar adeudos pendientes si se solicita
+        if (liquidar_adeudos) {
+            const adeudosPendientes = await models.Adeudo_empleado.findAll({
+                where: {
+                    id_empleado,
+                    estado: ['Pendiente', 'Parcial']
+                }
+            });
+
+            for (const adeudo of adeudosPendientes) {
+                await adeudo.update({
+                    monto_pagado: adeudo.monto_adeudo,
+                    estado: 'Liquidado',
+                    fecha_liquidacion: new Date()
+                });
+            }
+        }
 
         // Registrar en historial
         if (req.usuario) {
@@ -326,7 +398,7 @@ const registrarPagoNomina = async (req, res) => {
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
  */
-const generarReciboPDF = async (req, res) => {
+const generarReciboPDFOld = async (req, res) => {
     try {
         const { id_nomina } = req.params;
 

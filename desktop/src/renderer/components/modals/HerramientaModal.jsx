@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FaSave, FaTimes, FaTools, FaHistory, FaExchangeAlt, FaExclamationTriangle, FaBoxOpen, FaShare, FaUndo, FaTrash } from "react-icons/fa";
 import ConfirmationModal from './ConfirmationModal';
+import api from '../../services/api';
 
 const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefresh, proyectos = [] }) => {
   const [formData, setFormData] = useState({
@@ -12,8 +13,8 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     serial: '',
     costo: '',
     vida_util_meses: '',
-    stock: '', // Cambio a string vacío para evitar el "Stock0"
-    stock_inicial: '', // Stock inicial de la herramienta
+    stock: '', // Stock actual disponible
+    stock_inicial: '', // Stock inicial registrado
     estado: 1, // 1 = Disponible por defecto
     ubicacion: '',
     observaciones: '',
@@ -48,35 +49,40 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     return parseFloat(value).toLocaleString('es-MX');
   };
 
-  // Función para obtener la ubicación del proyecto por ID
-  const getProyectoUbicacion = (proyectoId) => {
-    // Convertir a número para comparar correctamente
-    const idNumerico = parseInt(proyectoId);
-    const proyecto = proyectos.find(p => p.id_proyecto === idNumerico);
-    return proyecto ? proyecto.ubicacion : '';
-  };
-
-  // Función para manejar el cambio de proyecto
-  const handleProyectoChange = (proyectoId) => {
-    const ubicacionProyecto = getProyectoUbicacion(proyectoId);
+  // Función para calcular el porcentaje de stock disponible
+  const calcularPorcentajeStock = () => {
+    if (!formData.stock_inicial || !formData.stock) return null;
+    const stockInicial = parseInt(formData.stock_inicial);
+    const stockActual = parseInt(formData.stock);
     
-    setFormData(prev => ({
-      ...prev,
-      id_proyecto: proyectoId,
-      ubicacion: ubicacionProyecto // Autocompletar ubicación directamente
-    }));
+    // Validaciones de seguridad
+    if (stockInicial === 0) return null;
+    if (isNaN(stockInicial) || isNaN(stockActual)) return null;
+    if (stockInicial < 0 || stockActual < 0) return null;
+    
+    // Si el stock actual es mayor que el inicial, limitar al 100%
+    if (stockActual > stockInicial) {
+      return 100;
+    }
+    
+    return Math.round((stockActual / stockInicial) * 100);
   };
 
+  // Función para obtener el estado del stock
+  const getEstadoStock = () => {
+    const porcentaje = calcularPorcentajeStock();
+    if (porcentaje === null) return null;
+    
+    if (porcentaje <= 10) return { nivel: 'crítico', color: 'text-red-600', bg: 'bg-red-50' };
+    if (porcentaje <= 25) return { nivel: 'bajo', color: 'text-orange-600', bg: 'bg-orange-50' };
+    if (porcentaje <= 50) return { nivel: 'medio', color: 'text-yellow-600', bg: 'bg-yellow-50' };
+    return { nivel: 'bueno', color: 'text-green-600', bg: 'bg-green-50' };
+  };
 
   // Función para obtener categorías
   const fetchCategorias = async () => {
     try {
-      const response = await fetch('http://localhost:4000/api/herramientas/categorias', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const result = await response.json();
+      const result = await api.getCategoriasHerramientas();
       if (result.success) {
         setCategorias(result.data);
       }
@@ -91,12 +97,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     
     setLoadingMovimientos(true);
     try {
-      const response = await fetch(`http://localhost:4000/api/herramientas/${herramientaId}/movimientos`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-      const result = await response.json();
+      const result = await api.getMovimientosHerramienta(herramientaId);
       if (result.success) {
         setMovimientos(result.data);
       }
@@ -112,7 +113,14 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
       fetchCategorias();
       
       if (herramienta && (mode === 'edit' || mode === 'view' || mode === 'duplicate')) {
-        
+        // Debug: Log de los datos de la herramienta recibidos
+        console.log('🔍 Datos de herramienta recibidos:', {
+          herramienta,
+          stock_inicial: herramienta.stock_inicial,
+          stock: herramienta.stock,
+          mode
+        });
+
         setFormData({
           id_categoria_herr: herramienta.id_categoria_herr || '',
           id_proyecto: herramienta.id_proyecto || '',
@@ -166,7 +174,51 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   }, [herramienta, mode, isOpen]);
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const newData = { ...prev, [field]: value };
+      
+      // Solo sincronizar automáticamente en modo creación y si ambos campos están vacíos
+      if (mode === 'create' && field === 'stock_inicial' && value !== '' && (!newData.stock || newData.stock === '')) {
+        const stockInicial = parseInt(value) || 0;
+        newData.stock = stockInicial.toString();
+      }
+      
+      // En modo edición, no sincronizar automáticamente para evitar perder datos
+      
+      // Validar que el stock actual no sea mayor que el stock inicial
+      if (field === 'stock' && newData.stock_inicial && value !== '') {
+        const stockInicial = parseInt(newData.stock_inicial);
+        const stockActual = parseInt(value);
+        if (!isNaN(stockInicial) && !isNaN(stockActual) && stockActual > stockInicial) {
+          // Mostrar advertencia pero permitir el valor
+          console.warn(`Stock actual (${stockActual}) es mayor que stock inicial (${stockInicial})`);
+        }
+      }
+      
+      // Si se cambia el stock inicial y el stock actual es mayor, ajustar automáticamente
+      if (field === 'stock_inicial' && newData.stock && value !== '') {
+        const stockInicial = parseInt(value) || 0;
+        const stockActual = parseInt(newData.stock);
+        if (!isNaN(stockInicial) && !isNaN(stockActual) && stockActual > stockInicial) {
+          // Ajustar el stock actual al stock inicial
+          newData.stock = stockInicial.toString();
+        }
+      }
+      
+      // Autocompletar ubicación cuando se selecciona un proyecto
+      if (field === 'id_proyecto' && value !== '') {
+        const proyectoSeleccionado = proyectos.find(p => p.id_proyecto.toString() === value);
+        if (proyectoSeleccionado && proyectoSeleccionado.ubicacion) {
+          // Solo autocompletar si el campo de ubicación está vacío
+          if (!newData.ubicacion || newData.ubicacion === '') {
+            newData.ubicacion = proyectoSeleccionado.ubicacion;
+          }
+        }
+      }
+      
+      return newData;
+    });
+    
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
     }
@@ -195,6 +247,16 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     }
     if (formData.stock_inicial && (isNaN(parseInt(formData.stock_inicial)) || parseInt(formData.stock_inicial) < 0)) {
       newErrors.stock_inicial = 'El stock inicial debe ser un número positivo';
+    }
+    
+    // Validar que el stock actual no sea mayor que el stock inicial
+    if (formData.stock && formData.stock_inicial) {
+      const stockActual = parseInt(formData.stock);
+      const stockInicial = parseInt(formData.stock_inicial);
+      
+      if (!isNaN(stockActual) && !isNaN(stockInicial) && stockActual > stockInicial) {
+        newErrors.stock = 'El stock actual no puede ser mayor que el stock inicial';
+      }
     }
     if (formData.estado && (isNaN(parseInt(formData.estado)) || parseInt(formData.estado) < 1 || parseInt(formData.estado) > 5)) {
       newErrors.estado = 'El estado debe ser un valor entre 1 y 5';
@@ -226,6 +288,15 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
         stock_inicial: parseInt(formData.stock_inicial) || 0,
         estado: parseInt(formData.estado) || 1
       };
+
+      // Debug: Log de los datos que se van a enviar
+      console.log('🔍 Datos del formulario a enviar:', {
+        mode,
+        formData,
+        processedData,
+        stock_inicial: processedData.stock_inicial,
+        stock: processedData.stock
+      });
       
       // Función para manejar la subida de imagen después de guardar
       const handleImageUploadAfterSave = async (savedHerramienta) => {
@@ -253,9 +324,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
         return;
       }
 
-      // Validar tamaño (5MB máximo)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('El archivo es demasiado grande. El tamaño máximo es 5MB');
+      // Validar tamaño (10MB máximo)
+      if (file.size > 10 * 1024 * 1024) {
+        alert('El archivo es demasiado grande. El tamaño máximo es 10MB');
         return;
       }
 
@@ -274,20 +345,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   const handleImageUpload = async (herramientaId) => {
     if (!selectedImage) return null;
 
-    const formData = new FormData();
-    formData.append('image', selectedImage);
-
     try {
       setUploadingImage(true);
-      const response = await fetch(`http://localhost:4000/api/herramientas/${herramientaId}/upload-image`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      });
-
-      const result = await response.json();
+      const result = await api.uploadHerramientaImage(herramientaId, selectedImage);
       
       if (result.success) {
         return result.data.image_url;
@@ -296,7 +356,20 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
       }
     } catch (error) {
       console.error('Error uploading image:', error);
-      alert('Error al subir la imagen: ' + error.message);
+      
+      // Manejar errores específicos
+      let errorMessage = 'Error al subir la imagen';
+      if (error.message.includes('413') || error.message.includes('Payload Too Large')) {
+        errorMessage = 'El archivo es demasiado grande. El tamaño máximo permitido es 10MB';
+      } else if (error.message.includes('400')) {
+        errorMessage = 'Formato de archivo no válido. Solo se permiten imágenes (JPEG, PNG, GIF, WebP)';
+      } else if (error.message.includes('500')) {
+        errorMessage = 'Error interno del servidor. Intenta nuevamente';
+      } else {
+        errorMessage = `Error al subir la imagen: ${error.message}`;
+      }
+      
+      alert(errorMessage);
       return null;
     } finally {
       setUploadingImage(false);
@@ -306,15 +379,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   // Función para eliminar imagen
   const handleImageDelete = async (herramientaId) => {
     try {
-      const response = await fetch(`http://localhost:4000/api/herramientas/${herramientaId}/delete-image`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      const result = await response.json();
+      const result = await api.deleteHerramientaImage(herramientaId);
       
       if (result.success) {
         setFormData(prev => ({ ...prev, image_url: '' }));
@@ -506,33 +571,13 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   };
 
   const eliminarHistorialMovimientos = async () => {
-
     try {
       setLoadingMovimientos(true);
-      const token = localStorage.getItem('token');
       
       console.log('Iniciando eliminación del historial...');
       console.log('ID de herramienta:', herramienta.id_herramienta);
-      console.log('Token presente:', !!token);
       
-      const response = await fetch(`http://localhost:4000/api/herramientas/${herramienta.id_herramienta}/movimientos`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      console.log('Status de respuesta:', response.status);
-      console.log('Response OK:', response.ok);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error del servidor:', errorText);
-        throw new Error(`Error del servidor (${response.status}): ${errorText}`);
-      }
-
-      const result = await response.json();
+      const result = await api.deleteMovimientosHerramienta(herramienta.id_herramienta);
       console.log('Respuesta del servidor:', result);
       
       if (result.success) {        
@@ -912,128 +957,232 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                 <div>
                   <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Control de Inventario</h4>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {/* Primera fila: Ubicación Principal */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Ubicación Principal
-                      </label>
-                      <select
-                        value={formData.id_proyecto || ''}
-                        onChange={(e) => handleProyectoChange(e.target.value)}
-                        disabled={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        <option value="">Seleccionar ubicación...</option>
-                        <optgroup label="Ubicaciones">
-                          {proyectos?.filter(p => 
-                            ['Bodega Central', 'Almacén Principal', 'Oficina Principal', 'Taller de Reparaciones', 'Pendiente de Ubicación'].includes(p.nombre)
-                          ).map(proyecto => (
+                  <div className="space-y-6">
+                    {/* Primera fila: Proyecto y Estado */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Proyecto
+                        </label>
+                        <select
+                          value={formData.id_proyecto || ''}
+                          onChange={(e) => handleInputChange('id_proyecto', e.target.value)}
+                          disabled={isReadOnly}
+                          className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
+                            isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          <option value="">Seleccionar proyecto...</option>
+                          {proyectos?.map((proyecto) => (
                             <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
                               {proyecto.nombre}
                             </option>
                           ))}
-                        </optgroup>
-                        <optgroup label="Proyectos Activos">
-                          {proyectos?.filter(p => 
-                            !['Bodega Central', 'Almacén Principal', 'Oficina Principal', 'Taller de Reparaciones', 'Pendiente de Ubicación'].includes(p.nombre) && 
-                            p.estado === 'Activo'
-                          ).map(proyecto => (
-                            <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
-                              {proyecto.nombre}
-                            </option>
-                          ))}
-                        </optgroup>
-                      </select>
-                      {errors.id_proyecto && (
-                        <p className="mt-1 text-sm text-red-600">{errors.id_proyecto}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Estado
-                      </label>
-                      <select
-                        value={formData.estado || 1}
-                        onChange={(e) => handleInputChange('estado', parseInt(e.target.value))}
-                        disabled={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                      >
-                        <option value={1}>Disponible</option>
-                        <option value={2}>En uso</option>
-                        <option value={3}>En mantenimiento</option>
-                        <option value={4}>Averiado</option>
-                        <option value={5}>Fuera de servicio</option>
-                      </select>
-                      {errors.estado && (
-                        <p className="mt-1 text-sm text-red-600">{errors.estado}</p>
-                      )}
-                    </div>
-
-                    {/* Segunda fila: Stock Inicial y Stock Actual */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        Stock Inicial *
-                        {isReadOnly && (
-                          <span className="ml-2 text-gray-600 font-semibold">{formatNumber(formData.stock_inicial)} unidades</span>
+                        </select>
+                        {errors.id_proyecto && (
+                          <p className="mt-1 text-sm text-red-600">{errors.id_proyecto}</p>
                         )}
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        required
-                        value={formData.stock_inicial || ''}
-                        onChange={(e) => handleInputChange('stock_inicial', e.target.value)}
-                        readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                        placeholder="0"
-                      />
-                      {errors.stock_inicial && (
-                        <p className="mt-1 text-sm text-red-600">{errors.stock_inicial}</p>
-                      )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Estado
+                        </label>
+                        <select
+                          value={formData.estado || 1}
+                          onChange={(e) => handleInputChange('estado', parseInt(e.target.value))}
+                          disabled={isReadOnly}
+                          className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
+                            isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                        >
+                          <option value={1}>Disponible</option>
+                          <option value={2}>En uso</option>
+                          <option value={3}>En mantenimiento</option>
+                          <option value={4}>Averiado</option>
+                          <option value={5}>Fuera de servicio</option>
+                        </select>
+                        {errors.estado && (
+                          <p className="mt-1 text-sm text-red-600">{errors.estado}</p>
+                        )}
+                      </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-2">
-                        Stock Actual
-                        {formData.stock && parseInt(formData.stock) <= 5 && (
-                          <div className="relative group">
-                            <FaExclamationTriangle className="text-orange-500 cursor-help" />
-                            <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50">
-                              Stock bajo (≤ 5 unidades)
+                    {/* Segunda fila: Stock Inicial y Stock Actual con indicadores */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          Stock Inicial *
+                          {isReadOnly && (
+                            <span className="ml-2 text-gray-600 font-semibold">{formatNumber(formData.stock_inicial)} unidades</span>
+                          )}
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          required
+                          value={formData.stock_inicial || ''}
+                          onChange={(e) => handleInputChange('stock_inicial', e.target.value)}
+                          readOnly={isReadOnly}
+                          className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
+                            isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                          }`}
+                          placeholder="0"
+                        />
+                        {errors.stock_inicial && (
+                          <p className="mt-1 text-sm text-red-600">{errors.stock_inicial}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1 flex items-center gap-2">
+                          Stock Actual
+                          {formData.stock && parseInt(formData.stock) <= 5 && (
+                            <div className="relative group">
+                              <FaExclamationTriangle className="text-orange-500 cursor-help" />
+                              <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-50">
+                                Stock bajo (≤ 5 unidades)
+                              </div>
                             </div>
+                          )}
+                          {isReadOnly && (
+                            <span className="ml-2 text-gray-600 font-semibold">{formatNumber(formData.stock)} unidades</span>
+                          )}
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={formData.stock || ''}
+                          onChange={(e) => handleInputChange('stock', e.target.value)}
+                          readOnly={isReadOnly}
+                          className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
+                            isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
+                          } ${formData.stock && parseInt(formData.stock) <= 5 ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : ''}`}
+                          placeholder="0"
+                        />
+                        {errors.stock && (
+                          <p className="mt-1 text-sm text-red-600">{errors.stock}</p>
+                        )}
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Cantidad actual disponible en inventario
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Tercera fila: Controles de sincronización e indicadores */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div></div> {/* Espacio vacío para alineación */}
+                      
+                      <div className="space-y-3">
+                        {/* Botón de sincronización manual */}
+                        {formData.stock_inicial && formData.stock && mode !== 'view' && (
+                          <div className="flex justify-end">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm('¿Sincronizar el stock actual con el stock inicial? Esto reemplazará el stock actual.')) {
+                                  handleInputChange('stock', formData.stock_inicial);
+                                }
+                              }}
+                              className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 bg-gray-700 hover:bg-gray-600 text-gray-200 rounded-md border border-gray-600 hover:border-gray-500 transition-all duration-200 shadow-sm"
+                              title="Sincronizar stock actual con stock inicial"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                              </svg>
+                              Sincronizar
+                            </button>
                           </div>
                         )}
-                        {isReadOnly && (
-                          <span className="ml-2 text-gray-600 font-semibold">{formatNumber(formData.stock)} unidades</span>
+                        
+                        {/* Indicador de estado del stock */}
+                        {formData.stock_inicial && formData.stock && (
+                          <div>
+                            {(() => {
+                              const porcentaje = calcularPorcentajeStock();
+                              const estado = getEstadoStock();
+                              const stockActual = parseInt(formData.stock);
+                              const stockInicial = parseInt(formData.stock_inicial);
+                              const stockMayor = !isNaN(stockActual) && !isNaN(stockInicial) && stockActual > stockInicial;
+                              
+                              // Si el stock actual es mayor que el inicial, mostrar advertencia
+                              if (stockMayor) {
+                                return (
+                                  <div className="p-3 rounded-lg bg-red-900/20 border border-red-500/30 backdrop-blur-sm">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                                        <span className="text-sm font-medium text-red-400">
+                                          Stock actual mayor que inicial
+                                        </span>
+                                      </div>
+                                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-800/50 text-red-300 border border-red-600/50">
+                                        Error
+                                      </span>
+                                    </div>
+                                    <div className="mt-2 text-xs text-red-300/80">
+                                      Stock inicial: {stockInicial} | Stock actual: {stockActual}
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              
+                              if (!porcentaje || !estado) return null;
+                              
+                              return (
+                                <div className={`p-3 rounded-lg backdrop-blur-sm border ${
+                                  estado.nivel === 'crítico' ? 'bg-red-900/20 border-red-500/30' :
+                                  estado.nivel === 'bajo' ? 'bg-orange-900/20 border-orange-500/30' :
+                                  estado.nivel === 'medio' ? 'bg-yellow-900/20 border-yellow-500/30' :
+                                  'bg-green-900/20 border-green-500/30'
+                                }`}>
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-2 h-2 rounded-full ${
+                                        estado.nivel === 'crítico' ? 'bg-red-500' :
+                                        estado.nivel === 'bajo' ? 'bg-orange-500' :
+                                        estado.nivel === 'medio' ? 'bg-yellow-500' :
+                                        'bg-green-500'
+                                      }`}></div>
+                                      <span className={`text-sm font-medium ${
+                                        estado.nivel === 'crítico' ? 'text-red-400' :
+                                        estado.nivel === 'bajo' ? 'text-orange-400' :
+                                        estado.nivel === 'medio' ? 'text-yellow-400' :
+                                        'text-green-400'
+                                      }`}>
+                                        {porcentaje}% disponible
+                                      </span>
+                                    </div>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${
+                                      estado.nivel === 'crítico' ? 'bg-red-800/50 text-red-300 border-red-600/50' :
+                                      estado.nivel === 'bajo' ? 'bg-orange-800/50 text-orange-300 border-orange-600/50' :
+                                      estado.nivel === 'medio' ? 'bg-yellow-800/50 text-yellow-300 border-yellow-600/50' :
+                                      'bg-green-800/50 text-green-300 border-green-600/50'
+                                    }`}>
+                                      {estado.nivel.charAt(0).toUpperCase() + estado.nivel.slice(1)}
+                                    </span>
+                                  </div>
+                                  <div className="mt-2 w-full bg-gray-700/50 rounded-full h-1.5 overflow-hidden">
+                                    <div 
+                                      className={`h-full rounded-full transition-all duration-300 ${
+                                        estado.nivel === 'crítico' ? 'bg-red-500' :
+                                        estado.nivel === 'bajo' ? 'bg-orange-500' :
+                                        estado.nivel === 'medio' ? 'bg-yellow-500' :
+                                        'bg-green-500'
+                                      }`}
+                                      style={{ width: `${Math.min(porcentaje, 100)}%` }}
+                                    ></div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </div>
                         )}
-                      </label>
-                      <input
-                        type="number"
-                        min="0"
-                        value={formData.stock || ''}
-                        onChange={(e) => handleInputChange('stock', e.target.value)}
-                        readOnly={isReadOnly}
-                        className={`mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500 ${
-                          isReadOnly ? 'opacity-50 cursor-not-allowed' : ''
-                        } ${formData.stock && parseInt(formData.stock) <= 5 ? 'border-orange-300 bg-orange-50 dark:bg-orange-900/20' : ''}`}
-                        placeholder="0"
-                      />
-                      {errors.stock && (
-                        <p className="mt-1 text-sm text-red-600">{errors.stock}</p>
-                      )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Tercera fila: Ubicación */}
-                  <div className="mt-6">
+                    {/* Cuarta fila: Ubicación */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Ubicación
@@ -1041,9 +1190,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                       <input
                         type="text"
                         value={formData.ubicacion || ''}
-                        readOnly
-                        className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-dark-200 text-gray-900 dark:text-white rounded-md px-4 py-3 cursor-not-allowed"
-                        placeholder="Se autocompletará al seleccionar ubicación principal"
+                        onChange={(e) => handleInputChange('ubicacion', e.target.value)}
+                        className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500"
+                        placeholder="Ej: Almacén A - Rack 1 (se autocompleta al seleccionar proyecto)"
                       />
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         Este campo se llena automáticamente al seleccionar la ubicación principal
@@ -1383,7 +1532,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                   <div className="w-full h-64 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg flex items-center justify-center bg-gray-50 dark:bg-gray-900/30 mb-4">
                     {imagePreview || formData.image_url ? (
                       <img 
-                        src={imagePreview || `http://localhost:4000${formData.image_url}`}
+                        src={imagePreview || `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${formData.image_url}`}
                         alt="Preview"
                         className={`max-w-full max-h-full object-contain rounded-lg ${
                           isReadOnly && (imagePreview || formData.image_url) 
@@ -1512,7 +1661,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
           className="fixed inset-0 bg-black bg-opacity-75 z-[60] flex items-center justify-center p-4"
           onClick={() => setShowImageModal(false)}
         >
-          <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
+          <div className="relative flex flex-col items-center justify-center max-w-[90vw] max-h-[90vh]">
             <button
               onClick={() => setShowImageModal(false)}
               className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
@@ -1520,19 +1669,15 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
             >
               <FaTimes className="h-5 w-5" />
             </button>
-            
-            {/* Contenedor de la imagen con el footer */}
-            <div className="relative shadow-2xl rounded-lg overflow-hidden">
-              <img 
-                src={imagePreview || `http://localhost:4000${formData.image_url}`}
-                alt="Imagen expandida de la herramienta"
-                className="max-w-full max-h-[80vh] object-contain"
-                onClick={(e) => e.stopPropagation()}
-              />
-              <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-75 text-white p-3">
-                <p className="text-sm font-medium">{formData.nombre || 'Herramienta'}</p>
-                <p className="text-xs opacity-75">Clic fuera de la imagen para cerrar</p>
-              </div>
+            <img 
+              src={imagePreview || `${import.meta.env.VITE_API_URL || 'http://localhost:4000/api'}${formData.image_url}`}
+              alt="Imagen expandida de la herramienta"
+              className="max-w-full max-h-[calc(90vh-80px)] object-contain rounded-t-lg shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="bg-black bg-opacity-50 text-white p-3 rounded-b-lg w-full text-center">
+              <p className="text-sm font-medium">{formData.nombre || 'Herramienta'}</p>
+              <p className="text-xs opacity-75">Clic fuera de la imagen para cerrar</p>
             </div>
           </div>
         </div>

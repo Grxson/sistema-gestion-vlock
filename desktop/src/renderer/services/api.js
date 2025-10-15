@@ -66,10 +66,13 @@ class ApiService {
   }
 
   // Configurar headers con autenticación
-  getHeaders(includeAuth = true) {
-    const headers = {
-      'Content-Type': 'application/json',
-    };
+  getHeaders(includeAuth = true, options = {}) {
+    const headers = {};
+
+    // Solo agregar Content-Type para JSON si no es un blob
+    if (options.responseType !== 'blob') {
+      headers['Content-Type'] = 'application/json';
+    }
 
     if (includeAuth) {
       const token = this.getToken();
@@ -93,7 +96,7 @@ class ApiService {
     const url = `${this.baseURL}${endpoint}`;
     const config = {
       ...options,
-      headers: this.getHeaders(options.auth !== false),
+      headers: this.getHeaders(options.auth !== false, options),
     };
 
     // Para depuración
@@ -159,8 +162,26 @@ class ApiService {
       }
 
       // Procesar respuesta exitosa
-      const data = await response.json();
-      console.log(`[API:${requestId}] 📦 Datos recibidos (${Object.keys(data).length} propiedades)`);
+      let data;
+      const contentType = response.headers.get('content-type');
+      
+      console.log(`[API:${requestId}] 🔍 Content-Type: ${contentType}`);
+      console.log(`[API:${requestId}] 🔍 ResponseType: ${options.responseType}`);
+      console.log(`[API:${requestId}] 🔍 Is Blob: ${options.responseType === 'blob'}`);
+      console.log(`[API:${requestId}] 🔍 Is PDF: ${contentType?.includes('application/pdf')}`);
+      
+      if (options.responseType === 'blob' || contentType?.includes('application/pdf')) {
+        console.log(`[API:${requestId}] 📄 Procesando como blob...`);
+        data = await response.blob();
+        console.log(`[API:${requestId}] 📄 Blob recibido:`, data);
+        console.log(`[API:${requestId}] 📄 Tamaño: ${data.size} bytes`);
+        console.log(`[API:${requestId}] 📄 Tipo: ${data.type}`);
+      } else {
+        console.log(`[API:${requestId}] 📦 Procesando como JSON...`);
+        data = await response.json();
+        console.log(`[API:${requestId}] 📦 Datos recibidos (${Object.keys(data).length} propiedades)`);
+      }
+      
       return data;
       
     } catch (error) {
@@ -742,6 +763,71 @@ class ApiService {
 
   async createMovimientoHerramienta(movimientoData) {
     return this.post('/herramientas/movimientos', movimientoData);
+  }
+
+  async uploadHerramientaImage(id, imageFile) {
+    console.log('🔍 Frontend - uploadHerramientaImage:', {
+      id,
+      imageFile,
+      fileName: imageFile?.name,
+      fileSize: imageFile?.size,
+      fileType: imageFile?.type
+    });
+
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    
+    // Debug: verificar que el FormData tiene el archivo
+    console.log('🔍 Frontend - FormData entries:');
+    for (let [key, value] of formData.entries()) {
+      console.log(key, value);
+    }
+    
+    // Usar fetch directamente para evitar que el método request modifique headers
+    const url = `${this.baseURL}/herramientas/${id}/upload-image`;
+    const token = this.getToken();
+    
+    console.log('🔍 Frontend - Using direct fetch for upload');
+    
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+          // NO incluir Content-Type para que el navegador establezca multipart/form-data automáticamente
+        },
+        body: formData
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.message || 'Error al subir imagen');
+      }
+      
+      return data;
+    } catch (error) {
+      console.error('🔍 Frontend - Upload error:', error);
+      throw error;
+    }
+  }
+
+  async deleteHerramientaImage(id) {
+    return this.request(`/herramientas/${id}/delete-image`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`
+      }
+    });
+  }
+
+  async deleteMovimientosHerramienta(id) {
+    return this.request(`/herramientas/${id}/movimientos`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${this.getToken()}`
+      }
+    });
   }
 
   // Utilidades

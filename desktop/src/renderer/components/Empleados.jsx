@@ -48,6 +48,7 @@ export default function Empleados() {
     nombre: '',
     apellido: '',
     nss: '',
+    rfc: '',
     telefono: '',
     contacto_emergencia: '',
     telefono_emergencia: '',
@@ -65,6 +66,7 @@ export default function Empleados() {
       nombre: '',
       apellido: '',
       nss: '',
+      rfc: '',
       telefono: '',
       contacto_emergencia: '',
       telefono_emergencia: '',
@@ -234,6 +236,7 @@ export default function Empleados() {
       nombre: empleado.nombre || '',
       apellido: empleado.apellido || '',
       nss: empleado.nss || '',
+      rfc: empleado.rfc || '',
       telefono: empleado.telefono || '',
       contacto_emergencia: empleado.contacto_emergencia || '',
       telefono_emergencia: empleado.telefono_emergencia || '',
@@ -485,7 +488,10 @@ export default function Empleados() {
                         </span>
                       </div>
                       <p className="text-sm text-gray-500 dark:text-gray-400">{empleado.oficio?.nombre || 'Sin oficio'}</p>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">NSS: {empleado.nss || 'No registrado'}</p>
+                      <div className="flex space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                        <span>NSS: {empleado.nss || 'No registrado'}</span>
+                        <span>RFC: {empleado.rfc || 'No registrado'}</span>
+                      </div>
                       {empleado.proyecto && (
                         <p className="text-sm text-gray-500 dark:text-gray-400">Proyecto: {empleado.proyecto.nombre}</p>
                       )}
@@ -619,14 +625,27 @@ export default function Empleados() {
                 <div className="bg-gray-50 dark:bg-dark-200 p-4 rounded-lg mb-6">
                   <h4 className="text-sm font-medium text-gray-800 dark:text-gray-200 mb-3">Información de contacto</h4>
                   
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NSS</label>
-                    <input
-                      type="text"
-                      className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                      value={formData.nss}
-                      onChange={(e) => setFormData({...formData, nss: e.target.value})}
-                    />
+                  <div className="grid grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">NSS</label>
+                      <input
+                        type="text"
+                        className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                        value={formData.nss}
+                        onChange={(e) => setFormData({...formData, nss: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">RFC</label>
+                      <input
+                        type="text"
+                        maxLength="13"
+                        className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 uppercase"
+                        value={formData.rfc}
+                        onChange={(e) => setFormData({...formData, rfc: e.target.value.toUpperCase()})}
+                        placeholder="RFC123456789"
+                      />
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-6 mb-4">
@@ -844,6 +863,12 @@ export default function Empleados() {
                       <p className="text-xs text-gray-500 dark:text-gray-400">NSS</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-white">
                         {selectedEmpleado.nss || 'No registrado'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">RFC</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        {selectedEmpleado.rfc || 'No registrado'}
                       </p>
                     </div>
                   </div>

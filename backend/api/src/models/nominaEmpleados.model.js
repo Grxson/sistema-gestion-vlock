@@ -33,12 +33,41 @@ module.exports = (sequelize) => {
     deducciones: {
       type: DataTypes.DECIMAL(10,2)
     },
+    deducciones_isr: {
+      type: DataTypes.DECIMAL(10,2)
+    },
+    deducciones_imss: {
+      type: DataTypes.DECIMAL(10,2)
+    },
+    deducciones_infonavit: {
+      type: DataTypes.DECIMAL(10,2)
+    },
+    deducciones_adicionales: {
+      type: DataTypes.DECIMAL(10,2)
+    },
+    aplicar_isr: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    aplicar_imss: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
+    aplicar_infonavit: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true
+    },
     bonos: {
       type: DataTypes.DECIMAL(10,2)
     },
     monto_total: {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false
+    },
+    monto_pagado: {
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      comment: 'Monto realmente pagado al empleado (puede ser menor al monto_total en caso de pago parcial)'
     },
     estado: {
       type: DataTypes.ENUM('Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'),

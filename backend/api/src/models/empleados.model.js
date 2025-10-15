@@ -18,6 +18,13 @@ module.exports = (sequelize) => {
     nss: {
       type: DataTypes.STRING(20)
     },
+    rfc: {
+      type: DataTypes.STRING(13),
+      allowNull: true,
+      validate: {
+        len: [10, 13] // RFC puede ser de 10 o 13 caracteres
+      }
+    },
     telefono: {
       type: DataTypes.STRING(20)
     },

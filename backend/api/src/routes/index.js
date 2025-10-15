@@ -17,6 +17,7 @@ const proveedoresRoutes = require('./proveedores.routes');
 const herramientasRoutes = require('./herramientas.routes');
 const configRoutes = require('./config.routes');
 const healthRoutes = require('./health.routes');
+const adeudosRoutes = require('./adeudos.routes');
 
 // Rutas del sistema de presupuestos
 const presupuestosRoutes = require('./presupuestos.routes');
@@ -43,6 +44,7 @@ router.use('/proveedores', proveedoresRoutes);
 router.use('/herramientas', herramientasRoutes);
 router.use('/config', configRoutes);
 router.use('/health', healthRoutes);
+router.use('/adeudos', adeudosRoutes);
 
 // Registrar rutas del sistema de presupuestos
 router.use('/presupuestos', presupuestosRoutes);
