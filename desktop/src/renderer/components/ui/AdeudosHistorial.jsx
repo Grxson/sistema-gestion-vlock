@@ -32,8 +32,8 @@ const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
         // Cargar adeudos de un empleado específico
         adeudosData = await nominasServices.adeudos.getAdeudosEmpleado(empleado.id_empleado);
       } else {
-        // Cargar todos los adeudos pendientes
-        adeudosData = await nominasServices.adeudos.getAllAdeudosPendientes();
+        // Cargar todos los adeudos (pendientes y liquidados)
+        adeudosData = await nominasServices.adeudos.getAllAdeudos();
       }
       console.log('Adeudos cargados:', adeudosData);
       setAdeudos(adeudosData);

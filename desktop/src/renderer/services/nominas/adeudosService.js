@@ -97,6 +97,20 @@ class AdeudosService {
   }
 
   /**
+   * Obtener todos los adeudos (pendientes y liquidados)
+   * @returns {Promise<Array>} Lista de todos los adeudos
+   */
+  static async getAllAdeudos() {
+    try {
+      const response = await ApiService.get('/adeudos/all');
+      return response.data || response || [];
+    } catch (error) {
+      console.error('Error getting all debts:', error);
+      throw this.handleError(error);
+    }
+  }
+
+  /**
    * Obtener estadísticas de adeudos
    * @returns {Promise<Object>} Estadísticas de adeudos
    */

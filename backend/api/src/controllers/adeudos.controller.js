@@ -247,6 +247,36 @@ const getAllAdeudosPendientes = async (req, res) => {
 };
 
 /**
+ * Obtener todos los adeudos (pendientes y liquidados)
+ */
+const getAllAdeudos = async (req, res) => {
+  try {
+    const adeudos = await models.Adeudo_empleado.findAll({
+      include: [
+        {
+          model: models.Empleados,
+          as: 'empleado',
+          attributes: ['id_empleado', 'nombre', 'apellido']
+        }
+      ],
+      order: [['fecha_adeudo', 'DESC']]
+    });
+
+    res.json({
+      success: true,
+      data: adeudos
+    });
+  } catch (error) {
+    console.error('Error getting all debts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error al obtener todos los adeudos',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Obtener estadísticas de adeudos
  */
 const getEstadisticasAdeudos = async (req, res) => {
@@ -295,5 +325,6 @@ module.exports = {
   actualizarAdeudo,
   liquidarAdeudo,
   getAllAdeudosPendientes,
+  getAllAdeudos,
   getEstadisticasAdeudos
 };

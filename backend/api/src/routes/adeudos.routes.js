@@ -12,6 +12,7 @@ router.get('/empleado/:idEmpleado/total-pendientes', adeudosController.getTotalA
 
 // Rutas para reportes y estadísticas (accesibles para todos los usuarios autenticados)
 router.get('/pendientes', adeudosController.getAllAdeudosPendientes);
+router.get('/all', adeudosController.getAllAdeudos);
 router.get('/estadisticas', adeudosController.getEstadisticasAdeudos);
 
 // Rutas para gestión de adeudos (accesibles para todos los usuarios autenticados)
