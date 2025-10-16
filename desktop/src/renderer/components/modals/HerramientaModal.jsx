@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { FaSave, FaTimes, FaTools, FaHistory, FaExchangeAlt, FaExclamationTriangle, FaBoxOpen, FaShare, FaUndo, FaTrash } from "react-icons/fa";
 import ConfirmationModal from './ConfirmationModal';
 import api from '../../services/api';
+import { useToast } from '../../contexts/ToastContext';
 
 const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefresh, proyectos = [] }) => {
   const [formData, setFormData] = useState({
@@ -30,9 +31,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   const [categorias, setCategorias] = useState([]);
   const [showConfirmDeleteHistory, setShowConfirmDeleteHistory] = useState(false);
   const [showImageModal, setShowImageModal] = useState(false);
-  const [filtroMovimientos, setFiltroMovimientos] = useState('todos');
-  const [busquedaMovimientos, setBusquedaMovimientos] = useState('');
-  
+
+  // Hook para notificaciones toast
+  const { showSuccess } = useToast();
 
   // Estados disponibles
   const estados = [
@@ -586,8 +587,11 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
         // Limpiar la lista de movimientos inmediatamente
         setMovimientos([]);
         
-        // Mostrar mensaje de éxito
-        alert(`Historial eliminado exitosamente.\n\n${result.message || 'Operación completada'}`);
+        // Mostrar notificación de éxito
+        showSuccess(
+          'Historial eliminado exitosamente',
+          result.message || 'Operación completada'
+        );
         
         // Intentar refrescar los datos del componente padre (opcional)
         if (onRefresh) {
@@ -652,158 +656,20 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     });
   };
 
-  // Función para filtrar movimientos
-  const getMovimientosFiltrados = () => {
-    let movimientosFiltrados = movimientos;
-
-    // Filtrar por tipo
-    if (filtroMovimientos !== 'todos') {
-      movimientosFiltrados = movimientosFiltrados.filter(mov => mov.tipo_movimiento === filtroMovimientos);
-    }
-
-    // Filtrar por búsqueda
-    if (busquedaMovimientos.trim()) {
-      const busqueda = busquedaMovimientos.toLowerCase();
-      movimientosFiltrados = movimientosFiltrados.filter(mov => 
-        mov.razon_movimiento?.toLowerCase().includes(busqueda) ||
-        mov.usuario_receptor?.toLowerCase().includes(busqueda) ||
-        mov.proyectos?.nombre?.toLowerCase().includes(busqueda) ||
-        mov.notas?.toLowerCase().includes(busqueda)
-      );
-    }
-
-    return movimientosFiltrados;
-  };
-
-  // Función para obtener estadísticas de movimientos
-  const getEstadisticasMovimientos = () => {
-    const total = movimientos.length;
-    const entrada = movimientos.filter(m => m.tipo_movimiento === 'Entrada').length;
-    const salida = movimientos.filter(m => m.tipo_movimiento === 'Salida').length;
-    const devolucion = movimientos.filter(m => m.tipo_movimiento === 'Devolucion').length;
-    const baja = movimientos.filter(m => m.tipo_movimiento === 'Baja').length;
-
-    return { total, entrada, salida, devolucion, baja };
-  };
-
   if (!isOpen) return null;
 
   const isReadOnly = mode === 'view';
 
-  // Función para obtener el color del estado
-  const getEstadoColor = (estado) => {
-    switch (estado) {
-      case 1: return { bg: 'bg-green-100 dark:bg-green-900/20', text: 'text-green-800 dark:text-green-200', dot: 'bg-green-500' };
-      case 2: return { bg: 'bg-blue-100 dark:bg-blue-900/20', text: 'text-blue-800 dark:text-blue-200', dot: 'bg-blue-500' };
-      case 3: return { bg: 'bg-yellow-100 dark:bg-yellow-900/20', text: 'text-yellow-800 dark:text-yellow-200', dot: 'bg-yellow-500' };
-      case 4: return { bg: 'bg-orange-100 dark:bg-orange-900/20', text: 'text-orange-800 dark:text-orange-200', dot: 'bg-orange-500' };
-      case 5: return { bg: 'bg-red-100 dark:bg-red-900/20', text: 'text-red-800 dark:text-red-200', dot: 'bg-red-500' };
-      default: return { bg: 'bg-gray-100 dark:bg-gray-900/20', text: 'text-gray-800 dark:text-gray-200', dot: 'bg-gray-500' };
-    }
-  };
-
-  // Función para obtener el nombre del estado
-  const getEstadoNombre = (estado) => {
-    const estadoObj = estados.find(e => e.value === estado);
-    return estadoObj ? estadoObj.label : 'Desconocido';
-  };
-
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 overflow-y-auto h-screen w-screen z-50 flex items-start justify-center p-4">
-      <div className="relative top-5 mx-auto p-0 border border-gray-300 dark:border-gray-700 max-w-6xl shadow-lg rounded-lg bg-white dark:bg-dark-100 w-full md:w-auto max-h-[90vh] flex flex-col">
-          {/* Header con resumen ejecutivo */}
-          {mode === 'view' && herramienta && (
-            <div className="bg-white dark:bg-gray-800 p-6 border-b border-gray-200 dark:border-gray-700">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-4">
-                  {/* Imagen de la herramienta */}
-                  {formData.image_url && (
-                    <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-white dark:border-gray-600 shadow-sm">
-                      <img
-                        src={formData.image_url}
-                        alt={formData.nombre}
-                        className="w-full h-full object-cover cursor-pointer hover:scale-105 transition-transform"
-                        onClick={() => setShowImageModal(true)}
-                      />
-                    </div>
-                  )}
-                  
-                  <div>
-                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
-                      {formData.nombre}
-                    </h3>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                      <span>📦 {formData.marca}</span>
-                      <span>🔢 {formData.serial}</span>
-                      <span>💰 ${formatNumber(formData.costo)}</span>
-                    </div>
-                  </div>
-                </div>
-                
-                <button
-                  onClick={onClose}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
-                  title="Cerrar"
-                >
-                  <FaTimes className="w-5 h-5 text-gray-600 dark:text-gray-400" />
-                </button>
-              </div>
-              
-              {/* Métricas principales */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                {/* Stock actual */}
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Stock Actual</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{formData.stock}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">unidades</p>
-                </div>
-                
-                {/* Estado */}
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Estado</p>
-                  <div className="flex items-center gap-2">
-                    <div className={`w-2 h-2 rounded-full ${getEstadoColor(formData.estado).dot}`}></div>
-                    <p className={`text-sm font-medium ${getEstadoColor(formData.estado).text}`}>
-                      {getEstadoNombre(formData.estado)}
-                    </p>
-                  </div>
-                </div>
-                
-                {/* Último movimiento */}
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Último Movimiento</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {movimientos.length > 0 ? formatDateWithTime(movimientos[0].fecha_movimiento) : 'Sin movimientos'}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {movimientos.length > 0 ? `${movimientos.length} movimiento${movimientos.length !== 1 ? 's' : ''}` : 'Sin actividad'}
-                  </p>
-                </div>
-                
-                {/* Ubicación */}
-                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-600">
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Ubicación</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                    {formData.ubicacion || 'No asignada'}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {herramienta?.proyecto?.nombre || 'Sin proyecto'}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Contenido del modal */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="p-6">
-            {mode !== 'view' && (
-              <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-6">
-                {mode === 'create' && 'Nueva Herramienta'}
-                {mode === 'edit' && 'Editar Herramienta'}
-                {mode === 'duplicate' && 'Duplicar Herramienta'}
-              </h3>
-            )}
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 overflow-y-auto h-screen w-screen z-50 flex items-start justify-center">
+      <div className="relative top-10 mx-auto p-6 border border-gray-300 dark:border-gray-700 max-w-6xl shadow-lg rounded-md bg-white dark:bg-dark-100 w-full md:w-auto">
+        <div className="mt-3">
+          <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-6">
+            {mode === 'create' && 'Nueva Herramienta'}
+            {mode === 'edit' && 'Editar Herramienta'}
+            {mode === 'view' && 'Detalles de la Herramienta'}
+            {mode === 'duplicate' && 'Duplicar Herramienta'}
+          </h3>
 
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -1103,17 +969,17 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                               const estado = getEstadoStock();
                               const stockActual = parseInt(formData.stock);
                               const stockInicial = parseInt(formData.stock_inicial);
-                              const stockMayor = !isNaN(stockActual) && !isNaN(stockInicial) && stockActual > stockInicial;
+                              const stockNegativo = !isNaN(stockActual) && stockActual < 0;
                               
-                              // Si el stock actual es mayor que el inicial, mostrar advertencia
-                              if (stockMayor) {
+                              // Si el stock actual es negativo, mostrar error
+                              if (stockNegativo) {
                                 return (
                                   <div className="p-3 rounded-lg bg-red-900/20 border border-red-500/30 backdrop-blur-sm">
                                     <div className="flex items-center justify-between">
                                       <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                                         <span className="text-sm font-medium text-red-400">
-                                          Stock actual mayor que inicial
+                                          Stock negativo - revisar movimientos
                                         </span>
                                       </div>
                                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-800/50 text-red-300 border border-red-600/50">
@@ -1121,7 +987,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                                       </span>
                                     </div>
                                     <div className="mt-2 text-xs text-red-300/80">
-                                      Stock inicial: {stockInicial} | Stock actual: {stockActual}
+                                      Stock actual: {stockActual} | Stock inicial: {stockInicial}
                                     </div>
                                   </div>
                                 );
@@ -1180,7 +1046,6 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         )}
                       </div>
                     </div>
-                  </div>
 
                     {/* Cuarta fila: Ubicación */}
                     <div>
@@ -1194,9 +1059,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-gray-500 focus:border-gray-500"
                         placeholder="Ej: Almacén A - Rack 1 (se autocompleta al seleccionar proyecto)"
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Este campo se llena automáticamente al seleccionar la ubicación principal
-                      </p>
+                      {errors.ubicacion && (
+                        <p className="mt-1 text-sm text-red-600">{errors.ubicacion}</p>
+                      )}
                     </div>
                   </div>
 
@@ -1251,7 +1116,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
                     {/* Resumen estadístico */}
                     {movimientos.length > 0 && (
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                         {['Entrada', 'Salida', 'Devolucion', 'Baja'].map(tipo => {
                           const count = movimientos.filter(m => m.tipo_movimiento === tipo).length;
                           const total = movimientos.filter(m => m.tipo_movimiento === tipo)
@@ -1274,32 +1139,6 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                             </div>
                           );
                         })}
-                      </div>
-                    )}
-
-                    {/* Filtros y búsqueda */}
-                    {movimientos.length > 0 && (
-                      <div className="flex flex-col md:flex-row gap-4 mb-6">
-                        <div className="flex-1">
-                          <input
-                            type="text"
-                            placeholder="Buscar en movimientos (razón, usuario, proyecto, notas)..."
-                            value={busquedaMovimientos}
-                            onChange={(e) => setBusquedaMovimientos(e.target.value)}
-                            className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                        </div>
-                        <select
-                          value={filtroMovimientos}
-                          onChange={(e) => setFiltroMovimientos(e.target.value)}
-                          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="todos">Todos los movimientos</option>
-                          <option value="Entrada">Entradas</option>
-                          <option value="Salida">Salidas</option>
-                          <option value="Devolucion">Devoluciones</option>
-                          <option value="Baja">Bajas</option>
-                        </select>
                       </div>
                     )}
                     
@@ -1332,31 +1171,14 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
                         {/* Lista de movimientos */}
                         {movimientos.length === 0 ? (
-                          <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
-                            <FaExchangeAlt className="mx-auto h-16 w-16 mb-4 opacity-30" />
-                            <h5 className="text-lg font-medium mb-2">Sin movimientos registrados</h5>
-                            <p className="text-sm opacity-75">Los movimientos aparecerán aquí cuando registres entradas, salidas o devoluciones</p>
+                          <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                            <FaExchangeAlt className="mx-auto h-12 w-12 mb-2 opacity-50" />
+                            <p>No hay movimientos registrados para esta herramienta</p>
+                            <p className="text-xs mt-2 opacity-75">Los movimientos aparecerán aquí cuando registres entradas, salidas o devoluciones</p>
                           </div>
                         ) : (
-                          <>
-                            {getMovimientosFiltrados().length === 0 ? (
-                              <div className="text-center py-8 text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600">
-                                <FaExchangeAlt className="mx-auto h-12 w-12 mb-3 opacity-50" />
-                                <p className="font-medium mb-2">No se encontraron movimientos</p>
-                                <p className="text-sm opacity-75 mb-3">No hay movimientos que coincidan con los filtros aplicados</p>
-                                <button
-                                  onClick={() => {
-                                    setFiltroMovimientos('todos');
-                                    setBusquedaMovimientos('');
-                                  }}
-                                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
-                                >
-                                  Limpiar filtros
-                                </button>
-                              </div>
-                            ) : (
-                              <div className="space-y-3 max-h-96 overflow-y-auto bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
-                                {getMovimientosFiltrados().map((movimiento, index) => {
+                      <div className="space-y-3 max-h-80 overflow-y-auto bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
+                        {movimientos.map((movimiento, index) => {
                           const tipoConfig = getMovimientoConfig(movimiento.tipo_movimiento);
                           const descripcionContextual = getDescripcionMovimiento(movimiento);
                           
@@ -1512,10 +1334,8 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                               )}
                             </div>
                           );
-                                })}
-                              </div>
-                            )}
-                          </>
+                        })}
+                          </div>
                         )}
                       </>
                     )}
@@ -1636,8 +1456,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
               )}
             </div>
           </form>
-            </div>
-          </div>
+        </div>
       </div>
       
       {/* Modal de confirmación para eliminar historial */}
@@ -1664,7 +1483,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
           <div className="relative flex flex-col items-center justify-center max-w-[90vw] max-h-[90vh]">
             <button
               onClick={() => setShowImageModal(false)}
-              className="absolute -top-10 right-0 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
+              className="absolute top-4 right-4 text-white hover:text-gray-300 transition-colors z-10 bg-black bg-opacity-50 rounded-full p-2"
               title="Cerrar imagen"
             >
               <FaTimes className="h-5 w-5" />

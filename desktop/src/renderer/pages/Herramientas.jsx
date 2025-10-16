@@ -97,7 +97,7 @@ const Herramientas = () => {
 
 
   // Cargar todas las herramientas (sin filtros del servidor)
-  const loadHerramientas = async () => {
+  const loadHerramientas = async (isInitialLoad = true) => {
     setLoading(true);
     try {
       console.log('Cargando herramientas usando apiService...');
@@ -125,7 +125,7 @@ const Herramientas = () => {
   };
 
   useEffect(() => {
-    loadHerramientas(1, itemsPerPage, {}, true); // Carga inicial
+    loadHerramientas(true); // Carga inicial
     loadCategorias();
     loadProyectos();
   }, []);

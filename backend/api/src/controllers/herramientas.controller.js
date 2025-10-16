@@ -384,9 +384,10 @@ const herramientasController = {
         });
       }
 
-      // Crear el movimiento con campos detallados
+      // Crear el movimiento con campos detallados (sin stock_total temporalmente)
+      const { stock_total, ...movimientoDataClean } = movimientoData;
       const nuevoMovimiento = await models.movimientos_herramienta.create({
-        ...movimientoData,
+        ...movimientoDataClean,
         fecha_movimiento: new Date(),
         // Campos adicionales para información detallada
         razon_movimiento: movimientoData.razon_movimiento || null,
@@ -394,6 +395,7 @@ const herramientasController = {
         usuario_receptor: movimientoData.usuario_receptor || null,
         fecha_devolucion_esperada: movimientoData.fecha_devolucion_esperada || null,
         estado_movimiento: movimientoData.estado_movimiento || 'activo'
+        // stock_total: herramienta.stock + (movimientoData.tipo_movimiento === 'Entrada' ? parseInt(movimientoData.cantidad) : -parseInt(movimientoData.cantidad))
       });
 
       // Actualizar stock según el tipo de movimiento

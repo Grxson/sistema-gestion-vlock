@@ -16,7 +16,7 @@ module.exports = (sequelize) => {
       allowNull: true // Según la BD real
     },
     tipo_movimiento: {
-      type: DataTypes.ENUM('Entrada', 'Salida', 'Devolucion', 'Baja'),
+      type: DataTypes.ENUM('Entrada', 'Salida', 'Baja'),
       allowNull: false
     },
     cantidad: {
@@ -45,7 +45,7 @@ module.exports = (sequelize) => {
       comment: 'Información adicional detallada sobre el movimiento'
     },
     usuario_receptor: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.STRING(100),
       allowNull: true,
       comment: 'Usuario que recibe la herramienta en caso de préstamo'
     },
@@ -55,11 +55,16 @@ module.exports = (sequelize) => {
       comment: 'Fecha esperada de devolución para préstamos'
     },
     estado_movimiento: {
-      type: DataTypes.ENUM('activo', 'completado', 'cancelado'),
-      allowNull: false,
+      type: DataTypes.STRING(20),
+      allowNull: true,
       defaultValue: 'activo',
       comment: 'Estado del movimiento'
     }
+    // stock_total: {
+    //   type: DataTypes.INTEGER,
+    //   allowNull: true,
+    //   comment: 'Stock total después del movimiento'
+    // }
   }, {
     timestamps: false // No tiene createdAt ni updatedAt
   });

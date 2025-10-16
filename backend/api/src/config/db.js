@@ -4,8 +4,6 @@ require('dotenv').config();
 // Usar DATABASE_URL si está disponible, sino usar variables individuales
 const { DATABASE_URL, DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT } = process.env;
 
-let sequelize;
-
 const commonOptions = {
   dialect: 'mysql',
   logging: process.env.NODE_ENV === 'production' ? false : console.log,
@@ -34,6 +32,8 @@ const commonOptions = {
   }
 };
 
+let sequelize;
+
 if (DATABASE_URL) {
   console.log('🔧 Conectando usando DATABASE_URL...');
   sequelize = new Sequelize(DATABASE_URL, {
@@ -59,6 +59,11 @@ if (DATABASE_URL) {
       } : false
     }
   });
+}
+
+// Asegurar que sequelize esté definido
+if (!sequelize) {
+  throw new Error('❌ No se pudo inicializar Sequelize. Verifica las variables de entorno.');
 }
 
 // Función para probar la conexión con reintentos
