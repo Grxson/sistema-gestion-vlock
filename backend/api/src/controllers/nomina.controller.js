@@ -164,6 +164,11 @@ const createNomina = async (req, res) => {
             }
         }
 
+        // Determinar el estado de la nómina
+        // Si hay adeudo pendiente, la nómina está "pendiente"
+        // Si no hay adeudo, la nómina está "pagada"
+        const estadoNomina = montoAdeudo > 0 ? 'pendiente' : 'pagada';
+
         // Crear la nueva nómina
         const nuevaNomina = await NominaEmpleado.create({
             id_empleado,
@@ -183,7 +188,7 @@ const createNomina = async (req, res) => {
             bonos: bonosNum,
             monto_total: resultado.montoTotal,
             monto_pagado: montoAPagar, // Nuevo campo para el monto realmente pagado
-            estado: 'generada'
+            estado: estadoNomina // Estado dinámico: 'pagada' si es completa, 'pendiente' si es parcial
             // Ya no necesitamos especificar createdAt y updatedAt porque la base de datos usa valores por defecto
         });
 
@@ -238,14 +243,16 @@ const createNomina = async (req, res) => {
                 req.usuario.id_usuario,
                 'creacion',
                 null,
-                'Pendiente',
+                estadoNomina === 'pendiente' ? 'Pendiente' : 'Pagada',
                 {
                     dias_laborados: diasLaboradosNum,
                     pago_por_dia: pagoPorDiaNum,
                     horas_extra: horasExtraNum,
                     deducciones: resultado.deducciones.total,
                     bonos: bonosNum,
-                    monto_total: resultado.montoTotal
+                    monto_total: resultado.montoTotal,
+                    monto_pagado: montoAPagar,
+                    monto_adeudo: montoAdeudo
                 }
             );
         }

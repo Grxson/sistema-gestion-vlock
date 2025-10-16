@@ -44,6 +44,7 @@ export default function Nomina() {
   const [viewMode, setViewMode] = useState('cards');
   const [showAdeudosHistorial, setShowAdeudosHistorial] = useState(false);
   const [selectedEmpleadoAdeudos, setSelectedEmpleadoAdeudos] = useState(null);
+  const [showAllNominas, setShowAllNominas] = useState(false);
 
   // Funciones de utilidad
   const handleNominaSuccess = async () => {
@@ -95,6 +96,7 @@ export default function Nomina() {
       try {
         const nominasResponse = await nominasServices.nominas.getAll();
         nominasData = nominasResponse.data || [];
+        console.log('📊 [Nomina] Nominas cargadas:', nominasData);
         setNominas(nominasData);
       } catch (error) {
         console.log('Nomina endpoint not available yet');
@@ -383,38 +385,98 @@ export default function Nomina() {
         {/* Historial de Nóminas Simplificado */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-              Historial de Nóminas
-            </h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+                Historial de Nóminas
+              </h2>
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                {nominas.length} nómina{nominas.length !== 1 ? 's' : ''}
+              </span>
+            </div>
           </div>
-          <div className="p-6">
+          <div className={`p-6 ${showAllNominas ? 'max-h-[600px] overflow-y-auto' : ''}`}>
             {nominas.length > 0 ? (
               <div className="space-y-3">
-                {nominas.slice(0, 5).map((nomina, index) => (
-                  <div key={nomina.id || index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                {(showAllNominas ? nominas : nominas.slice(0, 5)).map((nomina, index) => {
+                  // Debug: verificar estructura de cada nómina
+                  console.log(`📋 [Nomina] Nómina ${index}:`, nomina);
+                  
+                  // Obtener nombre del empleado
+                  const nombreEmpleado = typeof nomina.empleado === 'object' && nomina.empleado
+                    ? `${nomina.empleado.nombre || ''} ${nomina.empleado.apellido || ''}`.trim()
+                    : nomina.nombre_empleado || nomina.empleado || 'Sin empleado';
+                  
+                  // Obtener inicial del empleado
+                  const inicialEmpleado = typeof nomina.empleado === 'object' && nomina.empleado
+                    ? nomina.empleado.nombre?.charAt(0)?.toUpperCase()
+                    : nombreEmpleado.charAt(0)?.toUpperCase() || 'E';
+                  
+                  // Obtener período
+                  let periodo = 'Sin período';
+                  if (typeof nomina.periodo === 'string') {
+                    periodo = nomina.periodo;
+                  } else if (typeof nomina.periodo === 'object' && nomina.periodo) {
+                    // Si es un objeto, extraer la etiqueta o formato
+                    if (nomina.periodo.etiqueta) {
+                      periodo = nomina.periodo.etiqueta;
+                    } else if (nomina.periodo.semana_iso && nomina.periodo.anio) {
+                      periodo = `Semana ${nomina.periodo.semana_iso} - ${nomina.periodo.anio}`;
+                    } else if (nomina.periodo.fecha_inicio) {
+                      try {
+                        periodo = new Date(nomina.periodo.fecha_inicio).toLocaleDateString('es-MX', { year: 'numeric', month: 'short' });
+                      } catch (e) {
+                        periodo = 'Sin período';
+                      }
+                    } else {
+                      periodo = 'Sin período';
+                    }
+                  } else if (nomina.semana) {
+                    periodo = nomina.semana;
+                  } else if (nomina.fecha) {
+                    try {
+                      periodo = new Date(nomina.fecha).toLocaleDateString('es-MX', { year: 'numeric', month: 'short' });
+                    } catch (e) {
+                      periodo = 'Sin período';
+                    }
+                  }
+                  
+                  // Asegurar que periodo siempre sea un string
+                  if (typeof periodo !== 'string') {
+                    periodo = 'Sin período';
+                  }
+                  
+                  return (
+                  <div key={nomina.id_nomina || nomina.id || index} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className="h-8 w-8 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
                         <span className="text-primary-600 dark:text-primary-400 text-sm font-medium">
-                          {typeof nomina.empleado === 'object' && nomina.empleado ? 
-                            nomina.empleado.nombre?.charAt(0)?.toUpperCase() : 'E'}
+                          {inicialEmpleado}
                         </span>
                       </div>
                       <div>
                         <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {typeof nomina.empleado === 'object' && nomina.empleado ? 
-                            `${nomina.empleado.nombre || ''} ${nomina.empleado.apellido || ''}`.trim() : 
-                            nomina.empleado || 'Sin empleado'}
+                          {nombreEmpleado}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {nomina.periodo || 'Sin período'} • {formatCurrency(nomina.monto_total || nomina.monto || 0)}
+                          {periodo} • {formatCurrency(nomina.monto_total || nomina.monto || 0)}
                         </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">
                       <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        nomina.estado === 'Pagado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                        nomina.estado === 'Aprobada' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                        nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado' ? 
+                          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                        nomina.estado === 'pendiente' || nomina.estado === 'Pendiente' ? 
+                          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                        nomina.estado === 'Aprobada' || nomina.estado === 'aprobada' ? 
+                          'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                        nomina.estado === 'cancelada' || nomina.estado === 'Cancelada' ? 
+                          'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                        nomina.estado === 'generada' || nomina.estado === 'Generada' ? 
+                          'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
+                        nomina.estado === 'borrador' || nomina.estado === 'Borrador' ? 
+                          'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' :
+                          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                       }`}>
                         {nomina.estado}
                       </span>
@@ -442,11 +504,29 @@ export default function Nomina() {
                       </button>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {nominas.length > 5 && (
                   <div className="text-center pt-2">
-                    <button className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
-                      Ver todas las nóminas ({nominas.length})
+                    <button 
+                      onClick={() => setShowAllNominas(!showAllNominas)}
+                      className="inline-flex items-center text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium transition-colors duration-200"
+                    >
+                      {showAllNominas ? (
+                        <>
+                          <span>Ocultar nóminas</span>
+                          <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                          </svg>
+                        </>
+                      ) : (
+                        <>
+                          <span>Ver todas las nóminas ({nominas.length})</span>
+                          <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </>
+                      )}
                     </button>
                   </div>
                 )}
@@ -520,11 +600,13 @@ export default function Nomina() {
                       <div>
                       <span className="text-gray-600 dark:text-gray-400">Estado:</span>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        selectedNomina.estado === 'Pagado' 
+                        selectedNomina.estado === 'pagada' || selectedNomina.estado === 'Pagado' || selectedNomina.estado === 'pagado'
                           ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' 
-                          : selectedNomina.estado === 'Aprobada'
-                            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
-                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                          : selectedNomina.estado === 'pendiente' || selectedNomina.estado === 'Pendiente'
+                            ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                            : selectedNomina.estado === 'Aprobada' || selectedNomina.estado === 'aprobada'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400'
+                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
                       }`}>
                         {selectedNomina.estado}
                       </span>
