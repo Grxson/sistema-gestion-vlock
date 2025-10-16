@@ -64,19 +64,54 @@ module.exports = (sequelize) => {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false
     },
+    version: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: 1
+    },
+    creada_por: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    revisada_por: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    pagada_por: {
+      type: DataTypes.INTEGER,
+      allowNull: true
+    },
+    fecha_revision: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    fecha_pago: {
+      type: DataTypes.DATE,
+      allowNull: true
+    },
+    motivo_ultimo_cambio: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    archivo_pdf_path: {
+      type: DataTypes.STRING(500),
+      allowNull: true
+    },
+    estado: {
+      type: DataTypes.ENUM('Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'),
+      defaultValue: 'Pendiente'
+    },
     monto_pagado: {
       type: DataTypes.DECIMAL(10,2),
       allowNull: true,
       comment: 'Monto realmente pagado al empleado (puede ser menor al monto_total en caso de pago parcial)'
     },
-    estado: {
-      type: DataTypes.ENUM('borrador', 'generada', 'revisada', 'pagada', 'archivada', 'cancelada'),
-      defaultValue: 'borrador'
-    },
     recibo_pdf: {
-      type: DataTypes.STRING(255)
+      type: DataTypes.STRING(255),
+      allowNull: true
     }
   }, {
+    tableName: 'nomina_empleados',
     timestamps: true
   });
 

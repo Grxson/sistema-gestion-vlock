@@ -2,12 +2,12 @@ const { DataTypes } = require('sequelize');
 
 module.exports = (sequelize) => {
   const AdeudoEmpleado = sequelize.define('Adeudo_empleado', {
-    id: {
+    id_adeudo: {
       type: DataTypes.INTEGER,
       primaryKey: true,
       autoIncrement: true
     },
-    empleado_id: {
+    id_empleado: {
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
@@ -15,89 +15,49 @@ module.exports = (sequelize) => {
         key: 'id_empleado'
       }
     },
-    concepto: {
-      type: DataTypes.STRING(255),
-      allowNull: false,
-      comment: 'Concepto del adeudo (ej: Pago parcial de nómina)'
-    },
-    descripcion: {
-      type: DataTypes.TEXT,
+    id_nomina: {
+      type: DataTypes.INTEGER,
       allowNull: true,
-      comment: 'Descripción detallada del adeudo'
+      references: {
+        model: 'nomina_empleados',
+        key: 'id_nomina'
+      }
     },
-    monto_total: {
+    monto_adeudo: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
       comment: 'Monto total del adeudo'
+    },
+    monto_pagado: {
+      type: DataTypes.DECIMAL(10, 2),
+      allowNull: false,
+      defaultValue: 0.00,
+      comment: 'Monto pagado del adeudo'
     },
     monto_pendiente: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
       comment: 'Monto que aún se debe'
     },
-    fecha_creacion: {
-      type: DataTypes.DATEONLY,
+    fecha_adeudo: {
+      type: DataTypes.DATE,
       allowNull: false,
-      defaultValue: DataTypes.NOW,
       comment: 'Fecha en que se creó el adeudo'
     },
-    fecha_vencimiento: {
-      type: DataTypes.DATEONLY,
+    fecha_liquidacion: {
+      type: DataTypes.DATE,
       allowNull: true,
-      comment: 'Fecha de vencimiento del adeudo'
-    },
-    tipo_adeudo: {
-      type: DataTypes.ENUM('prestamo', 'anticipo', 'descuento', 'multa', 'otros'),
-      allowNull: false,
-      defaultValue: 'prestamo'
+      comment: 'Fecha de liquidación del adeudo'
     },
     estado: {
-      type: DataTypes.ENUM('pendiente', 'en_proceso', 'liquidado', 'cancelado'),
+      type: DataTypes.ENUM('Pendiente', 'Parcial', 'Liquidado'),
       allowNull: false,
-      defaultValue: 'pendiente'
-    },
-    numero_cuotas: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      comment: 'Número total de cuotas para pagos a plazos'
-    },
-    cuotas_pagadas: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      defaultValue: 0,
-      comment: 'Número de cuotas pagadas'
-    },
-    monto_cuota: {
-      type: DataTypes.DECIMAL(10, 2),
-      allowNull: true,
-      comment: 'Monto de cada cuota'
-    },
-    tasa_interes: {
-      type: DataTypes.DECIMAL(5, 2),
-      allowNull: true,
-      defaultValue: 0.00,
-      comment: 'Tasa de interés aplicada'
+      defaultValue: 'Pendiente'
     },
     observaciones: {
       type: DataTypes.TEXT,
       allowNull: true,
       comment: 'Notas adicionales sobre el adeudo'
-    },
-    autorizado_por: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      comment: 'ID del usuario que autorizó el adeudo'
-    },
-    fecha_autorizacion: {
-      type: DataTypes.DATE,
-      allowNull: true,
-      comment: 'Fecha de autorización del adeudo'
-    },
-    activo: {
-      type: DataTypes.BOOLEAN,
-      allowNull: true,
-      defaultValue: true,
-      comment: 'Indica si el adeudo está activo'
     }
   }, {
     tableName: 'adeudos_empleados',
@@ -109,31 +69,29 @@ module.exports = (sequelize) => {
         // Solo calcular monto_pendiente si no está establecido explícitamente
         if (adeudo.monto_pendiente === null || adeudo.monto_pendiente === undefined) {
           // Para el sistema de nóminas, inicialmente el monto pendiente es igual al total
-          adeudo.monto_pendiente = parseFloat(adeudo.monto_total || 0);
+          adeudo.monto_pendiente = parseFloat(adeudo.monto_adeudo || 0);
         }
         
         // Establecer valores por defecto si no están definidos
         if (!adeudo.estado || adeudo.estado === null || adeudo.estado === undefined) {
-          adeudo.estado = 'pendiente';
+          adeudo.estado = 'Pendiente';
         }
         
-        if (!adeudo.tipo_adeudo || adeudo.tipo_adeudo === null || adeudo.tipo_adeudo === undefined) {
-          adeudo.tipo_adeudo = 'prestamo';
-        }
-        
-        if (!adeudo.concepto || adeudo.concepto === null || adeudo.concepto === undefined) {
-          adeudo.concepto = 'Pago parcial de nómina';
+        // Establecer fecha_adeudo si no está definida
+        if (!adeudo.fecha_adeudo || adeudo.fecha_adeudo === null || adeudo.fecha_adeudo === undefined) {
+          adeudo.fecha_adeudo = new Date();
         }
       },
       beforeUpdate: (adeudo) => {
         // Actualizar estado basado en monto pendiente
         if (adeudo.monto_pendiente !== null && adeudo.monto_pendiente !== undefined) {
           if (adeudo.monto_pendiente <= 0) {
-            adeudo.estado = 'liquidado';
-          } else if (adeudo.cuotas_pagadas > 0) {
-            adeudo.estado = 'en_proceso';
+            adeudo.estado = 'Liquidado';
+            adeudo.fecha_liquidacion = new Date();
+          } else if (adeudo.monto_pagado > 0) {
+            adeudo.estado = 'Parcial';
           } else {
-            adeudo.estado = 'pendiente';
+            adeudo.estado = 'Pendiente';
           }
         }
       }
@@ -144,8 +102,14 @@ module.exports = (sequelize) => {
   AdeudoEmpleado.associate = (models) => {
     // Un adeudo pertenece a un empleado
     AdeudoEmpleado.belongsTo(models.Empleados, {
-      foreignKey: 'empleado_id',
+      foreignKey: 'id_empleado',
       as: 'empleado'
+    });
+    
+    // Un adeudo puede pertenecer a una nómina
+    AdeudoEmpleado.belongsTo(models.Nomina_empleado, {
+      foreignKey: 'id_nomina',
+      as: 'nomina'
     });
   };
 

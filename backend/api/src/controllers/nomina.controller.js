@@ -165,9 +165,9 @@ const createNomina = async (req, res) => {
         }
 
         // Determinar el estado de la nómina
-        // Si hay adeudo pendiente, la nómina está "pendiente"
-        // Si no hay adeudo, la nómina está "pagada"
-        const estadoNomina = montoAdeudo > 0 ? 'pendiente' : 'pagada';
+        // Si hay adeudo pendiente, la nómina está "Pendiente"
+        // Si no hay adeudo, la nómina está "Pagado"
+        const estadoNomina = montoAdeudo > 0 ? 'Pendiente' : 'Pagado';
 
         // Crear la nueva nómina
         const nuevaNomina = await NominaEmpleado.create({
@@ -205,14 +205,12 @@ const createNomina = async (req, res) => {
             });
             
             await models.Adeudo_empleado.create({
-                empleado_id: id_empleado,
-                concepto: `Pago parcial de nómina ${nuevaNomina.id_nomina}`,
-                descripcion: `Pago parcial de nómina. Total: $${resultado.montoTotal.toFixed(2)}, Pagado: $${montoAPagar.toFixed(2)}, Pendiente: $${montoPendienteCalculado.toFixed(2)}`,
-                monto_total: resultado.montoTotal, // Monto total que se debe
+                id_empleado: id_empleado,
+                monto_adeudo: resultado.montoTotal, // Monto total que se debe
+                monto_pagado: montoAPagar, // Monto ya pagado
                 monto_pendiente: montoPendienteCalculado, // Calcular explícitamente
-                fecha_creacion: new Date(),
-                tipo_adeudo: 'prestamo',
-                estado: montoAPagar > 0 ? 'en_proceso' : 'pendiente', // Determinar estado explícitamente
+                fecha_adeudo: new Date(),
+                estado: montoAPagar > 0 ? 'Parcial' : 'Pendiente', // Determinar estado explícitamente
                 observaciones: `Pago parcial de nómina ${nuevaNomina.id_nomina}. Total: $${resultado.montoTotal.toFixed(2)}, Pagado: $${montoAPagar.toFixed(2)}, Pendiente: $${montoPendienteCalculado.toFixed(2)}`
             });
         }
@@ -221,17 +219,16 @@ const createNomina = async (req, res) => {
         if (liquidar_adeudos) {
             const adeudosPendientes = await models.Adeudo_empleado.findAll({
                 where: {
-                    empleado_id: id_empleado,
-                    estado: ['pendiente', 'en_proceso'],
-                    activo: true
+                    id_empleado: id_empleado,
+                    estado: ['Pendiente', 'Parcial']
                 }
             });
 
             for (const adeudo of adeudosPendientes) {
                 await adeudo.update({
                     monto_pendiente: 0,
-                    estado: 'liquidado',
-                    cuotas_pagadas: adeudo.numero_cuotas || 1
+                    estado: 'Liquidado',
+                    fecha_liquidacion: new Date()
                 });
             }
         }
@@ -243,7 +240,7 @@ const createNomina = async (req, res) => {
                 req.usuario.id_usuario,
                 'creacion',
                 null,
-                estadoNomina === 'pendiente' ? 'Pendiente' : 'Pagada',
+                estadoNomina === 'Pendiente' ? 'Pendiente' : 'Pagado',
                 {
                     dias_laborados: diasLaboradosNum,
                     pago_por_dia: pagoPorDiaNum,
@@ -1089,36 +1086,30 @@ const cambiarEstadoNomina = async (req, res) => {
         let transicionValida = true;
 
         switch(estadoActual) {
-            case 'borrador':
+            case 'Pendiente':
                 // Desde pendiente puede pasar a cualquier estado
                 break;
-            case 'generada':
-                // Desde generada puede ir a revisada, pagada, archivada o cancelada
-                if (estado === 'borrador') {
+            case 'En_Proceso':
+                // Desde en proceso puede ir a aprobada, pagado o cancelada
+                if (estado === 'Pendiente') {
                     transicionValida = false;
                 }
                 break;
-            case 'revisada':
-                // Desde revisada solo puede ir a pagada, archivada o cancelada
-                if (estado === 'borrador' || estado === 'generada') {
+            case 'Aprobada':
+                // Desde aprobada solo puede ir a pagado o cancelada
+                if (estado === 'Pendiente' || estado === 'En_Proceso') {
                     transicionValida = false;
                 }
                 break;
-            case 'pagada':
-                // Desde pagada solo puede ir a archivada
-                if (estado !== 'pagada' && estado !== 'archivada') {
+            case 'Pagado':
+                // Desde pagado no puede cambiar a ningún otro estado
+                if (estado !== 'Pagado') {
                     transicionValida = false;
                 }
                 break;
-            case 'archivada':
-                // Desde archivada no puede cambiar a ningún otro estado
-                if (estado !== 'archivada') {
-                    transicionValida = false;
-                }
-                break;
-            case 'cancelada':
+            case 'Cancelada':
                 // Desde cancelada no puede cambiar a ningún otro estado
-                if (estado !== 'cancelada') {
+                if (estado !== 'Cancelada') {
                     transicionValida = false;
                 }
                 break;
@@ -1131,7 +1122,7 @@ const cambiarEstadoNomina = async (req, res) => {
         }
 
         // Verificar que el estado sea uno de los valores permitidos
-        const estadosPermitidos = ['borrador', 'generada', 'revisada', 'pagada', 'archivada', 'cancelada'];
+        const estadosPermitidos = ['Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'];
         if (!estadosPermitidos.includes(estado)) {
             return res.status(400).json({
                 message: `Estado inválido: '${estado}'. Estados permitidos: ${estadosPermitidos.join(', ')}`
