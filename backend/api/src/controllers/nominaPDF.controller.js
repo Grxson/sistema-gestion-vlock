@@ -191,9 +191,6 @@ const generarReciboPDF = async (req, res) => {
         doc.text('Oficina: C. Aldama 1949, Col. San Antonio, Guadalajara, Jalisco, México', margin, currentY);
         
         currentY += 12;
-        doc.text('Lugar de expedición: GUADALAJARA, JALISCO, MÉXICO', margin, currentY);
-        
-        currentY += 12;
         doc.text('Email: admon.vlock.contructora@gmail.com', margin, currentY);
 
 
