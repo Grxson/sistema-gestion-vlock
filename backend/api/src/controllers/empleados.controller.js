@@ -19,7 +19,7 @@ const getAllEmpleados = async (req, res) => {
         const whereClause = {};
         if (proyecto) whereClause.id_proyecto = proyecto;
         if (oficio) whereClause.id_oficio = oficio;
-        if (activo !== undefined) whereClause.activo = activo === 'true';
+        if (activo !== undefined && activo !== 'all') whereClause.activo = activo === 'true';
 
         const empleados = await Empleado.findAll({
             where: whereClause,

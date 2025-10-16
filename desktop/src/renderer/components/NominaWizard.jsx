@@ -23,6 +23,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
   const { isDarkMode } = useTheme();
   const { showSuccess, showError, showInfo } = useToast();
   
+  // Debug: verificar empleados recibidos (solo en desarrollo)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 [NominaWizard] Empleados recibidos:', empleados.length, empleados);
+  }
+  
   // Estados del wizard
   const [currentStep, setCurrentStep] = useState(1);
   const [processingNomina, setProcessingNomina] = useState(false);
@@ -70,6 +75,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
         emp.rfc?.toLowerCase().includes(formData.searchTerm.toLowerCase())
       )
     : [];
+  
+  // Debug: verificar empleados filtrados (solo en desarrollo)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 [NominaWizard] Empleados filtrados:', empleadosFiltrados.length, 'para término:', formData.searchTerm);
+  }
 
   // Calcular nómina cuando cambian los datos relevantes
   useEffect(() => {
@@ -630,6 +640,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                       {/* Lista de empleados filtrados */}
                       {formData.searchTerm && (
                         <div className="max-h-60 overflow-y-auto border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700">
+                          {process.env.NODE_ENV === 'development' && console.log('🔍 [NominaWizard] Renderizando lista de empleados:', empleadosFiltrados.length, 'empleados totales:', empleados.length, 'término de búsqueda:', formData.searchTerm, 'empleados:', empleados)}
                           {empleadosFiltrados.length > 0 ? (
                             empleadosFiltrados.map((empleado, index) => (
                               <div
@@ -674,6 +685,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                             ))
                           ) : (
                             <div className="p-4 text-center text-gray-500 dark:text-gray-400">
+                              {process.env.NODE_ENV === 'development' && console.log('🔍 [NominaWizard] No se encontraron empleados para:', formData.searchTerm)}
                               No se encontraron empleados
                             </div>
                           )}

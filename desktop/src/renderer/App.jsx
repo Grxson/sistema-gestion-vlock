@@ -3,6 +3,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { PermissionsProvider, usePermissions } from './contexts/PermissionsContext';
 import { ToastProvider } from './contexts/ToastContext';
+import { EmpleadosProvider } from './contexts/EmpleadosContext';
 import ProtectedRoute from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -230,9 +231,11 @@ function App() {
       <AuthProvider>
         <PermissionsProvider>
           <ToastProvider>
-            <ProtectedRoute>
-              <MainApp />
-            </ProtectedRoute>
+            <EmpleadosProvider>
+              <ProtectedRoute>
+                <MainApp />
+              </ProtectedRoute>
+            </EmpleadosProvider>
           </ToastProvider>
         </PermissionsProvider>
       </AuthProvider>

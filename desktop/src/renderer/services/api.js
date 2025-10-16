@@ -180,6 +180,7 @@ class ApiService {
         console.log(`[API:${requestId}] 📦 Procesando como JSON...`);
         data = await response.json();
         console.log(`[API:${requestId}] 📦 Datos recibidos (${Object.keys(data).length} propiedades)`);
+        console.log(`[API:${requestId}] 📦 Contenido completo:`, data);
       }
       
       return data;
@@ -285,8 +286,28 @@ class ApiService {
   }
 
   // Métodos específicos para empleados
-  async getEmpleados() {
-    return this.get('/empleados');
+  async getEmpleados(filters = {}) {
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [API] getEmpleados llamado con filtros:', filters);
+    }
+    const queryParams = new URLSearchParams();
+    
+    // Agregar filtros si están definidos
+    if (filters.proyecto) queryParams.append('proyecto', filters.proyecto);
+    if (filters.oficio) queryParams.append('oficio', filters.oficio);
+    if (filters.activo !== 'all' && filters.activo !== undefined) queryParams.append('activo', filters.activo);
+    
+    const url = queryParams.toString() ? `/empleados?${queryParams.toString()}` : '/empleados';
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [API] URL final para empleados:', url);
+      console.log('🔍 [API] Query params:', queryParams.toString());
+    }
+    
+    const response = await this.get(url);
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 [API] Respuesta de getEmpleados:', response);
+    }
+    return response;
   }
 
   async createEmpleado(empleadoData) {

@@ -4,6 +4,7 @@ import nominasServices from '../services/nominas';
 import { formatCurrency } from '../utils/currency';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
+import { useEmpleados } from '../contexts/EmpleadosContext';
 import NominaWizardSimplificado from './NominaWizard';
 import ChartsSection from './ui/ChartsSection';
 import AdeudosHistorial from './ui/AdeudosHistorial';
@@ -26,9 +27,14 @@ import {
 export default function Nomina() {
   const { isDarkMode } = useTheme();
   const { showSuccess, showError, showInfo } = useToast();
+  const { empleados, getEmpleadosActivos, refreshEmpleados } = useEmpleados();
+  
+  // Debug: verificar empleados del contexto (solo en desarrollo)
+  if (process.env.NODE_ENV === 'development') {
+    console.log('🔍 [Nomina] Empleados del contexto:', empleados.length, empleados);
+  }
   
   const [nominas, setNominas] = useState([]);
-  const [empleados, setEmpleados] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
@@ -40,8 +46,17 @@ export default function Nomina() {
   const [selectedEmpleadoAdeudos, setSelectedEmpleadoAdeudos] = useState(null);
 
   // Funciones de utilidad
-  const handleNominaSuccess = () => {
-    fetchData(); // Recargar datos después de procesar nómina
+  const handleNominaSuccess = async () => {
+    // Refrescar empleados desde el contexto global
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔄 [Nomina] Refrescando empleados en handleNominaSuccess...');
+    }
+    await refreshEmpleados();
+    if (process.env.NODE_ENV === 'development') {
+      console.log('✅ [Nomina] Empleados refrescados en handleNominaSuccess');
+    }
+    // Recargar otros datos
+    fetchData();
   };
 
 
@@ -56,9 +71,24 @@ export default function Nomina() {
       // Inicializar servicios de nóminas
       await nominasServices.inicializar();
       
-      // Fetch empleados usando el nuevo servicio
-      const empleadosActivos = await nominasServices.empleados.getEmpleadosActivos();
-      setEmpleados(empleadosActivos);
+      // Refrescar empleados desde el contexto global
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 [Nomina] Refrescando empleados desde el contexto...');
+      }
+      const empleadosRefrescados = await refreshEmpleados();
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ [Nomina] Empleados refrescados:', empleadosRefrescados?.length || 0);
+        console.log('✅ [Nomina] Empleados del contexto después del refresh:', empleados.length);
+        console.log('✅ [Nomina] Empleados del contexto después del refresh (datos):', empleados);
+        
+        // Esperar un poco para que el estado se actualice
+        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log('✅ [Nomina] Empleados del contexto después del delay:', empleados.length);
+        
+        // Verificar que los empleados se están pasando correctamente al wizard
+        console.log('🔍 [Nomina] Verificando empleados para el wizard:', empleados.length, empleados);
+        console.log('🔍 [Nomina] Verificando empleados para el wizard (después del delay):', empleados.length, empleados);
+      }
       
       // Fetch nominas usando el nuevo servicio
       let nominasData = [];
@@ -79,8 +109,6 @@ export default function Nomina() {
         console.log('Error loading statistics:', error);
         setEstadisticas(null);
       }
-
-
 
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -113,7 +141,7 @@ export default function Nomina() {
                 Nóminas
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {empleados.length} empleados activos
+                {getEmpleadosActivos().length} empleados activos
               </p>
             </div>
             <div className="flex items-center space-x-3">
@@ -158,7 +186,7 @@ export default function Nomina() {
               <div className="ml-3">
                 <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Empleados</p>
                 <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {empleados.filter(e => e.activo).length}
+                  {getEmpleadosActivos().length}
                 </p>
               </div>
             </div>
@@ -236,11 +264,11 @@ export default function Nomina() {
           </div>
           <div className="p-6">
               
-              {Array.isArray(empleados) && empleados.filter(empleado => empleado.activo === 1 || empleado.activo === true).length > 0 ? (
+              {Array.isArray(empleados) && getEmpleadosActivos().length > 0 ? (
                 viewMode === 'cards' ? (
                   /* Vista de Cards */
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {empleados.filter(empleado => empleado.activo === 1 || empleado.activo === true).map((empleado, index) => (
+                    {getEmpleadosActivos().map((empleado, index) => (
                       <EmpleadoCard
                         key={empleado.id_empleado || `empleado-${index}`}
                         empleado={empleado}
@@ -279,7 +307,7 @@ export default function Nomina() {
                         </tr>
                       </thead>
                       <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {empleados.filter(empleado => empleado.activo === 1 || empleado.activo === true).map((empleado, index) => (
+                        {getEmpleadosActivos().map((empleado, index) => (
                           <tr key={empleado.id_empleado || `empleado-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
@@ -435,6 +463,7 @@ export default function Nomina() {
         </div>
 
         {/* Nomina Wizard Simplificado */}
+        {process.env.NODE_ENV === 'development' && console.log('🔍 [Nomina] Pasando empleados al wizard:', empleados.length, empleados)}
         <NominaWizardSimplificado 
           isOpen={showWizard}
           onClose={() => setShowWizard(false)}

@@ -3,6 +3,7 @@ import apiService from '../services/api';
 import PermissionGuard from './PermissionGuard';
 import { usePermissions } from '../contexts/PermissionsContext';
 import { useToast } from '../contexts/ToastContext';
+import { useEmpleados } from '../contexts/EmpleadosContext';
 import PermissionButton from './ui/PermissionButton';
 import DateInput from './ui/DateInput';
 import EmpleadoConfirmModal from './EmpleadoConfirmModal';
@@ -19,11 +20,18 @@ import {
 } from '@heroicons/react/24/outline';
 
 export default function Empleados() {
-  const [empleados, setEmpleados] = useState([]);
+  const { 
+    empleados, 
+    loading: empleadosLoading, 
+    fetchEmpleados, 
+    updateEmpleadoInList, 
+    addEmpleadoToList, 
+    removeEmpleadoFromList 
+  } = useEmpleados();
+  
   const [oficios, setOficios] = useState([]);
   const [contratos, setContratos] = useState([]);
   const [proyectos, setProyectos] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -83,31 +91,15 @@ export default function Empleados() {
   };
 
   useEffect(() => {
-    fetchEmpleados();
+    // Solo cargar datos auxiliares, los empleados se cargan automáticamente desde el contexto
+    console.log('🔄 [Empleados] Cargando datos auxiliares...');
+    console.log('🔄 [Empleados] Estado inicial de empleados:', empleados.length);
     fetchOficios();
     fetchContratos();
     fetchProyectos();
   }, []);
 
-  const fetchEmpleados = async () => {
-    try {
-      setLoading(true);
-      const queryParams = new URLSearchParams();
-      
-      // Agregar filtros si están definidos
-      if (filters.proyecto) queryParams.append('proyecto', filters.proyecto);
-      if (filters.oficio) queryParams.append('oficio', filters.oficio);
-      if (filters.activo !== 'all') queryParams.append('activo', filters.activo);
-      
-      const url = queryParams.toString() ? `/empleados?${queryParams.toString()}` : '/empleados';
-      const response = await apiService.get(url);
-      setEmpleados(response.empleados || []);
-    } catch (error) {
-      console.error('Error fetching empleados:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Los empleados se cargan automáticamente desde el contexto al inicializar
   
   const fetchOficios = async () => {
     try {
@@ -140,8 +132,12 @@ export default function Empleados() {
 
   // Refrescar empleados cuando cambien los filtros
   useEffect(() => {
-    fetchEmpleados();
-  }, [filters]);
+    console.log('🔄 [Empleados] Refrescando empleados con filtros:', filters);
+    console.log('🔄 [Empleados] fetchEmpleados function:', typeof fetchEmpleados);
+    fetchEmpleados(filters).catch(error => {
+      console.error('❌ [Empleados] Error al refrescar empleados:', error);
+    });
+  }, [filters, fetchEmpleados]);
   const validateForm = () => {
     if (!formData.nombre.trim()) {
       showError('Error de validación', 'El nombre es obligatorio');
@@ -206,9 +202,17 @@ export default function Empleados() {
         
         // Verificar que la respuesta sea exitosa
         if (response && (response.success || response.data)) {
+          const empleadoData = response.data || response.empleado;
+          
+          // Actualizar el contexto global
+          if (editingEmpleado) {
+            updateEmpleadoInList(empleadoData);
+          } else {
+            addEmpleadoToList(empleadoData);
+          }
+          
           // Cerrar modal y reiniciar estado
           resetForm();
-          fetchEmpleados();
           showSuccess(
             editingEmpleado ? 'Empleado actualizado' : 'Empleado creado',
             editingEmpleado ? 'El empleado ha sido actualizado con éxito' : 'El empleado ha sido creado con éxito'
@@ -358,11 +362,21 @@ export default function Empleados() {
     empleado.apellido?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     (empleado.oficio?.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     empleado.nss?.includes(searchTerm) ||
-    (empleado.contrato?.nombre || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (empleado.contrato?.tipo_contrato || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (empleado.proyecto?.nombre || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
+  // Debug: verificar el estado de empleados
+  console.log('🔍 [Empleados] Estado actual:', {
+    empleados: empleados.length,
+    loading: empleadosLoading,
+    filtered: filteredEmpleados.length,
+    searchTerm,
+    empleadosData: empleados
+  });
+
+  if (empleadosLoading) {
+    console.log('🔄 [Empleados] Mostrando loading...');
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
@@ -581,8 +595,13 @@ export default function Empleados() {
             <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
             <h3 className="mt-2 text-sm font-medium text-gray-900">No hay empleados</h3>
             <p className="mt-1 text-sm text-gray-500">
-              Comienza agregando un nuevo empleado.
+              {empleados.length === 0 ? 'Cargando empleados...' : 'No se encontraron empleados con los filtros aplicados.'}
             </p>
+            {empleados.length > 0 && (
+              <p className="mt-1 text-xs text-gray-400">
+                Total de empleados: {empleados.length}
+              </p>
+            )}
           </div>
         )}
       </div>

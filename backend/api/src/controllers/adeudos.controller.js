@@ -8,20 +8,15 @@ const getAdeudosEmpleado = async (req, res) => {
     const { idEmpleado } = req.params;
 
     const adeudos = await models.Adeudo_empleado.findAll({
-      where: { id_empleado: idEmpleado },
+      where: { empleado_id: idEmpleado },
       include: [
         {
           model: models.Empleados,
           as: 'empleado',
           attributes: ['id_empleado', 'nombre', 'apellido']
-        },
-        {
-          model: models.Nomina_empleado,
-          as: 'nomina',
-          attributes: ['id_nomina', 'createdAt']
         }
       ],
-      order: [['fecha_adeudo', 'DESC']]
+      order: [['fecha_creacion', 'DESC']]
     });
 
     res.json({
@@ -47,8 +42,8 @@ const getTotalAdeudosPendientes = async (req, res) => {
 
     const adeudos = await models.Adeudo_empleado.findAll({
       where: { 
-        id_empleado: idEmpleado,
-        estado: ['Pendiente', 'Parcial']
+        empleado_id: idEmpleado,
+        estado: ['pendiente', 'en_proceso']
       }
     });
 
@@ -76,26 +71,31 @@ const getTotalAdeudosPendientes = async (req, res) => {
 const crearAdeudo = async (req, res) => {
   try {
     const {
-      id_empleado,
-      id_nomina,
-      monto_adeudo,
-      monto_pagado = 0,
+      empleado_id,
+      concepto,
+      descripcion,
+      monto_total,
+      tipo_adeudo = 'prestamo',
       observaciones
     } = req.body;
 
     // Validar datos requeridos
-    if (!id_empleado || !monto_adeudo) {
+    if (!empleado_id || !monto_total) {
       return res.status(400).json({
         success: false,
-        message: 'ID del empleado y monto del adeudo son requeridos'
+        message: 'ID del empleado y monto total son requeridos'
       });
     }
 
     const nuevoAdeudo = await models.Adeudo_empleado.create({
-      id_empleado,
-      id_nomina,
-      monto_adeudo: parseFloat(monto_adeudo),
-      monto_pagado: parseFloat(monto_pagado),
+      empleado_id,
+      concepto: concepto || 'Adeudo de empleado',
+      descripcion,
+      monto_total: parseFloat(monto_total),
+      monto_pendiente: parseFloat(monto_total), // Inicialmente el pendiente es igual al total
+      tipo_adeudo,
+      fecha_creacion: new Date(),
+      estado: 'pendiente',
       observaciones
     });
 
@@ -204,7 +204,8 @@ const getAllAdeudosPendientes = async (req, res) => {
   try {
     const adeudos = await models.Adeudo_empleado.findAll({
       where: {
-        estado: ['Pendiente', 'Parcial']
+        estado: ['pendiente', 'en_proceso'],
+        activo: true
       },
       include: [
         {
@@ -213,7 +214,7 @@ const getAllAdeudosPendientes = async (req, res) => {
           attributes: ['id_empleado', 'nombre', 'apellido']
         }
       ],
-      order: [['fecha_adeudo', 'ASC']]
+      order: [['fecha_creacion', 'ASC']]
     });
 
     res.json({
@@ -237,14 +238,14 @@ const getEstadisticasAdeudos = async (req, res) => {
   try {
     const [totalAdeudos, adeudosPendientes, adeudosParciales, adeudosLiquidados] = await Promise.all([
       models.Adeudo_empleado.count(),
-      models.Adeudo_empleado.count({ where: { estado: 'Pendiente' } }),
-      models.Adeudo_empleado.count({ where: { estado: 'Parcial' } }),
-      models.Adeudo_empleado.count({ where: { estado: 'Liquidado' } })
+      models.Adeudo_empleado.count({ where: { estado: 'pendiente' } }),
+      models.Adeudo_empleado.count({ where: { estado: 'en_proceso' } }),
+      models.Adeudo_empleado.count({ where: { estado: 'liquidado' } })
     ]);
 
     // Calcular montos totales
     const adeudosPendientesData = await models.Adeudo_empleado.findAll({
-      where: { estado: ['Pendiente', 'Parcial'] },
+      where: { estado: ['pendiente', 'en_proceso'] },
       attributes: ['monto_pendiente']
     });
 

@@ -70,8 +70,8 @@ module.exports = (sequelize) => {
       comment: 'Monto realmente pagado al empleado (puede ser menor al monto_total en caso de pago parcial)'
     },
     estado: {
-      type: DataTypes.ENUM('Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'),
-      defaultValue: 'Pendiente'
+      type: DataTypes.ENUM('borrador', 'generada', 'revisada', 'pagada', 'archivada', 'cancelada'),
+      defaultValue: 'borrador'
     },
     recibo_pdf: {
       type: DataTypes.STRING(255)
