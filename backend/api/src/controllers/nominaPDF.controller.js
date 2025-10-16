@@ -182,16 +182,20 @@ const generarReciboPDF = async (req, res) => {
         
         doc.fontSize(9)
            .font('Helvetica')
-           .text('VLOCK CONSTRUCTORA', margin, currentY);
+           .text('EDIFICACIONES OROCAZA SA DE CV', margin, currentY);
         
         currentY += 12;
-        doc.text('RFC: VLO240101ABC', margin, currentY);
+        doc.text('RFC: EOR161129LG4', margin, currentY);
         
         currentY += 12;
-        doc.text('Reg Fiscal: 601 General de Ley Personas Morales', margin, currentY);
+        doc.text('Oficina: C. Aldama 1949, Col. San Antonio, Guadalajara, Jalisco, México', margin, currentY);
         
         currentY += 12;
         doc.text('Lugar de expedición: GUADALAJARA, JALISCO, MÉXICO', margin, currentY);
+        
+        currentY += 12;
+        doc.text('Email: admon.vlock.contructora@gmail.com', margin, currentY);
+
 
         // Fecha y hora de generación (esquina superior derecha)
         const fechaActual = new Date();
@@ -279,13 +283,6 @@ const generarReciboPDF = async (req, res) => {
         doc.fontSize(8)
            .text(`Fecha Inicio: ${fechaInicio}`, empCol1X, currentY);
         
-        currentY += 10;
-        doc.fontSize(8)
-           .text('Jornada: Diurna', empCol1X, currentY);
-        
-        currentY += 10;
-        doc.fontSize(8)
-           .text('Tipo Salario: Variable', empCol1X, currentY);
 
         // Columna derecha - INFORMACIÓN DEL PERÍODO
         let col2Y = currentY - 50; // Ajustar para alinear con columna izquierda
@@ -599,11 +596,12 @@ const generarReciboPDF = async (req, res) => {
         
         doc.fontSize(7)
            .font('Helvetica')
-           .text(`Documento generado el ${fechaFormateada} a las ${horaFormateada}`, margin, piePageY - 15, { align: 'center', width: pageWidth - 2 * margin });
+           .text(`Documento generado el ${fechaFormateada} a las ${horaFormateada} en Guadalajara Jalisco`, margin, piePageY - 15, { align: 'center', width: pageWidth - 2 * margin });
         
-        const nombreResponsable = req.usuario ? 
-            `${req.usuario.nombre_usuario.toUpperCase()}` : 
-            'Vlock Constructora';
+        //const nombreResponsable = req.usuario ? 
+          //  `${req.usuario.nombre_usuario.toUpperCase()}` : 
+            //'Vlock Constructora';
+        const nombreResponsable = 'ZAIDA KAREN COVARRUBIAS CASILLAS';
         
         doc.fontSize(7)
            .text(`Emitido por: ${nombreResponsable}`, margin, piePageY, { align: 'center', width: pageWidth - 2 * margin });
