@@ -731,6 +731,59 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
   }
 };
 
+// Función para exportar herramientas a Excel
+export const exportHerramientasToExcel = async (herramientas) => {
+  try {
+    // Mapear datos de herramientas con las columnas solicitadas
+    const exportData = herramientas.map(herramienta => ({
+      'Nombre': herramienta.nombre || '',
+      'Marca': herramienta.marca || '',
+      'Número de Serie': herramienta.serial || '',
+      'Categoría': herramienta.categorias_herramientum?.nombre || 'Sin categoría',
+      'Stock Inicial': herramienta.stock_inicial || 0,
+      'Stock Actual': herramienta.stock || 0,
+      'Proyecto': herramienta.proyecto?.nombre || 'No asignado',
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(exportData);
+
+    // Configurar ancho de columnas optimizado para herramientas
+    const colWidths = [
+      { wch: 25 }, // Nombre
+      { wch: 20 }, // Marca
+      { wch: 20 }, // Número de Serie
+      { wch: 20 }, // Categoría
+      { wch: 12 }, // Stock Inicial
+      { wch: 12 }, // Stock Actual
+      { wch: 25 }, // Proyecto
+    ];
+    ws['!cols'] = colWidths;
+
+    XLSX.utils.book_append_sheet(wb, ws, 'Herramientas');
+
+    const fileName = `herramientas_export_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.xlsx`;
+    XLSX.writeFile(wb, fileName);
+
+    return { success: true, fileName };
+  } catch (error) {
+    console.error('Error exportando herramientas a Excel:', error);
+    throw new Error('Error al exportar herramientas a Excel');
+  }
+};
+
+// Función auxiliar para obtener el label del estado
+const getEstadoLabel = (estado) => {
+  const estados = {
+    1: 'Disponible',
+    2: 'Prestado',
+    3: 'Mantenimiento',
+    4: 'Reparación',
+    5: 'Fuera de Servicio'
+  };
+  return estados[estado] || 'Desconocido';
+};
+
 // Función para procesar archivo de importación
 export const processImportFile = async (file) => {
   try {

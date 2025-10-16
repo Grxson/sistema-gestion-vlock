@@ -7,6 +7,7 @@ import HerramientaModal from '../components/modals/HerramientaModal';
 import MovimientoModal from '../components/modals/MovimientoModal';
 import ConfirmationModal from '../components/modals/ConfirmationModal';
 import apiService from '../services/api';
+import { exportHerramientasToExcel } from '../utils/exportUtils';
 import {
   PlusIcon,
   MagnifyingGlassIcon,
@@ -19,7 +20,8 @@ import {
   ClockIcon,
   CalendarIcon,
   BuildingOfficeIcon,
-  ArrowsRightLeftIcon
+  ArrowsRightLeftIcon,
+  ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 
 const Herramientas = () => {
@@ -320,6 +322,32 @@ const Herramientas = () => {
     loadHerramientas();
   };
 
+  // Función para exportar herramientas a Excel
+  const handleExportToExcel = async () => {
+    try {
+      if (filteredHerramientas.length === 0) {
+        showWarning('Sin datos para exportar', 'No hay herramientas para exportar. Ajusta los filtros o agrega herramientas.');
+        return;
+      }
+
+      showInfo('Exportando...', 'Generando archivo Excel con los datos de herramientas...');
+      
+      const result = await exportHerramientasToExcel(filteredHerramientas);
+      
+      if (result.success) {
+        showSuccess(
+          '¡Exportación exitosa!', 
+          `Se ha generado el archivo "${result.fileName}" con ${filteredHerramientas.length} herramientas.`
+        );
+      } else {
+        showError('Error en la exportación', 'No se pudo generar el archivo Excel. Intenta nuevamente.');
+      }
+    } catch (error) {
+      console.error('Error al exportar herramientas:', error);
+      showError('Error al exportar', 'Ocurrió un error al exportar las herramientas. Intenta nuevamente.');
+    }
+  };
+
   // Función específica para refrescar datos (usada después de eliminar historial)
   const handleRefreshData = async () => {
     await loadHerramientas();
@@ -371,13 +399,24 @@ const Herramientas = () => {
               </div>
             </div>
             
-            <button
-              onClick={handleCreate}
-              className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
-            >
-              <PlusIcon className="h-5 w-5 mr-2" />
-              Nueva Herramienta
-            </button>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={handleExportToExcel}
+                className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+                title="Exportar herramientas a Excel"
+              >
+                <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+                Exportar Excel
+              </button>
+              
+              <button
+                onClick={handleCreate}
+                className="inline-flex items-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors duration-200"
+              >
+                <PlusIcon className="h-5 w-5 mr-2" />
+                Nueva Herramienta
+              </button>
+            </div>
           </div>
         </div>
       </div>

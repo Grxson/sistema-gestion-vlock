@@ -14,11 +14,11 @@ import {
 import { formatCurrency } from '../../utils/currency';
 import nominasServices from '../../services/nominas';
 
-const AdeudosHistorial = ({ empleado, onClose }) => {
+const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
   const [adeudos, setAdeudos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [showLiquidados, setShowLiquidados] = useState(false);
+  const [soloPendientes, setSoloPendientes] = useState(false);
 
   useEffect(() => {
     cargarAdeudos();
@@ -83,7 +83,8 @@ const AdeudosHistorial = ({ empleado, onClose }) => {
   // Filtrar adeudos según el estado de visualización
   const adeudosPendientes = adeudos.filter(a => a.estado !== 'Liquidado');
   const adeudosLiquidados = adeudos.filter(a => a.estado === 'Liquidado');
-  const adeudosAVisualizar = showLiquidados ? adeudos : adeudosPendientes;
+  // Por defecto mostrar todos los adeudos, con opción de filtrar solo pendientes
+  const adeudosAVisualizar = soloPendientes ? adeudosPendientes : adeudos;
 
   const liquidarAdeudo = async (adeudoId) => {
     // Validar que el ID existe
@@ -94,26 +95,47 @@ const AdeudosHistorial = ({ empleado, onClose }) => {
     }
 
     try {
-      console.log('Liquidando adeudo con ID:', adeudoId);
+      console.log('🔄 [ADEUDOS] Liquidando adeudo con ID:', adeudoId);
+      console.log('🔄 [ADEUDOS] Adeudos antes de liquidar:', adeudos);
+      
       await nominasServices.adeudos.liquidarAdeudo(adeudoId);
+      console.log('✅ [ADEUDOS] Adeudo liquidado exitosamente en el backend');
       
       // Actualizar el estado local inmediatamente
-      setAdeudos(prevAdeudos => 
-        prevAdeudos.map(adeudo => {
+      setAdeudos(prevAdeudos => {
+        console.log('🔄 [ADEUDOS] Actualizando estado local, adeudos previos:', prevAdeudos);
+        
+        const updatedAdeudos = prevAdeudos.map(adeudo => {
           const currentId = adeudo.id_adeudo || adeudo.id;
-          return currentId === adeudoId 
-            ? { 
-                ...adeudo, 
-                estado: 'Liquidado', 
-                monto_pagado: adeudo.monto_adeudo || adeudo.monto_total,
-                monto_pendiente: 0,
-                fecha_liquidacion: new Date().toISOString()
-              }
-            : adeudo;
-        })
-      );
+          console.log(`🔍 [ADEUDOS] Comparando: currentId=${currentId} (tipo: ${typeof currentId}) vs adeudoId=${adeudoId} (tipo: ${typeof adeudoId})`);
+          
+          // Convertir ambos a número para comparación
+          const currentIdNum = parseInt(currentId);
+          const adeudoIdNum = parseInt(adeudoId);
+          
+          if (currentIdNum === adeudoIdNum) {
+            console.log('✅ [ADEUDOS] Encontrado adeudo para actualizar:', adeudo);
+            return { 
+              ...adeudo, 
+              estado: 'Liquidado', 
+              monto_pagado: adeudo.monto_adeudo || adeudo.monto_total,
+              monto_pendiente: 0,
+              fecha_liquidacion: new Date().toISOString()
+            };
+          }
+          return adeudo;
+        });
+        
+        console.log('✅ [ADEUDOS] Adeudos actualizados:', updatedAdeudos);
+        return updatedAdeudos;
+      });
+      
+      // Notificar al componente padre para actualizar estadísticas
+      if (onAdeudoLiquidado) {
+        onAdeudoLiquidado();
+      }
     } catch (error) {
-      console.error('Error liquidating adeudo:', error);
+      console.error('❌ [ADEUDOS] Error liquidating adeudo:', error);
       setError('Error al liquidar adeudo');
     }
   };
@@ -135,6 +157,11 @@ const AdeudosHistorial = ({ empleado, onClose }) => {
             : adeudo;
         })
       );
+      
+      // Notificar al componente padre para actualizar estadísticas
+      if (onAdeudoLiquidado) {
+        onAdeudoLiquidado();
+      }
     } catch (error) {
       console.error('Error updating adeudo:', error);
       setError('Error al actualizar adeudo');
@@ -218,7 +245,7 @@ const AdeudosHistorial = ({ empleado, onClose }) => {
         <div className="mb-4 flex items-center justify-between">
           <div className="text-sm text-gray-600 dark:text-gray-400">
             Mostrando {adeudosAVisualizar.length} de {adeudos.length} adeudos
-            {!showLiquidados && adeudosLiquidados.length > 0 && (
+            {soloPendientes && adeudosLiquidados.length > 0 && (
               <span className="ml-2 text-green-600 dark:text-green-400">
                 ({adeudosLiquidados.length} liquidados ocultos)
               </span>
@@ -227,18 +254,18 @@ const AdeudosHistorial = ({ empleado, onClose }) => {
           
           {adeudosLiquidados.length > 0 && (
             <button
-              onClick={() => setShowLiquidados(!showLiquidados)}
+              onClick={() => setSoloPendientes(!soloPendientes)}
               className="inline-flex items-center px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors duration-200"
             >
-              {showLiquidados ? (
+              {soloPendientes ? (
                 <>
-                  <ChevronUpIcon className="h-4 w-4 mr-2" />
-                  Ocultar Liquidados
+                  <ChevronDownIcon className="h-4 w-4 mr-2" />
+                  Mostrar Todos ({adeudos.length})
                 </>
               ) : (
                 <>
-                  <ChevronDownIcon className="h-4 w-4 mr-2" />
-                  Mostrar Liquidados ({adeudosLiquidados.length})
+                  <ChevronUpIcon className="h-4 w-4 mr-2" />
+                  Solo Pendientes ({adeudosPendientes.length})
                 </>
               )}
             </button>
@@ -254,7 +281,7 @@ const AdeudosHistorial = ({ empleado, onClose }) => {
           <div className="text-center py-8">
             <CurrencyDollarIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
             <p className="text-gray-600 dark:text-gray-400">
-              {showLiquidados ? 'No hay adeudos liquidados' : 'No hay adeudos pendientes'}
+              {soloPendientes ? 'No hay adeudos pendientes' : 'No hay adeudos registrados'}
             </p>
           </div>
         ) : (
@@ -265,7 +292,11 @@ const AdeudosHistorial = ({ empleado, onClose }) => {
               return (
                 <div
                   key={adeudo.id_adeudo || adeudo.id || `adeudo-${index}`}
-                  className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-200 dark:border-gray-600"
+                  className={`rounded-lg p-4 border ${
+                    adeudo.estado === 'Liquidado' 
+                      ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800' 
+                      : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'
+                  }`}
                 >
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-3">
@@ -275,8 +306,13 @@ const AdeudosHistorial = ({ empleado, onClose }) => {
                         Adeudo #{adeudo.id_adeudo || adeudo.id}
                       </h3>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {formatFecha(adeudo.fecha_adeudo || adeudo.fecha_creacion)}
+                        Creado: {formatFecha(adeudo.fecha_adeudo || adeudo.fecha_creacion)}
                       </p>
+                      {adeudo.estado === 'Liquidado' && adeudo.fecha_liquidacion && (
+                        <p className="text-sm text-green-600 dark:text-green-400 font-medium">
+                          Liquidado: {formatFecha(adeudo.fecha_liquidacion)}
+                        </p>
+                      )}
                       {!empleado && adeudo.empleado && (
                         <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">
                           {adeudo.empleado.nombre} {adeudo.empleado.apellido}

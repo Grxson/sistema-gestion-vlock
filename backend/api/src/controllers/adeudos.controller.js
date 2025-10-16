@@ -167,19 +167,36 @@ const actualizarAdeudo = async (req, res) => {
 const liquidarAdeudo = async (req, res) => {
   try {
     const { idAdeudo } = req.params;
+    console.log('🔄 [BACKEND] Liquidando adeudo con ID:', idAdeudo);
 
     const adeudo = await models.Adeudo_empleado.findByPk(idAdeudo);
     if (!adeudo) {
+      console.log('❌ [BACKEND] Adeudo no encontrado con ID:', idAdeudo);
       return res.status(404).json({
         success: false,
         message: 'Adeudo no encontrado'
       });
     }
 
+    console.log('🔍 [BACKEND] Adeudo encontrado:', {
+      id: adeudo.id,
+      estado_actual: adeudo.estado,
+      monto_total: adeudo.monto_total,
+      monto_pendiente: adeudo.monto_pendiente
+    });
+
     await adeudo.update({
-      monto_pagado: adeudo.monto_adeudo,
+      monto_pagado: adeudo.monto_total,
+      monto_pendiente: 0,
       estado: 'Liquidado',
       fecha_liquidacion: new Date()
+    });
+
+    console.log('✅ [BACKEND] Adeudo liquidado exitosamente:', {
+      id: adeudo.id,
+      nuevo_estado: adeudo.estado,
+      monto_pagado: adeudo.monto_pagado,
+      monto_pendiente: adeudo.monto_pendiente
     });
 
     res.json({
@@ -188,7 +205,7 @@ const liquidarAdeudo = async (req, res) => {
       message: 'Adeudo liquidado exitosamente'
     });
   } catch (error) {
-    console.error('Error liquidating debt:', error);
+    console.error('❌ [BACKEND] Error liquidating debt:', error);
     res.status(500).json({
       success: false,
       message: 'Error al liquidar adeudo',

@@ -60,6 +60,13 @@ export default function Nomina() {
     fetchData();
   };
 
+  // Función para refrescar datos cuando se liquida un adeudo
+  const handleAdeudoLiquidado = async () => {
+    console.log('🔄 [Nomina] Adeudo liquidado, refrescando estadísticas...');
+    // Refrescar estadísticas y datos
+    await fetchData();
+  };
+
 
   useEffect(() => {
     fetchData();
@@ -633,6 +640,7 @@ export default function Nomina() {
         <AdeudosHistorial
           empleado={selectedEmpleadoAdeudos}
           onClose={() => setShowAdeudosHistorial(false)}
+          onAdeudoLiquidado={handleAdeudoLiquidado}
         />
       )}
     </div>

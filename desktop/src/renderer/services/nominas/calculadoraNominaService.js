@@ -1,3 +1,5 @@
+import ApiService from '../api.js';
+
 /**
  * Servicio para cálculos de nómina
  * Maneja todos los cálculos fiscales y de prestaciones
@@ -270,9 +272,19 @@ export class CalculadoraNominaService {
    */
   static async getTotalSalariosMensuales() {
     try {
-      // Esta función debería obtener los empleados activos desde el servicio de empleados
-      // Por ahora retorna un valor simulado
-      return 0; // Se implementará cuando se integre con el servicio de empleados
+      // Obtener empleados activos desde la API
+      const response = await ApiService.get('/empleados?activo=true');
+      const empleados = response.empleados || response.data || [];
+      
+      // Calcular total mensual (asumiendo 6 días por semana, 4 semanas por mes = 24 días)
+      const diasPorMes = 24;
+      const totalMensual = empleados.reduce((total, empleado) => {
+        const salarioDiario = empleado.pago_diario || empleado.contrato?.salario_diario || 0;
+        return total + (salarioDiario * diasPorMes);
+      }, 0);
+      
+      console.log('💰 [CALCULADORA] Total salarios mensuales calculado:', totalMensual);
+      return totalMensual;
     } catch (error) {
       console.error('Error calculating total monthly salaries:', error);
       return 0;
