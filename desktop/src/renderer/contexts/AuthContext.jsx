@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiService from '../services/api';
+import { useToast } from './ToastContext';
 
 const AuthContext = createContext();
 
@@ -17,6 +18,7 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [lastVerified, setLastVerified] = useState(null);
   const [authError, setAuthError] = useState(null);
+  const { showSessionExpired } = useToast();
 
   // Efecto para verificar la autenticación al inicio
   useEffect(() => {
@@ -68,6 +70,15 @@ export const AuthProvider = ({ children }) => {
       console.log(`[AuthContext] Rol: ${response.usuario.rol} (ID: ${response.usuario.id_rol})`);
     } catch (error) {
       console.error('[AuthContext] Error verificando autenticación:', error);
+      
+      // Si es un error de token expirado, mostrar notificación y cerrar sesión
+      if (error.code === 'TOKEN_EXPIRED' || error.code === 'SESSION_EXPIRED') {
+        console.log('[AuthContext] Token expirado, cerrando sesión y mostrando notificación');
+        showSessionExpired();
+        logout();
+        return;
+      }
+      
       setAuthError({
         message: error.message || 'Error de autenticación',
         timestamp: new Date(),

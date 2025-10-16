@@ -71,6 +71,17 @@ export const ToastProvider = ({ children }) => {
     });
   }, [addToast]);
 
+  const showSessionExpired = useCallback((options = {}) => {
+    return addToast({
+      type: 'warning',
+      title: 'Sesión Expirada',
+      message: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
+      duration: 6000,
+      persistent: true, // No se cierra automáticamente
+      ...options
+    });
+  }, [addToast]);
+
   const clearAll = useCallback(() => {
     setToasts([]);
   }, []);
@@ -80,6 +91,7 @@ export const ToastProvider = ({ children }) => {
     showError,
     showWarning,
     showInfo,
+    showSessionExpired,
     clearAll,
     addToast,
     removeToast

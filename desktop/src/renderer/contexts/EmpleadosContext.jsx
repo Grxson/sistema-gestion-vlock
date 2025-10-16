@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import apiService from '../services/api';
+import { useAuthErrorHandler } from '../hooks/useAuthErrorHandler';
 
 const EmpleadosContext = createContext();
 
@@ -15,9 +16,20 @@ export const EmpleadosProvider = ({ children }) => {
   const [empleados, setEmpleados] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
+  const { handleAuthError } = useAuthErrorHandler();
 
   const fetchEmpleados = useCallback(async (filters = {}) => {
     try {
+      // Verificar si hay token válido antes de hacer la petición
+      const token = apiService.getToken();
+      if (!token || apiService.isTokenExpired()) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔄 [EmpleadosContext] No hay token válido, saltando fetch de empleados');
+        }
+        setEmpleados([]);
+        return [];
+      }
+
       setLoading(true);
       if (process.env.NODE_ENV === 'development') {
         console.log('🔄 [EmpleadosContext] Iniciando fetch de empleados con filtros:', filters);
@@ -54,17 +66,24 @@ export const EmpleadosProvider = ({ children }) => {
       console.error('❌ [EmpleadosContext] Error details:', {
         message: error.message,
         status: error.status,
-        data: error.data
+        data: error.data,
+        code: error.code
       });
       
-      // Si hay un error, mantener el estado actual de empleados
-      // pero mostrar el error en la consola
+      // Manejar errores de autenticación
+      if (handleAuthError(error)) {
+        console.log('🔄 [EmpleadosContext] Error de autenticación manejado, limpiando empleados');
+        setEmpleados([]);
+        return [];
+      }
+      
+      // Para otros errores, mantener el estado actual de empleados
       setEmpleados([]);
       throw error;
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [handleAuthError]);
 
   const refreshEmpleados = useCallback(async (filters = {}) => {
     console.log('🔄 Refrescando empleados...');
@@ -102,6 +121,15 @@ export const EmpleadosProvider = ({ children }) => {
 
   // Inicializar empleados automáticamente al cargar el contexto
   useEffect(() => {
+    // Solo inicializar si hay un token válido
+    const token = apiService.getToken();
+    if (!token || apiService.isTokenExpired()) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🚀 [EmpleadosContext] No hay token válido, saltando inicialización');
+      }
+      return;
+    }
+
     if (process.env.NODE_ENV === 'development') {
       console.log('🚀 [EmpleadosContext] Inicializando contexto de empleados...');
       console.log('🚀 [EmpleadosContext] fetchEmpleados function:', typeof fetchEmpleados);

@@ -228,17 +228,17 @@ function MainApp() {
 function App() {
   return (
     <ThemeProvider>
-      <AuthProvider>
-        <PermissionsProvider>
-          <ToastProvider>
+      <ToastProvider>
+        <AuthProvider>
+          <PermissionsProvider>
             <EmpleadosProvider>
               <ProtectedRoute>
                 <MainApp />
               </ProtectedRoute>
             </EmpleadosProvider>
-          </ToastProvider>
-        </PermissionsProvider>
-      </AuthProvider>
+          </PermissionsProvider>
+        </AuthProvider>
+      </ToastProvider>
     </ThemeProvider>
   );
 }
