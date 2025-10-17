@@ -208,8 +208,8 @@ export default function NominaCharts({ chartsData, loading }) {
     },
     {
       id: 'monthly',
-      title: 'Pagos Mensuales',
-      description: 'Evolución de pagos en los últimos 6 meses',
+      title: `Último mes - (${new Date().toLocaleDateString('es-MX', { month: 'long', year: 'numeric' })})`,
+      description: 'Distribución de pagos en las 4 semanas del mes actual',
       icon: ArrowTrendingUpIcon,
       component: (
         <Line 
@@ -220,8 +220,8 @@ export default function NominaCharts({ chartsData, loading }) {
     },
     {
       id: 'topEmpleados',
-      title: 'Top 10 Empleados',
-      description: 'Empleados con mayor monto acumulado',
+      title: 'Todos los Empleados',
+      description: 'Monto acumulado por empleado',
       icon: ChartBarIcon,
       component: (
         <Bar 
@@ -348,10 +348,10 @@ export default function NominaCharts({ chartsData, loading }) {
         {/* Top 5 Empleados */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
           <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-            Top 5 Empleados
+            Empleados
           </h4>
           <div className="space-y-3">
-            {topEmpleados.labels.slice(0, 5).map((label, index) => (
+            {topEmpleados.labels.slice(0, 10).map((label, index) => (
               <div key={index} className="flex items-center justify-between">
                 <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
                   {label}
@@ -367,7 +367,7 @@ export default function NominaCharts({ chartsData, loading }) {
         {/* Estadísticas Mensuales */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
           <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-            Últimos 6 Meses
+            Este Mes
           </h4>
           <div className="space-y-3">
             {monthlyPayments.labels.map((label, index) => (
@@ -378,6 +378,21 @@ export default function NominaCharts({ chartsData, loading }) {
                 </span>
               </div>
             ))}
+            
+            {/* Total del Mes */}
+            <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-600">
+              <div className="flex items-center justify-between">
+                <span className="text-base font-semibold text-gray-900 dark:text-white">
+                  Total del Mes
+                </span>
+                <span className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                  {formatCurrency(monthlyPayments.data.reduce((sum, amount) => sum + amount, 0))}
+                </span>
+              </div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Suma de las 4 semanas
+              </div>
+            </div>
           </div>
         </div>
       </div>

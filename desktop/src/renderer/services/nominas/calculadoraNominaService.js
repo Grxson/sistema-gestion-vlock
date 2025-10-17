@@ -60,6 +60,7 @@ export class CalculadoraNominaService {
       const {
         diasLaborados,
         pagoPorDia,
+        salarioBase,
         horasExtra = 0,
         bonos = 0,
         deduccionesAdicionales = 0,
@@ -77,15 +78,15 @@ export class CalculadoraNominaService {
         throw new Error('El pago por día debe ser mayor a 0');
       }
 
-      // Para pago semanal: el salario base ES el pago semanal directamente
-      const salarioBase = pagoPorDia; // pagoPorDia contiene el pago semanal completo
+      // Para pago semanal: usar el salario base calculado o calcularlo
+      const salarioBaseCalculado = salarioBase || pagoPorDia; // Usar salario base si se proporciona, sino usar pagoPorDia
       
       // Cálculo de horas extra (basándose en pago semanal)
       const pagoParaHorasExtra = pagoPorDia / 6; // Convertir pago semanal a diario para horas extra (semana de 6 días)
       const montoHorasExtra = this.calcularHorasExtra(horasExtra, pagoParaHorasExtra);
       
       // Subtotal antes de deducciones
-      const subtotal = salarioBase + montoHorasExtra + bonos;
+      const subtotal = salarioBaseCalculado + montoHorasExtra + bonos;
       
       // Cálculo de deducciones
       const deducciones = {
@@ -101,7 +102,7 @@ export class CalculadoraNominaService {
       const montoTotal = subtotal - deducciones.total;
       
       console.log('🔍 [SERVICIO] Cálculo de nómina:', {
-        salarioBase,
+        salarioBase: salarioBaseCalculado,
         montoHorasExtra,
         bonos,
         subtotal,
@@ -110,7 +111,7 @@ export class CalculadoraNominaService {
       });
 
       return {
-        salarioBase,
+        salarioBase: salarioBaseCalculado,
         montoHorasExtra,
         bonos,
         subtotal,

@@ -26,6 +26,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [weeklyData, setWeeklyData] = useState(null);
   const [chartsData, setChartsData] = useState(null);
   const [paymentsData, setPaymentsData] = useState(null);
+  const [monthlyData, setMonthlyData] = useState(null);
 
   // Calcular datos semanales
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       calculateWeeklyData();
       calculateChartsData();
       calculatePaymentsData();
+      calculateMonthlyData();
     }
   }, [nominas, empleados]);
 
@@ -51,7 +53,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
     // Calcular totales
     const totalAmount = weeklyNominas.reduce((sum, nomina) => {
-      return sum + (nomina.monto_total || nomina.monto || 0);
+      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+      return sum + (isNaN(monto) ? 0 : monto);
     }, 0);
 
     const paidNominas = weeklyNominas.filter(nomina => 
@@ -71,8 +74,14 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       paidNominas: paidNominas.length,
       pendingNominas: pendingNominas.length,
       partialPayments: partialPayments.length,
-      paidAmount: paidNominas.reduce((sum, nomina) => sum + (nomina.monto_total || 0), 0),
-      pendingAmount: pendingNominas.reduce((sum, nomina) => sum + (nomina.monto_total || 0), 0),
+      paidAmount: paidNominas.reduce((sum, nomina) => {
+        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+        return sum + (isNaN(monto) ? 0 : monto);
+      }, 0),
+      pendingAmount: pendingNominas.reduce((sum, nomina) => {
+        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+        return sum + (isNaN(monto) ? 0 : monto);
+      }, 0),
       startOfWeek,
       endOfWeek,
       weeklyNominas
@@ -87,22 +96,41 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       return acc;
     }, {});
 
-    // Datos para gráfica de pagos por mes (últimos 6 meses)
-    const monthlyData = {};
-    const last6Months = [];
-    for (let i = 5; i >= 0; i--) {
-      const date = new Date();
-      date.setMonth(date.getMonth() - i);
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
-      last6Months.push(monthKey);
-      monthlyData[monthKey] = 0;
+    // Datos para gráfica de pagos por semana del mes actual (4 semanas)
+    const weeklyData = {};
+    const currentMonth = new Date();
+    const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const lastDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+    
+    // Generar las 4 semanas del mes
+    const weeksOfMonth = [];
+    for (let week = 0; week < 4; week++) {
+      const weekStart = new Date(firstDayOfMonth);
+      weekStart.setDate(firstDayOfMonth.getDate() + (week * 7));
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      
+      // Asegurar que no exceda el último día del mes
+      if (weekEnd > lastDayOfMonth) {
+        weekEnd.setTime(lastDayOfMonth.getTime());
+      }
+      
+      const weekKey = `Semana ${week + 1}`;
+      weeksOfMonth.push(weekKey);
+      weeklyData[weekKey] = 0;
     }
 
     nominas.forEach(nomina => {
       const nominaDate = new Date(nomina.fecha_creacion || nomina.createdAt);
-      const monthKey = `${nominaDate.getFullYear()}-${String(nominaDate.getMonth() + 1).padStart(2, '0')}`;
-      if (monthlyData.hasOwnProperty(monthKey)) {
-        monthlyData[monthKey] += (nomina.monto_total || nomina.monto || 0);
+      
+      // Determinar en qué semana del mes cae la nómina
+      const dayOfMonth = nominaDate.getDate();
+      const weekNumber = Math.ceil(dayOfMonth / 7);
+      const weekKey = `Semana ${Math.min(weekNumber, 4)}`;
+      
+      if (weeklyData.hasOwnProperty(weekKey)) {
+        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+        weeklyData[weekKey] += (isNaN(monto) ? 0 : monto);
       }
     });
 
@@ -119,7 +147,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
             count: 0
           };
         }
-        empleadosData[empleadoId].total += (nomina.monto_total || nomina.monto || 0);
+        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+        empleadosData[empleadoId].total += (isNaN(monto) ? 0 : monto);
         empleadosData[empleadoId].count += 1;
       }
     });
@@ -135,12 +164,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         colors: ['#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6B7280']
       },
       monthlyPayments: {
-        labels: last6Months.map(month => {
-          const [year, monthNum] = month.split('-');
-          const date = new Date(year, monthNum - 1);
-          return date.toLocaleDateString('es-MX', { month: 'short', year: 'numeric' });
-        }),
-        data: last6Months.map(month => monthlyData[month])
+        labels: weeksOfMonth,
+        data: weeksOfMonth.map(week => weeklyData[week])
       },
       topEmpleados: {
         labels: topEmpleados.map(emp => `${emp.nombre} ${emp.apellido}`),
@@ -177,7 +202,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           };
         }
         paymentsByEmpleado[empleadoId].nominas.push(nomina);
-        paymentsByEmpleado[empleadoId].totalAmount += (nomina.monto_total || nomina.monto || 0);
+        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+        paymentsByEmpleado[empleadoId].totalAmount += (isNaN(monto) ? 0 : monto);
         
         // Determinar estado general
         if (nomina.estado === 'pagada' || nomina.estado === 'Pagado') {
@@ -189,6 +215,55 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     });
 
     setPaymentsData(Object.values(paymentsByEmpleado));
+  };
+
+  const calculateMonthlyData = () => {
+    const currentMonth = new Date();
+    const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+    const lastDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+
+    // Filtrar nóminas del mes actual
+    const monthlyNominas = nominas.filter(nomina => {
+      const nominaDate = new Date(nomina.fecha_creacion || nomina.createdAt);
+      return nominaDate >= firstDayOfMonth && nominaDate <= lastDayOfMonth;
+    });
+
+    // Calcular totales del mes
+    const totalAmount = monthlyNominas.reduce((sum, nomina) => {
+      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+      return sum + (isNaN(monto) ? 0 : monto);
+    }, 0);
+
+    const paidNominas = monthlyNominas.filter(nomina => 
+      nomina.estado === 'pagada' || nomina.estado === 'Pagado'
+    );
+
+    const pendingNominas = monthlyNominas.filter(nomina => 
+      nomina.estado === 'pendiente' || nomina.estado === 'Pendiente' || 
+      nomina.estado === 'borrador' || nomina.estado === 'Borrador'
+    );
+
+    const paidAmount = paidNominas.reduce((sum, nomina) => {
+      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+      return sum + (isNaN(monto) ? 0 : monto);
+    }, 0);
+
+    const pendingAmount = pendingNominas.reduce((sum, nomina) => {
+      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+      return sum + (isNaN(monto) ? 0 : monto);
+    }, 0);
+
+    setMonthlyData({
+      totalAmount,
+      totalNominas: monthlyNominas.length,
+      paidNominas: paidNominas.length,
+      pendingNominas: pendingNominas.length,
+      paidAmount,
+      pendingAmount,
+      firstDayOfMonth,
+      lastDayOfMonth,
+      monthlyNominas
+    });
   };
 
   const tabs = [
@@ -221,14 +296,45 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
               Análisis detallado de pagos semanales y tendencias
             </p>
           </div>
-          <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
-            <CalendarIcon className="h-4 w-4" />
-            <span>
-              {weeklyData ? 
-                `${weeklyData.startOfWeek.toLocaleDateString('es-MX')} - ${weeklyData.endOfWeek.toLocaleDateString('es-MX')}` :
-                'Cargando...'
-              }
-            </span>
+          <div className="flex items-center space-x-6">
+            <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
+              <CalendarIcon className="h-4 w-4" />
+              <span>
+                {weeklyData ? 
+                  `${weeklyData.startOfWeek.toLocaleDateString('es-MX')} - ${weeklyData.endOfWeek.toLocaleDateString('es-MX')}` :
+                  'Cargando...'
+                }
+              </span>
+            </div>
+            
+            {/* Subtotal Mensual */}
+            {monthlyData && (
+              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg px-4 py-2">
+                <div className="flex items-center space-x-3">
+                  <div className="h-8 w-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
+                    <span className="text-green-600 dark:text-green-400 text-sm font-bold">
+                      $
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                      Total del Mes
+                    </div>
+                    <div className="text-xs text-gray-600 dark:text-gray-400">
+                      {monthlyData.totalNominas} nóminas • {monthlyData.paidNominas} pagadas • {monthlyData.pendingNominas} pendientes
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                      {formatCurrency(monthlyData.totalAmount)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {monthlyData.firstDayOfMonth.toLocaleDateString('es-MX', { month: 'short' })} {monthlyData.firstDayOfMonth.getFullYear()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

@@ -111,7 +111,39 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       console.log('🔄 [WIZARD] Ejecutando cálculo automático por cambio en formData');
       calcularNomina();
     }
-  }, [formData.selectedEmpleado, formData.horasExtra, formData.bonos, formData.deduccionesAdicionales, formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
+  }, [formData.selectedEmpleado, formData.diasLaborados, formData.horasExtra, formData.bonos, formData.deduccionesAdicionales, formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
+
+  // Efecto específico para días laborados
+  useEffect(() => {
+    if (formData.selectedEmpleado && formData.diasLaborados && formData.diasLaborados > 0) {
+      console.log('🔄 [WIZARD] Cambio detectado en días laborados:', formData.diasLaborados);
+      calcularNomina();
+    }
+  }, [formData.diasLaborados]);
+
+  // Efecto específico para horas extra, bonos y deducciones
+  useEffect(() => {
+    if (formData.selectedEmpleado && (formData.horasExtra !== '' || formData.bonos !== '' || formData.deduccionesAdicionales !== '')) {
+      console.log('🔄 [WIZARD] Cambio detectado en campos numéricos:', {
+        horasExtra: formData.horasExtra,
+        bonos: formData.bonos,
+        deduccionesAdicionales: formData.deduccionesAdicionales
+      });
+      calcularNomina();
+    }
+  }, [formData.horasExtra, formData.bonos, formData.deduccionesAdicionales]);
+
+  // Efecto específico para configuraciones de impuestos
+  useEffect(() => {
+    if (formData.selectedEmpleado) {
+      console.log('🔄 [WIZARD] Cambio detectado en configuraciones de impuestos:', {
+        aplicarISR: formData.aplicarISR,
+        aplicarIMSS: formData.aplicarIMSS,
+        aplicarInfonavit: formData.aplicarInfonavit
+      });
+      calcularNomina();
+    }
+  }, [formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
 
   // Validar datos cuando cambian
   useEffect(() => {
@@ -249,10 +281,18 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   };
 
   const calcularNomina = async () => {
-    if (!formData.selectedEmpleado) return;
+    console.log('🔄 [CALCULO] Función calcularNomina ejecutada');
+    console.log('🔄 [CALCULO] formData.selectedEmpleado:', !!formData.selectedEmpleado);
+    console.log('🔄 [CALCULO] formData.diasLaborados:', formData.diasLaborados);
+    
+    if (!formData.selectedEmpleado) {
+      console.log('❌ [CALCULO] No hay empleado seleccionado, saliendo...');
+      return;
+    }
 
     // No calcular si hay campos vacíos temporalmente
     if (formData.horasExtra === '' || formData.bonos === '' || formData.deduccionesAdicionales === '') {
+      console.log('⏸️ [CALCULO] Campos vacíos, saliendo temporalmente...');
       return;
     }
 
@@ -263,6 +303,9 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       console.log('🔍 [CALCULO] Calculando nómina con datos:', {
         empleado: formData.selectedEmpleado.nombre,
         pagoSemanal,
+        diasLaborados: formData.diasLaborados,
+        pagoPorDia: pagoSemanal / 6, // Fijo: semana de 6 días
+        salarioBase: pagoSemanal, // Fijo: pago semanal completo
         horasExtra: formData.horasExtra,
         bonos: formData.bonos,
         deduccionesAdicionales: formData.deduccionesAdicionales
@@ -274,9 +317,14 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         return;
       }
       
+      const diasLaborados = formData.diasLaborados || 6;
+      const pagoPorDia = pagoSemanal / 6; // Equivalente diario fijo (semana de 6 días)
+      const salarioBase = pagoSemanal; // Para pago semanal, el salario base es el pago semanal completo
+      
       const datosNomina = {
-        diasLaborados: 1, // Fijo para pago semanal (no se usa para cálculo)
-        pagoPorDia: pagoSemanal, // El pago semanal completo
+        diasLaborados: diasLaborados, // Usar el valor ingresado por el usuario
+        pagoPorDia: pagoPorDia, // Pago por día fijo (semana de 6 días)
+        salarioBase: salarioBase, // Salario base calculado según días trabajados
         horasExtra: formData.horasExtra || 0,
         bonos: formData.bonos || 0,
         deduccionesAdicionales: formData.deduccionesAdicionales || 0,
@@ -288,7 +336,9 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
 
       const calculo = await nominasServices.calculadora.calcularNomina(datosNomina);
       console.log('🔍 [CALCULO] Resultado del cálculo:', calculo);
+      console.log('🔍 [CALCULO] Salario base calculado:', calculo.salarioBase);
       setCalculoNomina(calculo);
+      console.log('✅ [CALCULO] Estado calculoNomina actualizado');
     } catch (error) {
       console.error('Error calculating nomina:', error);
       setCalculoNomina(null);
@@ -507,7 +557,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         id_empleado: formData.selectedEmpleado.id_empleado,
         id_semana: infoSemana.semanaISO, // Usar semana ISO como identificador único
         id_proyecto: idProyecto,
-        dias_laborados: 1, // Fijo para pago semanal (no se usa para cálculo)
+        dias_laborados: formData.diasLaborados || 6, // Usar el valor ingresado por el usuario
         pago_semanal: pagoIngresado, // Contiene el pago semanal
         es_pago_semanal: true, // Siempre es pago semanal
         horas_extra: formData.horasExtra || 0,
@@ -603,6 +653,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     try {
       console.log('🚀 [WIZARD] Iniciando procesamiento de nómina final');
       console.log('🚀 [WIZARD] Datos de nómina:', nominaData);
+      console.log('🔍 [WIZARD] ¿Editando nómina existente?', !!nominaToEdit);
       
       // Validar datos antes de procesar
       console.log('🔍 [WIZARD] Validando datos de nómina...');
@@ -618,20 +669,55 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
 
       console.log('✅ [WIZARD] Validación exitosa, procesando nómina...');
       
-      // Si no se va a generar PDF inmediatamente, marcar como borrador
-      const nominaDataConEstado = generarPDF 
-        ? nominaData 
-        : { ...nominaData, estado: 'borrador' };
+      let response;
       
-      // Procesar nómina usando el servicio
-      const response = await nominasServices.nominas.procesarNomina(nominaDataConEstado);
-      console.log('✅ [WIZARD] Respuesta del procesamiento:', response);
+      if (nominaToEdit && nominaToEdit.id_nomina) {
+        // Modo edición: actualizar nómina existente
+        console.log('🔄 [WIZARD] Actualizando nómina existente:', nominaToEdit.id_nomina);
+        
+        // Preparar datos para actualización (sin campos que no se pueden modificar)
+        const updateData = {
+          dias_laborados: nominaData.dias_laborados,
+          pago_semanal: nominaData.pago_semanal,
+          horas_extra: nominaData.horas_extra,
+          bonos: nominaData.bonos,
+          deducciones_adicionales: nominaData.deducciones_adicionales,
+          aplicar_isr: nominaData.aplicar_isr,
+          aplicar_imss: nominaData.aplicar_imss,
+          aplicar_infonavit: nominaData.aplicar_infonavit,
+          pago_parcial: nominaData.pago_parcial,
+          monto_a_pagar: nominaData.monto_a_pagar,
+          liquidar_adeudos: nominaData.liquidar_adeudos
+        };
+        
+        response = await nominasServices.nominas.update(nominaToEdit.id_nomina, updateData);
+        console.log('✅ [WIZARD] Nómina actualizada:', response);
+      } else {
+        // Modo creación: crear nueva nómina
+        console.log('🆕 [WIZARD] Creando nueva nómina');
+        
+        // Si no se va a generar PDF inmediatamente, marcar como borrador
+        const nominaDataConEstado = generarPDF 
+          ? nominaData 
+          : { ...nominaData, estado: 'borrador' };
+        
+        response = await nominasServices.nominas.procesarNomina(nominaDataConEstado);
+        console.log('✅ [WIZARD] Nueva nómina creada:', response);
+      }
       
       // Obtener el ID de la nómina de la estructura correcta
-      const idNomina = response?.data?.nomina?.id_nomina || 
-                      response?.data?.id_nomina || 
-                      response?.data?.data?.nomina?.id_nomina;
-      console.log('📋 [WIZARD] ID de nómina extraído:', idNomina);
+      let idNomina;
+      if (nominaToEdit && nominaToEdit.id_nomina) {
+        // En modo edición, usar el ID existente
+        idNomina = nominaToEdit.id_nomina;
+        console.log('📋 [WIZARD] ID de nómina (edición):', idNomina);
+      } else {
+        // En modo creación, extraer el ID de la respuesta
+        idNomina = response?.data?.nomina?.id_nomina || 
+                   response?.data?.id_nomina || 
+                   response?.data?.data?.nomina?.id_nomina;
+        console.log('📋 [WIZARD] ID de nómina (creación):', idNomina);
+      }
       
       if (idNomina) {
         if (generarPDF) {
@@ -686,7 +772,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
             setNominaGenerada(nominaCompleta.data);
             setShowPreview(true);
             
-            showSuccess('¡Nómina Generada!', `Nómina creada exitosamente. Revisa los datos antes de generar el PDF.`);
+            const mensaje = nominaToEdit && nominaToEdit.id_nomina 
+              ? 'Nómina actualizada exitosamente. Revisa los datos antes de generar el PDF.'
+              : 'Nómina creada exitosamente. Revisa los datos antes de generar el PDF.';
+            showSuccess('¡Nómina Generada!', mensaje);
           } catch (previewError) {
             console.error('❌ Error al obtener datos de la nómina:', previewError);
             showError('Error al obtener nómina', 'No se pudieron obtener los datos de la nómina generada');
@@ -1065,7 +1154,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           onBlur={(e) => {
                             // Solo restaurar valor por defecto cuando pierde el foco y está vacío
                             if (e.target.value === '' || e.target.value === '0') {
-                              updateFormData({ diasLaborados: 1 });
+                              updateFormData({ diasLaborados: 6 });
                             }
                           }}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
@@ -1480,7 +1569,9 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                         <CalculatorIcon className="h-4 w-4 mr-2" />
                         Vista Previa del Cálculo:
                       </h5>
-                      {console.log('🔍 [VISTA_PREVIA] calculoNomina:', calculoNomina)}
+                        {console.log('🔍 [VISTA_PREVIA] calculoNomina:', calculoNomina)}
+                        {console.log('🔍 [VISTA_PREVIA] calculoNomina.salarioBase:', calculoNomina?.salarioBase)}
+                        {console.log('🔍 [VISTA_PREVIA] formData.diasLaborados:', formData.diasLaborados)}
                       
                       {/* Información del pago semanal del empleado */}
                       <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
