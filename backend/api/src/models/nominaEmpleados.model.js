@@ -23,9 +23,10 @@ module.exports = (sequelize) => {
       type: DataTypes.INTEGER,
       allowNull: false
     },
-    pago_por_dia: {
+    pago_semanal: {
       type: DataTypes.DECIMAL(10,2),
-      allowNull: false
+      allowNull: false,
+      comment: 'Pago semanal del empleado'
     },
     es_pago_semanal: {
       type: DataTypes.BOOLEAN,
@@ -110,6 +111,21 @@ module.exports = (sequelize) => {
       type: DataTypes.DECIMAL(10,2),
       allowNull: true,
       comment: 'Monto realmente pagado al empleado (puede ser menor al monto_total en caso de pago parcial)'
+    },
+    pago_parcial: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: 'Indica si es un pago parcial'
+    },
+    monto_a_pagar: {
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      comment: 'Monto específico a pagar en caso de pago parcial'
+    },
+    liquidar_adeudos: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: 'Indica si se deben liquidar adeudos pendientes'
     },
     recibo_pdf: {
       type: DataTypes.STRING(255),

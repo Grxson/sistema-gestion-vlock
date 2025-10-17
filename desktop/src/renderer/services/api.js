@@ -382,6 +382,13 @@ class ApiService {
     return this.put(`/nomina/${idNomina}/estado`, { estado });
   }
 
+  async liquidarAdeudo(idNomina, montoPagado, observaciones = '') {
+    return this.post(`/nomina/${idNomina}/liquidar-adeudo`, {
+      monto_pagado: montoPagado,
+      observaciones: observaciones
+    });
+  }
+
   async registrarPagoNomina(idNomina, pagoData) {
     return this.post(`/nomina/${idNomina}/pago`, pagoData);
   }

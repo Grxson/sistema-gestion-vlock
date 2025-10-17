@@ -7,6 +7,24 @@ const AuthContext = createContext();
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
+    // Durante hot reload, puede haber un momento donde el contexto no esté disponible
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[useAuth] Contexto no disponible, posible hot reload en progreso');
+      // Devolver un objeto con valores por defecto para evitar crashes
+      return {
+        user: null,
+        loading: true,
+        isAuthenticated: false,
+        lastVerified: null,
+        authError: null,
+        login: () => Promise.resolve(),
+        logout: () => {},
+        register: () => Promise.resolve(),
+        checkAuth: () => Promise.resolve(),
+        verifyToken: () => Promise.resolve(false),
+        getDebugInfo: () => ({})
+      };
+    }
     throw new Error('useAuth debe ser usado dentro de un AuthProvider');
   }
   return context;

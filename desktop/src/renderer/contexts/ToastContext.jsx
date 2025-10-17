@@ -6,6 +6,19 @@ const ToastContext = createContext();
 export const useToast = () => {
   const context = useContext(ToastContext);
   if (!context) {
+    // Durante hot reload, puede haber un momento donde el contexto no esté disponible
+    if (process.env.NODE_ENV === 'development') {
+      console.warn('[useToast] Contexto no disponible, posible hot reload en progreso');
+      // Devolver un objeto con funciones vacías para evitar crashes
+      return {
+        showSuccess: () => {},
+        showError: () => {},
+        showWarning: () => {},
+        showInfo: () => {},
+        showSessionExpired: () => {},
+        removeToast: () => {}
+      };
+    }
     throw new Error('useToast debe ser usado dentro de un ToastProvider');
   }
   return context;

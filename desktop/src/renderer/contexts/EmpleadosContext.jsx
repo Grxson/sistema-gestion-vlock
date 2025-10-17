@@ -16,7 +16,15 @@ export const EmpleadosProvider = ({ children }) => {
   const [empleados, setEmpleados] = useState([]);
   const [loading, setLoading] = useState(false);
   const [lastUpdate, setLastUpdate] = useState(null);
-  const { handleAuthError } = useAuthErrorHandler();
+  
+  // Verificar que el hook esté disponible (durante hot reload)
+  let handleAuthError = () => false;
+  try {
+    const authErrorHandler = useAuthErrorHandler();
+    handleAuthError = authErrorHandler.handleAuthError;
+  } catch (error) {
+    console.warn('[EmpleadosContext] useAuthErrorHandler no disponible, usando función vacía');
+  }
 
   const fetchEmpleados = useCallback(async (filters = {}) => {
     try {

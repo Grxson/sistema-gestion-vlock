@@ -24,7 +24,7 @@ const EmpleadoCard = ({
                      (empleado.salario_base_personal ? empleado.salario_base_personal * 7 : 0);
 
   // Calcular pago diario para cálculos internos
-  const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 7 : 
+  const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 6 : 
                     empleado.contrato?.salario_diario || 
                     empleado.salario_diario || 
                     empleado.salario_base_personal || 0;

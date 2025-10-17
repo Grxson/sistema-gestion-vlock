@@ -76,22 +76,15 @@ export class NominaService {
    */
   static async getById(id, includeDetails = true) {
     try {
-      // Como no hay ruta específica para obtener nómina por ID, 
-      // vamos a obtener todas las nóminas y filtrar por ID
-      const response = await ApiService.get('/nomina/');
+      const response = await ApiService.get(`/nomina/${id}`);
       
       if (response.success && response.data) {
-        const nomina = response.data.find(n => n.id_nomina === parseInt(id));
-        if (nomina) {
-          return {
-            success: true,
-            data: nomina
-          };
-        } else {
-          throw new Error('Nómina no encontrada');
-        }
+        return {
+          success: true,
+          data: response.data
+        };
       } else {
-        throw new Error('Error al obtener nóminas');
+        throw new Error('Error al obtener nómina');
       }
     } catch (error) {
       console.error('Error fetching nomina by ID:', error);
@@ -110,7 +103,7 @@ export class NominaService {
       console.log('🚀 [NOMINA_SERVICE] Datos recibidos:', nominaData);
       
       // Validar datos requeridos
-      const camposRequeridos = ['id_empleado', 'id_semana', 'id_proyecto', 'dias_laborados', 'pago_por_dia'];
+      const camposRequeridos = ['id_empleado', 'id_semana', 'id_proyecto', 'dias_laborados', 'pago_semanal'];
       const camposFaltantes = camposRequeridos.filter(campo => !nominaData[campo]);
       
       console.log('🔍 [NOMINA_SERVICE] Campos requeridos:', camposRequeridos);
@@ -222,18 +215,20 @@ export class NominaService {
    */
   static async marcarComoPagada(id, datosPago = {}) {
     try {
-      const response = await ApiService.put(`/nomina/${id}/pagar`, datosPago);
+      console.log('🔄 [SERVICE] Marcando nómina como pagada:', { id, estado: 'Pagado' });
+      const response = await ApiService.put(`/nomina/${id}/estado`, { estado: 'Pagado' });
       
       // Limpiar caché
       this.clearCache();
       
+      console.log('✅ [SERVICE] Nómina marcada como pagada exitosamente');
       return {
         success: true,
         data: response.data || response,
         message: response.message || 'Nómina marcada como pagada'
       };
     } catch (error) {
-      console.error('Error marking nomina as paid:', error);
+      console.error('❌ [SERVICE] Error marking nomina as paid:', error);
       throw this.handleError(error);
     }
   }
@@ -277,7 +272,7 @@ export class NominaService {
     return this.getAll({ periodo });
   }
 
-  /**
+                                                                                                                                            /**
    * Obtiene nóminas del período actual
    * @returns {Promise<Object>} Nóminas del período actual
    */

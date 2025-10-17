@@ -326,7 +326,7 @@ const generarReciboPDF = async (req, res) => {
         
         col2Y += 10;
         // SBC calculado para semana de 6 días laborales
-        const pagoSemanal = parseFloat(nomina.pago_por_dia); // pago_por_dia contiene el pago semanal
+        const pagoSemanal = parseFloat(nomina.pago_semanal); // pago_semanal contiene el pago semanal
         const sbcDiario = pagoSemanal / 6; // SBC diario basado en 6 días laborales
         const sbcSemanal = sbcDiario * 6; // SBC semanal (6 días)
         doc.text(`SBC: $${sbcDiario.toFixed(2)}/día`, empCol2X, col2Y);
@@ -370,7 +370,7 @@ const generarReciboPDF = async (req, res) => {
         currentY += 10;
         
         // Para pago semanal: el salario base ES el pago semanal directamente
-        const salarioBase = parseFloat(nomina.pago_por_dia); // pago_por_dia contiene el pago semanal
+        const salarioBase = parseFloat(nomina.pago_semanal); // pago_semanal contiene el pago semanal
         doc.fontSize(8)
            .font('Helvetica')
            .text('P', col1X, currentY)
@@ -383,7 +383,7 @@ const generarReciboPDF = async (req, res) => {
         // Horas extra (si aplica) - calcular basándose en el pago semanal
         if (nomina.horas_extra && nomina.horas_extra > 0) {
             // Para pago semanal: (pago semanal / 7 días) / 8 horas por día
-            const pagoPorHora = (parseFloat(nomina.pago_por_dia) / 7) / 8;
+            const pagoPorHora = (parseFloat(nomina.pago_semanal) / 7) / 8;
             const montoHorasExtra = parseFloat(nomina.horas_extra) * pagoPorHora * 2; // Doble tiempo
             doc.text('P', col1X, currentY)
                .text('002', col2X, currentY)
@@ -406,7 +406,7 @@ const generarReciboPDF = async (req, res) => {
         let montoHorasExtra = 0;
         if (nomina.horas_extra && nomina.horas_extra > 0) {
             // Para pago semanal: (pago semanal / 7 días) / 8 horas por día
-            const pagoPorHora = (parseFloat(nomina.pago_por_dia) / 7) / 8;
+            const pagoPorHora = (parseFloat(nomina.pago_semanal) / 7) / 8;
             montoHorasExtra = parseFloat(nomina.horas_extra) * pagoPorHora * 2;
         }
         

@@ -166,14 +166,27 @@ export default function Nomina() {
       
       // Obtener datos frescos de la nómina desde el backend
       try {
-        const response = await ApiService.get(`/nomina/${latestNomina.id_nomina}`);
+        console.log('🔍 [PREVIEW] Intentando obtener datos frescos para nómina:', latestNomina.id_nomina);
+        const response = await apiService.get(`/nomina/${latestNomina.id_nomina}`);
+        console.log('🔍 [PREVIEW] Respuesta del backend:', response);
+        
         if (response.success && response.data) {
+          console.log('🔍 [PREVIEW] Datos frescos recibidos:', {
+            id: response.data.id_nomina,
+            pago_parcial: response.data.pago_parcial,
+            monto_total: response.data.monto_total,
+            monto_pagado: response.data.monto_pagado,
+            monto_a_pagar: response.data.monto_a_pagar,
+            estado: response.data.estado
+          });
           setNominaPreviewData(response.data);
         } else {
+          console.log('🔍 [PREVIEW] Respuesta no exitosa, usando datos locales:', latestNomina);
           setNominaPreviewData(latestNomina);
         }
       } catch (apiError) {
-        console.warn('No se pudieron obtener datos frescos, usando datos locales:', apiError);
+        console.warn('❌ [PREVIEW] Error obteniendo datos frescos:', apiError);
+        console.log('🔍 [PREVIEW] Usando datos locales como fallback:', latestNomina);
         setNominaPreviewData(latestNomina);
       }
       
@@ -224,15 +237,24 @@ export default function Nomina() {
 
       showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
       
-      // Actualizar estado de la nómina a "pagada" si estaba en "borrador"
-      if (nominaPreviewData.estado === 'borrador') {
+      // Actualizar estado de la nómina a "Pagado" si estaba en "borrador" o "Pendiente"
+      if (nominaPreviewData.estado === 'borrador' || nominaPreviewData.estado === 'Borrador' || nominaPreviewData.estado === 'Pendiente') {
         try {
-          await nominasServices.nominas.cambiarEstadoNomina(nominaPreviewData.id_nomina, 'pagada');
+          console.log('🔄 [PDF] Actualizando estado de nómina:', {
+            id: nominaPreviewData.id_nomina,
+            estadoActual: nominaPreviewData.estado,
+            nuevoEstado: 'Pagado'
+          });
+          
+          await nominasServices.nominas.marcarComoPagada(nominaPreviewData.id_nomina);
           showSuccess('Estado actualizado', 'La nómina ha sido marcada como pagada');
+          
           // Refrescar datos
           await fetchData();
+          console.log('✅ [PDF] Datos refrescados después de cambiar estado');
         } catch (error) {
-          console.error('Error actualizando estado:', error);
+          console.error('❌ [PDF] Error actualizando estado:', error);
+          showError('Error', 'No se pudo actualizar el estado de la nómina');
         }
       }
       
@@ -249,12 +271,65 @@ export default function Nomina() {
     setShowWizard(true);
   };
 
+  const editarNominaDesdePreview = async () => {
+    if (!nominaPreviewData?.id_nomina) {
+      showError('Error', 'No hay nómina para editar');
+      return;
+    }
+
+    try {
+      console.log('🔍 [EDITAR] Obteniendo datos de nómina para edición:', nominaPreviewData.id_nomina);
+      
+      // Obtener datos frescos de la nómina
+      const response = await nominasServices.nominas.getById(nominaPreviewData.id_nomina);
+      
+      if (response.success && response.data) {
+        const nominaData = response.data;
+        console.log('🔍 [EDITAR] Datos de nómina obtenidos:', nominaData);
+        
+        // Buscar el empleado correspondiente
+        const empleado = empleados.find(emp => emp.id_empleado === nominaData.id_empleado);
+        
+        if (empleado) {
+          // Cerrar preview y abrir wizard con datos cargados
+          setShowNominaPreview(false);
+          setSelectedEmpleadoPreview(empleado);
+          setShowWizard(true);
+          
+          // TODO: Pasar datos de la nómina al wizard para pre-llenar el formulario
+          showInfo('Editando Nómina', 'Cargando datos de la nómina...');
+        } else {
+          showError('Error', 'No se encontró el empleado de la nómina');
+        }
+      } else {
+        showError('Error', 'No se pudieron obtener los datos de la nómina');
+      }
+    } catch (error) {
+      console.error('❌ [EDITAR] Error obteniendo datos de nómina:', error);
+      showError('Error', 'No se pudieron cargar los datos para editar');
+    }
+  };
+
 
   // Estado para el modal de liquidar adeudo
   const [showLiquidarModal, setShowLiquidarModal] = useState(false);
   const [nominaSeleccionada, setNominaSeleccionada] = useState(null);
   const [montoLiquidacion, setMontoLiquidacion] = useState('');
   const [observacionesLiquidacion, setObservacionesLiquidacion] = useState('');
+
+  // Debug: Verificar datos de preview cuando cambien
+  useEffect(() => {
+    if (nominaPreviewData) {
+      console.log('🔍 [PREVIEW] Datos de preview actualizados:', {
+        id: nominaPreviewData.id_nomina,
+        pago_parcial: nominaPreviewData.pago_parcial,
+        monto_total: nominaPreviewData.monto_total,
+        monto_pagado: nominaPreviewData.monto_pagado,
+        monto_a_pagar: nominaPreviewData.monto_a_pagar,
+        estado: nominaPreviewData.estado
+      });
+    }
+  }, [nominaPreviewData]);
 
   // Función para abrir modal de liquidar adeudo
   const abrirModalLiquidar = (nomina) => {
@@ -1027,8 +1102,13 @@ export default function Nomina() {
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Período</p>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {nominaPreviewData.semana?.anio && nominaPreviewData.semana?.semana_iso ? 
-                          `${nominaPreviewData.semana.anio}-${String(Math.ceil(nominaPreviewData.semana.semana_iso / 4)).padStart(2, '0')}` :
+                        {nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt ? 
+                          (() => {
+                            const fecha = new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt);
+                            const año = fecha.getFullYear();
+                            const mes = fecha.getMonth() + 1; // getMonth() es 0-11
+                            return `${año}-${String(mes).padStart(2, '0')}`;
+                          })() :
                           'Sin período'
                         }
                       </p>
@@ -1052,6 +1132,12 @@ export default function Nomina() {
                       </p>
                     </div>
                     <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Pago por Día</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {formatCurrency((nominaPreviewData.pago_semanal || 0) / 6)}
+                      </p>
+                    </div>
+                    <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Fecha de Creación</p>
                       <p className="font-medium text-gray-900 dark:text-white">
                         {new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt).toLocaleDateString('es-MX')}
@@ -1067,52 +1153,52 @@ export default function Nomina() {
                     <div className="flex justify-between">
                       <span className="text-gray-600 dark:text-gray-400">Salario Base:</span>
                       <span className="font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(nominaPreviewData.pago_semanal || 0)}
+                        {formatCurrency(nominaPreviewData?.pago_semanal || 0)}
                       </span>
                     </div>
-                    {nominaPreviewData.horas_extra > 0 && (
+                    {(nominaPreviewData?.horas_extra || 0) > 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">Horas Extra:</span>
                         <span className="font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(nominaPreviewData.horas_extra || 0)}
+                          {formatCurrency(nominaPreviewData?.horas_extra || 0)}
                         </span>
                       </div>
                     )}
-                    {nominaPreviewData.bonos > 0 && (
+                    {(nominaPreviewData?.bonos || 0) > 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">Bonos:</span>
                         <span className="font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(nominaPreviewData.bonos || 0)}
+                          {formatCurrency(nominaPreviewData?.bonos || 0)}
                         </span>
                       </div>
                     )}
-                    {nominaPreviewData.deducciones > 0 && (
+                    {(nominaPreviewData?.deducciones || 0) > 0 && (
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">Deducciones:</span>
                         <span className="font-medium text-red-600 dark:text-red-400">
-                          -{formatCurrency(nominaPreviewData.deducciones || 0)}
+                          -{formatCurrency(nominaPreviewData?.deducciones || 0)}
                         </span>
                       </div>
                     )}
                     <div className="border-t border-gray-300 dark:border-gray-600 pt-2">
-                      {nominaPreviewData.pago_parcial ? (
+                      {nominaPreviewData?.pago_parcial ? (
                         <>
                           <div className="flex justify-between mb-2">
                             <span className="text-sm text-gray-600 dark:text-gray-400">Monto Original:</span>
                             <span className="text-sm font-medium text-gray-900 dark:text-white">
-                              {formatCurrency(nominaPreviewData.monto_total || 0)}
+                              {formatCurrency(nominaPreviewData?.monto_total || 0)}
                             </span>
                           </div>
                           <div className="flex justify-between mb-2">
                             <span className="text-sm text-gray-600 dark:text-gray-400">Monto Pagado:</span>
                             <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                              {formatCurrency(nominaPreviewData.monto_pagado || 0)}
+                              {formatCurrency(nominaPreviewData?.monto_pagado || 0)}
                             </span>
                           </div>
                           <div className="flex justify-between">
                             <span className="text-lg font-medium text-gray-900 dark:text-white">Pendiente:</span>
                             <span className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                              {formatCurrency((nominaPreviewData.monto_total || 0) - (nominaPreviewData.monto_pagado || 0))}
+                              {formatCurrency((nominaPreviewData?.monto_total || 0) - (nominaPreviewData?.monto_pagado || 0))}
                             </span>
                           </div>
                         </>
@@ -1120,7 +1206,7 @@ export default function Nomina() {
                         <div className="flex justify-between">
                           <span className="text-lg font-medium text-gray-900 dark:text-white">Total a Pagar:</span>
                           <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                            {formatCurrency(nominaPreviewData.monto_total || 0)}
+                            {formatCurrency(nominaPreviewData?.monto_pagado || nominaPreviewData?.monto_total || 0)}
                           </span>
                         </div>
                       )}
@@ -1130,18 +1216,31 @@ export default function Nomina() {
               </div>
 
               {/* Footer del Preview */}
-              <div className="flex justify-end space-x-3 px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNominaPreview(false);
-                    setNominaPreviewData(null);
-                    setSelectedEmpleadoPreview(null);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                >
-                  Cerrar
-                </button>
+              <div className="flex justify-between px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
+                <div>
+                  {(nominaPreviewData.estado === 'borrador' || nominaPreviewData.estado === 'Borrador' || nominaPreviewData.estado === 'Pendiente') && (
+                    <button
+                      type="button"
+                      onClick={() => editarNominaDesdePreview()}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                    >
+                      <PencilIcon className="h-4 w-4 mr-2 inline-block" />
+                      Editar Nómina
+                    </button>
+                  )}
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNominaPreview(false);
+                      setNominaPreviewData(null);
+                      setSelectedEmpleadoPreview(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Cerrar
+                  </button>
                 {(nominaPreviewData.estado === 'borrador' || nominaPreviewData.estado === 'Borrador' || nominaPreviewData.estado === 'Pendiente') && (
                   <button
                     type="button"

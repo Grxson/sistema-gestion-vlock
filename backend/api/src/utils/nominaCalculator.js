@@ -104,8 +104,11 @@ const calcularInfonavit = (salarioBase) => {
  * @param {Number} pagoPorDia - Pago diario del empleado
  * @returns {Number} - El monto a pagar por horas extra
  */
-const calcularHorasExtra = (horasExtra, pagoPorDia) => {
-    const pagoPorHora = pagoPorDia / 8; // Asumiendo jornada de 8 horas
+const calcularHorasExtra = (horasExtra, pagoPorDia, esPagoSemanal = false) => {
+    // Para pago semanal: convertir a pago diario dividiendo por 6 días
+    // Para pago diario: usar directamente
+    const pagoParaHorasExtra = esPagoSemanal ? pagoPorDia / 6 : pagoPorDia;
+    const pagoPorHora = pagoParaHorasExtra / 8; // Asumiendo jornada de 8 horas
     return horasExtra * (pagoPorHora * 2); // Doble pago por horas extra
 };
 
@@ -129,13 +132,16 @@ const calcularNomina = (
     aplicarISR = true,
     aplicarIMSS = true,
     aplicarInfonavit = true,
-    deduccionesAdicionales = 0
+    deduccionesAdicionales = 0,
+    esPagoSemanal = false
 ) => {
     // Cálculo de salario base
-    const salarioBase = diasLaborados * pagoPorDia;
+    // Para pago semanal: pagoPorDia ya es el pago semanal completo
+    // Para pago diario: pagoPorDia * diasLaborados
+    const salarioBase = esPagoSemanal ? pagoPorDia : diasLaborados * pagoPorDia;
     
     // Cálculo de horas extra
-    const montoHorasExtra = calcularHorasExtra(horasExtra, pagoPorDia);
+    const montoHorasExtra = calcularHorasExtra(horasExtra, pagoPorDia, esPagoSemanal);
     
     // Subtotal antes de deducciones
     const subtotal = salarioBase + montoHorasExtra + bonos;

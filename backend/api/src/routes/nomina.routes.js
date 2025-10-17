@@ -15,6 +15,12 @@ router.get('/semana/:id_semana', nominaController.getNominasPorSemana);
 // Obtener nóminas por empleado
 router.get('/empleado/:id_empleado', nominaController.getNominasPorEmpleado);
 
+// Verificar duplicados de nómina (DEBE ir antes de /:id)
+router.get('/verificar-duplicados', verifyRole([1]), nominaController.verificarDuplicados);
+
+// Obtener una nómina por ID
+router.get('/:id', nominaController.getNominaById);
+
 // Crear nueva nómina - Solo administradores
 router.post('/', verifyRole([1]), nominaController.createNomina);
 
@@ -33,14 +39,14 @@ router.get('/pagos/historial', nominaController.getHistorialPagos);
 // Cambiar estado de nómina
 router.put('/:id_nomina/estado', verifyRole([1]), nominaController.cambiarEstadoNomina);
 
+// Liquidar adeudo pendiente
+router.post('/:id/liquidar-adeudo', verifyRole([1]), nominaController.liquidarAdeudo);
+
 // Obtener estadísticas de nómina
 router.get('/estadisticas', verifyRole([1]), nominaController.getNominaStats);
 
 // Obtener información para generar nóminas (proyectos, empleados, semanas)
 router.get('/info-para-nomina', verifyRole([1]), nominaController.getInfoParaNomina);
-
-// Verificar duplicados de nómina
-router.get('/verificar-duplicados', verifyRole([1]), nominaController.verificarDuplicados);
 
 // Obtener historial de cambios de una nómina
 router.get('/:id_nomina/historial', verifyToken, require('../controllers/nominaHistorial.controller').getHistorialNomina);

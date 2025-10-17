@@ -149,14 +149,14 @@ export class ReportesNominaService {
 
       if (incluirDetalles) {
         fila.DiasLaborados = nomina.dias_laborados || 0;
-        fila.PagoPorDia = nomina.pago_por_dia || 0;
+        fila.PagoSemanal = nomina.pago_semanal || 0;
         fila.HorasExtra = nomina.horas_extra || 0;
         fila.Bonos = nomina.bonos || 0;
         fila.DeduccionesAdicionales = nomina.deducciones_adicionales || 0;
       }
 
       if (incluirCalculos) {
-        fila.SalarioBase = (nomina.dias_laborados || 0) * (nomina.pago_por_dia || 0);
+        fila.SalarioBase = (nomina.dias_laborados || 0) * (nomina.pago_semanal || 0);
         fila.Subtotal = fila.SalarioBase + (nomina.horas_extra || 0) + (nomina.bonos || 0);
         fila.ISR = nomina.deducciones?.isr || 0;
         fila.IMSS = nomina.deducciones?.imss || 0;
@@ -309,7 +309,7 @@ export class ReportesNominaService {
           empleado: `${nomina.empleado?.nombre || ''} ${nomina.empleado?.apellido || ''}`.trim(),
           rfc: nomina.empleado?.rfc || 'N/A',
           nss: nomina.empleado?.nss || 'N/A',
-          salarioBase: (nomina.dias_laborados || 0) * (nomina.pago_por_dia || 0),
+          salarioBase: (nomina.dias_laborados || 0) * (nomina.pago_semanal || 0),
           isr: incluirISR ? (nomina.deducciones?.isr || 0) : 0,
           imss: incluirIMSS ? (nomina.deducciones?.imss || 0) : 0,
           infonavit: incluirInfonavit ? (nomina.deducciones?.infonavit || 0) : 0,

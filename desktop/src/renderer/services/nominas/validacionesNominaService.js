@@ -54,7 +54,7 @@ export class ValidacionesNominaService {
       { campo: 'id_semana', nombre: 'ID de semana' },
       { campo: 'id_proyecto', nombre: 'ID de proyecto' },
       { campo: 'dias_laborados', nombre: 'Días laborados' },
-      { campo: 'pago_por_dia', nombre: 'Pago por día' }
+      { campo: 'pago_semanal', nombre: 'Pago semanal' }
     ];
 
     camposRequeridos.forEach(({ campo, nombre }) => {
@@ -76,8 +76,8 @@ export class ValidacionesNominaService {
       errores.push('ID de empleado debe ser un número entero positivo');
     }
 
-    if (datos.id_semana && (!Number.isInteger(datos.id_semana) || datos.id_semana < 1 || datos.id_semana > 4)) {
-      errores.push('ID de semana debe ser un número entre 1 y 4');
+    if (datos.id_semana && (!Number.isInteger(datos.id_semana) || datos.id_semana < 1 || datos.id_semana > 53)) {
+      errores.push('ID de semana debe ser un número entre 1 y 53 (semana ISO)');
     }
 
     if (datos.id_proyecto && (!Number.isInteger(datos.id_proyecto) || datos.id_proyecto <= 0)) {
@@ -90,14 +90,14 @@ export class ValidacionesNominaService {
       }
     }
 
-    if (datos.pago_por_dia !== undefined) {
-      const pago = parseFloat(datos.pago_por_dia);
+    if (datos.pago_semanal !== undefined) {
+      const pago = parseFloat(datos.pago_semanal);
       if (isNaN(pago) || pago <= 0) {
-        errores.push('Pago por día debe ser un número positivo');
+        errores.push('Pago semanal debe ser un número positivo');
       } else if (pago > 10000) {
-        advertencias.push('Pago por día parece muy alto (>$10,000)');
+        advertencias.push('Pago semanal parece muy alto (>$10,000)');
       } else if (pago < 100) {
-        advertencias.push('Pago por día parece muy bajo (<$100)');
+        advertencias.push('Pago semanal parece muy bajo (<$100)');
       }
     }
 
@@ -169,13 +169,14 @@ export class ValidacionesNominaService {
    */
   static validarReglasFiscales(datos, errores, advertencias) {
     // Validar límites de salario para IMSS
-    if (datos.pago_por_dia) {
-      const salarioDiario = parseFloat(datos.pago_por_dia);
+    if (datos.pago_semanal) {
+      const salarioSemanal = parseFloat(datos.pago_semanal);
       const umaDiaria = 108.57; // UMA diaria 2024
       const maxSalarioIMSS = umaDiaria * 25; // 25 UMA
       
+      const salarioDiario = salarioSemanal / 6; // Convertir a diario para comparación (semana de 6 días)
       if (salarioDiario > maxSalarioIMSS) {
-        advertencias.push(`Salario diario ($${salarioDiario}) excede el tope de cotización IMSS ($${maxSalarioIMSS})`);
+        advertencias.push(`Salario diario ($${salarioDiario.toFixed(2)}) excede el tope de cotización IMSS ($${maxSalarioIMSS})`);
       }
     }
 
@@ -187,7 +188,7 @@ export class ValidacionesNominaService {
     // Validar límites de deducciones
     if (datos.deducciones_adicionales) {
       const deducciones = parseFloat(datos.deducciones_adicionales);
-      const salarioBase = (datos.dias_laborados || 0) * (datos.pago_por_dia || 0);
+      const salarioBase = (datos.dias_laborados || 0) * (datos.pago_semanal || 0);
       
       if (deducciones > salarioBase * 0.3) {
         advertencias.push('Deducciones adicionales exceden el 30% del salario base');
@@ -275,7 +276,7 @@ export class ValidacionesNominaService {
     }
 
     // El pago diario se puede configurar durante el proceso de nómina
-    const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 7 : 
+    const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 6 : 
                       empleado.contrato?.salario_diario || 
                       empleado.salario_diario || 
                       empleado.salario_base_personal || 0;

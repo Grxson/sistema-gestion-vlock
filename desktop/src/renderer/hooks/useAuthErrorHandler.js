@@ -7,8 +7,20 @@ import { useToast } from '../contexts/ToastContext';
  * Proporciona una función para manejar errores de token expirado de manera consistente
  */
 export const useAuthErrorHandler = () => {
-  const { logout } = useAuth();
-  const { showSessionExpired } = useToast();
+  // Verificar que los contextos estén disponibles
+  let authContext, toastContext;
+  
+  try {
+    authContext = useAuth();
+    toastContext = useToast();
+  } catch (error) {
+    // Si los contextos no están disponibles (durante hot reload), devolver función vacía
+    console.warn('[useAuthErrorHandler] Contextos no disponibles, devolviendo función vacía');
+    return { handleAuthError: () => false };
+  }
+  
+  const { logout } = authContext;
+  const { showSessionExpired } = toastContext;
 
   const handleAuthError = useCallback((error) => {
     // Verificar si es un error de token expirado

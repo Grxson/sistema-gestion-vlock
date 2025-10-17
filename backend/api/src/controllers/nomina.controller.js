@@ -3,6 +3,7 @@ const NominaEmpleado = models.Nomina_empleado;
 const Empleado = models.Empleados;
 const SemanaNomina = models.Semanas_nomina;
 const PagoNomina = models.Pagos_nomina;
+const Proyecto = models.Proyectos;
 const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
@@ -99,6 +100,44 @@ const getNominasPorEmpleado = async (req, res) => {
 };
 
 /**
+ * Obtener una nómina por ID
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const getNominaById = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        const nomina = await NominaEmpleado.findByPk(id, {
+            include: [
+                { model: Empleado, as: 'empleado' },
+                { model: SemanaNomina, as: 'semana' },
+                { model: Proyecto, as: 'proyecto' }
+            ]
+        });
+
+        if (!nomina) {
+            return res.status(404).json({
+                success: false,
+                message: 'Nómina no encontrada'
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            data: nomina
+        });
+    } catch (error) {
+        console.error('Error al obtener nómina por ID:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al obtener nómina',
+            error: error.message
+        });
+    }
+};
+
+/**
  * Crear una nueva nómina para un empleado
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
@@ -110,7 +149,7 @@ const createNomina = async (req, res) => {
             id_semana,
             id_proyecto, // Agregamos el campo para el proyecto
             dias_laborados,
-            pago_por_dia,
+            pago_semanal,
             horas_extra,
             deducciones_adicionales,
             bonos,
@@ -125,15 +164,15 @@ const createNomina = async (req, res) => {
         } = req.body;
 
         // Validaciones básicas
-        if (!id_empleado || !id_semana || !dias_laborados || !pago_por_dia || !id_proyecto) {
+        if (!id_empleado || !id_semana || !dias_laborados || !pago_semanal || !id_proyecto) {
             return res.status(400).json({
-                message: 'Los campos id_empleado, id_semana, id_proyecto, dias_laborados y pago_por_dia son obligatorios'
+                message: 'Los campos id_empleado, id_semana, id_proyecto, dias_laborados y pago_semanal son obligatorios'
             });
         }
 
         // Convertir valores a números
         const diasLaboradosNum = parseFloat(dias_laborados);
-        const pagoPorDiaNum = parseFloat(pago_por_dia);
+        const pagoSemanalNum = parseFloat(pago_semanal);
         const horasExtraNum = parseFloat(horas_extra || 0);
         const deduccionesAdicionalesNum = parseFloat(deducciones_adicionales || 0);
         const bonosNum = parseFloat(bonos || 0);
@@ -144,18 +183,20 @@ const createNomina = async (req, res) => {
         // Utilizar la función de cálculo de nómina
         const resultado = calcularNomina(
             diasLaboradosNum,
-            pagoPorDiaNum,
+            pagoSemanalNum,
             horasExtraNum,
             bonosNum,
             aplicarISR,
             aplicarIMSS,
             aplicarInfonavit,
-            deduccionesAdicionalesNum
+            deduccionesAdicionalesNum,
+            es_pago_semanal // Pasar el flag de pago semanal
         );
 
         // Determinar el monto a pagar
         let montoAPagar = resultado.montoTotal;
         let montoAdeudo = 0;
+        let adeudosLiquidados = [];
 
         if (pago_parcial && monto_a_pagar !== null) {
             const montoParcial = parseFloat(monto_a_pagar);
@@ -165,10 +206,71 @@ const createNomina = async (req, res) => {
             }
         }
 
+        // Verificar si hay liquidación automática (monto pagado > monto total)
+        if (montoAPagar > resultado.montoTotal) {
+            const excedente = montoAPagar - resultado.montoTotal;
+            console.log(`💰 [LIQUIDACION_AUTOMATICA] Excedente detectado: $${excedente.toFixed(2)}`);
+            
+            // Buscar adeudos pendientes del empleado
+            const adeudosPendientes = await NominaEmpleado.findAll({
+                where: {
+                    id_empleado: id_empleado,
+                    pago_parcial: true,
+                    estado: 'Pendiente'
+                },
+                order: [['createdAt', 'ASC']] // Liquidar los más antiguos primero
+            });
+
+            console.log(`💰 [LIQUIDACION_AUTOMATICA] Adeudos pendientes encontrados: ${adeudosPendientes.length}`);
+
+            let excedenteRestante = excedente;
+            
+            // Liquidar adeudos con el excedente
+            for (const adeudo of adeudosPendientes) {
+                if (excedenteRestante <= 0) break;
+                
+                const montoTotalAdeudo = parseFloat(adeudo.monto_total);
+                const montoYaPagadoAdeudo = parseFloat(adeudo.monto_pagado || 0);
+                const montoPendienteAdeudo = montoTotalAdeudo - montoYaPagadoAdeudo;
+                
+                if (montoPendienteAdeudo > 0) {
+                    const montoALiquidar = Math.min(excedenteRestante, montoPendienteAdeudo);
+                    const nuevoMontoPagadoAdeudo = montoYaPagadoAdeudo + montoALiquidar;
+                    const pagoCompletadoAdeudo = nuevoMontoPagadoAdeudo >= montoTotalAdeudo;
+                    
+                    // Actualizar el adeudo
+                    await adeudo.update({
+                        monto_pagado: nuevoMontoPagadoAdeudo,
+                        monto_a_pagar: pagoCompletadoAdeudo ? 0 : (montoTotalAdeudo - nuevoMontoPagadoAdeudo),
+                        pago_parcial: !pagoCompletadoAdeudo,
+                        estado: pagoCompletadoAdeudo ? 'Pagado' : 'Pendiente',
+                        fecha_pago: pagoCompletadoAdeudo ? new Date() : adeudo.fecha_pago,
+                        motivo_ultimo_cambio: `Liquidación automática desde nómina ${id_semana}: $${montoALiquidar.toFixed(2)}`
+                    });
+                    
+                    adeudosLiquidados.push({
+                        id_nomina: adeudo.id_nomina,
+                        monto_liquidado: montoALiquidar,
+                        pago_completado: pagoCompletadoAdeudo
+                    });
+                    
+                    excedenteRestante -= montoALiquidar;
+                    
+                    console.log(`✅ [LIQUIDACION_AUTOMATICA] Adeudo ${adeudo.id_nomina} liquidado: $${montoALiquidar.toFixed(2)}`);
+                }
+            }
+            
+            // Si aún hay excedente, ajustar el monto a pagar
+            if (excedenteRestante > 0) {
+                montoAPagar = resultado.montoTotal + excedenteRestante;
+                console.log(`💰 [LIQUIDACION_AUTOMATICA] Excedente restante: $${excedenteRestante.toFixed(2)}`);
+            }
+        }
+
         // Determinar el estado de la nómina
-        // Si hay adeudo pendiente, la nómina está "Pendiente"
-        // Si no hay adeudo, la nómina está "Pagado"
-        const estadoNomina = montoAdeudo > 0 ? 'Pendiente' : 'Pagado';
+        // Por defecto, todas las nóminas nuevas están "Pendiente por pagar"
+        // Solo se marcan como "Pagado" si se especifica explícitamente
+        const estadoNomina = 'Pendiente';
 
         // Crear la nueva nómina
         const nuevaNomina = await NominaEmpleado.create({
@@ -176,7 +278,7 @@ const createNomina = async (req, res) => {
             id_semana,
             id_proyecto, // Agregamos el ID del proyecto
             dias_laborados: diasLaboradosNum,
-            pago_por_dia: pagoPorDiaNum,
+            pago_semanal: pagoSemanalNum,
             es_pago_semanal: es_pago_semanal, // Nuevo campo para identificar pago semanal
             horas_extra: horasExtraNum,
             deducciones: resultado.deducciones.total,
@@ -190,6 +292,8 @@ const createNomina = async (req, res) => {
             bonos: bonosNum,
             monto_total: resultado.montoTotal,
             monto_pagado: montoAPagar, // Nuevo campo para el monto realmente pagado
+            pago_parcial: montoAdeudo > 0, // Marcar como pago parcial si hay adeudo
+            monto_a_pagar: montoAdeudo > 0 ? montoAdeudo : null, // Monto pendiente
             estado: estadoNomina // Estado dinámico: 'pagada' si es completa, 'pendiente' si es parcial
             // Ya no necesitamos especificar createdAt y updatedAt porque la base de datos usa valores por defecto
         });
@@ -245,7 +349,7 @@ const createNomina = async (req, res) => {
                 estadoNomina === 'Pendiente' ? 'Pendiente' : 'Pagado',
                 {
                     dias_laborados: diasLaboradosNum,
-                    pago_por_dia: pagoPorDiaNum,
+                    pago_semanal: pagoSemanalNum,
                     horas_extra: horasExtraNum,
                     deducciones: resultado.deducciones.total,
                     bonos: bonosNum,
@@ -257,9 +361,12 @@ const createNomina = async (req, res) => {
         }
 
         res.status(201).json({
-            message: 'Nómina creada exitosamente',
+            message: adeudosLiquidados.length > 0 
+                ? `Nómina creada exitosamente. ${adeudosLiquidados.length} adeudo(s) liquidado(s) automáticamente.`
+                : 'Nómina creada exitosamente',
             nomina: nuevaNomina,
-            calculo: resultado // Incluir desglose del cálculo en la respuesta
+            calculo: resultado, // Incluir desglose del cálculo en la respuesta
+            adeudos_liquidados: adeudosLiquidados // Información sobre adeudos liquidados
         });
     } catch (error) {
         console.error('Error al crear nómina:', error);
@@ -280,11 +387,15 @@ const updateNomina = async (req, res) => {
         const { id } = req.params;
         const {
             dias_laborados,
-            pago_por_dia,
+            pago_semanal,
             horas_extra,
             deducciones,
             bonos,
-            estado
+            estado,
+            // Campos para pago parcial
+            pago_parcial,
+            monto_a_pagar,
+            liquidar_adeudos
         } = req.body;
 
         // Verificar si existe la nómina
@@ -298,27 +409,31 @@ const updateNomina = async (req, res) => {
         // Calcular nuevo monto total si hay cambios en los valores
         let nuevoMontoTotal = nomina.monto_total;
         
-        if (dias_laborados !== undefined || pago_por_dia !== undefined || 
+        if (dias_laborados !== undefined || pago_semanal !== undefined || 
             horas_extra !== undefined || deducciones !== undefined || bonos !== undefined) {
                 
             const diasLaboradosCalc = dias_laborados !== undefined ? parseFloat(dias_laborados) : nomina.dias_laborados;
-            const pagoPorDiaCalc = pago_por_dia !== undefined ? parseFloat(pago_por_dia) : nomina.pago_por_dia;
+            const pagoSemanalCalc = pago_semanal !== undefined ? parseFloat(pago_semanal) : nomina.pago_semanal;
             const horasExtraCalc = horas_extra !== undefined ? parseFloat(horas_extra) : (nomina.horas_extra || 0);
             const deduccionesCalc = deducciones !== undefined ? parseFloat(deducciones) : (nomina.deducciones || 0);
             const bonosCalc = bonos !== undefined ? parseFloat(bonos) : (nomina.bonos || 0);
             
-            nuevoMontoTotal = (diasLaboradosCalc * pagoPorDiaCalc) + horasExtraCalc - deduccionesCalc + bonosCalc;
+            nuevoMontoTotal = (diasLaboradosCalc * pagoSemanalCalc) + horasExtraCalc - deduccionesCalc + bonosCalc;
         }
 
         // Actualizar nómina
         await nomina.update({
             dias_laborados: dias_laborados !== undefined ? dias_laborados : nomina.dias_laborados,
-            pago_por_dia: pago_por_dia !== undefined ? pago_por_dia : nomina.pago_por_dia,
+            pago_semanal: pago_semanal !== undefined ? pago_semanal : nomina.pago_semanal,
             horas_extra: horas_extra !== undefined ? horas_extra : nomina.horas_extra,
             deducciones: deducciones !== undefined ? deducciones : nomina.deducciones,
             bonos: bonos !== undefined ? bonos : nomina.bonos,
             monto_total: nuevoMontoTotal,
-            estado: estado || nomina.estado
+            estado: estado || nomina.estado,
+            // Campos para pago parcial
+            pago_parcial: pago_parcial !== undefined ? pago_parcial : nomina.pago_parcial,
+            monto_a_pagar: monto_a_pagar !== undefined ? monto_a_pagar : nomina.monto_a_pagar,
+            liquidar_adeudos: liquidar_adeudos !== undefined ? liquidar_adeudos : nomina.liquidar_adeudos
         });
 
         res.status(200).json({
@@ -695,7 +810,7 @@ const generarReciboPDFOld = async (req, res) => {
         doc.font('Helvetica-Bold')
            .text('Pago por día:', col1X, desgloseY);
         doc.font('Helvetica')
-           .text(`$${parseFloat(nomina.pago_por_dia).toFixed(2)}`, col1X + 90, desgloseY);
+           .text(`$${parseFloat(nomina.pago_semanal).toFixed(2)}`, col1X + 90, desgloseY);
         
         // Restauramos para el resto del documento
         doc.font('Helvetica')
@@ -756,7 +871,7 @@ const generarReciboPDFOld = async (req, res) => {
         }
         
         // Salario base
-        const salarioBase = parseFloat(nomina.dias_laborados) * parseFloat(nomina.pago_por_dia);
+        const salarioBase = parseFloat(nomina.dias_laborados) * parseFloat(nomina.pago_semanal);
         addRow('Salario Base', `$${salarioBase.toFixed(2)}`);
         
         // Horas extra
@@ -1069,9 +1184,9 @@ const cambiarEstadoNomina = async (req, res) => {
         const { estado } = req.body;
 
         // Validaciones básicas
-        if (!estado || !['borrador', 'generada', 'revisada', 'pagada', 'archivada', 'cancelada'].includes(estado)) {
+        if (!estado || !['Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'].includes(estado)) {
             return res.status(400).json({
-                message: 'El estado debe ser borrador, generada, revisada, pagada, archivada o cancelada'
+                message: `Estado inválido: '${estado}'. Estados permitidos: Pendiente, En_Proceso, Aprobada, Pagado, Cancelada`
             });
         }
 
@@ -1280,7 +1395,7 @@ const getInfoParaNomina = async (req, res) => {
                 id_empleado: emp.id_empleado,
                 nombre_completo: `${emp.nombre} ${emp.apellido}`,
                 oficio: oficio,
-                pago_por_dia_sugerido: pagoPorDia
+                pago_semanal_sugerido: pagoSemanal
             };
         });
         
@@ -1400,10 +1515,124 @@ const verificarDuplicados = async (req, res) => {
     }
 };
 
+/**
+ * Liquidar adeudo pendiente de una nómina
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const liquidarAdeudo = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { monto_pagado, observaciones } = req.body;
+        
+        console.log('💰 [LIQUIDAR_ADEUDO] Parámetros recibidos:', {
+            id_nomina: id,
+            monto_pagado,
+            observaciones
+        });
+
+        // Verificar si existe la nómina
+        const nomina = await NominaEmpleado.findByPk(id, {
+            include: [
+                { model: Empleado, as: 'empleado' }
+            ]
+        });
+        
+        if (!nomina) {
+            return res.status(404).json({
+                success: false,
+                message: 'Nómina no encontrada'
+            });
+        }
+
+        // Verificar que sea una nómina con pago parcial
+        if (!nomina.pago_parcial) {
+            return res.status(400).json({
+                success: false,
+                message: 'Esta nómina no tiene pago parcial'
+            });
+        }
+
+        // Calcular el monto pendiente
+        const montoTotal = parseFloat(nomina.monto_total);
+        const montoYaPagado = parseFloat(nomina.monto_pagado || 0);
+        const montoPendiente = montoTotal - montoYaPagado;
+        const montoPagadoNuevo = parseFloat(monto_pagado || 0);
+
+        console.log('💰 [LIQUIDAR_ADEUDO] Cálculos:', {
+            montoTotal,
+            montoYaPagado,
+            montoPendiente,
+            montoPagadoNuevo
+        });
+
+        // Validar que el monto pagado no exceda el pendiente
+        if (montoPagadoNuevo > montoPendiente) {
+            return res.status(400).json({
+                success: false,
+                message: `El monto pagado ($${montoPagadoNuevo.toFixed(2)}) excede el pendiente ($${montoPendiente.toFixed(2)})`
+            });
+        }
+
+        // Calcular nuevo monto pagado
+        const nuevoMontoPagado = montoYaPagado + montoPagadoNuevo;
+        const nuevoMontoPendiente = montoTotal - nuevoMontoPagado;
+
+        // Determinar si se completó el pago
+        const pagoCompletado = nuevoMontoPendiente <= 0;
+
+        // Actualizar la nómina
+        const datosActualizacion = {
+            monto_pagado: nuevoMontoPagado,
+            monto_a_pagar: pagoCompletado ? 0 : nuevoMontoPendiente,
+            pago_parcial: !pagoCompletado, // Si se completó, ya no es parcial
+            estado: pagoCompletado ? 'Pagado' : 'Pendiente',
+            fecha_pago: pagoCompletado ? new Date() : nomina.fecha_pago,
+            motivo_ultimo_cambio: observaciones || `Liquidación parcial: $${montoPagadoNuevo.toFixed(2)}`
+        };
+
+        await nomina.update(datosActualizacion);
+
+        console.log('✅ [LIQUIDAR_ADEUDO] Nómina actualizada:', {
+            id: nomina.id_nomina,
+            nuevoMontoPagado,
+            nuevoMontoPendiente,
+            pagoCompletado,
+            estado: datosActualizacion.estado
+        });
+
+        res.status(200).json({
+            success: true,
+            message: pagoCompletado 
+                ? 'Adeudo liquidado completamente' 
+                : `Pago parcial procesado. Pendiente: $${nuevoMontoPendiente.toFixed(2)}`,
+            data: {
+                id_nomina: nomina.id_nomina,
+                empleado: `${nomina.empleado.nombre} ${nomina.empleado.apellido}`,
+                monto_total: montoTotal,
+                monto_pagado: nuevoMontoPagado,
+                monto_pendiente: nuevoMontoPendiente,
+                pago_completado: pagoCompletado,
+                estado: datosActualizacion.estado,
+                fecha_pago: datosActualizacion.fecha_pago
+            }
+        });
+
+    } catch (error) {
+        console.error('Error liquidando adeudo:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor al liquidar adeudo',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllNominas,
     getNominasPorSemana,
     getNominasPorEmpleado,
+    getNominaById,
     createNomina,
     updateNomina,
     registrarPagoNomina,
@@ -1414,5 +1643,6 @@ module.exports = {
     cambiarEstadoNomina,
     getNominaStats,
     getInfoParaNomina,
-    verificarDuplicados
+    verificarDuplicados,
+    liquidarAdeudo
 };

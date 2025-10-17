@@ -110,7 +110,7 @@ export class EmpleadoNominaService {
       }
 
       // Obtener pago diario de diferentes fuentes
-      const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 7 : 
+      const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 6 : 
                         empleado.contrato?.salario_diario || 
                         empleado.salario_diario || 
                         empleado.salario_base_personal || 0;
@@ -240,7 +240,7 @@ export class EmpleadoNominaService {
       // Calcular promedio de salario diario para estadísticas (sin multiplicar por 30)
       const promedioSalarioDiario = empleadosConPago.length > 0 ? 
         empleadosConPago.reduce((sum, emp) => {
-          const pagoDiario = emp.pago_semanal ? emp.pago_semanal / 7 : 
+          const pagoDiario = emp.pago_semanal ? emp.pago_semanal / 6 : 
                             emp.contrato?.salario_diario || 
                             emp.salario_diario || 
                             emp.salario_base_personal || 0;
