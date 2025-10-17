@@ -39,6 +39,9 @@ router.get('/estadisticas', verifyRole([1]), nominaController.getNominaStats);
 // Obtener información para generar nóminas (proyectos, empleados, semanas)
 router.get('/info-para-nomina', verifyRole([1]), nominaController.getInfoParaNomina);
 
+// Verificar duplicados de nómina
+router.get('/verificar-duplicados', verifyRole([1]), nominaController.verificarDuplicados);
+
 // Obtener historial de cambios de una nómina
 router.get('/:id_nomina/historial', verifyToken, require('../controllers/nominaHistorial.controller').getHistorialNomina);
 

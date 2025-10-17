@@ -76,13 +76,23 @@ export class NominaService {
    */
   static async getById(id, includeDetails = true) {
     try {
-      const params = includeDetails ? '?include=empleado,semana,proyecto,pagos' : '';
-      const response = await ApiService.get(`/nomina/${id}${params}`);
+      // Como no hay ruta específica para obtener nómina por ID, 
+      // vamos a obtener todas las nóminas y filtrar por ID
+      const response = await ApiService.get('/nomina/');
       
-      return {
-        success: true,
-        data: response.nomina || response.data
-      };
+      if (response.success && response.data) {
+        const nomina = response.data.find(n => n.id_nomina === parseInt(id));
+        if (nomina) {
+          return {
+            success: true,
+            data: nomina
+          };
+        } else {
+          throw new Error('Nómina no encontrada');
+        }
+      } else {
+        throw new Error('Error al obtener nóminas');
+      }
     } catch (error) {
       console.error('Error fetching nomina by ID:', error);
       throw this.handleError(error);
@@ -275,6 +285,39 @@ export class NominaService {
     const ahora = new Date();
     const periodo = `${ahora.getFullYear()}-${String(ahora.getMonth() + 1).padStart(2, '0')}`;
     return this.getNominasPeriodo(periodo);
+  }
+
+  /**
+   * Verifica si ya existe una nómina para un empleado en una semana específica del período
+   * @param {Object} datos - Datos para verificar duplicados
+   * @param {number} datos.id_empleado - ID del empleado
+   * @param {string} datos.periodo - Período en formato YYYY-MM
+   * @param {number} datos.semana - Número de semana (1-4)
+   * @returns {Promise<Object>} Resultado de la verificación
+   */
+  static async verificarDuplicados(datos) {
+    try {
+      console.log('🔍 [NominaService] Verificando duplicados:', datos);
+      
+      const params = new URLSearchParams();
+      params.append('id_empleado', datos.id_empleado);
+      params.append('periodo', datos.periodo);
+      params.append('semana', datos.semana);
+      
+      const response = await ApiService.get(`/nomina/verificar-duplicados?${params.toString()}`);
+      
+      console.log('🔍 [NominaService] Respuesta verificación:', response);
+      
+      return {
+        success: true,
+        existe: response.existe || false,
+        nominaExistente: response.nominaExistente || null,
+        message: response.message || (response.existe ? 'Nómina duplicada encontrada' : 'No hay duplicados')
+      };
+    } catch (error) {
+      console.error('Error verificando duplicados:', error);
+      throw this.handleError(error);
+    }
   }
 
   /**

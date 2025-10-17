@@ -42,29 +42,60 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     return `${año}-${mes.toString().padStart(2, '0')}`;
   };
 
+  // Detectar automáticamente la semana del mes
+  const detectarSemanaDelMes = () => {
+    const ahora = new Date();
+    const diaDelMes = ahora.getDate();
+    
+    // Calcular la semana del mes (1-4)
+    // Semana 1: días 1-7
+    // Semana 2: días 8-14
+    // Semana 3: días 15-21
+    // Semana 4: días 22-28
+    // Semana 5: días 29-31 (se considera semana 4)
+    
+    if (diaDelMes <= 7) return 1;
+    if (diaDelMes <= 14) return 2;
+    if (diaDelMes <= 21) return 3;
+    if (diaDelMes <= 28) return 4;
+    return 4; // Para días 29-31, usar semana 4
+  };
+
   // Datos del formulario
   const [formData, setFormData] = useState({
     selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
-    semanaNum: 1,
+    semanaNum: detectarSemanaDelMes(), // Auto-detectar semana del mes
     selectedEmpleado: null,
     searchTerm: '',
     diasLaborados: 6,
     horasExtra: 0,
     bonos: 0,
     deduccionesAdicionales: 0,
-    aplicarISR: false,
-    aplicarIMSS: false,
-    aplicarInfonavit: false,
+    aplicarISR: false, // Siempre false por defecto
+    aplicarIMSS: false, // Siempre false por defecto
+    aplicarInfonavit: false, // Siempre false por defecto
     // Nuevos campos para pagos parciales
     pagoParcial: false,
     montoAPagar: 0,
     liquidarAdeudos: false
   });
 
+  // Debug: Log cuando se inicializa el formulario
+  useEffect(() => {
+    console.log('🔍 [NominaWizard] Formulario inicializado con valores:', {
+      aplicarISR: formData.aplicarISR,
+      aplicarIMSS: formData.aplicarIMSS,
+      aplicarInfonavit: formData.aplicarInfonavit
+    });
+  }, []);
+
   // Cálculos de nómina
   const [calculoNomina, setCalculoNomina] = useState(null);
   const [validacion, setValidacion] = useState(null);
   const [adeudosEmpleado, setAdeudosEmpleado] = useState(0);
+  const [verificacionDuplicados, setVerificacionDuplicados] = useState(null);
+  const [showPreview, setShowPreview] = useState(false);
+  const [nominaGenerada, setNominaGenerada] = useState(null);
 
   // Filtrar empleados por búsqueda y solo mostrar activos
   const empleadosFiltrados = Array.isArray(empleados) 
@@ -100,6 +131,27 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     }
   }, [formData.selectedEmpleado]);
 
+  // Verificar duplicados cuando cambien empleado, período o semana
+  useEffect(() => {
+    if (formData.selectedEmpleado && formData.selectedPeriodo && formData.semanaNum) {
+      verificarDuplicados();
+    } else {
+      setVerificacionDuplicados(null);
+    }
+  }, [formData.selectedEmpleado, formData.selectedPeriodo, formData.semanaNum]);
+
+  // Auto-actualizar semana cuando cambie el período al período actual
+  useEffect(() => {
+    const periodoActual = generarPeriodoActual();
+    if (formData.selectedPeriodo === periodoActual) {
+      // Si se selecciona el período actual, actualizar la semana automáticamente
+      const semanaActual = detectarSemanaDelMes();
+      if (formData.semanaNum !== semanaActual) {
+        updateFormData({ semanaNum: semanaActual });
+      }
+    }
+  }, [formData.selectedPeriodo]);
+
   // Cargar adeudos del empleado seleccionado
   const cargarAdeudosEmpleado = async () => {
     if (!formData.selectedEmpleado) return;
@@ -111,6 +163,37 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     } catch (error) {
       console.error('Error loading employee debts:', error);
       setAdeudosEmpleado(0);
+    }
+  };
+
+  // Verificar si ya existe una nómina para este empleado en esta semana del período
+  const verificarDuplicados = async () => {
+    if (!formData.selectedEmpleado || !formData.selectedPeriodo || !formData.semanaNum) {
+      setVerificacionDuplicados(null);
+      return;
+    }
+
+    try {
+      console.log('🔍 [WIZARD] Verificando duplicados para:', {
+        empleado: formData.selectedEmpleado.id_empleado,
+        periodo: formData.selectedPeriodo,
+        semana: formData.semanaNum
+      });
+
+      const response = await nominasServices.nominas.verificarDuplicados({
+        id_empleado: formData.selectedEmpleado.id_empleado,
+        periodo: formData.selectedPeriodo,
+        semana: formData.semanaNum
+      });
+
+      console.log('🔍 [WIZARD] Resultado verificación duplicados:', response);
+      setVerificacionDuplicados(response);
+    } catch (error) {
+      console.error('Error verificando duplicados:', error);
+      setVerificacionDuplicados({
+        existe: false,
+        error: 'Error al verificar duplicados'
+      });
     }
   };
 
@@ -163,18 +246,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
   };
 
   const resetForm = () => {
+    console.log('🔄 [NominaWizard] Reseteando formulario con valores por defecto:', {
+      aplicarISR: false,
+      aplicarIMSS: false,
+      aplicarInfonavit: false
+    });
+    
     setFormData({
       selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
-      semanaNum: 1,
+      semanaNum: detectarSemanaDelMes(), // Auto-detectar semana del mes
       selectedEmpleado: null,
       searchTerm: '',
       diasLaborados: 6,
       horasExtra: 0,
       bonos: 0,
       deduccionesAdicionales: 0,
-      aplicarISR: true,
-      aplicarIMSS: true,
-      aplicarInfonavit: true,
+      aplicarISR: false, // Siempre false por defecto
+      aplicarIMSS: false, // Siempre false por defecto
+      aplicarInfonavit: false, // Siempre false por defecto
       // Nuevos campos para pagos parciales
       pagoParcial: false,
       montoAPagar: 0,
@@ -183,6 +272,69 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     setCalculoNomina(null);
     setValidacion(null);
     setAdeudosEmpleado(0);
+    setVerificacionDuplicados(null);
+    setShowPreview(false);
+    setNominaGenerada(null);
+    setCurrentStep(1);
+  };
+
+
+  // Función para generar PDF desde preview
+  const generarPDFDesdePreview = async () => {
+    if (!nominaGenerada?.id_nomina) {
+      showError('Error', 'No hay nómina generada para crear PDF');
+      return;
+    }
+
+    try {
+      setProcessingNomina(true);
+      showInfo('Generando PDF', 'Creando recibo de nómina...');
+      
+      const pdfBlob = await nominasServices.nominas.generarReciboPDF(nominaGenerada.id_nomina);
+      
+      if (!pdfBlob || !(pdfBlob instanceof Blob)) {
+        throw new Error('No se recibió un PDF válido');
+      }
+      
+      // Crear nombre de archivo
+      const nombreArchivo = `nomina_${formData.selectedEmpleado.nombre.replace(/\s+/g, '_')}_${formData.selectedEmpleado.apellido.replace(/\s+/g, '_')}_${formData.selectedPeriodo}.pdf`;
+      
+      // Crear URL del blob y descargar
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = nombreArchivo;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Limpiar recursos
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 2000);
+
+      showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
+      
+      // Cerrar wizard y llamar callback de éxito
+      handleClose();
+      if (onSuccess) onSuccess();
+      
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      showError('Error al generar PDF', error.message || 'No se pudo generar el PDF');
+    } finally {
+      setProcessingNomina(false);
+    }
+  };
+
+  // Función para editar nómina desde preview
+  const editarNominaDesdePreview = () => {
+    setShowPreview(false);
+    setNominaGenerada(null);
+    // Volver al paso 1 para editar
     setCurrentStep(1);
   };
 
@@ -224,15 +376,34 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
   const isStepValid = (step) => {
     switch (step) {
       case 1:
-        return formData.selectedPeriodo && formData.selectedEmpleado && formData.diasLaborados > 0;
+        // Validar que todos los campos estén completos Y que no haya duplicados
+        const camposCompletos = formData.selectedPeriodo && formData.selectedEmpleado && formData.diasLaborados > 0;
+        const sinDuplicados = !verificacionDuplicados || !verificacionDuplicados.existe;
+        
+        console.log('🔍 Validando paso 1:', {
+          camposCompletos,
+          sinDuplicados,
+          verificacionDuplicados: !!verificacionDuplicados,
+          existeDuplicado: verificacionDuplicados?.existe,
+          isValid: camposCompletos && sinDuplicados
+        });
+        
+        return camposCompletos && sinDuplicados;
       case 2:
-        // Permitir procesar si hay cálculo y no hay errores críticos (solo advertencias)
-        const isValid = calculoNomina && validacion && validacion.esValido && validacion.errores.length === 0;
+        // Permitir procesar si hay cálculo, no hay errores críticos y no hay duplicados
+        const isValid = calculoNomina && 
+                       validacion && 
+                       validacion.esValido && 
+                       validacion.errores.length === 0 &&
+                       verificacionDuplicados &&
+                       !verificacionDuplicados.existe;
         console.log('🔍 Validando paso 2:', {
           calculoNomina: !!calculoNomina,
           validacion: !!validacion,
           esValido: validacion?.esValido,
           errores: validacion?.errores?.length || 0,
+          verificacionDuplicados: !!verificacionDuplicados,
+          existeDuplicado: verificacionDuplicados?.existe,
           isValid
         });
         return isValid;
@@ -241,7 +412,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     }
   };
 
-  const procesarNominaConPago = async (pagoIngresado) => {
+  const procesarNominaConPago = async (pagoIngresado, generarPDF = false) => {
     try {
       console.log('🚀 [WIZARD] Iniciando procesamiento con pago');
       console.log('🚀 [WIZARD] Pago ingresado:', pagoIngresado);
@@ -274,7 +445,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
       };
 
       console.log('🚀 [WIZARD] Datos preparados para nómina:', nominaData);
-      await procesarNominaFinal(nominaData);
+      await procesarNominaFinal(nominaData, generarPDF); // Usar el parámetro generarPDF
     } catch (error) {
       console.error('❌ [WIZARD] Error processing nomina:', error);
       showError('Error de procesamiento', error.message || 'Error al procesar la nómina');
@@ -316,7 +487,41 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     await procesarNominaConPago(pagoSemanal);
   };
 
-  const procesarNominaFinal = async (nominaData) => {
+  const procesarNominaConPDF = async () => {
+    console.log('🚀 [WIZARD] Función procesarNominaConPDF llamada');
+    console.log('🚀 [WIZARD] formData:', formData);
+    
+    // Validar que tenemos los datos básicos necesarios
+    if (!formData.selectedEmpleado || !formData.diasLaborados || !formData.selectedPeriodo) {
+      console.error('❌ [WIZARD] Datos incompletos:', {
+        selectedEmpleado: !!formData.selectedEmpleado,
+        diasLaborados: formData.diasLaborados,
+        selectedPeriodo: formData.selectedPeriodo
+      });
+      showError('Datos incompletos', 'Por favor completa todos los campos requeridos');
+      return;
+    }
+
+    console.log('✅ [WIZARD] Validación básica exitosa para PDF');
+    
+    // Para pago semanal: usar directamente el pago semanal
+    const pagoSemanal = formData.selectedEmpleado.pago_semanal || 0;
+
+    console.log('💰 [WIZARD] Pago semanal encontrado para PDF:', pagoSemanal);
+
+    // Si el pago semanal es 0 o null, mostrar modal para solicitar el valor
+    if (!pagoSemanal || pagoSemanal <= 0) {
+      console.log('💰 [WIZARD] Pago semanal no configurado, mostrando modal');
+      setShowPagoModal(true);
+      return;
+    }
+
+    console.log('✅ [WIZARD] Pago semanal configurado, procesando con PDF directamente');
+    // Si tiene pago semanal, procesar directamente con PDF
+    await procesarNominaConPago(pagoSemanal, true);
+  };
+
+  const procesarNominaFinal = async (nominaData, generarPDF = false) => {
     try {
       console.log('🚀 [WIZARD] Iniciando procesamiento de nómina final');
       console.log('🚀 [WIZARD] Datos de nómina:', nominaData);
@@ -334,108 +539,84 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
       }
 
       console.log('✅ [WIZARD] Validación exitosa, procesando nómina...');
+      
+      // Si no se va a generar PDF inmediatamente, marcar como borrador
+      const nominaDataConEstado = generarPDF 
+        ? nominaData 
+        : { ...nominaData, estado: 'borrador' };
+      
       // Procesar nómina usando el servicio
-      const response = await nominasServices.nominas.procesarNomina(nominaData);
+      const response = await nominasServices.nominas.procesarNomina(nominaDataConEstado);
       console.log('✅ [WIZARD] Respuesta del procesamiento:', response);
-      
-      showSuccess('¡Éxito!', `Nómina generada exitosamente para ${formData.selectedEmpleado.nombre} ${formData.selectedEmpleado.apellido}`);
-      
-      // Generar PDF si es posible
-      console.log('📄 [WIZARD] Verificando si se puede generar PDF...');
-      console.log('📄 [WIZARD] response completa:', response);
-      console.log('📄 [WIZARD] response.data:', response?.data);
-      console.log('📄 [WIZARD] response.data.nomina:', response?.data?.nomina);
-      console.log('📄 [WIZARD] response.data.data:', response?.data?.data);
-      console.log('📄 [WIZARD] response?.data?.id_nomina:', response?.data?.id_nomina);
-      console.log('📄 [WIZARD] response?.data?.data?.nomina?.id_nomina:', response?.data?.data?.nomina?.id_nomina);
       
       // Obtener el ID de la nómina de la estructura correcta
       const idNomina = response?.data?.nomina?.id_nomina || 
                       response?.data?.id_nomina || 
                       response?.data?.data?.nomina?.id_nomina;
-      console.log('📄 [WIZARD] ID de nómina extraído:', idNomina);
+      console.log('📋 [WIZARD] ID de nómina extraído:', idNomina);
       
       if (idNomina) {
-        try {
-          showInfo('Generando PDF', 'Creando recibo de nómina...');
-          
-          console.log('📄 Intentando generar PDF para nómina ID:', idNomina);
-          const pdfBlob = await nominasServices.nominas.generarReciboPDF(idNomina);
-          
-          console.log('📄 PDF recibido:', pdfBlob);
-          console.log('📄 Tipo de PDF:', typeof pdfBlob);
-          console.log('📄 Es Blob:', pdfBlob instanceof Blob);
-          console.log('📄 Constructor:', pdfBlob?.constructor?.name);
-          console.log('📄 Tamaño del PDF:', pdfBlob?.size || 'N/A');
-          console.log('📄 Tipo MIME:', pdfBlob?.type || 'N/A');
-          console.log('📄 Propiedades del objeto:', Object.keys(pdfBlob || {}));
-          
-          if (!pdfBlob) {
-            throw new Error('No se recibió ningún PDF');
-          }
-          
-          if (!(pdfBlob instanceof Blob)) {
-            console.error('❌ El objeto recibido no es un Blob válido:', pdfBlob);
-            throw new Error('El objeto recibido no es un Blob válido');
-          }
-          
-          if (pdfBlob.size === 0) {
-            throw new Error('El PDF recibido está vacío');
-          }
-          
-          // Crear nombre de archivo seguro
-          const nombreArchivo = `nomina_${formData.selectedEmpleado.nombre.replace(/\s+/g, '_')}_${formData.selectedEmpleado.apellido.replace(/\s+/g, '_')}_${formData.selectedPeriodo}.pdf`;
-          console.log('📄 Nombre de archivo:', nombreArchivo);
-          
-          // Crear URL del blob
-          const url = window.URL.createObjectURL(pdfBlob);
-          console.log('📄 URL creada:', url);
-          
-          // Intentar descarga automática
+        if (generarPDF) {
+          // Modo: Generar PDF inmediatamente
           try {
+            showInfo('Generando PDF', 'Creando recibo de nómina...');
+            
+            const pdfBlob = await nominasServices.nominas.generarReciboPDF(idNomina);
+            
+            if (!pdfBlob || !(pdfBlob instanceof Blob)) {
+              throw new Error('No se recibió un PDF válido');
+            }
+            
+            // Crear nombre de archivo
+            const nombreArchivo = `nomina_${formData.selectedEmpleado.nombre.replace(/\s+/g, '_')}_${formData.selectedEmpleado.apellido.replace(/\s+/g, '_')}_${formData.selectedPeriodo}.pdf`;
+            
+            // Crear URL del blob y descargar
+            const url = window.URL.createObjectURL(pdfBlob);
             const a = document.createElement('a');
             a.style.display = 'none';
             a.href = url;
             a.download = nombreArchivo;
-            a.target = '_blank'; // Abrir en nueva pestaña como fallback
-            
-            // Agregar al DOM y hacer clic
             document.body.appendChild(a);
-            console.log('📄 Elemento agregado al DOM, haciendo clic...');
             a.click();
             
-            // Limpiar después de un delay
+            // Limpiar recursos
             setTimeout(() => {
               window.URL.revokeObjectURL(url);
               if (document.body.contains(a)) {
                 document.body.removeChild(a);
               }
-              console.log('📄 Recursos limpiados');
             }, 2000);
-            
-          } catch (downloadError) {
-            console.error('❌ Error en descarga automática:', downloadError);
-            
-            // Fallback: Abrir en nueva ventana
-            console.log('📄 Intentando fallback: abrir en nueva ventana');
-            window.open(url, '_blank');
-            
-            // Limpiar después de un delay
-            setTimeout(() => {
-              window.URL.revokeObjectURL(url);
-            }, 5000);
-          }
 
-          showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
-        } catch (pdfError) {
-          console.error('❌ Error detallado al generar PDF:', pdfError);
-          console.error('❌ Stack trace:', pdfError.stack);
-          showError('Error al generar PDF', `No se pudo generar el PDF: ${pdfError.message}`);
+            showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
+            
+            // Cerrar wizard y llamar callback de éxito
+            handleClose();
+            if (onSuccess) onSuccess();
+            
+          } catch (pdfError) {
+            console.error('❌ Error generando PDF:', pdfError);
+            showError('Error al generar PDF', `No se pudo generar el PDF: ${pdfError.message}`);
+          }
+        } else {
+          // Modo: Solo generar nómina y mostrar preview
+          try {
+            // Obtener los datos completos de la nómina generada
+            const nominaCompleta = await nominasServices.nominas.getById(idNomina, true);
+            console.log('📋 [WIZARD] Nómina completa obtenida:', nominaCompleta);
+            
+            // Guardar la nómina generada y mostrar preview
+            setNominaGenerada(nominaCompleta.data);
+            setShowPreview(true);
+            
+            showSuccess('¡Nómina Generada!', `Nómina creada exitosamente. Revisa los datos antes de generar el PDF.`);
+          } catch (previewError) {
+            console.error('❌ Error al obtener datos de la nómina:', previewError);
+            showError('Error al obtener nómina', 'No se pudieron obtener los datos de la nómina generada');
+          }
         }
+      } else {
+        throw new Error('No se pudo obtener el ID de la nómina generada');
       }
-      
-      handleClose();
-      if (onSuccess) onSuccess();
     } catch (error) {
       console.error('Error processing nomina:', error);
       showError('Error de procesamiento', 'Error al procesar la nómina');
@@ -450,6 +631,181 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
   ];
 
   if (!isOpen) return null;
+
+  // Si estamos en modo preview, mostrar la vista de preview
+  if (showPreview && nominaGenerada) {
+    return (
+      <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+        <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-4xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
+          {/* Header del Preview */}
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Preview de Nómina
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Revisa los datos antes de generar el PDF
+                </p>
+              </div>
+              <button
+                onClick={handleClose}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          {/* Contenido del Preview */}
+          <div className="p-6">
+            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-6">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="ml-3">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    <strong>Nómina generada exitosamente</strong> - ID: {nominaGenerada.id_nomina} - Estado: {nominaGenerada.estado}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Información del Empleado */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Información del Empleado</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Nombre</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {formData.selectedEmpleado.nombre} {formData.selectedEmpleado.apellido}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">NSS</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{formData.selectedEmpleado.nss}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">RFC</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{formData.selectedEmpleado.rfc}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Proyecto</p>
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {formData.selectedEmpleado.proyecto?.nombre || 'Sin proyecto'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Detalles de la Nómina */}
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Detalles de la Nómina</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Período</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{formData.selectedPeriodo}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Semana</p>
+                  <p className="font-medium text-gray-900 dark:text-white">Semana {formData.semanaNum}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Días Laborados</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{formData.diasLaborados}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Pago por Día</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{formatCurrency(formData.pago_por_dia || 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Cálculos */}
+            {calculoNomina && (
+              <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Cálculos</h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-gray-600 dark:text-gray-400">Salario Base:</span>
+                    <span className="font-medium text-gray-900 dark:text-white">
+                      {formatCurrency(calculoNomina.salarioBase || 0)}
+                    </span>
+                  </div>
+                  {calculoNomina.horasExtra > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Horas Extra:</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {formatCurrency(calculoNomina.horasExtra || 0)}
+                      </span>
+                    </div>
+                  )}
+                  {calculoNomina.bonos > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Bonos:</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {formatCurrency(calculoNomina.bonos || 0)}
+                      </span>
+                    </div>
+                  )}
+                  {calculoNomina.deducciones > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Deducciones:</span>
+                      <span className="font-medium text-red-600 dark:text-red-400">
+                        -{formatCurrency(calculoNomina.deducciones || 0)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="border-t border-gray-300 dark:border-gray-600 pt-2">
+                    <div className="flex justify-between">
+                      <span className="text-lg font-medium text-gray-900 dark:text-white">Total a Pagar:</span>
+                      <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                        {formatCurrency(calculoNomina.totalAPagar || 0)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Footer del Preview */}
+          <div className="flex justify-end space-x-3 px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
+            <button
+              type="button"
+              onClick={editarNominaDesdePreview}
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Editar Datos
+            </button>
+            <button
+              type="button"
+              onClick={generarPDFDesdePreview}
+              disabled={processingNomina}
+              className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+            >
+              {processingNomina ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                  Generando PDF...
+                </>
+              ) : (
+                <>
+                  <DocumentTextIcon className="h-4 w-4 mr-2 inline-block" />
+                  Generar PDF
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
@@ -560,9 +916,19 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Semana del Período (1-4)
-                        </label>
+                        <div className="flex items-center justify-between mb-2">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                            Semana del Período (1-4)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => updateFormData({ semanaNum: detectarSemanaDelMes() })}
+                            className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
+                            title="Detectar automáticamente la semana actual"
+                          >
+                            🔄 Auto-detectar
+                          </button>
+                        </div>
                         <input
                           type="number"
                           min="1"
@@ -583,11 +949,14 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                           onBlur={(e) => {
                             // Solo restaurar valor por defecto cuando pierde el foco y está vacío
                             if (e.target.value === '' || e.target.value === '0') {
-                              updateFormData({ semanaNum: 1 });
+                              updateFormData({ semanaNum: detectarSemanaDelMes() });
                             }
                           }}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                         />
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Semana actual detectada: {detectarSemanaDelMes()} (día {new Date().getDate()} del mes)
+                        </p>
                       </div>
 
                       <div>
@@ -699,6 +1068,59 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                       )}
                     </div>
                   </div>
+
+                  {/* Verificación de duplicados - Ahora aparece justo debajo de "Seleccionar Empleado" */}
+                  {verificacionDuplicados && (
+                    <div className={`p-4 rounded-lg border ${
+                      verificacionDuplicados.existe 
+                        ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                        : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    }`}>
+                      <div className="flex items-center mb-2">
+                        {verificacionDuplicados.existe ? (
+                          <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
+                        ) : (
+                          <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
+                        )}
+                        <h5 className={`text-sm font-semibold ${
+                          verificacionDuplicados.existe 
+                            ? 'text-red-900 dark:text-red-200'
+                            : 'text-green-900 dark:text-green-200'
+                        }`}>
+                          {verificacionDuplicados.existe ? '⚠️ Nómina Duplicada Detectada' : '✅ Nómina Disponible'}
+                        </h5>
+                      </div>
+                      
+                      {verificacionDuplicados.existe ? (
+                        <div className="text-sm text-red-800 dark:text-red-300">
+                          <p className="mb-2">
+                            <strong>Ya existe una nómina</strong> para este empleado en la semana {formData.semanaNum} del período {formData.selectedPeriodo}.
+                          </p>
+                          {verificacionDuplicados.nominaExistente && (
+                            <div className="bg-red-100 dark:bg-red-900/30 p-3 rounded-lg border border-red-200 dark:border-red-700">
+                              <p className="font-medium mb-1">Nómina existente:</p>
+                              <p>• ID: {verificacionDuplicados.nominaExistente.id_nomina}</p>
+                              <p>• Estado: {verificacionDuplicados.nominaExistente.estado}</p>
+                              <p>• Fecha: {new Date(verificacionDuplicados.nominaExistente.fecha_creacion).toLocaleDateString('es-MX')}</p>
+                              <p>• Monto: {formatCurrency(verificacionDuplicados.nominaExistente.monto_total)}</p>
+                            </div>
+                          )}
+                          <p className="mt-2 text-xs">
+                            💡 <strong>Sugerencia:</strong> Cambia la semana o selecciona un período diferente para crear una nueva nómina.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-sm text-green-800 dark:text-green-300">
+                          <p>
+                            ✅ <strong>Perfecto!</strong> No existe ninguna nómina para este empleado en la semana {formData.semanaNum} del período {formData.selectedPeriodo}.
+                          </p>
+                          <p className="text-xs mt-1">
+                            Puedes proceder con la creación de la nómina.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {/* Columna derecha: Configuración adicional y vista previa */}
@@ -1344,25 +1766,67 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
             </button>
             
             {currentStep < 2 ? (
-              <button
-                onClick={nextStep}
-                disabled={!isStepValid(currentStep) || processingNomina}
-                className="flex items-center px-6 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                Siguiente
-                <ArrowRightIcon className="w-4 h-4 ml-2" />
-              </button>
+              <div className="flex flex-col items-end">
+                <button
+                  onClick={nextStep}
+                  disabled={!isStepValid(currentStep) || processingNomina}
+                  className="flex items-center px-6 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-lg hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  title={
+                    !isStepValid(currentStep) && verificacionDuplicados?.existe
+                      ? 'No se puede continuar: Ya existe una nómina para este empleado en esta semana del período'
+                      : !isStepValid(currentStep)
+                      ? 'Complete todos los campos requeridos para continuar'
+                      : ''
+                  }
+                >
+                  Siguiente
+                  <ArrowRightIcon className="w-4 h-4 ml-2" />
+                </button>
+              </div>
             ) : (
-              <button
-                onClick={procesarNomina}
-                disabled={processingNomina || !validacion?.esValido || validacion?.errores?.length > 0}
-                className="flex items-center px-6 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-              >
-                {processingNomina && (
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              <div className="flex flex-col items-end space-y-2">
+                <div className="flex space-x-3">
+                  <button
+                    onClick={procesarNomina}
+                    disabled={processingNomina || !isStepValid(currentStep)}
+                    className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    title={
+                      !isStepValid(currentStep) && verificacionDuplicados?.existe
+                        ? 'No se puede procesar: Ya existe una nómina para este empleado en esta semana del período'
+                        : !isStepValid(currentStep)
+                        ? 'Complete todos los campos y cálculos requeridos para procesar'
+                        : 'Generar nómina y mostrar preview'
+                    }
+                  >
+                    {processingNomina && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+                    )}
+                    {processingNomina ? 'Procesando...' : 'Generar Nómina'}
+                  </button>
+                  <button
+                    onClick={() => procesarNominaConPDF()}
+                    disabled={processingNomina || !isStepValid(currentStep)}
+                    className="flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                    title={
+                      !isStepValid(currentStep) && verificacionDuplicados?.existe
+                        ? 'No se puede procesar: Ya existe una nómina para este empleado en esta semana del período'
+                        : !isStepValid(currentStep)
+                        ? 'Complete todos los campos y cálculos requeridos para procesar'
+                        : 'Generar nómina y PDF directamente'
+                    }
+                  >
+                    {processingNomina && (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    )}
+                    {processingNomina ? 'Procesando...' : 'Generar Nómina y PDF'}
+                  </button>
+                </div>
+                {!isStepValid(currentStep) && verificacionDuplicados?.existe && (
+                  <p className="text-xs text-red-600 dark:text-red-400 text-right">
+                    ⚠️ Nómina duplicada detectada
+                  </p>
                 )}
-                {processingNomina ? 'Procesando...' : 'Procesar Nómina'}
-              </button>
+              </div>
             )}
           </div>
         </div>

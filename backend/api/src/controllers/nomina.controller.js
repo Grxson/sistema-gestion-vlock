@@ -1299,6 +1299,107 @@ const getInfoParaNomina = async (req, res) => {
     }
 };
 
+/**
+ * Verificar si ya existe una nómina para un empleado en una semana específica del período
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const verificarDuplicados = async (req, res) => {
+    try {
+        const { id_empleado, periodo, semana } = req.query;
+        
+        console.log('🔍 [VERIFICAR_DUPLICADOS] Parámetros recibidos:', {
+            id_empleado,
+            periodo,
+            semana
+        });
+
+        // Validar parámetros requeridos
+        if (!id_empleado || !periodo || !semana) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parámetros requeridos: id_empleado, periodo, semana'
+            });
+        }
+
+        // Validar formato del período (YYYY-MM)
+        const periodoRegex = /^\d{4}-\d{2}$/;
+        if (!periodoRegex.test(periodo)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Formato de período inválido. Use YYYY-MM'
+            });
+        }
+
+        // Validar semana (1-4)
+        const semanaNum = parseInt(semana);
+        if (isNaN(semanaNum) || semanaNum < 1 || semanaNum > 4) {
+            return res.status(400).json({
+                success: false,
+                message: 'Semana debe ser un número entre 1 y 4'
+            });
+        }
+
+        // Extraer año y mes del período
+        const [año, mes] = periodo.split('-').map(Number);
+        
+        // Buscar nóminas existentes para este empleado en este período y semana
+        // Usar el campo id_semana directamente y verificar el mes/año con createdAt
+        const nominasExistentes = await NominaEmpleado.findAll({
+            where: {
+                id_empleado: id_empleado,
+                id_semana: semanaNum,
+                // Verificar que la nómina fue creada en el mes y año correctos
+                createdAt: {
+                    [Op.and]: [
+                        sequelize.where(sequelize.fn('YEAR', sequelize.col('createdAt')), año),
+                        sequelize.where(sequelize.fn('MONTH', sequelize.col('createdAt')), mes)
+                    ]
+                }
+            },
+            include: [
+                {
+                    model: Empleado,
+                    as: 'empleado',
+                    attributes: ['id_empleado', 'nombre', 'apellido', 'nss']
+                }
+            ]
+        });
+
+        console.log('🔍 [VERIFICAR_DUPLICADOS] Nóminas encontradas:', nominasExistentes.length);
+
+        const existe = nominasExistentes.length > 0;
+        const nominaExistente = existe ? nominasExistentes[0] : null;
+
+        res.status(200).json({
+            success: true,
+            existe: existe,
+            nominaExistente: nominaExistente ? {
+                id_nomina: nominaExistente.id_nomina,
+                estado: nominaExistente.estado,
+                fecha_creacion: nominaExistente.fecha_creacion,
+                monto_total: nominaExistente.monto_total,
+                empleado: {
+                    nombre: nominaExistente.empleado.nombre,
+                    apellido: nominaExistente.empleado.apellido,
+                    nss: nominaExistente.empleado.nss
+                }
+            } : null,
+            message: existe 
+                ? `Ya existe una nómina para este empleado en la semana ${semana} del período ${periodo}`
+                : `No existe nómina para este empleado en la semana ${semana} del período ${periodo}`
+        });
+
+    } catch (error) {
+        console.error('Error verificando duplicados:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor al verificar duplicados',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getAllNominas,
     getNominasPorSemana,
@@ -1312,5 +1413,6 @@ module.exports = {
     actualizarEstadoSemana,
     cambiarEstadoNomina,
     getNominaStats,
-    getInfoParaNomina
+    getInfoParaNomina,
+    verificarDuplicados
 };

@@ -22,6 +22,7 @@ import {
   PencilIcon,
   TrashIcon,
   ChartBarIcon,
+  CheckCircleIcon,
 } from '@heroicons/react/24/outline';
 
 export default function Nomina() {
@@ -45,6 +46,196 @@ export default function Nomina() {
   const [showAdeudosHistorial, setShowAdeudosHistorial] = useState(false);
   const [selectedEmpleadoAdeudos, setSelectedEmpleadoAdeudos] = useState(null);
   const [showAllNominas, setShowAllNominas] = useState(false);
+  
+  // Filtros para empleados
+  const [filtroProyecto, setFiltroProyecto] = useState('');
+  const [filtroBusqueda, setFiltroBusqueda] = useState('');
+  
+  // Filtros para historial de nóminas
+  const [filtroPeriodo, setFiltroPeriodo] = useState('');
+  const [filtroMes, setFiltroMes] = useState('');
+  
+  // Estados para preview de nómina
+  const [showNominaPreview, setShowNominaPreview] = useState(false);
+  const [selectedEmpleadoPreview, setSelectedEmpleadoPreview] = useState(null);
+  const [nominaPreviewData, setNominaPreviewData] = useState(null);
+
+  // Funciones de filtrado
+  const getEmpleadosFiltrados = () => {
+    let empleadosActivos = getEmpleadosActivos();
+    
+    // Filtrar por proyecto
+    if (filtroProyecto) {
+      empleadosActivos = empleadosActivos.filter(emp => 
+        emp.proyecto?.nombre?.toLowerCase().includes(filtroProyecto.toLowerCase()) ||
+        emp.id_proyecto?.toString().includes(filtroProyecto)
+      );
+    }
+    
+    // Filtrar por búsqueda (nombre, apellido, NSS, RFC)
+    if (filtroBusqueda) {
+      const busqueda = filtroBusqueda.toLowerCase();
+      empleadosActivos = empleadosActivos.filter(emp => 
+        emp.nombre?.toLowerCase().includes(busqueda) ||
+        emp.apellido?.toLowerCase().includes(busqueda) ||
+        emp.nss?.toLowerCase().includes(busqueda) ||
+        emp.rfc?.toLowerCase().includes(busqueda)
+      );
+    }
+    
+    return empleadosActivos;
+  };
+
+  const getNominasFiltradas = () => {
+    let nominasFiltradas = nominas;
+    
+    // Filtrar por período
+    if (filtroPeriodo) {
+      nominasFiltradas = nominasFiltradas.filter(nomina => {
+        let periodo = '';
+        if (typeof nomina.periodo === 'string') {
+          periodo = nomina.periodo;
+        } else if (typeof nomina.periodo === 'object' && nomina.periodo) {
+          if (nomina.periodo.etiqueta) {
+            periodo = nomina.periodo.etiqueta;
+          } else if (nomina.periodo.semana_iso && nomina.periodo.anio) {
+            periodo = `${nomina.periodo.anio}-${String(nomina.periodo.semana_iso).padStart(2, '0')}`;
+          }
+        }
+        return periodo.toLowerCase().includes(filtroPeriodo.toLowerCase());
+      });
+    }
+    
+    // Filtrar por mes
+    if (filtroMes) {
+      nominasFiltradas = nominasFiltradas.filter(nomina => {
+        let fecha = '';
+        if (nomina.fecha_creacion) {
+          fecha = new Date(nomina.fecha_creacion).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+        } else if (nomina.fecha) {
+          fecha = new Date(nomina.fecha).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
+        }
+        return fecha.toLowerCase().includes(filtroMes.toLowerCase());
+      });
+    }
+    
+    return nominasFiltradas;
+  };
+
+  // Función para verificar si un empleado tiene nómina generada
+  const getNominaStatus = (empleado) => {
+    const nominasEmpleado = nominas.filter(nomina => 
+      nomina.empleado?.id_empleado === empleado.id_empleado ||
+      nomina.id_empleado === empleado.id_empleado
+    );
+    
+    if (nominasEmpleado.length === 0) {
+      return { status: 'none', count: 0, latest: null };
+    }
+    
+    const latest = nominasEmpleado.sort((a, b) => 
+      new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
+    )[0];
+    
+    return {
+      status: latest.estado === 'pagada' || latest.estado === 'Pagado' ? 'completed' : 'draft',
+      count: nominasEmpleado.length,
+      latest: latest
+    };
+  };
+
+  // Función para ver preview de nómina
+  const verPreviewNomina = async (empleado) => {
+    try {
+      setSelectedEmpleadoPreview(empleado);
+      
+      // Buscar la nómina más reciente del empleado
+      const nominasEmpleado = nominas.filter(nomina => 
+        nomina.empleado?.id_empleado === empleado.id_empleado ||
+        nomina.id_empleado === empleado.id_empleado
+      );
+      
+      if (nominasEmpleado.length === 0) {
+        showInfo('Sin nóminas', 'Este empleado no tiene nóminas generadas');
+        return;
+      }
+      
+      const latestNomina = nominasEmpleado.sort((a, b) => 
+        new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
+      )[0];
+      
+      setNominaPreviewData(latestNomina);
+      setShowNominaPreview(true);
+      
+    } catch (error) {
+      console.error('Error al obtener preview de nómina:', error);
+      showError('Error', 'No se pudo obtener la información de la nómina');
+    }
+  };
+
+  // Función para generar PDF desde preview
+  const generarPDFDesdePreview = async () => {
+    if (!nominaPreviewData?.id_nomina) {
+      showError('Error', 'No hay nómina para generar PDF');
+      return;
+    }
+
+    try {
+      showInfo('Generando PDF', 'Creando recibo de nómina...');
+      
+      const pdfBlob = await nominasServices.nominas.generarReciboPDF(nominaPreviewData.id_nomina);
+      
+      if (!pdfBlob || !(pdfBlob instanceof Blob)) {
+        throw new Error('No se recibió un PDF válido');
+      }
+      
+      // Crear nombre de archivo
+      const nombreEmpleado = selectedEmpleadoPreview.nombre + '_' + selectedEmpleadoPreview.apellido;
+      const nombreArchivo = `nomina_${nombreEmpleado.replace(/\s+/g, '_')}_${nominaPreviewData.periodo || 'sin_periodo'}.pdf`;
+      
+      // Crear URL del blob y descargar
+      const url = window.URL.createObjectURL(pdfBlob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      a.download = nombreArchivo;
+      document.body.appendChild(a);
+      a.click();
+      
+      // Limpiar recursos
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+        if (document.body.contains(a)) {
+          document.body.removeChild(a);
+        }
+      }, 2000);
+
+      showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
+      
+      // Actualizar estado de la nómina a "pagada" si estaba en "borrador"
+      if (nominaPreviewData.estado === 'borrador') {
+        try {
+          await nominasServices.nominas.cambiarEstadoNomina(nominaPreviewData.id_nomina, 'pagada');
+          showSuccess('Estado actualizado', 'La nómina ha sido marcada como pagada');
+          // Refrescar datos
+          await fetchData();
+        } catch (error) {
+          console.error('Error actualizando estado:', error);
+        }
+      }
+      
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      showError('Error al generar PDF', error.message || 'No se pudo generar el PDF');
+    }
+  };
+
+  // Función para editar nómina
+  const editarNomina = (empleado) => {
+    // Abrir wizard con el empleado preseleccionado
+    setSelectedEmpleadoPreview(empleado);
+    setShowWizard(true);
+  };
 
   // Funciones de utilidad
   const handleNominaSuccess = async () => {
@@ -240,173 +431,222 @@ export default function Nomina() {
           />
         )}
 
-        {/* Sección de Empleados Simplificada */}
+        {/* Sección de Empleados con Tabla y Filtros */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-                Empleados Activos
+                Empleados Activos ({getEmpleadosFiltrados().length})
               </h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => setViewMode('cards')}
-                  className={`p-2 rounded-lg text-sm font-medium transition-colors ${
-                    viewMode === 'cards' 
-                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
-                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
-                >
-                  Cards
-                </button>
-                <button
-                  onClick={() => setViewMode('table')}
-                  className={`p-2 rounded-lg text-sm font-medium transition-colors ${
-                    viewMode === 'table' 
-                      ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' 
-                      : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
-                >
-                  Tabla
-                </button>
+            </div>
+            
+            {/* Filtros */}
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Buscar Empleado
+                </label>
+                <input
+                  type="text"
+                  value={filtroBusqueda}
+                  onChange={(e) => setFiltroBusqueda(e.target.value)}
+                  placeholder="Nombre, apellido, NSS o RFC..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Filtrar por Proyecto
+                </label>
+                <input
+                  type="text"
+                  value={filtroProyecto}
+                  onChange={(e) => setFiltroProyecto(e.target.value)}
+                  placeholder="Nombre del proyecto..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
               </div>
             </div>
           </div>
           <div className="p-6">
-              
-              {Array.isArray(empleados) && getEmpleadosActivos().length > 0 ? (
-                viewMode === 'cards' ? (
-                  /* Vista de Cards */
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {getEmpleadosActivos().map((empleado, index) => (
-                      <EmpleadoCard
-                        key={empleado.id_empleado || `empleado-${index}`}
-                        empleado={empleado}
-                        onView={(emp) => {
-                          setSelectedNomina(null);
-                          // Aquí podrías abrir un modal de detalles del empleado
-                        }}
-                        onEdit={(emp) => {
-                          // Aquí podrías abrir el modal de edición
-                        }}
-                        showActions={true}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  /* Vista de Tabla Simplificada */
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                      <thead className="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Empleado
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Oficio
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Pago Semanal
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Proyecto
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Acciones
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                        {getEmpleadosActivos().map((empleado, index) => (
-                          <tr key={empleado.id_empleado || `empleado-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="flex items-center">
-                                <div className="h-10 w-10 flex-shrink-0">
-                                  <div className="h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                                    <span className="text-primary-600 dark:text-primary-400 font-medium text-sm">
-                                      {empleado.nombre?.charAt(0)?.toUpperCase()}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {empleado.nombre} {empleado.apellido}
-                                  </div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                                    {empleado.nss || 'Sin NSS'} • {empleado.rfc || 'Sin RFC'}
-                                  </div>
-                                </div>
+            {Array.isArray(empleados) && getEmpleadosFiltrados().length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Empleado
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Oficio
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Pago Semanal
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Proyecto
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Estado Nómina
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                        Acciones
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    {getEmpleadosFiltrados().map((empleado, index) => (
+                      <tr key={empleado.id_empleado || `empleado-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="h-10 w-10 flex-shrink-0">
+                              <div className="h-10 w-10 rounded-full bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
+                                <span className="text-primary-600 dark:text-primary-400 font-medium text-sm">
+                                  {empleado.nombre?.charAt(0)?.toUpperCase()}
+                                </span>
                               </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-white">
-                                {empleado.oficio?.nombre || 'Sin oficio'}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            </div>
+                            <div className="ml-4">
                               <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {empleado.pago_semanal ? formatCurrency(empleado.pago_semanal) : 
-                                 empleado.contrato?.salario_diario ? formatCurrency(empleado.contrato.salario_diario * 7) : 
-                                 formatCurrency(0)}
+                                {empleado.nombre} {empleado.apellido}
                               </div>
-                              <div className={`text-xs ${
-                                (empleado.pago_semanal || empleado.contrato?.salario_diario) 
-                                  ? 'text-green-600 dark:text-green-400' 
-                                  : 'text-red-600 dark:text-red-400'
-                              }`}>
-                                {(empleado.pago_semanal || empleado.contrato?.salario_diario) 
-                                  ? 'Configurado' 
-                                  : 'Sin configurar'
-                                }
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {empleado.nss || 'Sin NSS'} • {empleado.rfc || 'Sin RFC'}
                               </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                              {empleado.proyecto?.nombre || 'Sin proyecto'}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                              <div className="flex space-x-2">
-                                <button className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
-                                  <EyeIcon className="h-4 w-4" />
-                                </button>
-                                <button className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300">
-                                  <PencilIcon className="h-4 w-4" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )
-              ) : (
-                <div className="text-center py-12">
-                  <ExclamationTriangleIcon className="mx-auto h-16 w-16 text-yellow-400 mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">No hay empleados activos</h3>
-                  <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
-                    Necesitas tener empleados activos para poder procesar la nómina. Agrega o activa empleados en el módulo de empleados.
-                  </p>
-                </div>
-              )}
-            </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-900 dark:text-white">
+                            {empleado.oficio?.nombre || 'Sin oficio'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">
+                              {empleado.pago_semanal ? formatCurrency(empleado.pago_semanal) : 
+                             empleado.contrato?.salario_diario ? formatCurrency(empleado.contrato.salario_diario * 7) : 
+                             formatCurrency(0)}
+                          </div>
+                          <div className={`text-xs ${
+                            (empleado.pago_semanal || empleado.contrato?.salario_diario) 
+                              ? 'text-green-600 dark:text-green-400' 
+                              : 'text-red-600 dark:text-red-400'
+                          }`}>
+                            {(empleado.pago_semanal || empleado.contrato?.salario_diario) 
+                              ? 'Configurado' 
+                              : 'Sin configurar'
+                            }
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                          {empleado.proyecto?.nombre || 'Sin proyecto'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {(() => {
+                            const nominaStatus = getNominaStatus(empleado);
+                            if (nominaStatus.status === 'none') {
+                              return (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
+                                  Sin nómina
+                                </span>
+                              );
+                            } else if (nominaStatus.status === 'draft') {
+                              return (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                  Borrador ({nominaStatus.count})
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                  Completada ({nominaStatus.count})
+                                </span>
+                              );
+                            }
+                          })()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button 
+                              onClick={() => verPreviewNomina(empleado)}
+                              className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                              title="Ver nómina"
+                            >
+                              <EyeIcon className="h-4 w-4" />
+                            </button>
+                            <button 
+                              onClick={() => editarNomina(empleado)}
+                              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
+                              title="Crear/Editar nómina"
+                            >
+                              <PencilIcon className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <ExclamationTriangleIcon className="mx-auto h-16 w-16 text-yellow-400 mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
+                  {getEmpleadosActivos().length === 0 ? 'No hay empleados activos' : 'No se encontraron empleados'}
+                </h3>
+                <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+                  {getEmpleadosActivos().length === 0 
+                    ? 'Necesitas tener empleados activos para poder procesar la nómina. Agrega o activa empleados en el módulo de empleados.'
+                    : 'Intenta ajustar los filtros de búsqueda para encontrar empleados.'
+                  }
+                </p>
+              </div>
+            )}
+          </div>
           </div>
         </div>
 
-        {/* Historial de Nóminas Simplificado */}
+        {/* Historial de Nóminas con Filtros */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-medium text-gray-900 dark:text-white">
-                Historial de Nóminas
+                Historial de Nóminas ({getNominasFiltradas().length})
               </h2>
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                {nominas.length} nómina{nominas.length !== 1 ? 's' : ''}
-              </span>
+            </div>
+            
+            {/* Filtros para nóminas */}
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Filtrar por Período
+                </label>
+                <input
+                  type="text"
+                  value={filtroPeriodo}
+                  onChange={(e) => setFiltroPeriodo(e.target.value)}
+                  placeholder="Ej: 2025-01, Semana 3..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Filtrar por Mes
+                </label>
+                <input
+                  type="text"
+                  value={filtroMes}
+                  onChange={(e) => setFiltroMes(e.target.value)}
+                  placeholder="Ej: enero, febrero, 2025..."
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
+              </div>
             </div>
           </div>
           <div className={`p-6 ${showAllNominas ? 'max-h-[600px] overflow-y-auto' : ''}`}>
-            {nominas.length > 0 ? (
+            {getNominasFiltradas().length > 0 ? (
               <div className="space-y-3">
-                {(showAllNominas ? nominas : nominas.slice(0, 5)).map((nomina, index) => {
+                {(showAllNominas ? getNominasFiltradas() : getNominasFiltradas().slice(0, 5)).map((nomina, index) => {
                   // Debug: verificar estructura de cada nómina
                   console.log(`📋 [Nomina] Nómina ${index}:`, nomina);
                   
@@ -515,7 +755,7 @@ export default function Nomina() {
                   </div>
                   );
                 })}
-                {nominas.length > 5 && (
+                {getNominasFiltradas().length > 5 && (
                   <div className="text-center pt-2">
                     <button 
                       onClick={() => setShowAllNominas(!showAllNominas)}
@@ -530,7 +770,7 @@ export default function Nomina() {
                         </>
                       ) : (
                         <>
-                          <span>Ver todas las nóminas ({nominas.length})</span>
+                          <span>Ver todas las nóminas ({getNominasFiltradas().length})</span>
                           <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                           </svg>
@@ -544,8 +784,22 @@ export default function Nomina() {
               <div className="text-center py-8">
                 <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400 mb-3" />
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Aún no hay nóminas procesadas
+                  {nominas.length === 0 
+                    ? 'Aún no hay nóminas procesadas'
+                    : 'No se encontraron nóminas con los filtros aplicados'
+                  }
                 </p>
+                {nominas.length > 0 && (filtroPeriodo || filtroMes) && (
+                  <button
+                    onClick={() => {
+                      setFiltroPeriodo('');
+                      setFiltroMes('');
+                    }}
+                    className="mt-2 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
+                  >
+                    Limpiar filtros
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -553,12 +807,223 @@ export default function Nomina() {
 
         {/* Nomina Wizard Simplificado */}
         {process.env.NODE_ENV === 'development' && console.log('🔍 [Nomina] Pasando empleados al wizard:', empleados.length, empleados)}
-        <NominaWizardSimplificado 
+        <NominaWizardSimplificado
           isOpen={showWizard}
           onClose={() => setShowWizard(false)}
           onSuccess={handleNominaSuccess}
           empleados={empleados}
+          selectedEmpleado={selectedEmpleadoPreview}
         />
+
+        {/* Modal de Preview de Nómina */}
+        {showNominaPreview && nominaPreviewData && selectedEmpleadoPreview && (
+          <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
+            <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-4xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
+              {/* Header del Preview */}
+              <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                      Preview de Nómina
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      {selectedEmpleadoPreview.nombre} {selectedEmpleadoPreview.apellido}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowNominaPreview(false);
+                      setNominaPreviewData(null);
+                      setSelectedEmpleadoPreview(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                  >
+                    <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Contenido del Preview */}
+              <div className="p-6">
+                {/* Estado de la nómina */}
+                <div className={`p-4 rounded-lg border mb-6 ${
+                  nominaPreviewData.estado === 'pagada' || nominaPreviewData.estado === 'Pagado'
+                    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                    : 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+                }`}>
+                  <div className="flex items-center">
+                    <div className="flex-shrink-0">
+                      {nominaPreviewData.estado === 'pagada' || nominaPreviewData.estado === 'Pagado' ? (
+                        <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      ) : (
+                        <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                      )}
+                    </div>
+                    <div className="ml-3">
+                      <p className={`text-sm font-medium ${
+                        nominaPreviewData.estado === 'pagada' || nominaPreviewData.estado === 'Pagado'
+                          ? 'text-green-800 dark:text-green-200'
+                          : 'text-yellow-800 dark:text-yellow-200'
+                      }`}>
+                        <strong>Estado:</strong> {nominaPreviewData.estado} - ID: {nominaPreviewData.id_nomina}
+                      </p>
+                      <p className={`text-xs ${
+                        nominaPreviewData.estado === 'pagada' || nominaPreviewData.estado === 'Pagado'
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-yellow-600 dark:text-yellow-400'
+                      }`}>
+                        {nominaPreviewData.estado === 'pagada' || nominaPreviewData.estado === 'Pagado'
+                          ? 'Nómina completada y PDF generado'
+                          : 'Nómina en borrador - Pendiente de confirmación'
+                        }
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Información del Empleado */}
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Información del Empleado</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Nombre</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {selectedEmpleadoPreview.nombre} {selectedEmpleadoPreview.apellido}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">NSS</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{selectedEmpleadoPreview.nss}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">RFC</p>
+                      <p className="font-medium text-gray-900 dark:text-white">{selectedEmpleadoPreview.rfc}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Proyecto</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {selectedEmpleadoPreview.proyecto?.nombre || 'Sin proyecto'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Detalles de la Nómina */}
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Detalles de la Nómina</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Período</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {nominaPreviewData.periodo || 'Sin período'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Semana</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        Semana {nominaPreviewData.id_semana || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Días Laborados</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {nominaPreviewData.dias_laborados || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Fecha de Creación</p>
+                      <p className="font-medium text-gray-900 dark:text-white">
+                        {new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt).toLocaleDateString('es-MX')}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cálculos */}
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Cálculos</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600 dark:text-gray-400">Salario Base:</span>
+                      <span className="font-medium text-gray-900 dark:text-white">
+                        {formatCurrency(nominaPreviewData.salario_base || 0)}
+                      </span>
+                    </div>
+                    {nominaPreviewData.horas_extra > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Horas Extra:</span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {formatCurrency(nominaPreviewData.horas_extra || 0)}
+                        </span>
+                      </div>
+                    )}
+                    {nominaPreviewData.bonos > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Bonos:</span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {formatCurrency(nominaPreviewData.bonos || 0)}
+                        </span>
+                      </div>
+                    )}
+                    {nominaPreviewData.deducciones > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-gray-600 dark:text-gray-400">Deducciones:</span>
+                        <span className="font-medium text-red-600 dark:text-red-400">
+                          -{formatCurrency(nominaPreviewData.deducciones || 0)}
+                        </span>
+                      </div>
+                    )}
+                    <div className="border-t border-gray-300 dark:border-gray-600 pt-2">
+                      <div className="flex justify-between">
+                        <span className="text-lg font-medium text-gray-900 dark:text-white">Total a Pagar:</span>
+                        <span className="text-lg font-bold text-green-600 dark:text-green-400">
+                          {formatCurrency(nominaPreviewData.monto_total || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer del Preview */}
+              <div className="flex justify-end space-x-3 px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNominaPreview(false);
+                    setNominaPreviewData(null);
+                    setSelectedEmpleadoPreview(null);
+                  }}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                >
+                  Cerrar
+                </button>
+                {(nominaPreviewData.estado === 'borrador' || nominaPreviewData.estado === 'Borrador') && (
+                  <button
+                    type="button"
+                    onClick={generarPDFDesdePreview}
+                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+                  >
+                    <DocumentTextIcon className="h-4 w-4 mr-2 inline-block" />
+                    Generar PDF y Marcar como Pagada
+                  </button>
+                )}
+                {nominaPreviewData.estado === 'pagada' || nominaPreviewData.estado === 'Pagado' ? (
+                  <button
+                    type="button"
+                    onClick={generarPDFDesdePreview}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                  >
+                    <DocumentTextIcon className="h-4 w-4 mr-2 inline-block" />
+                    Descargar PDF
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Modal de Detalles de Nómina - Placeholder para futuras implementaciones */}
       {showNominaDetails && selectedNomina && (
