@@ -1,5 +1,6 @@
 const models = require('../models');
 const { verifyToken } = require('../middlewares/auth');
+const { Op } = require('sequelize');
 
 // Obtener todos los proyectos
 const getProyectos = async (req, res) => {
@@ -69,8 +70,26 @@ const createProyecto = async (req, res) => {
             });
         }
 
-        // Validar fechas si se proporcionan
-        if (fecha_inicio && fecha_fin && new Date(fecha_inicio) > new Date(fecha_fin)) {
+        // Validar y limpiar fechas
+        let fechaInicioLimpia = null;
+        let fechaFinLimpia = null;
+        
+        if (fecha_inicio && fecha_inicio.trim() !== '') {
+            const fechaInicio = new Date(fecha_inicio);
+            if (!isNaN(fechaInicio.getTime())) {
+                fechaInicioLimpia = fecha_inicio;
+            }
+        }
+        
+        if (fecha_fin && fecha_fin.trim() !== '') {
+            const fechaFin = new Date(fecha_fin);
+            if (!isNaN(fechaFin.getTime())) {
+                fechaFinLimpia = fecha_fin;
+            }
+        }
+
+        // Validar fechas si ambas se proporcionan
+        if (fechaInicioLimpia && fechaFinLimpia && new Date(fechaInicioLimpia) > new Date(fechaFinLimpia)) {
             return res.status(400).json({
                 success: false,
                 message: 'La fecha de inicio no puede ser posterior a la fecha de fin'
@@ -79,12 +98,12 @@ const createProyecto = async (req, res) => {
 
         const nuevoProyecto = await models.Proyectos.create({
             nombre: nombre.trim(),
-            descripcion: descripcion?.trim(),
-            fecha_inicio,
-            fecha_fin,
+            descripcion: descripcion?.trim() || null,
+            fecha_inicio: fechaInicioLimpia,
+            fecha_fin: fechaFinLimpia,
             estado: estado || 'Activo',
-            responsable: responsable?.trim(),
-            ubicacion: ubicacion?.trim()
+            responsable: responsable?.trim() || null,
+            ubicacion: ubicacion?.trim() || null
         });
 
         res.status(201).json({
@@ -124,8 +143,34 @@ const updateProyecto = async (req, res) => {
             });
         }
 
-        // Validar fechas si se proporcionan
-        if (fecha_inicio && fecha_fin && new Date(fecha_inicio) > new Date(fecha_fin)) {
+        // Validar y limpiar fechas
+        let fechaInicioLimpia = proyecto.fecha_inicio;
+        let fechaFinLimpia = proyecto.fecha_fin;
+        
+        if (fecha_inicio !== undefined) {
+            if (fecha_inicio && fecha_inicio.trim() !== '') {
+                const fechaInicio = new Date(fecha_inicio);
+                if (!isNaN(fechaInicio.getTime())) {
+                    fechaInicioLimpia = fecha_inicio;
+                }
+            } else {
+                fechaInicioLimpia = null;
+            }
+        }
+        
+        if (fecha_fin !== undefined) {
+            if (fecha_fin && fecha_fin.trim() !== '') {
+                const fechaFin = new Date(fecha_fin);
+                if (!isNaN(fechaFin.getTime())) {
+                    fechaFinLimpia = fecha_fin;
+                }
+            } else {
+                fechaFinLimpia = null;
+            }
+        }
+
+        // Validar fechas si ambas se proporcionan
+        if (fechaInicioLimpia && fechaFinLimpia && new Date(fechaInicioLimpia) > new Date(fechaFinLimpia)) {
             return res.status(400).json({
                 success: false,
                 message: 'La fecha de inicio no puede ser posterior a la fecha de fin'
@@ -135,8 +180,8 @@ const updateProyecto = async (req, res) => {
         await proyecto.update({
             nombre: nombre?.trim() || proyecto.nombre,
             descripcion: descripcion?.trim() || proyecto.descripcion,
-            fecha_inicio: fecha_inicio || proyecto.fecha_inicio,
-            fecha_fin: fecha_fin || proyecto.fecha_fin,
+            fecha_inicio: fechaInicioLimpia,
+            fecha_fin: fechaFinLimpia,
             estado: estado || proyecto.estado,
             responsable: responsable?.trim() || proyecto.responsable,
             ubicacion: ubicacion?.trim() || proyecto.ubicacion
@@ -286,6 +331,58 @@ const getProyectosActivos = async (req, res) => {
     }
 };
 
+// Buscar proyectos por nombre
+const searchProyectos = async (req, res) => {
+    try {
+        const { q } = req.query;
+        
+        if (!q || q.trim().length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'El parámetro de búsqueda es requerido'
+            });
+        }
+
+        const searchQuery = q.trim();
+
+        const proyectos = await models.Proyectos.findAll({
+            where: {
+                [Op.or]: [
+                    {
+                        nombre: {
+                            [Op.like]: `%${searchQuery}%`
+                        }
+                    },
+                    {
+                        descripcion: {
+                            [Op.like]: `%${searchQuery}%`
+                        }
+                    },
+                    {
+                        responsable: {
+                            [Op.like]: `%${searchQuery}%`
+                        }
+                    }
+                ]
+            },
+            order: [['nombre', 'ASC']],
+            limit: 20
+        });
+
+        res.json({
+            success: true,
+            message: 'Búsqueda de proyectos completada',
+            data: proyectos
+        });
+    } catch (error) {
+        console.error('Error al buscar proyectos:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error interno del servidor'
+        });
+    }
+};
+
 // Obtener estadísticas de un proyecto
 const getEstadisticasProyecto = async (req, res) => {
     try {
@@ -362,5 +459,6 @@ module.exports = {
     updateProyecto,
     deleteProyecto,
     getProyectosActivos,
+    searchProyectos,
     getEstadisticasProyecto
 };

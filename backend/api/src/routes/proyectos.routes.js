@@ -8,6 +8,7 @@ const {
     updateProyecto,
     deleteProyecto,
     getProyectosActivos,
+    searchProyectos,
     getEstadisticasProyecto
 } = require('../controllers/proyectos.controller');
 
@@ -17,6 +18,7 @@ router.use(verifyToken);
 // Rutas para proyectos
 router.get('/', getProyectos);                           // GET /api/proyectos
 router.get('/activos', getProyectosActivos);            // GET /api/proyectos/activos
+router.get('/search', searchProyectos);                 // GET /api/proyectos/search
 router.get('/:id', getProyectoById);                    // GET /api/proyectos/:id
 router.get('/:id/estadisticas', getEstadisticasProyecto); // GET /api/proyectos/:id/estadisticas
 router.post('/', createProyecto);                       // POST /api/proyectos

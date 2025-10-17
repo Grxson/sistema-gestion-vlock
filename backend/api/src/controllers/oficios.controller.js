@@ -244,6 +244,55 @@ const deleteOficio = async (req, res) => {
 };
 
 /**
+ * Buscar oficios por nombre
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const searchOficios = async (req, res) => {
+    try {
+        const { q } = req.query;
+        
+        if (!q || q.trim().length === 0) {
+            return res.status(400).json({
+                message: 'El parámetro de búsqueda es requerido'
+            });
+        }
+
+        const searchQuery = q.trim();
+
+        const oficios = await Oficio.findAll({
+            where: {
+                [Op.or]: [
+                    {
+                        nombre: {
+                            [Op.like]: `%${searchQuery}%`
+                        }
+                    },
+                    {
+                        descripcion: {
+                            [Op.like]: `%${searchQuery}%`
+                        }
+                    }
+                ]
+            },
+            order: [['nombre', 'ASC']],
+            limit: 20
+        });
+
+        res.status(200).json({
+            message: 'Búsqueda de oficios completada',
+            data: oficios
+        });
+    } catch (error) {
+        console.error('Error al buscar oficios:', error);
+        res.status(500).json({
+            message: 'Error al buscar oficios',
+            error: error.message
+        });
+    }
+};
+
+/**
  * Obtener estadísticas de oficios
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
@@ -337,5 +386,6 @@ module.exports = {
     createOficio,
     updateOficio,
     deleteOficio,
+    searchOficios,
     getOficiosStats
 };

@@ -12,6 +12,9 @@ router.get('/stats', verifyRole([1]), oficiosController.getOficiosStats);
 // Obtener todos los oficios
 router.get('/', oficiosController.getAllOficios);
 
+// Buscar oficios
+router.get('/search', oficiosController.searchOficios);
+
 // Obtener un oficio específico
 router.get('/:id', oficiosController.getOficioById);
 
