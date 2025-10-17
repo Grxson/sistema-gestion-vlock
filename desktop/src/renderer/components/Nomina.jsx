@@ -9,6 +9,8 @@ import NominaWizardSimplificado from './NominaWizard';
 import ChartsSection from './ui/ChartsSection';
 import AdeudosHistorial from './ui/AdeudosHistorial';
 import EmpleadoCard from './ui/EmpleadoCard';
+import CustomSelect from './ui/CustomSelect';
+import DateRangePicker from './ui/DateRangePicker';
 import {
   PlusIcon,
   CalendarIcon,
@@ -53,23 +55,26 @@ export default function Nomina() {
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
   
   // Filtros para historial de nóminas
-  const [filtroPeriodo, setFiltroPeriodo] = useState('');
-  const [filtroMes, setFiltroMes] = useState('');
+  const [filtroFechaInicio, setFiltroFechaInicio] = useState('');
+  const [filtroFechaFin, setFiltroFechaFin] = useState('');
+  
+  // Estados para proyectos
+  const [proyectos, setProyectos] = useState([]);
   
   // Estados para preview de nómina
   const [showNominaPreview, setShowNominaPreview] = useState(false);
   const [selectedEmpleadoPreview, setSelectedEmpleadoPreview] = useState(null);
   const [nominaPreviewData, setNominaPreviewData] = useState(null);
 
-  // Funciones de filtrado
+  // Funciones de filtrado mejoradas
   const getEmpleadosFiltrados = () => {
     let empleadosActivos = getEmpleadosActivos();
     
-    // Filtrar por proyecto
+    // Filtrar por proyecto (usando ID del proyecto seleccionado)
     if (filtroProyecto) {
       empleadosActivos = empleadosActivos.filter(emp => 
-        emp.proyecto?.nombre?.toLowerCase().includes(filtroProyecto.toLowerCase()) ||
-        emp.id_proyecto?.toString().includes(filtroProyecto)
+        emp.id_proyecto?.toString() === filtroProyecto ||
+        emp.proyecto?.id_proyecto?.toString() === filtroProyecto
       );
     }
     
@@ -90,33 +95,22 @@ export default function Nomina() {
   const getNominasFiltradas = () => {
     let nominasFiltradas = nominas;
     
-    // Filtrar por período
-    if (filtroPeriodo) {
+    // Filtrar por rango de fechas
+    if (filtroFechaInicio) {
       nominasFiltradas = nominasFiltradas.filter(nomina => {
-        let periodo = '';
-        if (typeof nomina.periodo === 'string') {
-          periodo = nomina.periodo;
-        } else if (typeof nomina.periodo === 'object' && nomina.periodo) {
-          if (nomina.periodo.etiqueta) {
-            periodo = nomina.periodo.etiqueta;
-          } else if (nomina.periodo.semana_iso && nomina.periodo.anio) {
-            periodo = `${nomina.periodo.anio}-${String(nomina.periodo.semana_iso).padStart(2, '0')}`;
-          }
-        }
-        return periodo.toLowerCase().includes(filtroPeriodo.toLowerCase());
+        const fechaNomina = new Date(nomina.fecha_creacion || nomina.fecha || nomina.createdAt);
+        const fechaInicio = new Date(filtroFechaInicio);
+        return fechaNomina >= fechaInicio;
       });
     }
     
-    // Filtrar por mes
-    if (filtroMes) {
+    if (filtroFechaFin) {
       nominasFiltradas = nominasFiltradas.filter(nomina => {
-        let fecha = '';
-        if (nomina.fecha_creacion) {
-          fecha = new Date(nomina.fecha_creacion).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
-        } else if (nomina.fecha) {
-          fecha = new Date(nomina.fecha).toLocaleDateString('es-MX', { month: 'long', year: 'numeric' });
-        }
-        return fecha.toLowerCase().includes(filtroMes.toLowerCase());
+        const fechaNomina = new Date(nomina.fecha_creacion || nomina.fecha || nomina.createdAt);
+        const fechaFin = new Date(filtroFechaFin);
+        // Agregar un día para incluir el día completo
+        fechaFin.setDate(fechaFin.getDate() + 1);
+        return fechaNomina < fechaFin;
       });
     }
     
@@ -385,7 +379,27 @@ export default function Nomina() {
 
   useEffect(() => {
     fetchData();
+    cargarDatosFiltros();
   }, []);
+
+  // Función para cargar datos necesarios para los filtros
+  const cargarDatosFiltros = async () => {
+    try {
+      // Cargar proyectos
+      const proyectosResponse = await apiService.getProyectosActivos();
+      setProyectos(proyectosResponse.data || []);
+    } catch (error) {
+      console.error('Error cargando datos de filtros:', error);
+    }
+  };
+
+  // Función para limpiar todos los filtros
+  const limpiarFiltros = () => {
+    setFiltroProyecto('');
+    setFiltroBusqueda('');
+    setFiltroFechaInicio('');
+    setFiltroFechaFin('');
+  };
 
   const fetchData = async () => {
     try {
@@ -564,32 +578,53 @@ export default function Nomina() {
               </h2>
               </div>
             
-            {/* Filtros */}
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Buscar Empleado
-                </label>
-                <input
-                  type="text"
-                  value={filtroBusqueda}
-                  onChange={(e) => setFiltroBusqueda(e.target.value)}
-                  placeholder="Nombre, apellido, NSS o RFC..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                />
-                  </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Filtrar por Proyecto
-                </label>
-                <input
-                  type="text"
-                  value={filtroProyecto}
-                  onChange={(e) => setFiltroProyecto(e.target.value)}
-                  placeholder="Nombre del proyecto..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                />
+            {/* Filtros Mejorados */}
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Buscar Empleado
+                  </label>
+                  <input
+                    type="text"
+                    value={filtroBusqueda}
+                    onChange={(e) => setFiltroBusqueda(e.target.value)}
+                    placeholder="Nombre, apellido, NSS o RFC..."
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Filtrar por Proyecto
+                  </label>
+                  <CustomSelect
+                    value={filtroProyecto}
+                    onChange={setFiltroProyecto}
+                    placeholder="Seleccionar proyecto..."
+                    options={[
+                      { value: '', label: 'Todos los proyectos' },
+                      ...proyectos.map(proyecto => ({
+                        value: proyecto.id_proyecto.toString(),
+                        label: proyecto.nombre,
+                        description: proyecto.ubicacion || 'Sin ubicación'
+                      }))
+                    ]}
+                    searchable={true}
+                  />
+                </div>
               </div>
+              
+              {/* Botón para limpiar filtros */}
+              {(filtroBusqueda || filtroProyecto) && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={limpiarFiltros}
+                    className="inline-flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <div className="p-6">
@@ -732,32 +767,36 @@ export default function Nomina() {
               </h2>
             </div>
             
-            {/* Filtros para nóminas */}
-            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Filtrar por Período
-                </label>
-                <input
-                  type="text"
-                  value={filtroPeriodo}
-                  onChange={(e) => setFiltroPeriodo(e.target.value)}
-                  placeholder="Ej: 2025-01, Semana 3..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                />
+            {/* Filtro por Rango de Fechas */}
+            <div className="mt-4 space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Rango de Fechas
+                  </label>
+                  <DateRangePicker
+                    startDate={filtroFechaInicio}
+                    endDate={filtroFechaFin}
+                    onStartDateChange={setFiltroFechaInicio}
+                    onEndDateChange={setFiltroFechaFin}
+                  />
+                </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Filtrar por Mes
-                </label>
-                <input
-                  type="text"
-                  value={filtroMes}
-                  onChange={(e) => setFiltroMes(e.target.value)}
-                  placeholder="Ej: enero, febrero, 2025..."
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                />
-              </div>
+              
+              {/* Botón para limpiar filtros */}
+              {(filtroFechaInicio || filtroFechaFin) && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => {
+                      setFiltroFechaInicio('');
+                      setFiltroFechaFin('');
+                    }}
+                    className="inline-flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
+                  >
+                    Limpiar filtros
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <div className={`p-6 ${showAllNominas ? 'max-h-[600px] overflow-y-auto' : ''}`}>
@@ -923,11 +962,11 @@ export default function Nomina() {
                     : 'No se encontraron nóminas con los filtros aplicados'
                   }
                 </p>
-                {nominas.length > 0 && (filtroPeriodo || filtroMes) && (
+                {nominas.length > 0 && (filtroFechaInicio || filtroFechaFin) && (
                   <button
                     onClick={() => {
-                      setFiltroPeriodo('');
-                      setFiltroMes('');
+                      setFiltroFechaInicio('');
+                      setFiltroFechaFin('');
                     }}
                     className="mt-2 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
                   >
@@ -1158,7 +1197,7 @@ export default function Nomina() {
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">Horas Extra:</span>
                         <span className="font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(nominaPreviewData.horas_extra || 0)}
+                          {formatCurrency(nominaPreviewData.horas_extra || 0)}                                                                                      
                         </span>
                       </div>
                     )}
