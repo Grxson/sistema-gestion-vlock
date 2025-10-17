@@ -66,13 +66,16 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
   const [validacion, setValidacion] = useState(null);
   const [adeudosEmpleado, setAdeudosEmpleado] = useState(0);
 
-  // Filtrar empleados por búsqueda
+  // Filtrar empleados por búsqueda y solo mostrar activos
   const empleadosFiltrados = Array.isArray(empleados) 
     ? empleados.filter(emp => 
-        emp.nombre?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
-        emp.apellido?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
-        emp.nss?.includes(formData.searchTerm) ||
-        emp.rfc?.toLowerCase().includes(formData.searchTerm.toLowerCase())
+        // Solo empleados activos
+        (emp.activo === true || emp.activo === 1) &&
+        // Y que coincidan con la búsqueda
+        (emp.nombre?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
+         emp.apellido?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
+         emp.nss?.includes(formData.searchTerm) ||
+         emp.rfc?.toLowerCase().includes(formData.searchTerm.toLowerCase()))
       )
     : [];
   
@@ -121,7 +124,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     try {
       const datosNomina = {
         diasLaborados: formData.diasLaborados || 1,
-        pagoPorDia: formData.pago_por_dia || formData.selectedEmpleado.pago_diario || formData.selectedEmpleado.contrato?.salario_diario || 0,
+        pagoPorDia: formData.pago_por_dia || (formData.selectedEmpleado.pago_semanal ? formData.selectedEmpleado.pago_semanal / 7 : formData.selectedEmpleado.contrato?.salario_diario) || 0,
         horasExtra: formData.horasExtra || 0,
         bonos: formData.bonos || 0,
         deduccionesAdicionales: formData.deduccionesAdicionales || 0,
@@ -291,7 +294,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     console.log('✅ [WIZARD] Validación básica exitosa');
     
     // Validar y preparar datos para la nómina
-    const pagoDiario = formData.selectedEmpleado.pago_diario || 
+    const pagoDiario = formData.selectedEmpleado.pago_semanal ? formData.selectedEmpleado.pago_semanal / 7 : 
                       formData.selectedEmpleado.contrato?.salario_diario || 
                       formData.selectedEmpleado.salario_diario || 
                       formData.selectedEmpleado.salario_base_personal || 0;
@@ -649,7 +652,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                                   updateFormData({ 
                                     selectedEmpleado: empleado,
                                     searchTerm: '',
-                                    pago_por_dia: empleado.pago_diario || empleado.contrato?.salario_diario || 0
+                                    pago_por_dia: empleado.pago_semanal ? empleado.pago_semanal / 7 : empleado.contrato?.salario_diario || 0
                                   });
                                 }}
                                 className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0 ${
@@ -671,12 +674,12 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                                     NSS: {empleado.nss} • RFC: {empleado.rfc}
                                   </p>
                                   <p className={`text-xs font-medium ${
-                                    (empleado.pago_diario || empleado.contrato?.salario_diario)
+                                    (empleado.pago_semanal ? empleado.pago_semanal / 7 : empleado.contrato?.salario_diario)
                                       ? 'text-green-600 dark:text-green-400'
                                       : 'text-red-600 dark:text-red-400'
                                   }`}>
-                                    {(empleado.pago_diario || empleado.contrato?.salario_diario)
-                                      ? `${formatCurrency(empleado.pago_diario || empleado.contrato?.salario_diario)} por día`
+                                    {(empleado.pago_semanal ? empleado.pago_semanal / 7 : empleado.contrato?.salario_diario)
+                                      ? `${formatCurrency(empleado.pago_semanal ? empleado.pago_semanal / 7 : empleado.contrato?.salario_diario)} por día`
                                       : '⚠️ Sin pago configurado'
                                     }
                                   </p>
@@ -1362,10 +1365,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
             {/* Content */}
             <div className="p-6">
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                El empleado <strong>{formData.selectedEmpleado?.nombre} {formData.selectedEmpleado?.apellido}</strong> no tiene pago diario configurado.
+                El empleado <strong>{formData.selectedEmpleado?.nombre} {formData.selectedEmpleado?.apellido}</strong> no tiene pago semanal configurado.
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-                Por favor ingresa el pago diario para este empleado:
+                Por favor ingresa el pago diario para este empleado (equivalente):
               </p>
               
               <div className="mb-4">

@@ -187,7 +187,7 @@ export class CalculadoraNominaService {
   /**
    * Calcula el pago de horas extra
    * @param {number} horasExtra - Cantidad de horas extra trabajadas
-   * @param {number} pagoPorDia - Pago diario del empleado
+   * @param {number} pagoPorDia - Pago diario del empleado (calculado desde pago semanal)
    * @returns {number} El monto a pagar por horas extra
    */
   static calcularHorasExtra(horasExtra, pagoPorDia) {
@@ -279,7 +279,7 @@ export class CalculadoraNominaService {
       // Calcular total mensual (asumiendo 6 días por semana, 4 semanas por mes = 24 días)
       const diasPorMes = 24;
       const totalMensual = empleados.reduce((total, empleado) => {
-        const salarioDiario = empleado.pago_diario || empleado.contrato?.salario_diario || 0;
+        const salarioDiario = empleado.pago_semanal ? empleado.pago_semanal / 7 : empleado.contrato?.salario_diario || 0;
         return total + (salarioDiario * diasPorMes);
       }, 0);
       

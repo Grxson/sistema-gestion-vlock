@@ -69,7 +69,7 @@ export class EmpleadoNominaService {
   static async getEmpleadosConPago() {
     const empleados = await this.getEmpleadosActivos();
     return empleados.filter(emp => 
-      emp.pago_diario > 0 || 
+      emp.pago_semanal > 0 || 
       emp.contrato?.salario_diario > 0 ||
       emp.salario_diario > 0 ||
       emp.salario_base_personal > 0
@@ -83,7 +83,7 @@ export class EmpleadoNominaService {
   static async getEmpleadosSinPago() {
     const empleados = await this.getEmpleadosActivos();
     return empleados.filter(emp => 
-      !emp.pago_diario && 
+      !emp.pago_semanal && 
       !emp.contrato?.salario_diario &&
       !emp.salario_diario &&
       !emp.salario_base_personal
@@ -110,7 +110,7 @@ export class EmpleadoNominaService {
       }
 
       // Obtener pago diario de diferentes fuentes
-      const pagoDiario = empleado.pago_diario || 
+      const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 7 : 
                         empleado.contrato?.salario_diario || 
                         empleado.salario_diario || 
                         empleado.salario_base_personal || 0;
@@ -151,7 +151,7 @@ export class EmpleadoNominaService {
       }
 
       if (!empleado.tiene_pago_configurado) {
-        errores.push('No tiene pago diario configurado');
+        errores.push('No tiene pago semanal configurado');
       }
 
       if (!empleado.id_oficio) {
@@ -240,7 +240,7 @@ export class EmpleadoNominaService {
       // Calcular promedio de salario diario para estadísticas (sin multiplicar por 30)
       const promedioSalarioDiario = empleadosConPago.length > 0 ? 
         empleadosConPago.reduce((sum, emp) => {
-          const pagoDiario = emp.pago_diario || 
+          const pagoDiario = emp.pago_semanal ? emp.pago_semanal / 7 : 
                             emp.contrato?.salario_diario || 
                             emp.salario_diario || 
                             emp.salario_base_personal || 0;
@@ -318,14 +318,14 @@ export class EmpleadoNominaService {
   }
 
   /**
-   * Actualiza el pago diario de un empleado
+   * Actualiza el pago semanal de un empleado
    * @param {number} empleadoId - ID del empleado
-   * @param {number} pagoDiario - Nuevo pago diario
+   * @param {number} pagoSemanal - Nuevo pago semanal
    * @returns {Promise<Object>} Resultado de la actualización
    */
-  static async actualizarPagoDiario(empleadoId, pagoDiario) {
+  static async actualizarPagoSemanal(empleadoId, pagoSemanal) {
     try {
-      const response = await ApiService.updateEmpleado(empleadoId, { pago_diario: pagoDiario });
+      const response = await ApiService.updateEmpleado(empleadoId, { pago_semanal: pagoSemanal });
       
       // Limpiar caché
       this.clearCache();
@@ -333,10 +333,10 @@ export class EmpleadoNominaService {
       return {
         success: true,
         data: response.data || response,
-        message: 'Pago diario actualizado exitosamente'
+        message: 'Pago semanal actualizado exitosamente'
       };
     } catch (error) {
-      console.error('Error updating daily payment:', error);
+      console.error('Error updating weekly payment:', error);
       throw this.handleError(error);
     }
   }

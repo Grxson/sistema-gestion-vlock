@@ -129,18 +129,33 @@ const createEmpleado = async (req, res) => {
             telefono_emergencia,
             banco,
             cuenta_bancaria,
-            id_contrato,
             id_oficio,
             id_proyecto,
-            pago_diario,
+            pago_semanal,
             rfc
         } = req.body;
 
         // Validaciones básicas
-        if (!nombre || !apellido || !nss || !id_oficio) {
+        if (!nombre || !apellido || !nss || !id_oficio || !pago_semanal) {
             return res.status(400).json({
                 success: false,
-                message: 'Los campos nombre, apellido, NSS y oficio son obligatorios'
+                message: 'Los campos nombre, apellido, NSS, oficio y pago semanal son obligatorios'
+            });
+        }
+
+        // Validar que el pago semanal sea un número positivo
+        if (isNaN(pago_semanal) || pago_semanal <= 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'El pago semanal debe ser un número mayor a 0'
+            });
+        }
+
+        // Validar RFC si se proporciona
+        if (rfc && rfc.length > 0 && (rfc.length < 10 || rfc.length > 13)) {
+            return res.status(400).json({
+                success: false,
+                message: 'El RFC debe tener entre 10 y 13 caracteres'
             });
         }
 
@@ -165,11 +180,11 @@ const createEmpleado = async (req, res) => {
             telefono_emergencia,
             banco,
             cuenta_bancaria,
-            id_contrato: id_contrato || null,
+            id_contrato: null, // Siempre sin contrato
             id_oficio,
             id_proyecto: id_proyecto || null,
-            pago_diario: pago_diario || null,
-            activo: true,
+            pago_semanal: pago_semanal,
+            activo: true, // Siempre activo
             fecha_alta: new Date(),
             rfc
         });
@@ -181,6 +196,17 @@ const createEmpleado = async (req, res) => {
         });
     } catch (error) {
         console.error('Error al crear empleado:', error);
+        
+        // Manejar errores de validación de Sequelize
+        if (error.name === 'SequelizeValidationError') {
+            const errorMessages = error.errors.map(err => err.message);
+            return res.status(400).json({
+                success: false,
+                message: 'Error de validación',
+                errors: errorMessages
+            });
+        }
+        
         res.status(500).json({
             success: false,
             message: 'Error interno del servidor al crear el empleado'
@@ -199,7 +225,7 @@ const updateEmpleado = async (req, res) => {
         const { 
             nombre, apellido, nss, telefono, contacto_emergencia, 
             telefono_emergencia, banco, cuenta_bancaria, id_contrato, 
-            id_oficio, id_proyecto, pago_diario, activo, fecha_alta, fecha_baja, 
+            id_oficio, id_proyecto, pago_semanal, activo, fecha_alta, fecha_baja, 
             rfc
         } = req.body;
 
@@ -225,7 +251,7 @@ const updateEmpleado = async (req, res) => {
             id_contrato: id_contrato === '' ? null : (id_contrato !== undefined ? id_contrato : empleado.id_contrato),
             id_oficio: id_oficio === '' ? null : (id_oficio !== undefined ? id_oficio : empleado.id_oficio),
             id_proyecto: id_proyecto === '' ? null : (id_proyecto !== undefined ? id_proyecto : empleado.id_proyecto),
-            pago_diario: pago_diario === '' ? null : (pago_diario !== undefined ? pago_diario : empleado.pago_diario),
+            pago_semanal: pago_semanal === '' ? null : (pago_semanal !== undefined ? pago_semanal : empleado.pago_semanal),
             activo: activo !== undefined ? activo : empleado.activo,
             fecha_alta: fecha_alta || empleado.fecha_alta,
             fecha_baja: fecha_baja === '' ? null : (fecha_baja !== undefined ? fecha_baja : empleado.fecha_baja),

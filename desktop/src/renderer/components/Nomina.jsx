@@ -344,14 +344,14 @@ export default function Nomina() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {formatCurrency(empleado.pago_diario || empleado.contrato?.salario_diario || 0)}
+                                {formatCurrency((empleado.pago_semanal || empleado.contrato?.salario_diario || 0) / 7)}
                               </div>
                               <div className={`text-xs ${
-                                (empleado.pago_diario || empleado.contrato?.salario_diario) 
+                                (empleado.pago_semanal || empleado.contrato?.salario_diario) 
                                   ? 'text-green-600 dark:text-green-400' 
                                   : 'text-red-600 dark:text-red-400'
                               }`}>
-                                {(empleado.pago_diario || empleado.contrato?.salario_diario) 
+                                {(empleado.pago_semanal || empleado.contrato?.salario_diario) 
                                   ? 'Configurado' 
                                   : 'Sin configurar'
                                 }

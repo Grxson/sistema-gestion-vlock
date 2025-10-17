@@ -275,7 +275,7 @@ export class ValidacionesNominaService {
     }
 
     // El pago diario se puede configurar durante el proceso de nómina
-    const pagoDiario = empleado.pago_diario || 
+    const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 7 : 
                       empleado.contrato?.salario_diario || 
                       empleado.salario_diario || 
                       empleado.salario_base_personal || 0;

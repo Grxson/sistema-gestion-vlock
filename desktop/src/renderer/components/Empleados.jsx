@@ -62,11 +62,9 @@ export default function Empleados() {
     telefono_emergencia: '',
     banco: '',
     cuenta_bancaria: '',
-    id_contrato: '',
     id_oficio: '',
     id_proyecto: '',
-    pago_diario: '',
-    activo: true
+    pago_semanal: ''
   });
 
   const resetForm = () => {
@@ -80,11 +78,9 @@ export default function Empleados() {
       telefono_emergencia: '',
       banco: '',
       cuenta_bancaria: '',
-      id_contrato: '',
       id_oficio: '',
       id_proyecto: '',
-      pago_diario: '',
-      activo: true
+      pago_semanal: ''
     });
     setEditingEmpleado(null);
     setShowModal(false);
@@ -148,15 +144,21 @@ export default function Empleados() {
       return false;
     }
     
-    // Validar que al menos tenga contrato O pago diario
-    if (!formData.id_contrato && !formData.pago_diario) {
-      showError('Error de validación', 'Debe asignar un contrato o especificar un pago diario');
+    // Validar que el pago semanal sea obligatorio
+    if (!formData.pago_semanal || formData.pago_semanal <= 0) {
+      showError('Error de validación', 'El pago semanal es obligatorio y debe ser mayor a 0');
       return false;
     }
     
-    // Validar que el pago diario sea un número válido si se especifica
-    if (formData.pago_diario && (isNaN(formData.pago_diario) || formData.pago_diario <= 0)) {
-      showError('Error de validación', 'El pago diario debe ser un número mayor a 0');
+    // Validar que el pago semanal sea un número válido
+    if (isNaN(formData.pago_semanal)) {
+      showError('Error de validación', 'El pago semanal debe ser un número válido');
+      return false;
+    }
+
+    // Validar RFC si se proporciona
+    if (formData.rfc && formData.rfc.trim() && (formData.rfc.length < 10 || formData.rfc.length > 13)) {
+      showError('Error de validación', 'El RFC debe tener entre 10 y 13 caracteres');
       return false;
     }
     
@@ -246,11 +248,9 @@ export default function Empleados() {
       telefono_emergencia: empleado.telefono_emergencia || '',
       banco: empleado.banco || '',
       cuenta_bancaria: empleado.cuenta_bancaria || '',
-      id_contrato: empleado.id_contrato || '',
       id_oficio: empleado.id_oficio || '',
       id_proyecto: empleado.id_proyecto || '',
-      pago_diario: empleado.pago_diario || '',
-      activo: empleado.activo !== undefined ? empleado.activo : true
+      pago_semanal: empleado.pago_semanal || ''
     });
     setShowModal(true);
   };
@@ -516,14 +516,14 @@ export default function Empleados() {
                       {empleado.contrato?.tipo_contrato || 'Sin contrato'}
                     </p>
                     
-                    {/* Mostrar salario del contrato o pago diario */}
+                    {/* Mostrar salario del contrato o pago semanal */}
                     {empleado.contrato?.salario_diario ? (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                         ${parseFloat(empleado.contrato.salario_diario).toLocaleString()}/día (contrato)
                       </p>
-                    ) : empleado.pago_diario ? (
+                    ) : empleado.pago_semanal ? (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                        ${parseFloat(empleado.pago_diario).toLocaleString()}/día (independiente)
+                        ${parseFloat(empleado.pago_semanal).toLocaleString()}/semana (independiente)
                       </p>
                     ) : (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
@@ -664,6 +664,9 @@ export default function Empleados() {
                         onChange={(e) => setFormData({...formData, rfc: e.target.value.toUpperCase()})}
                         placeholder="RFC123456789"
                       />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Opcional - Entre 10 y 13 caracteres
+                      </p>
                     </div>
                   </div>
 
@@ -762,51 +765,20 @@ export default function Empleados() {
 
                   <div className="mb-4">
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Contrato {contratos.length > 0 ? `(${contratos.length} disponibles)` : '(Cargando...)'}
-                    </label>
-                    <select
-                      className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                      value={formData.id_contrato}
-                      onChange={(e) => setFormData({...formData, id_contrato: e.target.value})}
-                    >
-                      <option value="">Sin contrato (usar pago diario)</option>
-                      {contratos.map(contrato => (
-                        <option key={contrato.id_contrato} value={contrato.id_contrato}>
-                          {contrato.tipo_contrato} - ${parseFloat(contrato.salario_diario).toLocaleString()}/día
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Pago Diario (solo si no tiene contrato)
+                      Pago Semanal
                     </label>
                     <input
                       type="number"
                       step="0.01"
                       min="0"
-                      disabled={!!formData.id_contrato}
-                      className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      placeholder="Ej: 500.00"
-                      value={formData.pago_diario}
-                      onChange={(e) => setFormData({...formData, pago_diario: e.target.value})}
+                      className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
+                      placeholder="Ej: 3500.00"
+                      value={formData.pago_semanal}
+                      onChange={(e) => setFormData({...formData, pago_semanal: e.target.value})}
                     />
                     <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {formData.id_contrato ? 'El salario se toma del contrato seleccionado' : 'Especificar el pago diario para empleados sin contrato'}
+                      Especificar el pago semanal del empleado
                     </p>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
-                    <select
-                      className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
-                      value={formData.activo}
-                      onChange={(e) => setFormData({...formData, activo: e.target.value === 'true'})}
-                    >
-                      <option value="true">Activo</option>
-                      <option value="false">Inactivo</option>
-                    </select>
                   </div>
                 </div>
 
@@ -825,11 +797,9 @@ export default function Empleados() {
                         telefono_emergencia: '',
                         banco: '',
                         cuenta_bancaria: '',
-                        id_contrato: '',
                         id_oficio: '',
                         id_proyecto: '',
-                        pago_diario: '',
-                        activo: true
+                        pago_semanal: ''
                       });
                     }}
                     className="px-5 py-2.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-dark-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-200 dark:hover:bg-dark-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200"
@@ -960,12 +930,12 @@ export default function Empleados() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Salario/Pago diario</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">Salario/Pago semanal</p>
                       <p className="text-sm font-medium text-gray-900 dark:text-white">
                         {selectedEmpleado.contrato?.salario_diario 
                           ? `$${parseFloat(selectedEmpleado.contrato.salario_diario).toLocaleString()}/día (contrato)`
-                          : selectedEmpleado.pago_diario 
-                            ? `$${parseFloat(selectedEmpleado.pago_diario).toLocaleString()}/día (independiente)`
+                          : selectedEmpleado.pago_semanal 
+                            ? `$${parseFloat(selectedEmpleado.pago_semanal).toLocaleString()}/semana (independiente)`
                             : 'Sin salario definido'
                         }
                       </p>

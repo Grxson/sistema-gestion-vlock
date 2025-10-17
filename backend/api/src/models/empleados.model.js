@@ -22,7 +22,10 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(13),
       allowNull: true,
       validate: {
-        len: [10, 13] // RFC puede ser de 10 o 13 caracteres
+        len: {
+          args: [10, 13],
+          msg: 'El RFC debe tener entre 10 y 13 caracteres'
+        }
       }
     },
     telefono: {
@@ -54,7 +57,7 @@ module.exports = (sequelize) => {
         key: 'id_proyecto'
       }
     },
-    pago_diario: {
+    pago_semanal: {
       type: DataTypes.DECIMAL(10, 2),
       allowNull: true
     },
