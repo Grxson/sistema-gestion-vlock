@@ -311,18 +311,38 @@ const generarReciboPDF = async (req, res) => {
         
         col2Y += 15;
         
+        // Calcular semana del mes (1-4) usando el mismo algoritmo que el wizard
+        const fechaCreacion = new Date(nomina.createdAt);
+        
+        function calcularSemanaDelMes(fecha) {
+            const primerDiaDelMes = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
+            const primerLunesDelMes = new Date(primerDiaDelMes);
+            
+            // Ajustar al primer lunes del mes
+            const diaDeLaSemana = primerDiaDelMes.getDay();
+            const diasHastaLunes = diaDeLaSemana === 0 ? 1 : 8 - diaDeLaSemana;
+            primerLunesDelMes.setDate(primerDiaDelMes.getDate() + diasHastaLunes);
+            
+            // Si el primer lunes está en el mes anterior, usar el primer día del mes
+            if (primerLunesDelMes.getMonth() !== fecha.getMonth()) {
+                primerLunesDelMes.setTime(primerDiaDelMes.getTime());
+            }
+            
+            const diasTranscurridos = Math.floor((fecha - primerLunesDelMes) / (1000 * 60 * 60 * 24));
+            const semanaDelMes = Math.floor(diasTranscurridos / 7) + 1;
+            
+            // Limitar entre 1 y 4
+            return Math.max(1, Math.min(4, semanaDelMes));
+        }
+        
+        const semanaFinal = calcularSemanaDelMes(fechaCreacion);
+        
         doc.fontSize(8)
            .font('Helvetica')
-           .text(`Ejercicio: ${añoActual}`, empCol2X, col2Y);
+           .text(`Período: ${añoActual} ${mesActual.toString().padStart(2, '0')} - Semana ${semanaFinal}`, empCol2X, col2Y);
         
         col2Y += 10;
-        doc.text(`Período: ${mesActual.toString().padStart(2, '0')} - Semanal`, empCol2X, col2Y);
-        
-        col2Y += 10;
-        doc.text(`Días de Pago: ${nomina.dias_laborados}`, empCol2X, col2Y); // Sin decimales
-        
-        col2Y += 10;
-        doc.text(`Fecha Pago: ${fechaFormateada}`, empCol2X, col2Y);
+        doc.text(`Días de Pago: 6`, empCol2X, col2Y); // Siempre 6 días para pago semanal
         
         col2Y += 10;
         // SBC calculado para semana de 6 días laborales

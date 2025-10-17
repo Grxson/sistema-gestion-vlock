@@ -99,6 +99,15 @@ export class CalculadoraNominaService {
       
       // Monto final
       const montoTotal = subtotal - deducciones.total;
+      
+      console.log('🔍 [SERVICIO] Cálculo de nómina:', {
+        salarioBase,
+        montoHorasExtra,
+        bonos,
+        subtotal,
+        deducciones: deducciones.total,
+        montoTotal
+      });
 
       return {
         salarioBase,

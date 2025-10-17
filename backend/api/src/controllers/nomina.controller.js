@@ -268,9 +268,9 @@ const createNomina = async (req, res) => {
         }
 
         // Determinar el estado de la nómina
-        // Por defecto, todas las nóminas nuevas están "Pendiente por pagar"
+        // Por defecto, todas las nóminas nuevas están "Borrador" hasta generar PDF
         // Solo se marcan como "Pagado" si se especifica explícitamente
-        const estadoNomina = 'Pendiente';
+        const estadoNomina = 'Borrador';
 
         // Crear la nueva nómina
         const nuevaNomina = await NominaEmpleado.create({
@@ -346,7 +346,7 @@ const createNomina = async (req, res) => {
                 req.usuario.id_usuario,
                 'creacion',
                 null,
-                estadoNomina === 'Pendiente' ? 'Pendiente' : 'Pagado',
+                estadoNomina === 'Borrador' ? 'Borrador' : 'Pagado',
                 {
                     dias_laborados: diasLaboradosNum,
                     pago_semanal: pagoSemanalNum,

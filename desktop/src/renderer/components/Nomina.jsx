@@ -40,6 +40,7 @@ export default function Nomina() {
   const [loading, setLoading] = useState(true);
   const [showWizard, setShowWizard] = useState(false);
   const [selectedNomina, setSelectedNomina] = useState(null);
+  const [nominaToEdit, setNominaToEdit] = useState(null);
   const [showCharts, setShowCharts] = useState(false);
   const [showNominaDetails, setShowNominaDetails] = useState(false);
   const [viewMode, setViewMode] = useState('cards');
@@ -146,6 +147,7 @@ export default function Nomina() {
 
   // Función para ver preview de nómina
   const verPreviewNomina = async (empleado) => {
+    console.log('🔍 [PREVIEW] Función verPreviewNomina llamada para empleado:', empleado.id_empleado);
     try {
       setSelectedEmpleadoPreview(empleado);
       
@@ -224,15 +226,24 @@ export default function Nomina() {
 
       showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
       
-      // Actualizar estado de la nómina a "pagada" si estaba en "borrador"
-      if (nominaPreviewData.estado === 'borrador') {
+      // Actualizar estado de la nómina a "Pagado" si estaba en "borrador" o "Pendiente"
+      if (nominaPreviewData.estado === 'borrador' || nominaPreviewData.estado === 'Borrador' || nominaPreviewData.estado === 'Pendiente') {
         try {
-          await nominasServices.nominas.cambiarEstadoNomina(nominaPreviewData.id_nomina, 'pagada');
+          console.log('🔄 [PDF] Actualizando estado de nómina:', {
+            id: nominaPreviewData.id_nomina,
+            estadoActual: nominaPreviewData.estado,
+            nuevoEstado: 'Pagado'
+          });
+          
+          await nominasServices.nominas.marcarComoPagada(nominaPreviewData.id_nomina);
           showSuccess('Estado actualizado', 'La nómina ha sido marcada como pagada');
+          
           // Refrescar datos
           await fetchData();
+          console.log('✅ [PDF] Datos refrescados después de cambiar estado');
         } catch (error) {
-          console.error('Error actualizando estado:', error);
+          console.error('❌ [PDF] Error actualizando estado:', error);
+          showError('Error', 'No se pudo actualizar el estado de la nómina');
         }
       }
       
@@ -242,11 +253,50 @@ export default function Nomina() {
     }
   };
 
-  // Función para editar nómina
-  const editarNomina = (empleado) => {
-    // Abrir wizard con el empleado preseleccionado
-    setSelectedEmpleadoPreview(empleado);
-    setShowWizard(true);
+
+  const editarNominaDesdePreview = async () => {
+    console.log('🔍 [EDITAR] Función editarNominaDesdePreview llamada');
+    console.log('🔍 [EDITAR] nominaPreviewData:', nominaPreviewData);
+    
+    if (!nominaPreviewData?.id_nomina) {
+      console.log('❌ [EDITAR] No hay nómina para editar');
+      showError('Error', 'No hay nómina para editar');
+      return;
+    }
+
+    try {
+      console.log('🔍 [EDITAR] Obteniendo datos de nómina para edición:', nominaPreviewData.id_nomina);
+      
+      // Obtener datos frescos de la nómina
+      const response = await nominasServices.nominas.getById(nominaPreviewData.id_nomina);
+      
+      if (response.success && response.data) {
+        const nominaData = response.data;
+        console.log('🔍 [EDITAR] Datos de nómina obtenidos:', nominaData);
+        
+        // Buscar el empleado correspondiente
+        const empleado = empleados.find(emp => emp.id_empleado === nominaData.id_empleado);
+        
+        if (empleado) {
+          // Almacenar datos de la nómina para editar
+          setNominaToEdit(nominaData);
+          
+          // Cerrar preview y abrir wizard con datos cargados
+          setShowNominaPreview(false);
+          setSelectedEmpleadoPreview(empleado);
+          setShowWizard(true);
+          
+          showInfo('Editando Nómina', 'Cargando datos de la nómina...');
+        } else {
+          showError('Error', 'No se encontró el empleado de la nómina');
+        }
+      } else {
+        showError('Error', 'No se pudieron obtener los datos de la nómina');
+      }
+    } catch (error) {
+      console.error('❌ [EDITAR] Error obteniendo datos de nómina:', error);
+      showError('Error', 'No se pudieron cargar los datos para editar');
+    }
   };
 
 
@@ -648,13 +698,6 @@ export default function Nomina() {
                             >
                                   <EyeIcon className="h-4 w-4" />
                                 </button>
-                            <button 
-                              onClick={() => editarNomina(empleado)}
-                              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-300"
-                              title="Crear/Editar nómina"
-                            >
-                                  <PencilIcon className="h-4 w-4" />
-                                </button>
                               </div>
                             </td>
                           </tr>
@@ -900,14 +943,23 @@ export default function Nomina() {
         {process.env.NODE_ENV === 'development' && console.log('🔍 [Nomina] Pasando empleados al wizard:', empleados.length, empleados)}
         <NominaWizardSimplificado 
           isOpen={showWizard}
-          onClose={() => setShowWizard(false)}
+          onClose={() => {
+            setShowWizard(false);
+            setNominaToEdit(null); // Limpiar datos de edición al cerrar
+          }}
           onSuccess={handleNominaSuccess}
           empleados={empleados}
           selectedEmpleado={selectedEmpleadoPreview}
+          nominaToEdit={nominaToEdit}
         />
 
         {/* Modal de Preview de Nómina */}
         {showNominaPreview && nominaPreviewData && selectedEmpleadoPreview && (
+          console.log('🔍 [PREVIEW] Renderizando preview de nómina:', {
+            showNominaPreview,
+            nominaPreviewData: nominaPreviewData?.id_nomina,
+            selectedEmpleadoPreview: selectedEmpleadoPreview?.id_empleado
+          }),
           <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
             <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-4xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
               {/* Header del Preview */}
@@ -1027,16 +1079,48 @@ export default function Nomina() {
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Período</p>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        {nominaPreviewData.semana?.anio && nominaPreviewData.semana?.semana_iso ? 
-                          `${nominaPreviewData.semana.anio}-${String(Math.ceil(nominaPreviewData.semana.semana_iso / 4)).padStart(2, '0')}` :
-                          'Sin período'
-                        }
+                        {(() => {
+                          // Usar fecha actual si no hay fecha de creación
+                          const fecha = nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt ? 
+                            new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt) : 
+                            new Date();
+                          const año = fecha.getFullYear();
+                          const mes = fecha.getMonth() + 1;
+                          return `${año}-${String(mes).padStart(2, '0')}`;
+                        })()}
                       </p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">Semana</p>
                       <p className="font-medium text-gray-900 dark:text-white">
-                        Semana {nominaPreviewData.semana?.semana_iso || nominaPreviewData.id_semana || 'N/A'}
+                        {(() => {
+                          // Usar fecha actual si no hay fecha de creación
+                          const fecha = nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt ? 
+                            new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt) : 
+                            new Date();
+                          
+                          // Usar el mismo algoritmo que el wizard
+                          function calcularSemanaDelMes(fecha) {
+                            const primerDiaDelMes = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
+                            const primerLunesDelMes = new Date(primerDiaDelMes);
+                            
+                            const diaDeLaSemana = primerDiaDelMes.getDay();
+                            const diasHastaLunes = diaDeLaSemana === 0 ? 1 : 8 - diaDeLaSemana;
+                            primerLunesDelMes.setDate(primerDiaDelMes.getDate() + diasHastaLunes);
+                            
+                            if (primerLunesDelMes.getMonth() !== fecha.getMonth()) {
+                              primerLunesDelMes.setTime(primerDiaDelMes.getTime());
+                            }
+                            
+                            const diasTranscurridos = Math.floor((fecha - primerLunesDelMes) / (1000 * 60 * 60 * 24));
+                            const semanaDelMes = Math.floor(diasTranscurridos / 7) + 1;
+                            
+                            return Math.max(1, Math.min(4, semanaDelMes));
+                          }
+                          
+                          const semanaFinal = calcularSemanaDelMes(fecha);
+                          return `Semana ${semanaFinal}`;
+                        })()}
                       </p>
                     </div>
                     <div>
@@ -1130,38 +1214,53 @@ export default function Nomina() {
               </div>
 
               {/* Footer del Preview */}
-              <div className="flex justify-end space-x-3 px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowNominaPreview(false);
-                    setNominaPreviewData(null);
-                    setSelectedEmpleadoPreview(null);
-                  }}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                >
-                  Cerrar
-                </button>
-                {(nominaPreviewData.estado === 'borrador' || nominaPreviewData.estado === 'Borrador' || nominaPreviewData.estado === 'Pendiente') && (
+              <div className="flex justify-between px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
+                <div className="flex space-x-3">
                   <button
                     type="button"
-                    onClick={generarPDFDesdePreview}
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
-                  >
-                    <DocumentTextIcon className="h-4 w-4 mr-2 inline-block" />
-                    Generar PDF y Marcar como Pagada
-                  </button>
-                )}
-                {nominaPreviewData.estado === 'pagada' || nominaPreviewData.estado === 'Pagado' ? (
-                  <button
-                    type="button"
-                    onClick={generarPDFDesdePreview}
+                    onClick={() => {
+                      console.log('🔍 [BOTON] Botón Editar Nómina clickeado');
+                      editarNominaDesdePreview();
+                    }}
                     className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
                   >
-                    <DocumentTextIcon className="h-4 w-4 mr-2 inline-block" />
-                    Descargar PDF
+                    <PencilIcon className="h-4 w-4 mr-2 inline-block" />
+                    Editar Nómina
                   </button>
-                ) : null}
+                </div>
+                <div className="flex space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowNominaPreview(false);
+                      setNominaPreviewData(null);
+                      setSelectedEmpleadoPreview(null);
+                    }}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                  >
+                    Cerrar
+                  </button>
+                  {(nominaPreviewData.estado === 'borrador' || nominaPreviewData.estado === 'Borrador' || nominaPreviewData.estado === 'Pendiente') && (
+                    <button
+                      type="button"
+                      onClick={generarPDFDesdePreview}
+                      className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200"
+                    >
+                      <DocumentTextIcon className="h-4 w-4 mr-2 inline-block" />
+                      Generar PDF y Marcar como Pagada
+                    </button>
+                  )}
+                  {nominaPreviewData.estado === 'pagada' || nominaPreviewData.estado === 'Pagado' ? (
+                    <button
+                      type="button"
+                      onClick={generarPDFDesdePreview}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
+                    >
+                      <DocumentTextIcon className="h-4 w-4 mr-2 inline-block" />
+                      Descargar PDF
+                    </button>
+                  ) : null}
+                </div>
               </div>
             </div>
           </div>

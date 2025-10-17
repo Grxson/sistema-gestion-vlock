@@ -25,7 +25,7 @@ import {
   CalculatorIcon
 } from '@heroicons/react/24/outline';
 
-const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }) => {
+const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], selectedEmpleado, nominaToEdit }) => {
   const { isDarkMode } = useTheme();
   const { showSuccess, showError, showInfo } = useToast();
   
@@ -108,6 +108,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
   useEffect(() => {
     if (formData.selectedEmpleado && formData.selectedEmpleado.pago_semanal) {
       // Para pago semanal: calcular automáticamente cuando se selecciona empleado
+      console.log('🔄 [WIZARD] Ejecutando cálculo automático por cambio en formData');
       calcularNomina();
     }
   }, [formData.selectedEmpleado, formData.horasExtra, formData.bonos, formData.deduccionesAdicionales, formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
@@ -140,6 +141,67 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
       }
     }
   }, [formData.selectedPeriodo]);
+
+  // Pre-llenar formulario cuando hay datos de nómina a editar
+  useEffect(() => {
+    if (nominaToEdit && isOpen) {
+      console.log('🔍 [WIZARD] Pre-llenando formulario con datos de nómina:', nominaToEdit);
+      
+      // Calcular período y semana desde la fecha de creación
+      const fechaCreacion = new Date(nominaToEdit.createdAt || nominaToEdit.fecha_creacion);
+      const año = fechaCreacion.getFullYear();
+      const mes = fechaCreacion.getMonth() + 1;
+      const periodo = `${año}-${String(mes).padStart(2, '0')}`;
+      
+      // Calcular semana del mes
+      function calcularSemanaDelMes(fecha) {
+        const primerDiaDelMes = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
+        const primerLunesDelMes = new Date(primerDiaDelMes);
+        
+        const diaDeLaSemana = primerDiaDelMes.getDay();
+        const diasHastaLunes = diaDeLaSemana === 0 ? 1 : 8 - diaDeLaSemana;
+        primerLunesDelMes.setDate(primerDiaDelMes.getDate() + diasHastaLunes);
+        
+        if (primerLunesDelMes.getMonth() !== fecha.getMonth()) {
+          primerLunesDelMes.setTime(primerDiaDelMes.getTime());
+        }
+        
+        const diasTranscurridos = Math.floor((fecha - primerLunesDelMes) / (1000 * 60 * 60 * 24));
+        const semanaDelMes = Math.floor(diasTranscurridos / 7) + 1;
+        
+        return Math.max(1, Math.min(4, semanaDelMes));
+      }
+      
+      const semanaDelMes = calcularSemanaDelMes(fechaCreacion);
+      
+      // Pre-llenar formulario con datos de la nómina
+      setFormData({
+        selectedPeriodo: periodo,
+        semanaNum: semanaDelMes,
+        selectedEmpleado: empleados.find(emp => emp.id_empleado === nominaToEdit.id_empleado) || null,
+        searchTerm: '',
+        diasLaborados: nominaToEdit.dias_laborados || 6,
+        horasExtra: nominaToEdit.horas_extra || 0,
+        bonos: nominaToEdit.bonos || 0,
+        deduccionesAdicionales: nominaToEdit.deducciones_adicionales || 0,
+        aplicarISR: nominaToEdit.aplicar_isr || false,
+        aplicarIMSS: nominaToEdit.aplicar_imss || false,
+        aplicarInfonavit: nominaToEdit.aplicar_infonavit || false,
+        // Campos de pago parcial
+        pagoParcial: nominaToEdit.pago_parcial || false,
+        montoAPagar: nominaToEdit.monto_a_pagar || null,
+        liquidarAdeudos: nominaToEdit.liquidar_adeudos || false
+      });
+      
+      console.log('✅ [WIZARD] Formulario pre-llenado con datos de nómina');
+      
+      // Forzar recálculo después de pre-llenar
+      setTimeout(() => {
+        console.log('🔄 [WIZARD] Forzando recálculo después de pre-llenar...');
+        calcularNomina();
+      }, 100);
+    }
+  }, [nominaToEdit, isOpen, empleados]);
 
   // Cargar adeudos del empleado seleccionado
   const cargarAdeudosEmpleado = async () => {
@@ -198,6 +260,14 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
       // Para pago semanal: usar directamente el pago semanal
       const pagoSemanal = formData.selectedEmpleado.pago_semanal || 0;
       
+      console.log('🔍 [CALCULO] Calculando nómina con datos:', {
+        empleado: formData.selectedEmpleado.nombre,
+        pagoSemanal,
+        horasExtra: formData.horasExtra,
+        bonos: formData.bonos,
+        deduccionesAdicionales: formData.deduccionesAdicionales
+      });
+      
       // Verificar que el empleado tenga pago_semanal definido
       if (!pagoSemanal || pagoSemanal <= 0) {
         showError('Error', 'El empleado seleccionado no tiene un pago semanal válido definido');
@@ -217,6 +287,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
       };
 
       const calculo = await nominasServices.calculadora.calcularNomina(datosNomina);
+      console.log('🔍 [CALCULO] Resultado del cálculo:', calculo);
       setCalculoNomina(calculo);
     } catch (error) {
       console.error('Error calculating nomina:', error);
@@ -737,6 +808,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
             {calculoNomina && (
               <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Cálculos</h3>
+                {console.log('🔍 [RENDER] calculoNomina existe:', calculoNomina)}
                 <div className="space-y-2">
                   <div className="flex justify-between">
                     <span className="text-gray-600 dark:text-gray-400">Salario Base:</span>
@@ -772,7 +844,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                     <div className="flex justify-between">
                       <span className="text-lg font-medium text-gray-900 dark:text-white">Total a Pagar:</span>
                       <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                        {formatCurrency(calculoNomina.totalAPagar || 0)}
+                        {(() => {
+                          console.log('🔍 [RENDER] calculoNomina en Total a Pagar:', calculoNomina);
+                          return formatCurrency(calculoNomina?.montoTotal || 0);
+                        })()}
                       </span>
                     </div>
                   </div>
@@ -1405,6 +1480,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                         <CalculatorIcon className="h-4 w-4 mr-2" />
                         Vista Previa del Cálculo:
                       </h5>
+                      {console.log('🔍 [VISTA_PREVIA] calculoNomina:', calculoNomina)}
                       
                       {/* Información del pago semanal del empleado */}
                       <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -1497,7 +1573,16 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                             {formData.pagoParcial ? 'Total a Pagar (Parcial):' : 'Total a Pagar:'}
                           </span>
                           <span className="font-bold text-lg text-green-600 dark:text-green-400">
-                            {formatCurrency(formData.pagoParcial ? formData.montoAPagar : calculoNomina.montoTotal)}
+                            {(() => {
+                              const total = formData.pagoParcial ? formData.montoAPagar : calculoNomina.montoTotal;
+                              console.log('🔍 [TOTAL] Calculando Total a Pagar:', {
+                                pagoParcial: formData.pagoParcial,
+                                montoAPagar: formData.montoAPagar,
+                                calculoNominaMontoTotal: calculoNomina.montoTotal,
+                                totalFinal: total
+                              });
+                              return formatCurrency(total);
+                            })()}
                           </span>
                         </div>
                         
