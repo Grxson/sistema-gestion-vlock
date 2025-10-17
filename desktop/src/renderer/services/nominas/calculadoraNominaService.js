@@ -65,7 +65,8 @@ export class CalculadoraNominaService {
         deduccionesAdicionales = 0,
         aplicarISR = true,
         aplicarIMSS = true,
-        aplicarInfonavit = true
+        aplicarInfonavit = true,
+        esPagoSemanal = false
       } = datosNomina;
 
       // Validar datos básicos
@@ -76,11 +77,12 @@ export class CalculadoraNominaService {
         throw new Error('El pago por día debe ser mayor a 0');
       }
 
-      // Cálculo de salario base
-      const salarioBase = diasLaborados * pagoPorDia;
+      // Para pago semanal: el salario base ES el pago semanal directamente
+      const salarioBase = pagoPorDia; // pagoPorDia contiene el pago semanal completo
       
-      // Cálculo de horas extra
-      const montoHorasExtra = this.calcularHorasExtra(horasExtra, pagoPorDia);
+      // Cálculo de horas extra (basándose en pago semanal)
+      const pagoParaHorasExtra = pagoPorDia / 7; // Convertir pago semanal a diario para horas extra
+      const montoHorasExtra = this.calcularHorasExtra(horasExtra, pagoParaHorasExtra);
       
       // Subtotal antes de deducciones
       const subtotal = salarioBase + montoHorasExtra + bonos;
@@ -303,6 +305,7 @@ export class CalculadoraNominaService {
       empleado: datosNomina.empleado || {},
       diasLaborados: datosNomina.diasLaborados,
       pagoPorDia: datosNomina.pagoPorDia,
+      esPagoSemanal: datosNomina.esPagoSemanal || false,
       horasExtra: datosNomina.horasExtra || 0,
       bonos: datosNomina.bonos || 0,
       deduccionesAdicionales: datosNomina.deduccionesAdicionales || 0,

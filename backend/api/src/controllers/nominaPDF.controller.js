@@ -120,7 +120,14 @@ const generarReciboPDF = async (req, res) => {
         // Verificar si existe la nómina con todas las relaciones necesarias
         const nomina = await NominaEmpleado.findByPk(id_nomina, {
             include: [
-                { model: Empleado, as: 'empleado' },
+                { 
+                    model: Empleado, 
+                    as: 'empleado',
+                    include: [
+                        { model: models.Oficios, as: 'oficio' },
+                        { model: models.Proyectos, as: 'proyecto' }
+                    ]
+                },
                 { model: SemanaNomina, as: 'semana' },
                 { 
                     model: PagoNomina,
@@ -169,7 +176,7 @@ const generarReciboPDF = async (req, res) => {
         doc.fontSize(16)
            .font('Helvetica-Bold')
            .fillColor('#000000')
-           .text('COMPROBANTE FISCAL DIGITAL POR INTERNET', margin, currentY, { align: 'center' });
+           .text('COMPROBANTE DIGITAL DE NÓMINA', margin, currentY, { align: 'center' });
         
         currentY += 30;
 
@@ -280,6 +287,20 @@ const generarReciboPDF = async (req, res) => {
         doc.fontSize(8)
            .text(`Fecha Inicio: ${fechaInicio}`, empCol1X, currentY);
         
+        currentY += 10;
+        
+        // Puesto/Oficio del empleado
+        const puesto = nomina.empleado?.oficio?.nombre || 'Sin especificar';
+        doc.fontSize(8)
+           .text(`Puesto: ${puesto}`, empCol1X, currentY);
+        
+        currentY += 10;
+        
+        // Proyecto del empleado
+        const proyecto = nomina.empleado?.proyecto?.nombre || nomina.proyecto?.nombre || 'Sin proyecto';
+        doc.fontSize(8)
+           .text(`Proyecto: ${proyecto}`, empCol1X, currentY);
+        
 
         // Columna derecha - INFORMACIÓN DEL PERÍODO
         let col2Y = currentY - 50; // Ajustar para alinear con columna izquierda
@@ -304,15 +325,11 @@ const generarReciboPDF = async (req, res) => {
         doc.text(`Fecha Pago: ${fechaFormateada}`, empCol2X, col2Y);
         
         col2Y += 10;
-        // Usar el oficio del empleado en lugar del proyecto
-        const puesto = empleado.oficio?.nombre || 'Operativo';
-        doc.text(`Puesto: ${puesto}`, empCol2X, col2Y);
-        
-        col2Y += 10;
-        doc.text(`Depto: General`, empCol2X, col2Y);
-        
-        col2Y += 10;
-        doc.text(`SBC: $${parseFloat(nomina.pago_por_dia).toFixed(2)}`, empCol2X, col2Y);
+        // SBC calculado para semana de 6 días laborales
+        const pagoSemanal = parseFloat(nomina.pago_por_dia); // pago_por_dia contiene el pago semanal
+        const sbcDiario = pagoSemanal / 6; // SBC diario basado en 6 días laborales
+        const sbcSemanal = sbcDiario * 6; // SBC semanal (6 días)
+        doc.text(`SBC: $${sbcDiario.toFixed(2)}/día`, empCol2X, col2Y);
         
         // Ajustar currentY para la siguiente sección
         currentY = Math.max(currentY, col2Y) + 10;
@@ -352,8 +369,8 @@ const generarReciboPDF = async (req, res) => {
         
         currentY += 10;
         
-        // Usar los datos exactos de la nómina del sistema
-        const salarioBase = parseFloat(nomina.pago_por_dia) * nomina.dias_laborados;
+        // Para pago semanal: el salario base ES el pago semanal directamente
+        const salarioBase = parseFloat(nomina.pago_por_dia); // pago_por_dia contiene el pago semanal
         doc.fontSize(8)
            .font('Helvetica')
            .text('P', col1X, currentY)
@@ -363,10 +380,10 @@ const generarReciboPDF = async (req, res) => {
         
         currentY += 15;
         
-        // Horas extra (si aplica) - usar el cálculo real del sistema
+        // Horas extra (si aplica) - calcular basándose en el pago semanal
         if (nomina.horas_extra && nomina.horas_extra > 0) {
-            // Calcular el monto real de horas extra: horas * (pago_por_dia / 8) * 2 (doble tiempo)
-            const pagoPorHora = parseFloat(nomina.pago_por_dia) / 8; // 8 horas por día
+            // Para pago semanal: (pago semanal / 7 días) / 8 horas por día
+            const pagoPorHora = (parseFloat(nomina.pago_por_dia) / 7) / 8;
             const montoHorasExtra = parseFloat(nomina.horas_extra) * pagoPorHora * 2; // Doble tiempo
             doc.text('P', col1X, currentY)
                .text('002', col2X, currentY)
@@ -385,10 +402,11 @@ const generarReciboPDF = async (req, res) => {
         }
         
         // Total de percepciones - usar el cálculo del sistema
-        // Calcular horas extra si aplican
+        // Calcular horas extra si aplican (basándose en pago semanal)
         let montoHorasExtra = 0;
         if (nomina.horas_extra && nomina.horas_extra > 0) {
-            const pagoPorHora = parseFloat(nomina.pago_por_dia) / 8;
+            // Para pago semanal: (pago semanal / 7 días) / 8 horas por día
+            const pagoPorHora = (parseFloat(nomina.pago_por_dia) / 7) / 8;
             montoHorasExtra = parseFloat(nomina.horas_extra) * pagoPorHora * 2;
         }
         

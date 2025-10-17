@@ -150,7 +150,7 @@ export default function Nomina() {
                 Nóminas
               </h1>
               <p className="text-sm text-gray-500 dark:text-gray-400">
-                {getEmpleadosActivos().length} empleados activos
+                {getEmpleadosActivos().length} empleados activos • Sistema de pago semanal
               </p>
             </div>
             <div className="flex items-center space-x-3">
@@ -305,7 +305,7 @@ export default function Nomina() {
                             Oficio
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                            Pago Diario
+                            Pago Semanal
                           </th>
                           <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                             Proyecto
@@ -344,7 +344,9 @@ export default function Nomina() {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {formatCurrency((empleado.pago_semanal || empleado.contrato?.salario_diario || 0) / 7)}
+                                  {empleado.pago_semanal ? formatCurrency(empleado.pago_semanal) : 
+                                 empleado.contrato?.salario_diario ? formatCurrency(empleado.contrato.salario_diario * 7) : 
+                                 formatCurrency(0)}
                               </div>
                               <div className={`text-xs ${
                                 (empleado.pago_semanal || empleado.contrato?.salario_diario) 

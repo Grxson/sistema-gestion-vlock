@@ -17,12 +17,19 @@ const EmpleadoCard = ({
   onDelete,
   showActions = true 
 }) => {
+  // Calcular pago semanal para mostrar
+  const pagoSemanal = empleado.pago_semanal || 
+                     (empleado.contrato?.salario_diario ? empleado.contrato.salario_diario * 7 : 0) || 
+                     (empleado.salario_diario ? empleado.salario_diario * 7 : 0) || 
+                     (empleado.salario_base_personal ? empleado.salario_base_personal * 7 : 0);
+
+  // Calcular pago diario para cálculos internos
   const pagoDiario = empleado.pago_semanal ? empleado.pago_semanal / 7 : 
                     empleado.contrato?.salario_diario || 
                     empleado.salario_diario || 
                     empleado.salario_base_personal || 0;
 
-  const tienePagoConfigurado = pagoDiario > 0;
+  const tienePagoConfigurado = pagoSemanal > 0;
 
   return (
     <div className="bg-white dark:bg-dark-100 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-all duration-200 overflow-hidden">
@@ -132,13 +139,13 @@ const EmpleadoCard = ({
             <div className="flex items-center space-x-2">
               <CurrencyDollarIcon className="h-4 w-4 text-gray-400" />
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Pago Diario</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">Pago Semanal</p>
                 <p className={`text-sm font-medium ${
                   tienePagoConfigurado 
                     ? 'text-green-600 dark:text-green-400' 
                     : 'text-red-600 dark:text-red-400'
                 }`}>
-                  {tienePagoConfigurado ? `$${pagoDiario.toLocaleString()}` : 'No configurado'}
+                  {tienePagoConfigurado ? `$${pagoSemanal.toLocaleString()}` : 'No configurado'}
                 </p>
               </div>
             </div>

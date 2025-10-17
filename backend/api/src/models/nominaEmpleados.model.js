@@ -27,6 +27,11 @@ module.exports = (sequelize) => {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false
     },
+    es_pago_semanal: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      comment: 'Indica si el empleado tiene pago semanal'
+    },
     horas_extra: {
       type: DataTypes.DECIMAL(10,2)
     },

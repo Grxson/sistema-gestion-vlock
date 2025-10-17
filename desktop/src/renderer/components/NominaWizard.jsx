@@ -86,10 +86,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
 
   // Calcular nómina cuando cambian los datos relevantes
   useEffect(() => {
-    if (formData.selectedEmpleado && formData.diasLaborados && formData.pago_por_dia) {
+    if (formData.selectedEmpleado && formData.selectedEmpleado.pago_semanal) {
+      // Para pago semanal: calcular automáticamente cuando se selecciona empleado
       calcularNomina();
     }
-  }, [formData.selectedEmpleado, formData.diasLaborados, formData.horasExtra, formData.bonos, formData.deduccionesAdicionales, formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
+  }, [formData.selectedEmpleado, formData.horasExtra, formData.bonos, formData.deduccionesAdicionales, formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
 
   // Validar datos cuando cambian
   useEffect(() => {
@@ -117,20 +118,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
     if (!formData.selectedEmpleado) return;
 
     // No calcular si hay campos vacíos temporalmente
-    if (formData.diasLaborados === '' || formData.horasExtra === '' || formData.bonos === '' || formData.deduccionesAdicionales === '') {
+    if (formData.horasExtra === '' || formData.bonos === '' || formData.deduccionesAdicionales === '') {
       return;
     }
 
     try {
+      // Para pago semanal: usar directamente el pago semanal
+      const pagoSemanal = formData.selectedEmpleado.pago_semanal || 0;
+      
       const datosNomina = {
-        diasLaborados: formData.diasLaborados || 1,
-        pagoPorDia: formData.pago_por_dia || (formData.selectedEmpleado.pago_semanal ? formData.selectedEmpleado.pago_semanal / 7 : formData.selectedEmpleado.contrato?.salario_diario) || 0,
+        diasLaborados: 1, // Fijo para pago semanal (no se usa para cálculo)
+        pagoPorDia: pagoSemanal, // El pago semanal completo
         horasExtra: formData.horasExtra || 0,
         bonos: formData.bonos || 0,
         deduccionesAdicionales: formData.deduccionesAdicionales || 0,
         aplicarISR: formData.aplicarISR,
         aplicarIMSS: formData.aplicarIMSS,
-        aplicarInfonavit: formData.aplicarInfonavit
+        aplicarInfonavit: formData.aplicarInfonavit,
+        esPagoSemanal: true // Siempre es pago semanal
       };
 
       const calculo = await nominasServices.calculadora.calcularNomina(datosNomina);
@@ -253,8 +258,9 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
         id_empleado: formData.selectedEmpleado.id_empleado,
         id_semana: formData.semanaNum,
         id_proyecto: idProyecto,
-        dias_laborados: formData.diasLaborados,
-        pago_por_dia: pagoIngresado,
+        dias_laborados: 1, // Fijo para pago semanal (no se usa para cálculo)
+        pago_por_dia: pagoIngresado, // Contiene el pago semanal
+        es_pago_semanal: true, // Siempre es pago semanal
         horas_extra: formData.horasExtra || 0,
         bonos: formData.bonos || 0,
         deducciones_adicionales: formData.deduccionesAdicionales || 0,
@@ -293,24 +299,21 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
 
     console.log('✅ [WIZARD] Validación básica exitosa');
     
-    // Validar y preparar datos para la nómina
-    const pagoDiario = formData.selectedEmpleado.pago_semanal ? formData.selectedEmpleado.pago_semanal / 7 : 
-                      formData.selectedEmpleado.contrato?.salario_diario || 
-                      formData.selectedEmpleado.salario_diario || 
-                      formData.selectedEmpleado.salario_base_personal || 0;
+    // Para pago semanal: usar directamente el pago semanal
+    const pagoSemanal = formData.selectedEmpleado.pago_semanal || 0;
 
-    console.log('💰 [WIZARD] Pago diario encontrado:', pagoDiario);
+    console.log('💰 [WIZARD] Pago semanal encontrado:', pagoSemanal);
 
-    // Si el pago diario es 0 o null, mostrar modal para solicitar el valor
-    if (!pagoDiario || pagoDiario <= 0) {
-      console.log('💰 [WIZARD] Pago diario no configurado, mostrando modal');
+    // Si el pago semanal es 0 o null, mostrar modal para solicitar el valor
+    if (!pagoSemanal || pagoSemanal <= 0) {
+      console.log('💰 [WIZARD] Pago semanal no configurado, mostrando modal');
       setShowPagoModal(true);
       return;
     }
 
-    console.log('✅ [WIZARD] Pago diario configurado, procesando directamente');
-    // Si tiene pago diario, procesar directamente
-    await procesarNominaConPago(pagoDiario);
+    console.log('✅ [WIZARD] Pago semanal configurado, procesando directamente');
+    // Si tiene pago semanal, procesar directamente
+    await procesarNominaConPago(pagoSemanal);
   };
 
   const procesarNominaFinal = async (nominaData) => {
@@ -674,12 +677,12 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                                     NSS: {empleado.nss} • RFC: {empleado.rfc}
                                   </p>
                                   <p className={`text-xs font-medium ${
-                                    (empleado.pago_semanal ? empleado.pago_semanal / 7 : empleado.contrato?.salario_diario)
+                                    (empleado.pago_semanal || empleado.contrato?.salario_diario)
                                       ? 'text-green-600 dark:text-green-400'
                                       : 'text-red-600 dark:text-red-400'
                                   }`}>
-                                    {(empleado.pago_semanal ? empleado.pago_semanal / 7 : empleado.contrato?.salario_diario)
-                                      ? `${formatCurrency(empleado.pago_semanal ? empleado.pago_semanal / 7 : empleado.contrato?.salario_diario)} por día`
+                                    {(empleado.pago_semanal || empleado.contrato?.salario_diario)
+                                      ? `${formatCurrency(empleado.pago_semanal || empleado.contrato?.salario_diario * 7)} por semana`
                                       : '⚠️ Sin pago configurado'
                                     }
                                   </p>
@@ -973,9 +976,28 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                         <CalculatorIcon className="h-4 w-4 mr-2" />
                         Vista Previa del Cálculo:
                       </h5>
+                      
+                      {/* Información del pago semanal del empleado */}
+                      <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <div className="flex justify-between items-center text-sm">
+                          <span className="text-blue-700 dark:text-blue-300 font-medium">Pago Semanal del Empleado:</span>
+                          <span className="font-bold text-blue-900 dark:text-blue-100">
+                            {formatCurrency(formData.selectedEmpleado?.pago_semanal || (formData.selectedEmpleado?.contrato?.salario_diario ? formData.selectedEmpleado.contrato.salario_diario * 7 : 0))}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-xs mt-1">
+                          <span className="text-blue-600 dark:text-blue-400">Equivalente diario:</span>
+                          <span className="text-blue-800 dark:text-blue-200">
+                            {formatCurrency(formData.selectedEmpleado?.pago_semanal ? formData.selectedEmpleado.pago_semanal / 7 : formData.pago_por_dia || 0)} por día
+                          </span>
+                        </div>
+                      </div>
+                      
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
-                          <span className="text-green-700 dark:text-green-300">Salario Base:</span>
+                          <span className="text-green-700 dark:text-green-300">
+                            {formData.selectedEmpleado?.pago_semanal ? 'Salario Semanal:' : 'Salario Base:'}
+                          </span>
                           <span className="font-medium text-green-900 dark:text-green-100">
                             {formatCurrency(calculoNomina.salarioBase)}
                           </span>
@@ -1155,7 +1177,9 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                     </h5>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Salario Base ({formData.diasLaborados} días):</span>
+                        <span className="text-gray-600 dark:text-gray-400">
+                          {formData.selectedEmpleado?.pago_semanal ? 'Salario Semanal:' : `Salario Base (${formData.diasLaborados} días):`}
+                        </span>
                         <span className="font-medium text-gray-900 dark:text-white">
                           {formatCurrency(calculoNomina.salarioBase)}
                         </span>
@@ -1368,12 +1392,12 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [] }
                 El empleado <strong>{formData.selectedEmpleado?.nombre} {formData.selectedEmpleado?.apellido}</strong> no tiene pago semanal configurado.
               </p>
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-                Por favor ingresa el pago diario para este empleado (equivalente):
+                Por favor ingresa el pago semanal para calcular la nómina:
               </p>
               
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Pago Diario (MXN)
+                  Pago Semanal (MXN)
                 </label>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

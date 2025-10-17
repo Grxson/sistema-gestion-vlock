@@ -120,7 +120,8 @@ const createNomina = async (req, res) => {
             // Nuevos campos para pagos parciales
             pago_parcial = false,
             monto_a_pagar = null,
-            liquidar_adeudos = false
+            liquidar_adeudos = false,
+            es_pago_semanal = false
         } = req.body;
 
         // Validaciones básicas
@@ -176,6 +177,7 @@ const createNomina = async (req, res) => {
             id_proyecto, // Agregamos el ID del proyecto
             dias_laborados: diasLaboradosNum,
             pago_por_dia: pagoPorDiaNum,
+            es_pago_semanal: es_pago_semanal, // Nuevo campo para identificar pago semanal
             horas_extra: horasExtraNum,
             deducciones: resultado.deducciones.total,
             deducciones_isr: resultado.deducciones.isr,
