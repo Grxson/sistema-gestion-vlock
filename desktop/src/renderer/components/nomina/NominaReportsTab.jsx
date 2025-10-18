@@ -3,6 +3,7 @@ import { formatCurrency } from '../../utils/currency';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useEmpleados } from '../../contexts/EmpleadosContext';
+import * as XLSX from 'xlsx';
 import NominaWeeklySummary from './NominaWeeklySummary';
 import NominaCharts from './NominaCharts';
 import NominaPaymentsList from './NominaPaymentsList';
@@ -20,7 +21,7 @@ import {
 
 export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const { isDarkMode } = useTheme();
-  const { showError } = useToast();
+  const { showError, showSuccess } = useToast();
   const { empleados } = useEmpleados();
   
   const [activeTab, setActiveTab] = useState('summary');
@@ -33,6 +34,109 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [weeklyReportsData, setWeeklyReportsData] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Función para exportar a Excel
+  const exportToExcel = () => {
+    if (!nominas || nominas.length === 0) {
+      showError('Error', 'No hay datos para exportar');
+      return;
+    }
+
+    try {
+      // Función para calcular semana del mes
+      const calcularSemanaDelMes = (fecha) => {
+        const año = fecha.getFullYear();
+        const mes = fecha.getMonth();
+        const dia = fecha.getDate();
+        
+        const primerDiaDelMes = new Date(año, mes, 1);
+        const diaPrimerDia = primerDiaDelMes.getDay();
+        const diasEnPrimeraFila = 7 - diaPrimerDia;
+        
+        if (dia <= diasEnPrimeraFila) {
+          return 1;
+        } else {
+          const diasRestantes = dia - diasEnPrimeraFila;
+          const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
+          
+          const ultimoDiaDelMes = new Date(año, mes + 1, 0);
+          const diasEnElMes = ultimoDiaDelMes.getDate();
+          const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
+          const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
+          const totalFilas = 1 + filasAdicionales;
+          
+          return Math.max(1, Math.min(semanaDelMes, totalFilas));
+        }
+      };
+
+      // Preparar datos para Excel
+      const datosExcel = nominas.map((nomina, index) => {
+        const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
+        const pagoDiario = empleado?.pago_semanal ? empleado.pago_semanal / 6 : 0;
+        const diasTrabajados = nomina.dias_laborados || 6;
+        const pagoTotal = nomina.monto_total || nomina.monto || 0;
+        const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
+        const semanaDelMes = calcularSemanaDelMes(fechaNomina);
+
+        return {
+          'Empleado': empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado',
+          'Oficio': empleado?.oficio?.nombre || 'Sin oficio',
+          'Pago Diario': pagoDiario,
+          'Días Trabajados': diasTrabajados,
+          'Pago Total': pagoTotal,
+          'Semana': `Semana ${semanaDelMes}`,
+          'Fecha': fechaNomina.toLocaleDateString('es-MX')
+        };
+      });
+
+      // Agregar fila de totales
+      const totalPago = nominas.reduce((total, nomina) => {
+        const monto = parseFloat(nomina.monto_total || nomina.monto || 0);
+        return total + (isNaN(monto) ? 0 : monto);
+      }, 0);
+
+      datosExcel.push({
+        'Empleado': 'TOTALES',
+        'Oficio': `${nominas.length} empleados`,
+        'Pago Diario': '-',
+        'Días Trabajados': '-',
+        'Pago Total': totalPago,
+        'Semana': '-',
+        'Fecha': '-'
+      });
+
+      // Crear libro de trabajo
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(datosExcel);
+
+      // Ajustar ancho de columnas
+      const colWidths = [
+        { wch: 25 }, // Empleado
+        { wch: 20 }, // Oficio
+        { wch: 15 }, // Pago Diario
+        { wch: 15 }, // Días Trabajados
+        { wch: 15 }, // Pago Total
+        { wch: 12 }, // Semana
+        { wch: 12 }  // Fecha
+      ];
+      ws['!cols'] = colWidths;
+
+      // Agregar hoja al libro
+      XLSX.utils.book_append_sheet(wb, ws, 'Nóminas Detalladas');
+
+      // Generar nombre de archivo con fecha actual
+      const fechaActual = new Date();
+      const nombreArchivo = `nominas_detalladas_${fechaActual.getFullYear()}_${(fechaActual.getMonth() + 1).toString().padStart(2, '0')}_${fechaActual.getDate().toString().padStart(2, '0')}.xlsx`;
+
+      // Descargar archivo
+      XLSX.writeFile(wb, nombreArchivo);
+
+      showSuccess('Éxito', 'Archivo Excel exportado correctamente');
+    } catch (error) {
+      console.error('Error al exportar a Excel:', error);
+      showError('Error', 'No se pudo exportar el archivo Excel');
+    }
+  };
 
   // Calcular datos semanales
   useEffect(() => {
@@ -667,8 +771,19 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Tabla Detallada de Nóminas
                 </h3>
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  {nominas?.length || 0} nóminas generadas
+                <div className="flex items-center space-x-4">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    {nominas?.length || 0} nóminas generadas
+                  </div>
+                  <button
+                    onClick={exportToExcel}
+                    className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                  >
+                    <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    Exportar Excel
+                  </button>
                 </div>
               </div>
               
@@ -693,7 +808,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           Pago Total
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Estado
+                          Semana
                         </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Fecha
@@ -706,6 +821,35 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         const pagoDiario = empleado?.pago_semanal ? empleado.pago_semanal / 6 : 0;
                         const diasTrabajados = nomina.dias_laborados || 6;
                         const pagoTotal = nomina.monto_total || nomina.monto || 0;
+                        
+                        // Calcular semana del mes
+                        const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
+                        const calcularSemanaDelMes = (fecha) => {
+                          const año = fecha.getFullYear();
+                          const mes = fecha.getMonth();
+                          const dia = fecha.getDate();
+                          
+                          const primerDiaDelMes = new Date(año, mes, 1);
+                          const diaPrimerDia = primerDiaDelMes.getDay();
+                          const diasEnPrimeraFila = 7 - diaPrimerDia;
+                          
+                          if (dia <= diasEnPrimeraFila) {
+                            return 1;
+                          } else {
+                            const diasRestantes = dia - diasEnPrimeraFila;
+                            const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
+                            
+                            const ultimoDiaDelMes = new Date(año, mes + 1, 0);
+                            const diasEnElMes = ultimoDiaDelMes.getDate();
+                            const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
+                            const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
+                            const totalFilas = 1 + filasAdicionales;
+                            
+                            return Math.max(1, Math.min(semanaDelMes, totalFilas));
+                          }
+                        };
+                        
+                        const semanaDelMes = calcularSemanaDelMes(fechaNomina);
                         
                         return (
                           <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -735,18 +879,12 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                               </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
-                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                nomina.estado === 'pagada' || nomina.estado === 'Pagado' 
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
-                                  : nomina.estado === 'pendiente' || nomina.estado === 'Pendiente'
-                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
-                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
-                              }`}>
-                                {nomina.estado || 'Borrador'}
-                              </span>
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                Semana {semanaDelMes}
+                              </div>
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                              {new Date(nomina.fecha_creacion || nomina.createdAt).toLocaleDateString('es-MX')}
+                              {fechaNomina.toLocaleDateString('es-MX')}
                             </td>
                           </tr>
                         );
@@ -770,7 +908,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
                             -
                           </div>
                         </td>
