@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CalendarDaysIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import DateInput from './DateInput';
 
@@ -16,6 +16,27 @@ const DateRangePicker = ({
 }) => {
   const [startError, setStartError] = useState(null);
   const [endError, setEndError] = useState(null);
+  const [activeFilter, setActiveFilter] = useState(null);
+
+  // Sincronizar el estado del filtro activo cuando cambian las fechas manualmente
+  useEffect(() => {
+    if (!startDate && !endDate) {
+      setActiveFilter(null);
+      return;
+    }
+
+    // Verificar si las fechas actuales coinciden con algún filtro predefinido
+    const quickRanges = getQuickRanges();
+    const matchingFilter = quickRanges.find(range => 
+      range.start === startDate && range.end === endDate
+    );
+
+    if (matchingFilter) {
+      setActiveFilter(matchingFilter.label);
+    } else {
+      setActiveFilter(null);
+    }
+  }, [startDate, endDate]);
 
   const handleStartDateChange = (date) => {
     setStartError(null);
@@ -84,8 +105,17 @@ const DateRangePicker = ({
   };
 
   const applyQuickRange = (range) => {
-    onStartDateChange(range.start);
-    onEndDateChange(range.end);
+    // Si el filtro ya está activo, lo desactivamos (toggle)
+    if (activeFilter === range.label) {
+      setActiveFilter(null);
+      onStartDateChange('');
+      onEndDateChange('');
+    } else {
+      // Si no está activo, lo activamos
+      setActiveFilter(range.label);
+      onStartDateChange(range.start);
+      onEndDateChange(range.end);
+    }
   };
 
   return (
@@ -100,18 +130,23 @@ const DateRangePicker = ({
 
       {/* Rangos rápidos */}
       <div className="flex flex-wrap gap-2">
-        {getQuickRanges().map((range, index) => (
-          <button
-            key={index}
-            onClick={() => applyQuickRange(range)}
-            disabled={disabled}
-            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 
-                     dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 
-                     rounded-full transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {range.label}
-          </button>
-        ))}
+        {getQuickRanges().map((range, index) => {
+          const isActive = activeFilter === range.label;
+          return (
+            <button
+              key={index}
+              onClick={() => applyQuickRange(range)}
+              disabled={disabled}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed ${
+                isActive
+                  ? 'bg-primary-600 text-white hover:bg-primary-700 dark:bg-primary-500 dark:hover:bg-primary-600'
+                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
+              }`}
+            >
+              {range.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Inputs de fecha */}

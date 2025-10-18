@@ -15,6 +15,7 @@ import {
   ClockIcon,
   ExclamationTriangleIcon,
   CheckCircleIcon,
+  TableCellsIcon,
 } from '@heroicons/react/24/outline';
 
 export default function NominaReportsTab({ nominas, estadisticas, loading }) {
@@ -27,6 +28,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [chartsData, setChartsData] = useState(null);
   const [paymentsData, setPaymentsData] = useState(null);
   const [monthlyData, setMonthlyData] = useState(null);
+  
+  // Estados para reportes por semanas
+  const [weeklyReportsData, setWeeklyReportsData] = useState(null);
+  const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   // Calcular datos semanales
   useEffect(() => {
@@ -35,8 +41,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       calculateChartsData();
       calculatePaymentsData();
       calculateMonthlyData();
+      calculateWeeklyReportsData();
     }
-  }, [nominas, empleados]);
+  }, [nominas, empleados, selectedPeriod, selectedYear]);
 
   const calculateWeeklyData = () => {
     const today = new Date();
@@ -266,10 +273,147 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     });
   };
 
+  const calculateWeeklyReportsData = () => {
+    if (!nominas || !empleados) return;
+
+    // Función para calcular semana del mes (mismo algoritmo que el wizard)
+    const calcularSemanaDelMes = (fecha) => {
+      const año = fecha.getFullYear();
+      const mes = fecha.getMonth();
+      const dia = fecha.getDate();
+      
+      const primerDiaDelMes = new Date(año, mes, 1);
+      const diaPrimerDia = primerDiaDelMes.getDay();
+      const diasEnPrimeraFila = 7 - diaPrimerDia;
+      
+      if (dia <= diasEnPrimeraFila) {
+        return 1;
+      } else {
+        const diasRestantes = dia - diasEnPrimeraFila;
+        const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
+        
+        const ultimoDiaDelMes = new Date(año, mes + 1, 0);
+        const diasEnElMes = ultimoDiaDelMes.getDate();
+        const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
+        const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
+        const totalFilas = 1 + filasAdicionales;
+        
+        return Math.max(1, Math.min(semanaDelMes, totalFilas));
+      }
+    };
+
+    // Filtrar nóminas por período, año y estado (solo pagadas/completadas)
+    let nominasFiltradas = nominas.filter(nomina => {
+      // Solo incluir nóminas que están pagadas o completadas
+      const estado = nomina.estado?.toLowerCase() || '';
+      return estado === 'pagada' || estado === 'pagado' || estado === 'completada' || estado === 'completado';
+    });
+    
+    if (selectedPeriod) {
+      const [año, mes] = selectedPeriod.split('-').map(Number);
+      nominasFiltradas = nominasFiltradas.filter(nomina => {
+        const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
+        return fechaNomina.getFullYear() === año && fechaNomina.getMonth() === (mes - 1);
+      });
+    } else if (selectedYear) {
+      nominasFiltradas = nominasFiltradas.filter(nomina => {
+        const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
+        return fechaNomina.getFullYear() === selectedYear;
+      });
+    }
+
+    // Agrupar por período y semana
+    const reportesPorSemana = {};
+    
+    nominasFiltradas.forEach(nomina => {
+      const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
+      const año = fechaNomina.getFullYear();
+      const mes = fechaNomina.getMonth() + 1;
+      const semanaDelMes = calcularSemanaDelMes(fechaNomina);
+      
+      const periodo = `${año}-${mes.toString().padStart(2, '0')}`;
+      const clave = `${periodo}-Semana${semanaDelMes}`;
+      
+      if (!reportesPorSemana[clave]) {
+        reportesPorSemana[clave] = {
+          periodo,
+          semana: semanaDelMes,
+          año,
+          mes,
+          nombreMes: fechaNomina.toLocaleDateString('es-MX', { month: 'long' }),
+          nominas: [],
+          totalNominas: 0,
+          totalMonto: 0,
+          totalPagado: 0,
+          totalPendiente: 0,
+          empleados: new Set()
+        };
+      }
+      
+      const montoTotal = parseFloat(nomina.monto_total || nomina.monto || 0);
+      
+      // Si la nómina está pagada/completada, el monto pagado es igual al monto total
+      const montoPagado = montoTotal; // Nóminas pagadas/completadas se pagaron en su totalidad
+      
+      reportesPorSemana[clave].nominas.push(nomina);
+      reportesPorSemana[clave].totalNominas++;
+      reportesPorSemana[clave].totalMonto += montoTotal;
+      reportesPorSemana[clave].totalPagado += montoPagado;
+      reportesPorSemana[clave].totalPendiente += 0; // No hay pendiente si está pagada
+      reportesPorSemana[clave].empleados.add(nomina.id_empleado);
+    });
+
+    // Convertir a array y ordenar
+    const reportesArray = Object.values(reportesPorSemana).map(reporte => ({
+      ...reporte,
+      totalEmpleados: reporte.empleados.size,
+      empleados: Array.from(reporte.empleados)
+    }));
+
+    // Ordenar por año, mes y semana
+    reportesArray.sort((a, b) => {
+      if (a.año !== b.año) return b.año - a.año; // Más recientes primero
+      if (a.mes !== b.mes) return b.mes - a.mes;
+      return b.semana - a.semana;
+    });
+
+    // Calcular totales generales
+    const totalesGenerales = reportesArray.reduce((totales, reporte) => {
+      return {
+        totalNominas: totales.totalNominas + reporte.totalNominas,
+        totalMonto: totales.totalMonto + reporte.totalMonto,
+        totalPagado: totales.totalPagado + reporte.totalPagado,
+        totalPendiente: totales.totalPendiente + reporte.totalPendiente,
+        totalEmpleados: Math.max(totales.totalEmpleados, reporte.totalEmpleados)
+      };
+    }, {
+      totalNominas: 0,
+      totalMonto: 0,
+      totalPagado: 0,
+      totalPendiente: 0,
+      totalEmpleados: 0
+    });
+
+    setWeeklyReportsData({
+      reportes: reportesArray,
+      totales: totalesGenerales,
+      periodosDisponibles: [...new Set(nominas.map(n => {
+        const fecha = new Date(n.fecha_creacion || n.createdAt || n.fecha);
+        return `${fecha.getFullYear()}-${(fecha.getMonth() + 1).toString().padStart(2, '0')}`;
+      }))].sort().reverse(),
+      añosDisponibles: [...new Set(nominas.map(n => {
+        const fecha = new Date(n.fecha_creacion || n.createdAt || n.fecha);
+        return fecha.getFullYear();
+      }))].sort((a, b) => b - a)
+    });
+  };
+
   const tabs = [
     { id: 'summary', name: 'Resumen Semanal', icon: CalendarIcon },
     { id: 'charts', name: 'Gráficas', icon: ChartBarIcon },
-    { id: 'payments', name: 'Lista de Pagos', icon: UserGroupIcon }
+    { id: 'payments', name: 'Lista de Pagos', icon: UserGroupIcon },
+    { id: 'weekly-reports', name: 'Reportes por Semanas', icon: TableCellsIcon },
+    { id: 'detailed', name: 'Tabla Detallada', icon: DocumentTextIcon }
   ];
 
   if (loading) {
@@ -384,6 +528,286 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
               paymentsData={paymentsData}
               loading={loading}
             />
+          )}
+          
+          {activeTab === 'weekly-reports' && (
+            <div className="space-y-6">
+              {/* Filtros */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Año
+                    </label>
+                    <select
+                      value={selectedYear}
+                      onChange={(e) => {
+                        setSelectedYear(parseInt(e.target.value));
+                        setSelectedPeriod('');
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
+                    >
+                      <option value="">Todos los años</option>
+                      {weeklyReportsData?.añosDisponibles?.map(año => (
+                        <option key={año} value={año}>{año}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Período Específico
+                    </label>
+                    <select
+                      value={selectedPeriod}
+                      onChange={(e) => {
+                        setSelectedPeriod(e.target.value);
+                        if (e.target.value) {
+                          const [año] = e.target.value.split('-');
+                          setSelectedYear(parseInt(año));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
+                    >
+                      <option value="">Todos los períodos</option>
+                      {weeklyReportsData?.periodosDisponibles?.map(periodo => (
+                        <option key={periodo} value={periodo}>{periodo}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => {
+                        setSelectedPeriod('');
+                        setSelectedYear(new Date().getFullYear());
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    >
+                      Limpiar Filtros
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Total General */}
+              {weeklyReportsData?.totales && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                  <div className="text-center">
+                    <div className="flex items-center justify-center">
+                      <div className="flex-shrink-0">
+                        <CurrencyDollarIcon className="h-12 w-12 text-green-600 dark:text-green-400" />
+                      </div>
+                      <div className="ml-4">
+                        <p className="text-lg font-medium text-gray-500 dark:text-gray-400">Total General Pagado</p>
+                        <p className="text-4xl font-bold text-green-600 dark:text-green-400">
+                          {formatCurrency(weeklyReportsData.totales.totalPagado)}
+                        </p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                          {weeklyReportsData.totales.totalNominas} nóminas en {weeklyReportsData.reportes.length} semanas
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tabla Simple de Totales por Semana */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Total de Nómina Pagada por Semana
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    Solo nóminas con estado "Pagada" o "Completada"
+                  </p>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Semana
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Total Pagado
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {weeklyReportsData?.reportes?.map((reporte, index) => (
+                        <tr key={`${reporte.periodo}-${reporte.semana}`} className={index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                            {reporte.periodo} - Semana {reporte.semana}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600 dark:text-green-400">
+                            {formatCurrency(reporte.totalPagado)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                
+                {(!weeklyReportsData?.reportes || weeklyReportsData.reportes.length === 0) && (
+                  <div className="text-center py-12">
+                    <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
+                    <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No hay reportes</h3>
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                      No se encontraron nóminas para los filtros seleccionados.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          
+          {activeTab === 'detailed' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Tabla Detallada de Nóminas
+                </h3>
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  {nominas?.length || 0} nóminas generadas
+                </div>
+              </div>
+              
+              {nominas && nominas.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Empleado
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Oficio
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Pago Diario
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Días Trabajados
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Pago Total
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Estado
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Fecha
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      {nominas.map((nomina, index) => {
+                        const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
+                        const pagoDiario = empleado?.pago_semanal ? empleado.pago_semanal / 6 : 0;
+                        const diasTrabajados = nomina.dias_laborados || 6;
+                        const pagoTotal = nomina.monto_total || nomina.monto || 0;
+                        
+                        return (
+                          <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {empleado?.oficio?.nombre || 'Sin oficio'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {formatCurrency(pagoDiario)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {diasTrabajados}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                {formatCurrency(pagoTotal)}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                nomina.estado === 'pagada' || nomina.estado === 'Pagado' 
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                                  : nomina.estado === 'pendiente' || nomina.estado === 'Pendiente'
+                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+                              }`}>
+                                {nomina.estado || 'Borrador'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                              {new Date(nomina.fecha_creacion || nomina.createdAt).toLocaleDateString('es-MX')}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      
+                      {/* Fila de totales */}
+                      <tr className="bg-gray-50 dark:bg-gray-700 border-t-2 border-gray-300 dark:border-gray-600">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-gray-900 dark:text-white">
+                            TOTALES
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {nominas.length} empleados
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            -
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">
+                            -
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                            {formatCurrency(nominas.reduce((total, nomina) => {
+                              const monto = parseFloat(nomina.monto_total || nomina.monto || 0);
+                              return total + (isNaN(monto) ? 0 : monto);
+                            }, 0))}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            -
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            -
+                          </div>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
+                    No hay nóminas generadas
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Genera algunas nóminas para ver la tabla detallada
+                  </p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

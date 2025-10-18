@@ -6,12 +6,15 @@ import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
 import { useEmpleados } from '../contexts/EmpleadosContext';
 import NominaWizardSimplificado from './NominaWizard';
+import EditNominaModal from './nomina/EditNominaModal';
 import ChartsSection from './ui/ChartsSection';
 import AdeudosHistorial from './ui/AdeudosHistorial';
 import EmpleadoCard from './ui/EmpleadoCard';
 import CustomSelect from './ui/CustomSelect';
 import DateRangePicker from './ui/DateRangePicker';
 import NominaReportsTab from './nomina/NominaReportsTab';
+import ConfirmModal from './ui/ConfirmModal';
+import useDeleteNomina from '../hooks/useDeleteNomina';
 import {
   PlusIcon,
   CalendarIcon,
@@ -33,6 +36,20 @@ export default function Nomina() {
   const { showSuccess, showError, showInfo } = useToast();
   const { empleados, getEmpleadosActivos, refreshEmpleados } = useEmpleados();
   
+  // Hook para manejar eliminación de nóminas
+  console.log('🔍 [Nomina] Inicializando hook useDeleteNomina');
+  const deleteNominaModal = useDeleteNomina(
+    (message) => {
+      console.log('🔍 [Nomina] onSuccess callback ejecutado:', message);
+      showSuccess('Éxito', message);
+      fetchData(); // Recargar las nóminas
+    },
+    (message) => {
+      console.log('🔍 [Nomina] onError callback ejecutado:', message);
+      showError('Error', message);
+    }
+  );
+  
   // Debug: verificar empleados del contexto (solo en desarrollo)
   if (process.env.NODE_ENV === 'development') {
     console.log('🔍 [Nomina] Empleados del contexto:', empleados.length, empleados);
@@ -44,13 +61,22 @@ export default function Nomina() {
   const [showWizard, setShowWizard] = useState(false);
   const [selectedNomina, setSelectedNomina] = useState(null);
   const [nominaToEdit, setNominaToEdit] = useState(null);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showCharts, setShowCharts] = useState(false);
   const [showNominaDetails, setShowNominaDetails] = useState(false);
   const [viewMode, setViewMode] = useState('cards');
   const [showAdeudosHistorial, setShowAdeudosHistorial] = useState(false);
   const [selectedEmpleadoAdeudos, setSelectedEmpleadoAdeudos] = useState(null);
   const [showAllNominas, setShowAllNominas] = useState(false);
-  const [activeTab, setActiveTab] = useState('empleados'); // 'empleados', 'historial', 'reportes'
+  const [activeTab, setActiveTab] = useState(() => {
+    // Cargar la pestaña activa desde localStorage, por defecto 'empleados'
+    return localStorage.getItem('nomina-active-tab') || 'empleados';
+  });
+
+  // Guardar la pestaña activa en localStorage cuando cambie
+  useEffect(() => {
+    localStorage.setItem('nomina-active-tab', activeTab);
+  }, [activeTab]);
   
   // Filtros para empleados
   const [filtroProyecto, setFiltroProyecto] = useState('');
@@ -59,6 +85,7 @@ export default function Nomina() {
   // Filtros para historial de nóminas
   const [filtroFechaInicio, setFiltroFechaInicio] = useState('');
   const [filtroFechaFin, setFiltroFechaFin] = useState('');
+  const [filtroBusquedaHistorial, setFiltroBusquedaHistorial] = useState('');
   
   // Estados para proyectos
   const [proyectos, setProyectos] = useState([]);
@@ -116,8 +143,28 @@ export default function Nomina() {
       });
     }
     
+    // Filtrar por búsqueda de texto
+    if (filtroBusquedaHistorial) {
+      const busqueda = filtroBusquedaHistorial.toLowerCase();
+      nominasFiltradas = nominasFiltradas.filter(nomina => {
+        const nombreEmpleado = typeof nomina.empleado === 'object' && nomina.empleado
+          ? `${nomina.empleado.nombre || ''} ${nomina.empleado.apellido || ''}`.trim().toLowerCase()
+          : (nomina.nombre_empleado || nomina.empleado || '').toLowerCase();
+        
+        const nss = nomina.empleado?.nss?.toLowerCase() || '';
+        const rfc = nomina.empleado?.rfc?.toLowerCase() || '';
+        const idNomina = (nomina.id_nomina || nomina.id || '').toString();
+        
+        return nombreEmpleado.includes(busqueda) ||
+               nss.includes(busqueda) ||
+               rfc.includes(busqueda) ||
+               idNomina.includes(busqueda);
+      });
+    }
+    
     return nominasFiltradas;
   };
+
 
   // Función para calcular el subtotal de la semana actual
   const getSubtotalSemanaActual = () => {
@@ -175,8 +222,23 @@ export default function Nomina() {
       new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
     )[0];
     
+    // Determinar el estado de la nómina
+    const estado = latest.estado?.toLowerCase();
+    let status;
+    
+    if (estado === 'pagada' || estado === 'pagado' || estado === 'completada' || estado === 'completado') {
+      status = 'completed';
+    } else if (estado === 'borrador' || estado === 'pendiente') {
+      status = 'draft';
+    } else {
+      // Por defecto, considerar como draft si no se reconoce el estado
+      status = 'draft';
+    }
+    
+    console.log('🔍 [NOMINA_STATUS] Empleado:', empleado.id_empleado, 'Estado original:', latest.estado, 'Estado procesado:', status);
+    
     return {
-      status: latest.estado === 'pagada' || latest.estado === 'Pagado' ? 'completed' : 'draft',
+      status: status,
       count: nominasEmpleado.length,
       latest: latest
     };
@@ -205,10 +267,11 @@ export default function Nomina() {
       
       // Obtener datos frescos de la nómina desde el backend
       try {
-        const response = await ApiService.get(`/nomina/${latestNomina.id_nomina}`);
+        const response = await nominasServices.nominas.getById(latestNomina.id_nomina);
         if (response.success && response.data) {
           setNominaPreviewData(response.data);
         } else {
+          console.warn('Respuesta inválida del servicio, usando datos locales');
           setNominaPreviewData(latestNomina);
         }
       } catch (apiError) {
@@ -291,51 +354,85 @@ export default function Nomina() {
   };
 
 
-  const editarNominaDesdePreview = async () => {
-    console.log('🔍 [EDITAR] Función editarNominaDesdePreview llamada');
-    console.log('🔍 [EDITAR] nominaPreviewData:', nominaPreviewData);
-    
-    if (!nominaPreviewData?.id_nomina) {
-      console.log('❌ [EDITAR] No hay nómina para editar');
-      showError('Error', 'No hay nómina para editar');
-      return;
-    }
 
+  const editarNominaDirecta = async (empleado) => {
+    console.log('🔍 [EDITAR_DIRECTA] Función editarNominaDirecta llamada para empleado:', empleado.id_empleado);
+    
     try {
-      console.log('🔍 [EDITAR] Obteniendo datos de nómina para edición:', nominaPreviewData.id_nomina);
+      // Buscar la nómina más reciente del empleado
+      const nominasEmpleado = nominas.filter(nomina => 
+        nomina.empleado?.id_empleado === empleado.id_empleado ||
+        nomina.id_empleado === empleado.id_empleado
+      );
+      
+      if (nominasEmpleado.length === 0) {
+        showError('Error', 'Este empleado no tiene nóminas generadas');
+        return;
+      }
+      
+      const latestNomina = nominasEmpleado.sort((a, b) => 
+        new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
+      )[0];
+      
+      console.log('🔍 [EDITAR_DIRECTA] Nómina más reciente encontrada:', latestNomina.id_nomina);
       
       // Obtener datos frescos de la nómina
-      const response = await nominasServices.nominas.getById(nominaPreviewData.id_nomina);
+      const response = await nominasServices.nominas.getById(latestNomina.id_nomina);
       
       if (response.success && response.data) {
         const nominaData = response.data;
-        console.log('🔍 [EDITAR] Datos de nómina obtenidos:', nominaData);
+        console.log('🔍 [EDITAR_DIRECTA] Datos de nómina obtenidos:', nominaData);
         
-        // Buscar el empleado correspondiente
-        const empleado = empleados.find(emp => emp.id_empleado === nominaData.id_empleado);
+        // Almacenar datos de la nómina para editar
+        setNominaToEdit(nominaData);
+        setSelectedEmpleadoPreview(empleado);
         
-        if (empleado) {
-          // Almacenar datos de la nómina para editar
-          setNominaToEdit(nominaData);
-          
-          // Cerrar preview y abrir wizard con datos cargados
-          setShowNominaPreview(false);
-          setSelectedEmpleadoPreview(empleado);
-          setShowWizard(true);
-          
-          showInfo('Editando Nómina', 'Cargando datos de la nómina...');
-        } else {
-          showError('Error', 'No se encontró el empleado de la nómina');
-        }
+        // Abrir modal de edición
+        setShowEditModal(true);
+        
+        console.log('🔍 [EDITAR_DIRECTA] Datos establecidos:', {
+          nominaData: nominaData,
+          empleado: empleado,
+          showEditModal: true,
+          selectedEmpleadoPreview: empleado,
+          nominaToEdit: nominaData
+        });
+        
+        showInfo('Editando Nómina', 'Abriendo editor de nómina...');
       } else {
+        console.error('❌ [EDITAR_DIRECTA] Respuesta inválida del servicio:', response);
         showError('Error', 'No se pudieron obtener los datos de la nómina');
       }
     } catch (error) {
-      console.error('❌ [EDITAR] Error obteniendo datos de nómina:', error);
+      console.error('❌ [EDITAR_DIRECTA] Error obteniendo datos de nómina:', error);
       showError('Error', 'No se pudieron cargar los datos para editar');
     }
   };
 
+  // Función para eliminar nómina (simplificada usando el hook)
+  const eliminarNomina = (empleado) => {
+    console.log('🔍 [ELIMINAR] Función eliminarNomina llamada para empleado:', empleado.id_empleado);
+    
+    // Buscar la nómina más reciente del empleado
+    const nominasEmpleado = nominas.filter(nomina => 
+      nomina.empleado?.id_empleado === empleado.id_empleado ||
+      nomina.id_empleado === empleado.id_empleado
+    );
+    
+    if (nominasEmpleado.length === 0) {
+      showError('Error', 'Este empleado no tiene nóminas generadas');
+      return;
+    }
+    
+    const latestNomina = nominasEmpleado.sort((a, b) => 
+      new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
+    )[0];
+    
+    console.log('🔍 [ELIMINAR] Nómina más reciente encontrada:', latestNomina.id_nomina);
+    
+    // Usar el hook para manejar la eliminación
+    deleteNominaModal.deleteNomina(empleado, latestNomina);
+  };
 
   // Estado para el modal de liquidar adeudo
   const [showLiquidarModal, setShowLiquidarModal] = useState(false);
@@ -388,27 +485,32 @@ export default function Nomina() {
   // Funciones de utilidad
   const handleNominaSuccess = async () => {
     try {
-    // Refrescar empleados desde el contexto global
-    if (process.env.NODE_ENV === 'development') {
-      console.log('🔄 [Nomina] Refrescando empleados en handleNominaSuccess...');
-    }
-    await refreshEmpleados();
-    if (process.env.NODE_ENV === 'development') {
-      console.log('✅ [Nomina] Empleados refrescados en handleNominaSuccess');
-    }
+      // Refrescar empleados desde el contexto global
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔄 [Nomina] Refrescando empleados en handleNominaSuccess...');
+      }
+      await refreshEmpleados();
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ [Nomina] Empleados refrescados en handleNominaSuccess');
+      }
       
-    // Recargar otros datos
+      // Recargar otros datos
       await fetchData();
       
+      // Limpiar datos de edición
+      setNominaToEdit(null);
+      setSelectedEmpleadoPreview(null);
+      setShowEditModal(false);
+      
       // Mostrar mensaje de éxito
-      showSuccess('Éxito', 'Nómina generada correctamente');
+      showSuccess('Éxito', 'Nómina procesada correctamente');
       
       if (process.env.NODE_ENV === 'development') {
         console.log('✅ [Nomina] Todos los datos refrescados correctamente');
       }
     } catch (error) {
       console.error('❌ [Nomina] Error refrescando datos:', error);
-      showError('Error', 'Nómina generada pero hubo un problema al refrescar los datos');
+      showError('Error', 'Nómina procesada pero hubo un problema al refrescar los datos');
     }
   };
 
@@ -634,6 +736,7 @@ export default function Nomina() {
                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Mensual</p>
                     <p className="text-lg font-semibold text-gray-900 dark:text-white">
                       {formatCurrency(estadisticas?.totalSalariosMensuales || 0)}
+                      {console.log(estadisticas)}
                     </p>
                   </div>
                 </div>
@@ -817,6 +920,42 @@ export default function Nomina() {
                               >
                                 <EyeIcon className="h-4 w-4" />
                               </button>
+                              {(() => {
+                                const status = getNominaStatus(empleado);
+                                console.log('🔍 [BOTON_EDITAR] Estado para empleado', empleado.id_empleado, ':', status);
+                                // Solo mostrar botón de editar para nóminas en estado 'draft' (borrador)
+                                const shouldShow = status.status === 'draft';
+                                console.log('🔍 [BOTON_EDITAR] ¿Mostrar botón para empleado', empleado.id_empleado, '?', shouldShow);
+                                return shouldShow;
+                              })() && (
+                                <button 
+                                  onClick={() => {
+                                    console.log('🔍 [BOTON_EDITAR] Clickeado para empleado:', empleado.id_empleado);
+                                    editarNominaDirecta(empleado);
+                                  }}
+                                  className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
+                                  title="Editar nómina"
+                                >
+                                  <PencilIcon className="h-4 w-4" />
+                                </button>
+                              )}
+                              {(() => {
+                                const status = getNominaStatus(empleado);
+                                // Solo mostrar botón de eliminar para nóminas en estado 'draft' (borrador)
+                                const shouldShow = status.status === 'draft';
+                                return shouldShow;
+                              })() && (
+                                <button 
+                                  onClick={() => {
+                                    console.log('🔍 [BOTON_ELIMINAR] Clickeado para empleado:', empleado.id_empleado);
+                                    eliminarNomina(empleado);
+                                  }}
+                                  className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                  title="Eliminar nómina"
+                                >
+                                  <TrashIcon className="h-4 w-4" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -853,36 +992,34 @@ export default function Nomina() {
               </h2>
             </div>
             
-            {/* Filtro por Rango de Fechas */}
+            {/* Filtros del Historial */}
             <div className="mt-4 space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Rango de Fechas
-                  </label>
-                  <DateRangePicker
-                    startDate={filtroFechaInicio}
-                    endDate={filtroFechaFin}
-                    onStartDateChange={setFiltroFechaInicio}
-                    onEndDateChange={setFiltroFechaFin}
-                  />
-                </div>
+              {/* Primera fila: Búsqueda Rápida */}
+              <div className="max-w-md">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Búsqueda Rápida
+                </label>
+                <input
+                  type="text"
+                  placeholder="Buscar por nombre, NSS, RFC o ID..."
+                  value={filtroBusquedaHistorial}
+                  onChange={(e) => setFiltroBusquedaHistorial(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                />
               </div>
-              
-              {/* Botón para limpiar filtros */}
-              {(filtroFechaInicio || filtroFechaFin) && (
-                <div className="flex justify-end">
-                  <button
-                    onClick={() => {
-                      setFiltroFechaInicio('');
-                      setFiltroFechaFin('');
-                    }}
-                    className="inline-flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
-                  >
-                    Limpiar filtros
-                  </button>
-                </div>
-              )}
+
+              {/* Segunda fila: Rango de Fechas */}
+              <div className="max-w-lg">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Rango de Fechas
+                </label>
+                <DateRangePicker
+                  startDate={filtroFechaInicio}
+                  endDate={filtroFechaFin}
+                  onStartDateChange={setFiltroFechaInicio}
+                  onEndDateChange={setFiltroFechaFin}
+                />
+              </div>
             </div>
           </div>
           <div className={`p-6 ${showAllNominas ? 'max-h-[600px] overflow-y-auto' : ''}`}>
@@ -902,32 +1039,88 @@ export default function Nomina() {
                     ? nomina.empleado.nombre?.charAt(0)?.toUpperCase()
                     : nombreEmpleado.charAt(0)?.toUpperCase() || 'E';
                   
-                  // Obtener período
+                  // Función para calcular semana del mes (mismo algoritmo que el wizard)
+                  const calcularSemanaDelMes = (fecha) => {
+                    const año = fecha.getFullYear();
+                    const mes = fecha.getMonth();
+                    const dia = fecha.getDate();
+                    
+                    // Obtener el primer día del mes
+                    const primerDiaDelMes = new Date(año, mes, 1);
+                    const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
+                    
+                    // Calcular en qué fila del calendario está la fecha
+                    // Primera fila: días del mes anterior + días del mes actual
+                    const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
+                    
+                    if (dia <= diasEnPrimeraFila) {
+                      // La fecha está en la primera fila
+                      return 1;
+                    } else {
+                      // La fecha está en una fila posterior
+                      const diasRestantes = dia - diasEnPrimeraFila;
+                      const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
+                      
+                      // Calcular cuántas semanas tiene realmente el mes
+                      const ultimoDiaDelMes = new Date(año, mes + 1, 0);
+                      const diasEnElMes = ultimoDiaDelMes.getDate();
+                      const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
+                      const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
+                      const totalFilas = 1 + filasAdicionales;
+                      
+                      // Limitar al número real de semanas del mes
+                      return Math.max(1, Math.min(semanaDelMes, totalFilas));
+                    }
+                  };
+
+                  // Obtener período y semana
                   let periodo = 'Sin período';
-                  if (typeof nomina.periodo === 'string') {
-                    periodo = nomina.periodo;
-                  } else if (typeof nomina.periodo === 'object' && nomina.periodo) {
-                    // Si es un objeto, extraer la etiqueta o formato
-                    if (nomina.periodo.etiqueta) {
-                      periodo = nomina.periodo.etiqueta;
-                    } else if (nomina.periodo.semana_iso && nomina.periodo.anio) {
-                      periodo = `Semana ${nomina.periodo.semana_iso} - ${nomina.periodo.anio}`;
-                    } else if (nomina.periodo.fecha_inicio) {
-                      try {
-                        periodo = new Date(nomina.periodo.fecha_inicio).toLocaleDateString('es-MX', { year: 'numeric', month: 'short' });
-                      } catch (e) {
+                  let semana = '';
+                  
+                  // Intentar obtener información de la semana desde la base de datos
+                  if (nomina.semana && typeof nomina.semana === 'object') {
+                    // Si tenemos información de la semana desde la BD
+                    const semanaData = nomina.semana;
+                    const fechaInicio = new Date(semanaData.fecha_inicio);
+                    const año = fechaInicio.getFullYear();
+                    const mes = fechaInicio.getMonth() + 1;
+                    const semanaDelMes = calcularSemanaDelMes(fechaInicio);
+                    
+                    periodo = `${año}-${mes.toString().padStart(2, '0')}`;
+                    semana = `Semana ${semanaDelMes}`;
+                  } else {
+                    // Fallback: calcular desde fecha de creación
+                    const fechaCreacion = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
+                    if (!isNaN(fechaCreacion.getTime())) {
+                      const año = fechaCreacion.getFullYear();
+                      const mes = fechaCreacion.getMonth() + 1;
+                      const semanaDelMes = calcularSemanaDelMes(fechaCreacion);
+                      
+                      periodo = `${año}-${mes.toString().padStart(2, '0')}`;
+                      semana = `Semana ${semanaDelMes}`;
+                    } else {
+                      // Último fallback: usar información existente
+                      if (typeof nomina.periodo === 'string') {
+                        periodo = nomina.periodo;
+                      } else if (typeof nomina.periodo === 'object' && nomina.periodo) {
+                        if (nomina.periodo.etiqueta) {
+                          periodo = nomina.periodo.etiqueta;
+                        } else if (nomina.periodo.semana_iso && nomina.periodo.anio) {
+                          periodo = `Semana ${nomina.periodo.semana_iso} - ${nomina.periodo.anio}`;
+                        } else if (nomina.periodo.fecha_inicio) {
+                          try {
+                            periodo = new Date(nomina.periodo.fecha_inicio).toLocaleDateString('es-MX', { year: 'numeric', month: 'short' });
+                          } catch (e) {
+                            periodo = 'Sin período';
+                          }
+                        } else {
+                          periodo = 'Sin período';
+                        }
+                      } else if (nomina.semana) {
+                        periodo = nomina.semana;
+                      } else {
                         periodo = 'Sin período';
                       }
-                    } else {
-                      periodo = 'Sin período';
-                    }
-                  } else if (nomina.semana) {
-                    periodo = nomina.semana;
-                  } else if (nomina.fecha) {
-                    try {
-                      periodo = new Date(nomina.fecha).toLocaleDateString('es-MX', { year: 'numeric', month: 'short' });
-                    } catch (e) {
-                      periodo = 'Sin período';
                     }
                   }
                   
@@ -949,7 +1142,7 @@ export default function Nomina() {
                           {nombreEmpleado}
                         </div>
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {periodo} • {formatCurrency(nomina.monto_total || nomina.monto || 0)}
+                          {periodo}{semana ? ` • ${semana}` : ''} • {formatCurrency(nomina.monto_total || nomina.monto || 0)}
                           {nomina.pago_parcial && (
                             <span className="ml-2 text-orange-600 dark:text-orange-400 font-medium">
                               (Parcial: {formatCurrency(nomina.monto_a_pagar || 0)})
@@ -1133,11 +1326,36 @@ export default function Nomina() {
           onClose={() => {
             setShowWizard(false);
             setNominaToEdit(null); // Limpiar datos de edición al cerrar
+            setSelectedEmpleadoPreview(null); // Limpiar empleado seleccionado
           }}
           onSuccess={handleNominaSuccess}
           empleados={empleados}
           selectedEmpleado={selectedEmpleadoPreview}
           nominaToEdit={nominaToEdit}
+        />
+
+        {/* Modal de Edición de Nómina */}
+        <EditNominaModal
+          isOpen={showEditModal}
+          onClose={() => {
+            setShowEditModal(false);
+            setNominaToEdit(null);
+          }}
+          nominaData={nominaToEdit}
+          empleado={selectedEmpleadoPreview}
+          onSuccess={handleNominaSuccess}
+        />
+
+        {/* Modal de Confirmación */}
+        <ConfirmModal
+          isOpen={deleteNominaModal.isOpen}
+          onClose={deleteNominaModal.handleCancel}
+          onConfirm={deleteNominaModal.handleConfirm}
+          title={deleteNominaModal.modalData?.title || ''}
+          message={deleteNominaModal.modalData?.message || ''}
+          confirmText={deleteNominaModal.modalData?.confirmText || 'Confirmar'}
+          cancelText={deleteNominaModal.modalData?.cancelText || 'Cancelar'}
+          type={deleteNominaModal.modalData?.type || 'warning'}
         />
 
         {/* Modal de Preview de Nómina */}
@@ -1285,24 +1503,38 @@ export default function Nomina() {
                           const fecha = nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt ? 
                             new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt) : 
                             new Date();
-                          
-                          // Usar el mismo algoritmo que el wizard
+                            // Usar el  |mismo algoritmo que el wizard (basado en calendario visual)
                           function calcularSemanaDelMes(fecha) {
-                            const primerDiaDelMes = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
-                            const primerLunesDelMes = new Date(primerDiaDelMes);
+                            const año = fecha.getFullYear();
+                            const mes = fecha.getMonth();
+                            const dia = fecha.getDate();
                             
-                            const diaDeLaSemana = primerDiaDelMes.getDay();
-                            const diasHastaLunes = diaDeLaSemana === 0 ? 1 : 8 - diaDeLaSemana;
-                            primerLunesDelMes.setDate(primerDiaDelMes.getDate() + diasHastaLunes);
+                            // Obtener el primer día del mes
+                            const primerDiaDelMes = new Date(año, mes, 1);
+                            const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
                             
-                            if (primerLunesDelMes.getMonth() !== fecha.getMonth()) {
-                              primerLunesDelMes.setTime(primerDiaDelMes.getTime());
+                            // Calcular en qué fila del calendario está la fecha
+                            // Primera fila: días del mes anterior + días del mes actual
+                            const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
+                            
+                            if (dia <= diasEnPrimeraFila) {
+                              // La fecha está en la primera fila
+                              return 1;
+                            } else {
+                              // La fecha está en una fila posterior
+                              const diasRestantes = dia - diasEnPrimeraFila;
+                              const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
+                              
+                              // Calcular cuántas semanas tiene realmente el mes
+                              const ultimoDiaDelMes = new Date(año, mes + 1, 0);
+                              const diasEnElMes = ultimoDiaDelMes.getDate();
+                              const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
+                              const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
+                              const totalFilas = 1 + filasAdicionales;
+                              
+                              // Limitar al número real de semanas del mes
+                              return Math.max(1, Math.min(semanaDelMes, totalFilas));
                             }
-                            
-                            const diasTranscurridos = Math.floor((fecha - primerLunesDelMes) / (1000 * 60 * 60 * 24));
-                            const semanaDelMes = Math.floor(diasTranscurridos / 7) + 1;
-                            
-                            return Math.max(1, Math.min(4, semanaDelMes));
                           }
                           
                           const semanaFinal = calcularSemanaDelMes(fecha);
@@ -1401,20 +1633,7 @@ export default function Nomina() {
               </div>
 
               {/* Footer del Preview */}
-              <div className="flex justify-between px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
-                <div className="flex space-x-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      console.log('🔍 [BOTON] Botón Editar Nómina clickeado');
-                      editarNominaDesdePreview();
-                    }}
-                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-all duration-200"
-                  >
-                    <PencilIcon className="h-4 w-4 mr-2 inline-block" />
-                    Editar Nómina
-                  </button>
-                </div>
+              <div className="flex justify-end px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
                 <div className="flex space-x-3">
                   <button
                     type="button"

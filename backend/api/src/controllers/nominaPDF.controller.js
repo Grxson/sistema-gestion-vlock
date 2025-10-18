@@ -311,35 +311,105 @@ const generarReciboPDF = async (req, res) => {
         
         col2Y += 15;
         
-        // Calcular semana del mes (1-4) usando el mismo algoritmo que el wizard
-        const fechaCreacion = new Date(nomina.createdAt);
+        // Obtener información de la semana desde la base de datos
+        let semanaFinal = 'N/A';
+        let periodoInfo = '';
         
-        function calcularSemanaDelMes(fecha) {
-            const primerDiaDelMes = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
-            const primerLunesDelMes = new Date(primerDiaDelMes);
+        if (nomina.semana) {
+            // Usar la información de la semana desde la base de datos
+            const semanaData = nomina.semana;
+            const fechaInicio = new Date(semanaData.fecha_inicio);
+            const año = fechaInicio.getFullYear();
+            const mes = fechaInicio.getMonth() + 1;
             
-            // Ajustar al primer lunes del mes
-            const diaDeLaSemana = primerDiaDelMes.getDay();
-            const diasHastaLunes = diaDeLaSemana === 0 ? 1 : 8 - diaDeLaSemana;
-            primerLunesDelMes.setDate(primerDiaDelMes.getDate() + diasHastaLunes);
-            
-            // Si el primer lunes está en el mes anterior, usar el primer día del mes
-            if (primerLunesDelMes.getMonth() !== fecha.getMonth()) {
-                primerLunesDelMes.setTime(primerDiaDelMes.getTime());
+            // Calcular semana del mes basada en la fecha de inicio de la semana
+            function calcularSemanaDelMes(fecha) {
+                const año = fecha.getFullYear();
+                const mes = fecha.getMonth();
+                const dia = fecha.getDate();
+                
+                // Obtener el primer día del mes
+                const primerDiaDelMes = new Date(año, mes, 1);
+                const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
+                
+                // Calcular en qué fila del calendario está la fecha
+                // Primera fila: días del mes anterior + días del mes actual
+                const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
+                
+                if (dia <= diasEnPrimeraFila) {
+                    // La fecha está en la primera fila
+                    return 1;
+                } else {
+                    // La fecha está en una fila posterior
+                    const diasRestantes = dia - diasEnPrimeraFila;
+                    const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
+                    
+                    // Calcular cuántas semanas tiene realmente el mes
+                    const ultimoDiaDelMes = new Date(año, mes + 1, 0);
+                    const diasEnElMes = ultimoDiaDelMes.getDate();
+                    const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
+                    const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
+                    const totalFilas = 1 + filasAdicionales;
+                    
+                    // Limitar al número real de semanas del mes
+                    return Math.max(1, Math.min(semanaDelMes, totalFilas));
+                }
             }
             
-            const diasTranscurridos = Math.floor((fecha - primerLunesDelMes) / (1000 * 60 * 60 * 24));
-            const semanaDelMes = Math.floor(diasTranscurridos / 7) + 1;
+            semanaFinal = calcularSemanaDelMes(fechaInicio);
+            periodoInfo = `${año} ${mes.toString().padStart(2, '0')} - Semana ${semanaFinal}`;
             
-            // Limitar entre 1 y 4
-            return Math.max(1, Math.min(4, semanaDelMes));
+            console.log('🔍 [PDF] Información de semana desde BD:', {
+                semanaISO: semanaData.semana_iso,
+                año: semanaData.anio,
+                fechaInicio: fechaInicio.toLocaleDateString('es-MX'),
+                semanaDelMes: semanaFinal,
+                periodo: periodoInfo
+            });
+        } else {
+            // Fallback: calcular desde fecha de creación si no hay información de semana
+            const fechaCreacion = new Date(nomina.createdAt);
+            const año = fechaCreacion.getFullYear();
+            const mes = fechaCreacion.getMonth() + 1;
+            
+            function calcularSemanaDelMes(fecha) {
+                const año = fecha.getFullYear();
+                const mes = fecha.getMonth();
+                const dia = fecha.getDate();
+                
+                const primerDiaDelMes = new Date(año, mes, 1);
+                const diaPrimerDia = primerDiaDelMes.getDay();
+                const diasEnPrimeraFila = 7 - diaPrimerDia;
+                
+                if (dia <= diasEnPrimeraFila) {
+                    return 1;
+                } else {
+                    const diasRestantes = dia - diasEnPrimeraFila;
+                    const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
+                    
+                    const ultimoDiaDelMes = new Date(año, mes + 1, 0);
+                    const diasEnElMes = ultimoDiaDelMes.getDate();
+                    const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
+                    const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
+                    const totalFilas = 1 + filasAdicionales;
+                    
+                    return Math.max(1, Math.min(semanaDelMes, totalFilas));
+                }
+            }
+            
+            semanaFinal = calcularSemanaDelMes(fechaCreacion);
+            periodoInfo = `${año} ${mes.toString().padStart(2, '0')} - Semana ${semanaFinal}`;
+            
+            console.log('🔍 [PDF] Calculando semana desde fecha de creación:', {
+                fechaCreacion: fechaCreacion.toLocaleDateString('es-MX'),
+                semanaDelMes: semanaFinal,
+                periodo: periodoInfo
+            });
         }
-        
-        const semanaFinal = calcularSemanaDelMes(fechaCreacion);
         
         doc.fontSize(8)
            .font('Helvetica')
-           .text(`Período: ${añoActual} ${mesActual.toString().padStart(2, '0')} - Semana ${semanaFinal}`, empCol2X, col2Y);
+           .text(`Período: ${periodoInfo}`, empCol2X, col2Y);
         
         col2Y += 10;
         doc.text(`Días de Pago: 6`, empCol2X, col2Y); // Siempre 6 días para pago semanal

@@ -230,11 +230,36 @@ export class EmpleadoNominaService {
       let totalNominasMesActual = 0;
       try {
         const nominasMesActual = await this.getNominasMesActual();
-        totalNominasMesActual = nominasMesActual.reduce((sum, nomina) => {
-          return sum + (parseFloat(nomina.monto_total) || 0);
-        }, 0);
+        
+        // Verificar que sea un array válido
+        if (!Array.isArray(nominasMesActual)) {
+          console.log('⚠️ [ESTADISTICAS] nominasMesActual no es un array:', typeof nominasMesActual);
+          totalNominasMesActual = 0;
+        } else {
+          console.log('🔍 [ESTADISTICAS] Nóminas del mes actual:', nominasMesActual.length);
+          
+          if (nominasMesActual.length > 0) {
+            console.log('🔍 [ESTADISTICAS] Nóminas con monto_total:', nominasMesActual.map(n => ({
+              id: n.id_nomina || n.id,
+              monto_total: n.monto_total,
+              empleado: n.empleado?.nombre || 'N/A',
+              fecha: n.fecha_creacion || n.createdAt
+            })));
+            
+            totalNominasMesActual = nominasMesActual.reduce((sum, nomina) => {
+              const monto = parseFloat(nomina.monto_total) || 0;
+              console.log(`💰 [ESTADISTICAS] Nómina ${nomina.id_nomina || nomina.id}: $${monto}`);
+              return sum + monto;
+            }, 0);
+          } else {
+            console.log('ℹ️ [ESTADISTICAS] No hay nóminas en el mes actual');
+          }
+          
+          console.log('💰 [ESTADISTICAS] Total mensual calculado:', totalNominasMesActual);
+        }
       } catch (error) {
-        console.log('No se pudieron obtener nóminas del mes actual');
+        console.log('❌ [ESTADISTICAS] No se pudieron obtener nóminas del mes actual:', error);
+        totalNominasMesActual = 0;
       }
 
       // Calcular promedio de salario diario para estadísticas (sin multiplicar por 30)
@@ -271,10 +296,32 @@ export class EmpleadoNominaService {
       const year = now.getFullYear();
       const month = now.getMonth() + 1; // getMonth() es 0-indexado
       
-      const response = await ApiService.get(`/nomina?year=${year}&month=${month}`);
-      return response.data || response || [];
+      // Calcular fechas de inicio y fin del mes
+      const fechaInicio = new Date(year, now.getMonth(), 1);
+      const fechaFin = new Date(year, now.getMonth() + 1, 0, 23, 59, 59);
+      
+      console.log('🔍 [NOMINAS_MES] Rango de fechas:', {
+        fechaInicio: fechaInicio.toISOString().split('T')[0],
+        fechaFin: fechaFin.toISOString().split('T')[0],
+        year,
+        month
+      });
+      
+      // Usar filtros de fecha más específicos
+      const params = new URLSearchParams();
+      params.append('fecha_desde', fechaInicio.toISOString().split('T')[0]);
+      params.append('fecha_hasta', fechaFin.toISOString().split('T')[0]);
+      
+      const response = await ApiService.get(`/nomina?${params.toString()}`);
+      console.log('🔍 [NOMINAS_MES] Respuesta del API:', response);
+      
+      // Asegurar que siempre retornemos un array
+      const nominas = response.nominas || response.data || response || [];
+      console.log('🔍 [NOMINAS_MES] Nóminas encontradas:', Array.isArray(nominas) ? nominas.length : 'No es array');
+      
+      return Array.isArray(nominas) ? nominas : [];
     } catch (error) {
-      console.error('Error getting current month nominas:', error);
+      console.error('❌ [NOMINAS_MES] Error getting current month nominas:', error);
       return [];
     }
   }

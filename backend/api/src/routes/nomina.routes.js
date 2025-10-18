@@ -27,6 +27,9 @@ router.post('/', verifyRole([1]), nominaController.createNomina);
 // Actualizar nómina - Solo administradores
 router.put('/:id', verifyRole([1]), nominaController.updateNomina);
 
+// Eliminar nómina - Solo administradores
+router.delete('/:id', verifyRole([1]), nominaController.deleteNomina);
+
 // Registrar pago de nómina - Solo administradores
 router.post('/:id_nomina/pago', verifyRole([1]), nominaController.registrarPagoNomina);
 

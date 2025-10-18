@@ -51,7 +51,7 @@ export class ValidacionesNominaService {
   static validarCamposRequeridos(datos, errores) {
     const camposRequeridos = [
       { campo: 'id_empleado', nombre: 'ID de empleado' },
-      { campo: 'id_semana', nombre: 'ID de semana' },
+      // id_semana se maneja automáticamente en el backend
       { campo: 'id_proyecto', nombre: 'ID de proyecto' },
       { campo: 'dias_laborados', nombre: 'Días laborados' },
       { campo: 'pago_semanal', nombre: 'Pago semanal' }
@@ -76,9 +76,7 @@ export class ValidacionesNominaService {
       errores.push('ID de empleado debe ser un número entero positivo');
     }
 
-    if (datos.id_semana && (!Number.isInteger(datos.id_semana) || datos.id_semana < 1 || datos.id_semana > 53)) {
-      errores.push('ID de semana debe ser un número entre 1 y 53 (semana ISO)');
-    }
+    // id_semana se maneja automáticamente en el backend, no se valida aquí
 
     if (datos.id_proyecto && (!Number.isInteger(datos.id_proyecto) || datos.id_proyecto <= 0)) {
       errores.push('ID de proyecto debe ser un número entero positivo');
@@ -145,11 +143,9 @@ export class ValidacionesNominaService {
     }
 
     // Validar límites de días laborados por semana
-    if (datos.dias_laborados && datos.id_semana) {
-      const diasPorSemana = this.getDiasMaximosPorSemana(datos.id_semana);
-      if (datos.dias_laborados > diasPorSemana) {
-        advertencias.push(`Días laborados (${datos.dias_laborados}) excede los días típicos de la semana ${datos.id_semana} (${diasPorSemana})`);
-      }
+    // Nota: id_semana se maneja automáticamente en el backend
+    if (datos.dias_laborados && datos.dias_laborados > 7) {
+      advertencias.push(`Días laborados (${datos.dias_laborados}) excede los días típicos de una semana (7)`);
     }
 
     // Validar coherencia entre días laborados y horas extra

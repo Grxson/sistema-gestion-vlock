@@ -103,7 +103,7 @@ export class NominaService {
       console.log('🚀 [NOMINA_SERVICE] Datos recibidos:', nominaData);
       
       // Validar datos requeridos
-      const camposRequeridos = ['id_empleado', 'id_semana', 'id_proyecto', 'dias_laborados', 'pago_semanal'];
+      const camposRequeridos = ['id_empleado', 'id_proyecto', 'dias_laborados', 'pago_semanal'];
       const camposFaltantes = camposRequeridos.filter(campo => !nominaData[campo]);
       
       console.log('🔍 [NOMINA_SERVICE] Campos requeridos:', camposRequeridos);
@@ -338,6 +338,29 @@ export class NominaService {
    */
   static clearCache() {
     this.cache.clear();
+  }
+
+  /**
+   * Eliminar una nómina
+   * @param {number} id - ID de la nómina
+   * @returns {Promise<Object>} Resultado de la eliminación
+   */
+  static async delete(id) {
+    try {
+      const response = await ApiService.delete(`/nomina/${id}`);
+      
+      // Limpiar caché
+      this.clearCache();
+      
+      return {
+        success: true,
+        data: response.data || response,
+        message: response.message || 'Nómina eliminada exitosamente'
+      };
+    } catch (error) {
+      console.error('Error deleting nomina:', error);
+      throw this.handleError(error);
+    }
   }
 
   /**

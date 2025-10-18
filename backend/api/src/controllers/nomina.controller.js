@@ -4,10 +4,12 @@ const Empleado = models.Empleados;
 const SemanaNomina = models.Semanas_nomina;
 const PagoNomina = models.Pagos_nomina;
 const Proyecto = models.Proyectos;
+const NominaHistorial = models.Nomina_historial;
 const { Op } = require('sequelize');
 const fs = require('fs');
 const path = require('path');
 const { calcularNomina } = require('../utils/nominaCalculator');
+const { calcularSemanaISO, generarInfoSemana, detectarSemanaActual } = require('../utils/weekCalculator');
 const { registrarCambioNomina } = require('./nominaHistorial.controller');
 const { generarReciboPDF } = require('./nominaPDF.controller');
 const sequelize = require('../config/db');
@@ -146,7 +148,6 @@ const createNomina = async (req, res) => {
     try {
         const {
             id_empleado,
-            id_semana,
             id_proyecto, // Agregamos el campo para el proyecto
             dias_laborados,
             pago_semanal,
@@ -164,9 +165,9 @@ const createNomina = async (req, res) => {
         } = req.body;
 
         // Validaciones básicas
-        if (!id_empleado || !id_semana || !dias_laborados || !pago_semanal || !id_proyecto) {
+        if (!id_empleado || !dias_laborados || !pago_semanal || !id_proyecto) {
             return res.status(400).json({
-                message: 'Los campos id_empleado, id_semana, id_proyecto, dias_laborados y pago_semanal son obligatorios'
+                message: 'Los campos id_empleado, id_proyecto, dias_laborados y pago_semanal son obligatorios'
             });
         }
 
@@ -179,6 +180,45 @@ const createNomina = async (req, res) => {
         const aplicarISR = aplicar_isr !== false; // Por defecto aplica ISR a menos que se especifique false
         const aplicarIMSS = aplicar_imss !== false; // Por defecto aplica IMSS a menos que se especifique false
         const aplicarInfonavit = aplicar_infonavit !== false; // Por defecto aplica Infonavit a menos que se especifique false
+
+        // Buscar o crear la semana en la tabla semanas_nomina
+        const fechaActual = new Date();
+        const infoSemana = generarInfoSemana(fechaActual);
+        
+        console.log('🔍 [CREATE_NOMINA] Información de semana calculada:', {
+            semanaISO: infoSemana.semanaISO,
+            año: infoSemana.año,
+            etiqueta: infoSemana.etiqueta,
+            fechaInicio: infoSemana.fechaInicio,
+            fechaFin: infoSemana.fechaFin
+        });
+
+        // Buscar si ya existe una semana con el mismo año y semana ISO
+        let semanaNomina = await SemanaNomina.findOne({
+            where: {
+                anio: infoSemana.año,
+                semana_iso: infoSemana.semanaISO
+            }
+        });
+
+        // Si no existe, crear la semana
+        if (!semanaNomina) {
+            console.log('🔍 [CREATE_NOMINA] Creando nueva semana en semanas_nomina');
+            semanaNomina = await SemanaNomina.create({
+                anio: infoSemana.año,
+                semana_iso: infoSemana.semanaISO,
+                etiqueta: infoSemana.etiqueta,
+                fecha_inicio: infoSemana.fechaInicio,
+                fecha_fin: infoSemana.fechaFin,
+                estado: 'Borrador'
+            });
+            console.log('✅ [CREATE_NOMINA] Semana creada con ID:', semanaNomina.id_semana);
+        } else {
+            console.log('✅ [CREATE_NOMINA] Semana encontrada con ID:', semanaNomina.id_semana);
+        }
+
+        // Usar el ID de la semana encontrada/creada
+        const idSemanaCorrecto = semanaNomina.id_semana;
 
         // Utilizar la función de cálculo de nómina
         const resultado = calcularNomina(
@@ -275,7 +315,7 @@ const createNomina = async (req, res) => {
         // Crear la nueva nómina
         const nuevaNomina = await NominaEmpleado.create({
             id_empleado,
-            id_semana,
+            id_semana: idSemanaCorrecto, // Usar el ID correcto de la semana
             id_proyecto, // Agregamos el ID del proyecto
             dias_laborados: diasLaboradosNum,
             pago_semanal: pagoSemanalNum,
@@ -406,10 +446,24 @@ const updateNomina = async (req, res) => {
             });
         }
 
-        // Calcular nuevo monto total si hay cambios en los valores
+        // Usar el monto_total enviado desde el frontend si está disponible
         let nuevoMontoTotal = nomina.monto_total;
         
-        if (dias_laborados !== undefined || pago_semanal !== undefined || 
+        console.log('🔍 [BACKEND_UPDATE] Datos recibidos:', {
+            id,
+            monto_total_from_frontend: req.body.monto_total,
+            dias_laborados,
+            pago_semanal,
+            horas_extra,
+            bonos,
+            deducciones
+        });
+        
+        // Si el frontend envía monto_total, usarlo directamente (ya viene calculado correctamente)
+        if (req.body.monto_total !== undefined) {
+            nuevoMontoTotal = parseFloat(req.body.monto_total);
+            console.log('🔍 [BACKEND_UPDATE] Usando monto_total del frontend:', nuevoMontoTotal);
+        } else if (dias_laborados !== undefined || pago_semanal !== undefined || 
             horas_extra !== undefined || deducciones !== undefined || bonos !== undefined) {
                 
             const diasLaboradosCalc = dias_laborados !== undefined ? parseFloat(dias_laborados) : nomina.dias_laborados;
@@ -418,7 +472,9 @@ const updateNomina = async (req, res) => {
             const deduccionesCalc = deducciones !== undefined ? parseFloat(deducciones) : (nomina.deducciones || 0);
             const bonosCalc = bonos !== undefined ? parseFloat(bonos) : (nomina.bonos || 0);
             
-            nuevoMontoTotal = (diasLaboradosCalc * pagoSemanalCalc) + horasExtraCalc - deduccionesCalc + bonosCalc;
+            // Calcular salario base proporcional: (pago_semanal / 6) * dias_laborados
+            const salarioBaseProporcional = (pagoSemanalCalc / 6) * diasLaboradosCalc;
+            nuevoMontoTotal = salarioBaseProporcional + horasExtraCalc - deduccionesCalc + bonosCalc;
         }
 
         // Actualizar nómina
@@ -436,6 +492,12 @@ const updateNomina = async (req, res) => {
             liquidar_adeudos: liquidar_adeudos !== undefined ? liquidar_adeudos : nomina.liquidar_adeudos
         });
 
+        console.log('🔍 [BACKEND_UPDATE] Nómina actualizada exitosamente:', {
+            id,
+            monto_total_guardado: nuevoMontoTotal,
+            dias_laborados: nomina.dias_laborados
+        });
+
         res.status(200).json({
             message: 'Nómina actualizada exitosamente',
             nomina
@@ -444,6 +506,89 @@ const updateNomina = async (req, res) => {
         console.error('Error al actualizar nómina:', error);
         res.status(500).json({
             message: 'Error al actualizar nómina',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * Eliminar una nómina
+ * @param {Object} req - Objeto de solicitud
+ * @param {Object} res - Objeto de respuesta
+ */
+const deleteNomina = async (req, res) => {
+    try {
+        const { id } = req.params;
+
+        console.log('🔍 [DELETE_NOMINA] Iniciando eliminación de nómina:', id);
+
+        // Verificar si existe la nómina
+        const nomina = await NominaEmpleado.findByPk(id, {
+            include: [
+                { model: Empleado, as: 'empleado' }
+            ]
+        });
+
+        if (!nomina) {
+            console.log('❌ [DELETE_NOMINA] Nómina no encontrada:', id);
+            return res.status(404).json({
+                success: false,
+                message: 'Nómina no encontrada'
+            });
+        }
+
+        console.log('🔍 [DELETE_NOMINA] Nómina encontrada:', {
+            id: nomina.id_nomina,
+            empleado: nomina.empleado?.nombre + ' ' + nomina.empleado?.apellido,
+            estado: nomina.estado
+        });
+
+        // Verificar si la nómina está en estado que permite eliminación
+        const estado = nomina.estado?.toLowerCase();
+        if (estado === 'pagada' || estado === 'pagado' || estado === 'completada' || estado === 'completado') {
+            console.log('❌ [DELETE_NOMINA] No se puede eliminar nómina completada:', estado);
+            return res.status(400).json({
+                success: false,
+                message: 'No se puede eliminar una nómina que ya está completada o pagada'
+            });
+        }
+
+        // Iniciar transacción para eliminar en cascada
+        await sequelize.transaction(async (t) => {
+            console.log('🔍 [DELETE_NOMINA] Eliminando pagos relacionados...');
+            
+            // Eliminar pagos relacionados
+            await PagoNomina.destroy({
+                where: { id_nomina: id },
+                transaction: t
+            });
+
+            console.log('🔍 [DELETE_NOMINA] Eliminando historial relacionado...');
+            
+            // Eliminar historial relacionado
+            await NominaHistorial.destroy({
+                where: { id_nomina: id },
+                transaction: t
+            });
+
+            console.log('🔍 [DELETE_NOMINA] Eliminando nómina principal...');
+            
+            // Eliminar la nómina principal
+            await nomina.destroy({ transaction: t });
+        });
+
+        console.log('✅ [DELETE_NOMINA] Nómina eliminada exitosamente:', id);
+
+        res.status(200).json({
+            success: true,
+            message: 'Nómina eliminada exitosamente'
+        });
+
+    } catch (error) {
+        console.error('❌ [DELETE_NOMINA] Error al eliminar nómina:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error al eliminar nómina',
             error: error.message
         });
     }
@@ -1086,14 +1231,22 @@ const getHistorialPagos = async (req, res) => {
  */
 const crearSemanaNomina = async (req, res) => {
     try {
-        const { anio, semana_iso, etiqueta, fecha_inicio, fecha_fin } = req.body;
+        const { fecha_inicio, fecha_fin, etiqueta } = req.body;
 
         // Validaciones básicas
-        if (!anio || !semana_iso || !fecha_inicio || !fecha_fin) {
+        if (!fecha_inicio || !fecha_fin) {
             return res.status(400).json({
-                message: 'Los campos anio, semana_iso, fecha_inicio y fecha_fin son obligatorios'
+                message: 'Los campos fecha_inicio y fecha_fin son obligatorios'
             });
         }
+
+        // Calcular automáticamente la semana ISO y año
+        const fechaInicio = new Date(fecha_inicio);
+        const infoSemana = generarInfoSemana(fechaInicio);
+        
+        const anio = infoSemana.año;
+        const semana_iso = infoSemana.semanaISO;
+        const etiquetaFinal = etiqueta || infoSemana.etiqueta;
 
         // Verificar que no exista ya una semana con el mismo anio y semana_iso
         const semanaExistente = await SemanaNomina.findOne({
@@ -1105,7 +1258,7 @@ const crearSemanaNomina = async (req, res) => {
 
         if (semanaExistente) {
             return res.status(400).json({
-                message: 'Ya existe una semana con el mismo año y número de semana ISO'
+                message: `Ya existe una semana con el mismo año (${anio}) y número de semana ISO (${semana_iso})`
             });
         }
 
@@ -1113,7 +1266,7 @@ const crearSemanaNomina = async (req, res) => {
         const nuevaSemana = await SemanaNomina.create({
             anio,
             semana_iso,
-            etiqueta,
+            etiqueta: etiquetaFinal,
             fecha_inicio,
             fecha_fin,
             estado: 'Borrador'
@@ -1446,37 +1599,86 @@ const verificarDuplicados = async (req, res) => {
             });
         }
 
-        // Validar semana (1-4)
+        // Validar semana (1-6)
         const semanaNum = parseInt(semana);
-        if (isNaN(semanaNum) || semanaNum < 1 || semanaNum > 4) {
+        if (isNaN(semanaNum) || semanaNum < 1 || semanaNum > 6) {
             return res.status(400).json({
                 success: false,
-                message: 'Semana debe ser un número entre 1 y 4'
+                message: 'Semana debe ser un número entre 1 y 6'
             });
         }
 
         // Extraer año y mes del período
         const [año, mes] = periodo.split('-').map(Number);
         
-        // Buscar nóminas existentes para este empleado en este período y semana
-        // Usar el campo id_semana directamente y verificar el mes/año con createdAt
+        // Calcular la fecha específica que corresponde a la semana del mes solicitada
+        // Necesitamos encontrar una fecha que esté en esa semana específica del mes
+        const primerDiaDelMes = new Date(año, mes - 1, 1); // mes - 1 porque es 0-indexado
+        const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
+        
+        // Calcular en qué fila del calendario está la semana solicitada
+        const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
+        
+        let fechaReferencia;
+        if (semanaNum === 1) {
+            // Semana 1: usar el primer día del mes
+            fechaReferencia = primerDiaDelMes;
+        } else {
+            // Semanas 2+: calcular el primer día de esa semana
+            const diasHastaSemana = diasEnPrimeraFila + (semanaNum - 2) * 7;
+            fechaReferencia = new Date(año, mes - 1, 1 + diasHastaSemana);
+        }
+        
+        console.log('🔍 [VERIFICAR_DUPLICADOS] Cálculo de fecha de referencia:', {
+            año,
+            mes,
+            semanaNum,
+            primerDiaDelMes: primerDiaDelMes.toLocaleDateString('es-MX'),
+            diaPrimerDia,
+            diasEnPrimeraFila,
+            fechaReferencia: fechaReferencia.toLocaleDateString('es-MX')
+        });
+        
+        const infoSemana = generarInfoSemana(fechaReferencia);
+        
+        console.log('🔍 [VERIFICAR_DUPLICADOS] Información de semana calculada:', {
+            semanaISO: infoSemana.semanaISO,
+            año: infoSemana.año,
+            etiqueta: infoSemana.etiqueta
+        });
+        
+        // Buscar la semana en la tabla semanas_nomina
+        const semanaNomina = await SemanaNomina.findOne({
+            where: {
+                anio: infoSemana.año,
+                semana_iso: infoSemana.semanaISO
+            }
+        });
+
+        if (!semanaNomina) {
+            return res.status(200).json({
+                success: true,
+                existe: false,
+                message: 'No existe semana configurada para este período'
+            });
+        }
+        
+        // Buscar nóminas existentes para este empleado en esta semana
         const nominasExistentes = await NominaEmpleado.findAll({
             where: {
                 id_empleado: id_empleado,
-                id_semana: semanaNum,
-                // Verificar que la nómina fue creada en el mes y año correctos
-                createdAt: {
-                    [Op.and]: [
-                        sequelize.where(sequelize.fn('YEAR', sequelize.col('createdAt')), año),
-                        sequelize.where(sequelize.fn('MONTH', sequelize.col('createdAt')), mes)
-                    ]
-                }
+                id_semana: semanaNomina.id_semana
             },
             include: [
                 {
                     model: Empleado,
                     as: 'empleado',
                     attributes: ['id_empleado', 'nombre', 'apellido', 'nss']
+                },
+                {
+                    model: SemanaNomina,
+                    as: 'semana',
+                    attributes: ['id_semana', 'anio', 'semana_iso', 'etiqueta']
                 }
             ]
         });
@@ -1635,6 +1837,7 @@ module.exports = {
     getNominaById,
     createNomina,
     updateNomina,
+    deleteNomina,
     registrarPagoNomina,
     generarReciboPDF,
     getHistorialPagos,

@@ -6,9 +6,33 @@ import { useToast } from '../contexts/ToastContext';
 import { 
   detectarSemanaActual, 
   generarPeriodoActual, 
-  generarInfoSemana,
+  obtenerInfoSemanaCompleta,
+  calcularSemanaDelMes,
   validarSemana 
 } from '../utils/weekCalculator';
+
+// Función auxiliar para calcular semanas en el mes (necesaria para la UI)
+function calcularSemanasEnElMes(año, mes) {
+  const primerDiaDelMes = new Date(año, mes, 1);
+  const ultimoDiaDelMes = new Date(año, mes + 1, 0);
+  
+  // Contar las filas del calendario visual
+  // Cada fila representa una semana, incluso si tiene días del mes anterior/siguiente
+  
+  // Calcular cuántas filas necesita el calendario
+  const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
+  const diasEnElMes = ultimoDiaDelMes.getDate();
+  
+  // Calcular el número de filas necesarias
+  // Primera fila: días del mes anterior + días del mes actual
+  const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
+  const diasRestantes = diasEnElMes - diasEnPrimeraFila;
+  const filasAdicionales = Math.ceil(diasRestantes / 7);
+  
+  const totalFilas = 1 + filasAdicionales;
+  
+  return totalFilas;
+}
 import {
   PlusIcon,
   CalendarIcon,
@@ -53,7 +77,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   // Datos del formulario
   const [formData, setFormData] = useState({
     selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
-    semanaNum: detectarSemanaActual(), // Auto-detectar semana del mes
+    semanaNum: detectarSemanaActual(), // Auto-detectar semana del mes actual
     selectedEmpleado: null,
     searchTerm: '',
     diasLaborados: 6,
@@ -249,7 +273,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     }
   };
 
-  // Verificar si ya existe una nómina para este empleado en esta semana del período
+  // Verificar si ya existe una nómina para este empleado en esta semana del mes
   const verificarDuplicados = async () => {
     if (!formData.selectedEmpleado || !formData.selectedPeriodo || !formData.semanaNum) {
       setVerificacionDuplicados(null);
@@ -281,9 +305,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   };
 
   const calcularNomina = async () => {
-    console.log('🔄 [CALCULO] Función calcularNomina ejecutada');
-    console.log('🔄 [CALCULO] formData.selectedEmpleado:', !!formData.selectedEmpleado);
-    console.log('🔄 [CALCULO] formData.diasLaborados:', formData.diasLaborados);
+    
     
     if (!formData.selectedEmpleado) {
       console.log('❌ [CALCULO] No hay empleado seleccionado, saliendo...');
@@ -370,7 +392,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     
     setFormData({
       selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
-      semanaNum: detectarSemanaActual(), // Auto-detectar semana del mes
+      semanaNum: detectarSemanaActual(), // Auto-detectar semana del mes actual
       selectedEmpleado: null,
       searchTerm: '',
       diasLaborados: 6,
@@ -446,13 +468,6 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     }
   };
 
-  // Función para editar nómina desde preview
-  const editarNominaDesdePreview = () => {
-    setShowPreview(false);
-    setNominaGenerada(null);
-    // Volver al paso 1 para editar
-    setCurrentStep(1);
-  };
 
   const handleClose = () => {
     resetForm();
@@ -541,21 +556,23 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       const idProyecto = formData.selectedEmpleado.id_proyecto || 
                         formData.selectedEmpleado.proyecto?.id_proyecto || 1;
 
-      // Generar información de semana dinámicamente
-      const infoSemana = generarInfoSemana(formData.selectedPeriodo, formData.semanaNum);
+      // Generar información de semana dinámicamente usando la fecha actual
+      const fechaActual = new Date();
+      const infoSemana = obtenerInfoSemanaCompleta(fechaActual);
       
       console.log('🔍 [WIZARD] Información de semana generada:', {
-        semanaNum: formData.semanaNum,
-        periodo: formData.selectedPeriodo,
+        semanaDelMes: formData.semanaNum,
         semanaISO: infoSemana.semanaISO,
-        etiqueta: infoSemana.etiqueta,
+        periodo: formData.selectedPeriodo,
+        etiquetaMes: infoSemana.etiquetaMes,
+        etiquetaISO: infoSemana.etiquetaISO,
         fechaInicio: infoSemana.fechaInicio.toLocaleDateString('es-MX'),
         fechaFin: infoSemana.fechaFin.toLocaleDateString('es-MX')
       });
 
       const nominaData = {
         id_empleado: formData.selectedEmpleado.id_empleado,
-        id_semana: infoSemana.semanaISO, // Usar semana ISO como identificador único
+        // id_semana se maneja automáticamente en el backend
         id_proyecto: idProyecto,
         dias_laborados: formData.diasLaborados || 6, // Usar el valor ingresado por el usuario
         pago_semanal: pagoIngresado, // Contiene el pago semanal
@@ -768,14 +785,17 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
             const nominaCompleta = await nominasServices.nominas.getById(idNomina, true);
             console.log('📋 [WIZARD] Nómina completa obtenida:', nominaCompleta);
             
-            // Guardar la nómina generada y mostrar preview
+            // Guardar la nómina generada (sin mostrar preview automático)
             setNominaGenerada(nominaCompleta.data);
-            setShowPreview(true);
             
             const mensaje = nominaToEdit && nominaToEdit.id_nomina 
-              ? 'Nómina actualizada exitosamente. Revisa los datos antes de generar el PDF.'
-              : 'Nómina creada exitosamente. Revisa los datos antes de generar el PDF.';
+              ? 'Nómina actualizada exitosamente.'
+              : 'Nómina creada exitosamente.';
             showSuccess('¡Nómina Generada!', mensaje);
+            
+            // Cerrar wizard y llamar callback de éxito
+            handleClose();
+            if (onSuccess) onSuccess();
           } catch (previewError) {
             console.error('❌ Error al obtener datos de la nómina:', previewError);
             showError('Error al obtener nómina', 'No se pudieron obtener los datos de la nómina generada');
@@ -809,10 +829,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Preview de Nómina
+                  {nominaToEdit ? 'Preview de Nómina Editada' : 'Preview de Nómina'}
                 </h2>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  Revisa los datos antes de generar el PDF
+                  {nominaToEdit ? 'Revisa los cambios antes de actualizar la nómina' : 'Revisa los datos antes de generar el PDF'}
                 </p>
               </div>
               <button
@@ -879,7 +899,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                   <p className="font-medium text-gray-900 dark:text-white">{formData.selectedPeriodo}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Semana</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Semana del Mes</p>
                   <p className="font-medium text-gray-900 dark:text-white">Semana {formData.semanaNum}</p>
                 </div>
                 <div>
@@ -949,13 +969,6 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
           <div className="flex justify-end space-x-3 px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
             <button
               type="button"
-              onClick={editarNominaDesdePreview}
-              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            >
-              Editar Datos
-            </button>
-            <button
-              type="button"
               onClick={generarPDFDesdePreview}
               disabled={processingNomina}
               className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
@@ -990,10 +1003,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
               </div>
               <div>
                 <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
-                  Procesar Nómina - Paso {currentStep} de 2
+                  {nominaToEdit ? 'Editar Nómina' : 'Procesar Nómina'} - Paso {currentStep} de 2
                 </h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {steps[currentStep - 1]?.name}
+                  {nominaToEdit ? 'Modificando nómina existente' : steps[currentStep - 1]?.name}
                 </p>
               </div>
             </div>
@@ -1089,13 +1102,13 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Semana del Período (1-4)
+                            Semana del Mes
                           </label>
                           <button
                             type="button"
                             onClick={() => updateFormData({ semanaNum: detectarSemanaActual() })}
                             className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
-                            title="Detectar automáticamente la semana actual"
+                            title="Detectar automáticamente la semana del mes actual"
                           >
                             🔄 Auto-detectar
                           </button>
@@ -1103,7 +1116,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                         <input
                           type="number"
                           min="1"
-                          max="4"
+                          max="6"
                           value={formData.semanaNum}
                           onChange={(e) => {
                             const value = e.target.value;
@@ -1112,8 +1125,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                               updateFormData({ semanaNum: '' });
                             } else {
                               const num = parseInt(value);
-                              if (!isNaN(num) && num >= 1 && num <= 4) {
-                                updateFormData({ semanaNum: num });
+                              if (!isNaN(num) && num >= 1) {
+                                // Validar contra el período actual
+                                if (validarSemana(num, formData.selectedPeriodo)) {
+                                  updateFormData({ semanaNum: num });
+                                }
                               }
                             }
                           }}
@@ -1126,7 +1142,16 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                         />
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Semana actual detectada: {detectarSemanaActual()} (día {new Date().getDate()} del mes)
+                          Semana del mes actual detectada: {detectarSemanaActual()} 
+                          {(() => {
+                            try {
+                              const [año, mes] = formData.selectedPeriodo.split('-').map(Number);
+                              const semanasEnElMes = calcularSemanasEnElMes(año, mes - 1);
+                              return ` (${semanasEnElMes} semanas en ${new Date(año, mes - 1).toLocaleDateString('es-MX', { month: 'long' })})`;
+                            } catch {
+                              return ' (con mapeo ISO automático)';
+                            }
+                          })()}
                         </p>
                       </div>
 
