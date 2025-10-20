@@ -99,6 +99,7 @@ export default function FormularioSuministros({
   proveedores = [],
   categorias = CATEGORIAS_SUMINISTRO,
   unidades = UNIDADES_MEDIDA,
+  unidadesDinamicas = [], // Unidades cargadas desde la API
   initialData = null,
   onCategoriesUpdated = null // Nuevo callback para notificar actualizaciones de categorías
 }) {
@@ -152,8 +153,8 @@ export default function FormularioSuministros({
       codigo_producto: '',
       descripcion_detallada: '',
       cantidad: '',
-      unidad_medida: 'pz',
-      id_unidad_medida: 1, // Default a 'pz' (Pieza, ID real: 1)
+      unidad_medida: '',
+      id_unidad_medida: null, // Se asignará después de cargar unidades
       precio_unitario: '',
       estado: 'Entregado',
       fecha_necesaria: getLocalDateString(),
@@ -186,8 +187,12 @@ export default function FormularioSuministros({
   const [showProveedorModal, setShowProveedorModal] = useState(false);
   const [proveedorModalData, setProveedorModalData] = useState(null);
 
-  // Hook para toast notifications
-  const { showSuccess, showError } = useToast();
+  // Hook para toast notifications (con fallback seguro)
+  const toast = useToast();
+  const showSuccess = toast?.showSuccess ?? (() => {});
+  const showError = toast?.showError ?? ((title, message) => {
+    console.error('[Toast:error]', title, message);
+  });
 
   // =================== DEBUGGING Y MONITORING ===================
   debugTools.useRenderDebug('FormularioSuministros', { 
@@ -278,38 +283,83 @@ export default function FormularioSuministros({
     'botes': 'pz'
   }), []);
 
-  // Mapeo de símbolos a IDs de unidades de medida (basado en la base de datos local)
+  // Mapeo dinámico de símbolos a IDs de unidades de medida (basado en unidades cargadas desde API)
   const unidadSymbolToId = useMemo(() => {
-    // Mapeo real basado en las unidades existentes en la base de datos local
-    const localMapping = {
-      'pz': 1,      // Pieza
-      'm³': 2,      // Metro cúbico
-      'm3': 2,      // Metro cúbico (alternativo)
-      'm²': 3,      // Metro cuadrado
-      'm2': 3,      // Metro cuadrado (alternativo)
-      'm': 4,       // Metro lineal
-      'ml': 5,      // Metro lineal (alt)
-      'kg': 6,      // Kilogramo
-      'ton': 7,     // Tonelada
-      'lt': 8,      // Litro
-      'gl': 9,      // Galón
-      'hr': 10,     // Hora
-      'día': 11,    // Día
-      'caja': 12,   // Caja
-      'saco': 13,   // Saco
-      'bote': 14,   // Bote
-      'rollo': 15,  // Rollo
-      'jgo': 16     // Juego
-    };
+    if (!unidadesDinamicas || unidadesDinamicas.length === 0) {
+      return {}; // Sin mapeo si no hay unidades cargadas
+    }
     
-    return localMapping;
-  }, []);
+    const dynamicMapping = {};
+    unidadesDinamicas.forEach(unidad => {
+      if (unidad.simbolo && unidad.id_unidad) {
+        dynamicMapping[unidad.simbolo] = unidad.id_unidad;
+        // También mapear variaciones comunes
+        const simboloLower = unidad.simbolo.toLowerCase();
+        dynamicMapping[simboloLower] = unidad.id_unidad;
+        
+        // Mapeos específicos para compatibilidad
+        if (simboloLower === 'pza' || simboloLower === 'pz') {
+          dynamicMapping['pz'] = unidad.id_unidad;
+          dynamicMapping['pza'] = unidad.id_unidad;
+        }
+      }
+    });
+    
+    console.log('🔄 Mapeo dinámico de unidades actualizado:', dynamicMapping);
+    return dynamicMapping;
+  }, [unidadesDinamicas]);
 
   // Keys cacheadas para evitar recálculos
-  const unidadKeys = useMemo(() => Object.keys(UNIDADES_MEDIDA), []);
+  const unidadKeys = useMemo(() => Object.keys(unidades), [unidades]);
   const categoriaKeys = useMemo(() => Object.keys(CATEGORIAS_SUMINISTRO), []);
-  const unidadEntries = useMemo(() => Object.entries(UNIDADES_MEDIDA), []);
+  const unidadEntries = useMemo(() => Object.entries(unidades), [unidades]);
   const categoriaEntries = useMemo(() => Object.entries(CATEGORIAS_SUMINISTRO), []);
+
+  // Asignar unidad inicial cuando existan unidades disponibles y no haya una seleccionada
+  useEffect(() => {
+    if (initialData && initialData.suministros) {
+      // Si estamos editando, no sobreescribir unidades existentes
+      return;
+    }
+
+    if (!unidades || Object.keys(unidades).length === 0) {
+      return;
+    }
+
+    const firstSymbol = Object.keys(unidades)[0];
+    if (!firstSymbol) {
+      return;
+    }
+
+    setSuministros(prev => prev.map(suministro => {
+      const currentSymbol = suministro.unidad_medida;
+      const isValidCurrent = currentSymbol && unidades[currentSymbol];
+
+      const resolveUnidadId = (symbol) => {
+        if (!symbol) return null;
+        if (unidadSymbolToId && unidadSymbolToId[symbol]) {
+          return unidadSymbolToId[symbol];
+        }
+        const match = unidadesDinamicas.find(u => u.simbolo === symbol || u.simbolo?.toLowerCase() === symbol.toLowerCase());
+        return match ? match.id_unidad : null;
+      };
+
+      if (isValidCurrent) {
+        if (suministro.id_unidad_medida) {
+          return suministro;
+        }
+        const resolvedId = resolveUnidadId(currentSymbol);
+        return resolvedId ? { ...suministro, id_unidad_medida: resolvedId } : suministro;
+      }
+
+      const resolvedId = resolveUnidadId(firstSymbol);
+      return {
+        ...suministro,
+        unidad_medida: firstSymbol,
+        id_unidad_medida: resolvedId
+      };
+    }));
+  }, [unidades, unidadSymbolToId, unidadesDinamicas, initialData]);
 
   // Función optimizada para normalizar unidad de medida
   const normalizeUnidadMedida = useCallback((unidadFromDB) => {
@@ -786,8 +836,8 @@ export default function FormularioSuministros({
     codigo_producto: '',
     descripcion_detallada: '',
     cantidad: '',
-    unidad_medida: 'pz',
-    id_unidad_medida: 19, // Default a 'pza' (Pieza, ID real: 19)
+    unidad_medida: '',
+    id_unidad_medida: null, // Se asignará al cargar unidades
     precio_unitario: '',
     estado: 'Entregado',
     fecha_necesaria: getLocalDateString(),
@@ -914,7 +964,7 @@ export default function FormularioSuministros({
       }
       
       // También actualizar el ID de unidad de medida
-      additionalFields.id_unidad_medida = unidadSymbolToId[normalizedValue] || 1;
+      additionalFields.id_unidad_medida = unidadSymbolToId[normalizedValue] || null;
       
     } else if (field === 'id_categoria_suministro') {
       // Solo normalizar si el valor no es null/undefined
@@ -1072,7 +1122,14 @@ export default function FormularioSuministros({
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    
     if (!validarFormulario()) {
+      return;
+    }
+
+    // Validar que se haya seleccionado una unidad de medida
+    if (suministros.some(s => !s.id_unidad_medida)) {
+      showError('Unidad de medida requerida', 'Debes seleccionar una unidad de medida para todos los suministros');
       return;
     }
 
@@ -1167,7 +1224,7 @@ export default function FormularioSuministros({
         },
         suministros: suministros.map(s => {
           // Mapear unidad de medida a ID
-          const unidadMedidaId = s.id_unidad_medida || 1; // Default a 'pz' (Pieza, ID real: 1)
+          const unidadMedidaId = s.id_unidad_medida; // Respetar selección del usuario
           
           // Debug: Log de la unidad de medida antes de enviar (solo en desarrollo)
           if (process.env.NODE_ENV === 'development') {
@@ -1673,16 +1730,18 @@ export default function FormularioSuministros({
                     <select
                       value={(() => {
                         const currentValue = suministro.unidad_medida;
-                        const isValid = unidades[currentValue];
+                        const isValid = currentValue && unidades[currentValue];
+                        const defaultSymbol = unidadKeys[0] || '';
                         
                         // Solo log en desarrollo y con debugging habilitado, y evitar spam
                         if (process.env.NODE_ENV === 'development' && globalThis.debugForms && !isValid) {
                         }
                         
-                        return isValid ? currentValue : 'pz';
+                        return isValid ? currentValue : defaultSymbol;
                       })()}
                       onChange={(e) => actualizarSuministro(suministro.id_temp, 'unidad_medida', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"
+                      placeholder="Seleccionar unidad"
                     >
                       {Object.entries(unidades).map(([key, value]) => (
                         <option key={key} value={key}>{value}</option>

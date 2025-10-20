@@ -280,7 +280,7 @@ const createSuministro = async (req, res) => {
             codigo_producto,
             descripcion_detallada,
             cantidad: cantidad ? parseFloat(cantidad) : null,
-            id_unidad_medida: id_unidad_medida || 1,
+            id_unidad_medida: id_unidad_medida,
             m3_perdidos: m3_perdidos ? parseFloat(m3_perdidos) : null,
             m3_entregados: m3_entregados ? parseFloat(m3_entregados) : null,
             m3_por_entregar: m3_por_entregar ? parseFloat(m3_por_entregar) : null,
@@ -392,6 +392,28 @@ const createMultipleSuministros = async (req, res) => {
                     message: `Suministro ${i + 1}: Los campos nombre, cantidad, unidad de medida y precio son obligatorios`
                 });
             }
+
+            // Validar que la categoría existe (si se proporciona)
+            if (suministro.id_categoria_suministro) {
+                const categoriaExists = await models.Categorias_suministro.findByPk(suministro.id_categoria_suministro);
+                if (!categoriaExists) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Suministro ${i + 1}: La categoría especificada no existe`
+                    });
+                }
+            }
+
+            // Validar que la unidad de medida existe
+            if (suministro.id_unidad_medida) {
+                const unidadExists = await models.Unidades_medida.findByPk(suministro.id_unidad_medida);
+                if (!unidadExists) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `Suministro ${i + 1}: La unidad de medida especificada no existe`
+                    });
+                }
+            }
         }
 
         // Usar transacción para crear todos los suministros
@@ -482,12 +504,12 @@ const createMultipleSuministros = async (req, res) => {
                             hora_fin_descarga,
                             observaciones: observaciones_generales,
                             tipo_suministro: suministroData.tipo_suministro || 'Material',
-                            id_categoria_suministro: suministroData.id_categoria_suministro || 1, // Campo faltante
+                            id_categoria_suministro: suministroData.id_categoria_suministro, // Respetar selección del usuario
                             nombre: suministroData.nombre,
                             codigo_producto: suministroData.codigo_producto,
                             descripcion_detallada: suministroData.descripcion_detallada,
                             cantidad: parseFloat(suministroData.cantidad),
-                            id_unidad_medida: suministroData.id_unidad_medida || 1, // Default a 'pz' (Pieza, ID real: 1)
+                            id_unidad_medida: suministroData.id_unidad_medida, // Respetar selección del usuario
                             m3_perdidos: suministroData.m3_perdidos ? parseFloat(suministroData.m3_perdidos) : null,
                             m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
                             m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,
@@ -505,7 +527,7 @@ const createMultipleSuministros = async (req, res) => {
                     // Crear nuevo suministro
                     console.log('Datos para crear suministro:', {
                         suministroData,
-                        id_categoria_procesado: suministroData.id_categoria_suministro || 1,
+                        id_categoria_procesado: suministroData.id_categoria_suministro,
                         tipo_suministro_procesado: suministroData.tipo_suministro || 'Material'
                     });
                     
@@ -532,12 +554,12 @@ const createMultipleSuministros = async (req, res) => {
                         hora_fin_descarga,
                         observaciones: observaciones_generales,
                         tipo_suministro: suministroData.tipo_suministro || 'Material',
-                        id_categoria_suministro: suministroData.id_categoria_suministro || 1, // Campo faltante
+                        id_categoria_suministro: suministroData.id_categoria_suministro, // Respetar selección del usuario
                         nombre: suministroData.nombre,
                         codigo_producto: suministroData.codigo_producto,
                         descripcion_detallada: suministroData.descripcion_detallada,
                         cantidad: parseFloat(suministroData.cantidad),
-                        id_unidad_medida: suministroData.id_unidad_medida || 1, // Default a 'pz' (Pieza, ID real: 1)
+                        id_unidad_medida: suministroData.id_unidad_medida, // Respetar selección del usuario
                         m3_perdidos: suministroData.m3_perdidos ? parseFloat(suministroData.m3_perdidos) : null,
                         m3_entregados: suministroData.m3_entregados ? parseFloat(suministroData.m3_entregados) : null,
                         m3_por_entregar: suministroData.m3_por_entregar ? parseFloat(suministroData.m3_por_entregar) : null,

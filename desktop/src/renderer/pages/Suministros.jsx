@@ -7420,6 +7420,7 @@ const Suministros = () => {
               proveedores={proveedores}
               categorias={categorias}
               unidades={unidadesMedida}
+              unidadesDinamicas={unidadesDinamicas || []}
               onCategoriesUpdated={handleCategoriasUpdated}
               initialData={editingRecibo}
             />
