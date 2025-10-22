@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ChartBarIcon, DocumentChartBarIcon, TruckIcon, BuildingOffice2Icon } from '@heroicons/react/24/outline';
-import DashboardSuministrosModerno from './DashboardSuministrosModerno';
+import SuministrosReportsTab from './reportes/SuministrosReportsTab';
 
 export default function Reportes() {
   const [activeTab, setActiveTab] = useState('suministros');
@@ -35,7 +35,7 @@ export default function Reportes() {
   const renderContent = () => {
     switch (activeTab) {
       case 'suministros':
-        return <DashboardSuministrosModerno />;
+        return <SuministrosReportsTab />;
       case 'nomina':
         return renderNominaTab();
       case 'financiero':
@@ -43,7 +43,7 @@ export default function Reportes() {
       case 'operacional':
         return renderOperacionalTab();
       default:
-        return <DashboardSuministrosModerno />;
+        return <SuministrosReportsTab />;
     }
   };
 
@@ -173,7 +173,7 @@ export default function Reportes() {
             </h3>
             <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
               {activeTab === 'suministros' && 
-                'Análisis completo con datos reales de suministros. Incluye filtros avanzados y exportación a PDF/Excel.'
+                'Dashboard modular con componentes optimizados: filtros dinámicos, múltiples gráficas interactivas, tabla con ordenamiento, y exportación personalizada a PDF/Excel.'
               }
               {activeTab === 'nomina' && 
                 'Próximamente: análisis detallado de costos laborales y rendimiento de empleados.'

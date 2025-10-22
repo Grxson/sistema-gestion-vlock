@@ -76,6 +76,7 @@ import SuministroNotificationModal from '../components/SuministroNotificationMod
 import FiltroTipoCategoria from '../components/common/FiltroTipoCategoria';
 import UnidadesMedidaManager from '../components/UnidadesMedidaManager';
 import { useToast } from '../contexts/ToastContext';
+import { NominaService } from '../services/nominas/nominaService';
 
 // Importar testing suite para desarrollo
 if (process.env.NODE_ENV === 'development') {
@@ -615,7 +616,7 @@ const Suministros = () => {
 
           try {
             // Usar todos los suministros para que coincida con el Total Gastado general
-            chartDataProcessed.analisisPorTipoGasto = processAnalisisPorTipoGasto(suministrosData);
+            chartDataProcessed.analisisPorTipoGasto = await processAnalisisPorTipoGasto(suministrosData);
           } catch (error) {
             console.error('❌ Error en analisisPorTipoGasto:', error);
           chartDataProcessed.analisisPorTipoGasto = null;
@@ -1277,12 +1278,25 @@ const Suministros = () => {
   };
 
   // Procesar análisis por tipo de gasto (Proyecto vs Administrativo)
-  const processAnalisisPorTipoGasto = (data) => {
+  const processAnalisisPorTipoGasto = async (data) => {
     try {
       const gastosPorTipo = {};
       const cantidadPorTipo = {};
       
+      // Cargar datos de nómina
+      let nominasData = [];
+      try {
+        const nominasResponse = await NominaService.getAll({ 
+          estado: 'pagada',
+          limite: 1000 // Obtener todas las nóminas pagadas
+        });
+        nominasData = nominasResponse.data || [];
+        console.log('📊 Nóminas cargadas para análisis:', nominasData.length);
+      } catch (nominaError) {
+        console.warn('⚠️ No se pudieron cargar datos de nómina:', nominaError);
+      }
       
+      // Procesar suministros
       data.forEach((suministro, index) => {
         try {
           let tipoGasto = 'Sin clasificar';
@@ -1327,6 +1341,37 @@ const Suministros = () => {
         }
       });
 
+      // Procesar nóminas
+      nominasData.forEach((nomina) => {
+        try {
+          // Determinar tipo de gasto basado en el proyecto
+          let tipoGasto = 'Nómina'; // Nueva categoría para nómina
+          
+          // Si la nómina tiene proyecto asociado, es gasto de proyecto
+          // Si no tiene proyecto, es gasto administrativo
+          if (nomina.id_proyecto || nomina.proyecto) {
+            tipoGasto = 'Nómina - Proyecto';
+          } else {
+            tipoGasto = 'Nómina - Administrativo';
+          }
+          
+          // Obtener el monto total de la nómina
+          const montoNomina = parseFloat(nomina.monto_total || nomina.pago_semanal || 0);
+          
+          if (montoNomina > 0) {
+            if (!gastosPorTipo[tipoGasto]) {
+              gastosPorTipo[tipoGasto] = 0;
+              cantidadPorTipo[tipoGasto] = 0;
+            }
+            
+            gastosPorTipo[tipoGasto] += montoNomina;
+            cantidadPorTipo[tipoGasto] += 1;
+          }
+        } catch (nominaError) {
+          console.error('❌ Error procesando nómina en analisisPorTipoGasto:', nominaError, nomina);
+        }
+      });
+
       const tipos = Object.keys(gastosPorTipo);
       const valores = tipos.map(tipo => gastosPorTipo[tipo]);
       const cantidades = tipos.map(tipo => cantidadPorTipo[tipo]);
@@ -1346,9 +1391,11 @@ const Suministros = () => {
 
       // Colores específicos para tipos de gasto
       const coloresTipoGasto = {
-        'Proyecto': 'rgba(59, 130, 246, 0.8)',      // Azul para proyectos
-        'Administrativo': 'rgba(16, 185, 129, 0.8)', // Verde para administrativo
-        'Sin clasificar': 'rgba(156, 163, 175, 0.8)' // Gris para sin clasificar
+        'Proyecto': 'rgba(59, 130, 246, 0.8)',           // Azul para proyectos
+        'Administrativo': 'rgba(16, 185, 129, 0.8)',     // Verde para administrativo
+        'Nómina - Proyecto': 'rgba(139, 92, 246, 0.8)', // Púrpura para nómina de proyecto
+        'Nómina - Administrativo': 'rgba(236, 72, 153, 0.8)', // Rosa para nómina administrativa
+        'Sin clasificar': 'rgba(156, 163, 175, 0.8)'    // Gris para sin clasificar
       };
 
       const valorTotal = valores.reduce((sum, val) => sum + val, 0);
@@ -1371,18 +1418,36 @@ const Suministros = () => {
         metrics: {
           valorTotal: valorTotal.toFixed(2),
           cantidadTotal,
+          // Suministros
           totalProyecto: (gastosPorTipo['Proyecto'] || 0).toFixed(2),
           totalAdministrativo: (gastosPorTipo['Administrativo'] || 0).toFixed(2),
           cantidadProyecto: cantidadPorTipo['Proyecto'] || 0,
           cantidadAdministrativo: cantidadPorTipo['Administrativo'] || 0,
+          // Nóminas
+          totalNominaProyecto: (gastosPorTipo['Nómina - Proyecto'] || 0).toFixed(2),
+          totalNominaAdministrativo: (gastosPorTipo['Nómina - Administrativo'] || 0).toFixed(2),
+          cantidadNominaProyecto: cantidadPorTipo['Nómina - Proyecto'] || 0,
+          cantidadNominaAdministrativo: cantidadPorTipo['Nómina - Administrativo'] || 0,
+          // Totales combinados
+          totalProyectoCompleto: ((gastosPorTipo['Proyecto'] || 0) + (gastosPorTipo['Nómina - Proyecto'] || 0)).toFixed(2),
+          totalAdministrativoCompleto: ((gastosPorTipo['Administrativo'] || 0) + (gastosPorTipo['Nómina - Administrativo'] || 0)).toFixed(2),
           promedioProyecto: gastosPorTipo['Proyecto'] ? (gastosPorTipo['Proyecto'] / cantidadPorTipo['Proyecto']).toFixed(2) : 0,
           promedioAdministrativo: gastosPorTipo['Administrativo'] ? (gastosPorTipo['Administrativo'] / cantidadPorTipo['Administrativo']).toFixed(2) : 0,
           promedioGeneral: cantidadTotal > 0 ? (valorTotal / cantidadTotal).toFixed(2) : 0,
+          // Porcentajes solo de suministros
           porcentajeProyecto: valorTotal > 0 ? ((gastosPorTipo['Proyecto'] || 0) * 100 / valorTotal).toFixed(1) : 0,
           porcentajeAdministrativo: valorTotal > 0 ? ((gastosPorTipo['Administrativo'] || 0) * 100 / valorTotal).toFixed(1) : 0,
+          // Porcentajes de nómina
+          porcentajeNominaProyecto: valorTotal > 0 ? ((gastosPorTipo['Nómina - Proyecto'] || 0) * 100 / valorTotal).toFixed(1) : 0,
+          porcentajeNominaAdministrativo: valorTotal > 0 ? ((gastosPorTipo['Nómina - Administrativo'] || 0) * 100 / valorTotal).toFixed(1) : 0,
+          // Porcentajes combinados
+          porcentajeProyectoCompleto: valorTotal > 0 ? (((gastosPorTipo['Proyecto'] || 0) + (gastosPorTipo['Nómina - Proyecto'] || 0)) * 100 / valorTotal).toFixed(1) : 0,
+          porcentajeAdministrativoCompleto: valorTotal > 0 ? (((gastosPorTipo['Administrativo'] || 0) + (gastosPorTipo['Nómina - Administrativo'] || 0)) * 100 / valorTotal).toFixed(1) : 0,
           balanceString: (() => {
-            const proyectoPerc = valorTotal > 0 ? ((gastosPorTipo['Proyecto'] || 0) * 100 / valorTotal) : 0;
-            const adminPerc = valorTotal > 0 ? ((gastosPorTipo['Administrativo'] || 0) * 100 / valorTotal) : 0;
+            const proyectoTotal = (gastosPorTipo['Proyecto'] || 0) + (gastosPorTipo['Nómina - Proyecto'] || 0);
+            const adminTotal = (gastosPorTipo['Administrativo'] || 0) + (gastosPorTipo['Nómina - Administrativo'] || 0);
+            const proyectoPerc = valorTotal > 0 ? (proyectoTotal * 100 / valorTotal) : 0;
+            const adminPerc = valorTotal > 0 ? (adminTotal * 100 / valorTotal) : 0;
             
             if (proyectoPerc > 70) return 'Enfocado en Proyectos';
             if (adminPerc > 70) return 'Enfocado Administrativo';
@@ -1390,20 +1455,26 @@ const Suministros = () => {
             return proyectoPerc > adminPerc ? 'Más Proyectos' : 'Más Administrativo';
           })(),
           interpretacion: (() => {
-            const proyectoPerc = valorTotal > 0 ? ((gastosPorTipo['Proyecto'] || 0) * 100 / valorTotal) : 0;
-            const adminPerc = valorTotal > 0 ? ((gastosPorTipo['Administrativo'] || 0) * 100 / valorTotal) : 0;
+            const proyectoTotal = (gastosPorTipo['Proyecto'] || 0) + (gastosPorTipo['Nómina - Proyecto'] || 0);
+            const adminTotal = (gastosPorTipo['Administrativo'] || 0) + (gastosPorTipo['Nómina - Administrativo'] || 0);
+            const proyectoPerc = valorTotal > 0 ? (proyectoTotal * 100 / valorTotal) : 0;
+            const adminPerc = valorTotal > 0 ? (adminTotal * 100 / valorTotal) : 0;
+            const nominaTotal = (gastosPorTipo['Nómina - Proyecto'] || 0) + (gastosPorTipo['Nómina - Administrativo'] || 0);
+            const nominaPerc = valorTotal > 0 ? (nominaTotal * 100 / valorTotal) : 0;
             
             if (proyectoPerc > 70) {
-              return `El ${proyectoPerc.toFixed(1)}% del presupuesto se destina a proyectos, indicando una fuerte inversión en desarrollo y construcción.`;
+              return `El ${proyectoPerc.toFixed(1)}% del presupuesto se destina a proyectos (incluyendo ${nominaPerc.toFixed(1)}% en nómina), indicando una fuerte inversión en desarrollo y construcción.`;
             } else if (adminPerc > 70) {
-              return `El ${adminPerc.toFixed(1)}% del presupuesto es administrativo, sugiriendo un enfoque en operaciones y mantenimiento.`;
+              return `El ${adminPerc.toFixed(1)}% del presupuesto es administrativo (incluyendo ${nominaPerc.toFixed(1)}% en nómina), sugiriendo un enfoque en operaciones y mantenimiento.`;
             } else {
-              return `La distribución está balanceada con ${proyectoPerc.toFixed(1)}% para proyectos y ${adminPerc.toFixed(1)}% administrativo.`;
+              return `La distribución está balanceada con ${proyectoPerc.toFixed(1)}% para proyectos y ${adminPerc.toFixed(1)}% administrativo. Las nóminas representan ${nominaPerc.toFixed(1)}% del total.`;
             }
           })(),
           recomendacion: (() => {
-            const proyectoPerc = valorTotal > 0 ? ((gastosPorTipo['Proyecto'] || 0) * 100 / valorTotal) : 0;
-            const adminPerc = valorTotal > 0 ? ((gastosPorTipo['Administrativo'] || 0) * 100 / valorTotal) : 0;
+            const proyectoTotal = (gastosPorTipo['Proyecto'] || 0) + (gastosPorTipo['Nómina - Proyecto'] || 0);
+            const adminTotal = (gastosPorTipo['Administrativo'] || 0) + (gastosPorTipo['Nómina - Administrativo'] || 0);
+            const proyectoPerc = valorTotal > 0 ? (proyectoTotal * 100 / valorTotal) : 0;
+            const adminPerc = valorTotal > 0 ? (adminTotal * 100 / valorTotal) : 0;
             
             if (proyectoPerc > 80) {
               return 'Considere aumentar los gastos administrativos para mantener operaciones eficientes.';
@@ -5171,7 +5242,7 @@ const Suministros = () => {
                           </div>
                           <div>
                             <h2 className="text-2xl font-bold">Análisis por Tipo de Gasto</h2>
-                            <p className="text-indigo-100 text-sm">Clasificación entre gastos de Proyecto y Administrativos</p>
+                            <p className="text-indigo-100 text-sm">Clasificación de Suministros y Nóminas por Proyecto y Administrativos</p>
                           </div>
                         </div>
                         <button
@@ -5260,19 +5331,25 @@ const Suministros = () => {
                               <div className="space-y-3">
                                 <div>
                                   <div className="text-3xl font-bold text-blue-800 dark:text-blue-200">
-                                    {chartData.analisisPorTipoGasto.metrics?.porcentajeProyecto || '0'}%
+                                    {chartData.analisisPorTipoGasto.metrics?.porcentajeProyectoCompleto || '0'}%
                                   </div>
                                   <div className="text-xs text-blue-600 dark:text-blue-400">del total</div>
                                 </div>
                                 <div>
                                   <div className="text-lg font-bold text-blue-800 dark:text-blue-200">
-                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyectoCompleto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                   </div>
                                   <div className="text-xs text-blue-600 dark:text-blue-400">total invertido</div>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-blue-600 dark:text-blue-400">Items:</span>
-                                  <span className="font-semibold text-blue-800 dark:text-blue-200">{chartData.analisisPorTipoGasto.metrics?.cantidadProyecto || '0'}</span>
+                                <div className="text-xs text-blue-600 dark:text-blue-400 space-y-1 pt-2 border-t border-blue-200 dark:border-blue-700">
+                                  <div className="flex justify-between">
+                                    <span>Suministros:</span>
+                                    <span className="font-semibold">${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Nómina:</span>
+                                    <span className="font-semibold">${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalNominaProyecto || '0').toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -5288,19 +5365,25 @@ const Suministros = () => {
                               <div className="space-y-3">
                                 <div>
                                   <div className="text-3xl font-bold text-emerald-800 dark:text-emerald-200">
-                                    {chartData.analisisPorTipoGasto.metrics?.porcentajeAdministrativo || '0'}%
+                                    {chartData.analisisPorTipoGasto.metrics?.porcentajeAdministrativoCompleto || '0'}%
                                   </div>
                                   <div className="text-xs text-emerald-600 dark:text-emerald-400">del total</div>
                                 </div>
                                 <div>
                                   <div className="text-lg font-bold text-emerald-800 dark:text-emerald-200">
-                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                    ${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativoCompleto || '0').toLocaleString('es-MX', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                   </div>
                                   <div className="text-xs text-emerald-600 dark:text-emerald-400">total invertido</div>
                                 </div>
-                                <div className="flex justify-between text-sm">
-                                  <span className="text-emerald-600 dark:text-emerald-400">Items:</span>
-                                  <span className="font-semibold text-emerald-800 dark:text-emerald-200">{chartData.analisisPorTipoGasto.metrics?.cantidadAdministrativo || '0'}</span>
+                                <div className="text-xs text-emerald-600 dark:text-emerald-400 space-y-1 pt-2 border-t border-emerald-200 dark:border-emerald-700">
+                                  <div className="flex justify-between">
+                                    <span>Suministros:</span>
+                                    <span className="font-semibold">${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Nómina:</span>
+                                    <span className="font-semibold">${parseFloat(chartData.analisisPorTipoGasto.metrics?.totalNominaAdministrativo || '0').toLocaleString('es-MX', {minimumFractionDigits: 0})}</span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
