@@ -288,26 +288,68 @@ export default function FormularioSuministros({
     if (!unidadesDinamicas || unidadesDinamicas.length === 0) {
       return {}; // Sin mapeo si no hay unidades cargadas
     }
-    
+
     const dynamicMapping = {};
     unidadesDinamicas.forEach(unidad => {
-      if (unidad.simbolo && unidad.id_unidad) {
-        dynamicMapping[unidad.simbolo] = unidad.id_unidad;
-        // También mapear variaciones comunes
-        const simboloLower = unidad.simbolo.toLowerCase();
-        dynamicMapping[simboloLower] = unidad.id_unidad;
-        
+      const unidadId = unidad?.id_unidad ?? unidad?.id_unidad_medida ?? unidad?.id;
+      if (!unidadId) {
+        return;
+      }
+
+      const simbolo = unidad?.simbolo?.trim();
+      const nombre = unidad?.nombre?.trim();
+
+      if (simbolo) {
+        dynamicMapping[simbolo] = unidadId;
+        dynamicMapping[simbolo.toLowerCase()] = unidadId;
+
         // Mapeos específicos para compatibilidad
-        if (simboloLower === 'pza' || simboloLower === 'pz') {
-          dynamicMapping['pz'] = unidad.id_unidad;
-          dynamicMapping['pza'] = unidad.id_unidad;
+        if (simbolo.toLowerCase() === 'pza' || simbolo.toLowerCase() === 'pz') {
+          dynamicMapping['pz'] = unidadId;
+          dynamicMapping['pza'] = unidadId;
         }
       }
+
+      if (nombre) {
+        dynamicMapping[nombre] = unidadId;
+        dynamicMapping[nombre.toLowerCase()] = unidadId;
+      }
+
+      // Fallback basado en ID para evitar pérdidas de referencia
+      dynamicMapping[`id:${unidadId}`] = unidadId;
     });
-    
+
     console.log('🔄 Mapeo dinámico de unidades actualizado:', dynamicMapping);
     return dynamicMapping;
   }, [unidadesDinamicas]);
+
+  const resolveUnidadId = useCallback((valor) => {
+    if (!valor) {
+      return null;
+    }
+
+    const directo = unidadSymbolToId[valor] || unidadSymbolToId[valor.toLowerCase?.()];
+    if (directo) {
+      return directo;
+    }
+
+    const lowerValor = valor.toLowerCase();
+    const match = unidadesDinamicas.find(unidad => {
+      const simbolo = unidad?.simbolo?.trim();
+      const nombre = unidad?.nombre?.trim();
+
+      return (
+        (simbolo && simbolo.toLowerCase() === lowerValor) ||
+        (nombre && nombre.toLowerCase() === lowerValor)
+      );
+    });
+
+    if (match) {
+      return match.id_unidad ?? match.id_unidad_medida ?? match.id ?? null;
+    }
+
+    return null;
+  }, [unidadSymbolToId, unidadesDinamicas]);
 
   // Keys cacheadas para evitar recálculos
   const unidadKeys = useMemo(() => Object.keys(unidades), [unidades]);
@@ -317,8 +359,8 @@ export default function FormularioSuministros({
 
   // Asignar unidad inicial cuando existan unidades disponibles y no haya una seleccionada
   useEffect(() => {
-    if (initialData && initialData.suministros) {
-      // Si estamos editando, no sobreescribir unidades existentes
+    if (initialData) {
+      // Si estamos editando (individual o múltiple), respetar unidad existente
       return;
     }
 
@@ -359,7 +401,7 @@ export default function FormularioSuministros({
         id_unidad_medida: resolvedId
       };
     }));
-  }, [unidades, unidadSymbolToId, unidadesDinamicas, initialData]);
+  }, [unidades, resolveUnidadId, initialData]);
 
   // Función optimizada para normalizar unidad de medida
   const normalizeUnidadMedida = useCallback((unidadFromDB) => {
@@ -527,6 +569,9 @@ export default function FormularioSuministros({
       const suministrosCargados = suministrosParaProcesar.reduce((acc, suministro, index) => {
         // ⚡ Cache normalizaciones para evitar recálculos
         const unidadNormalizada = normalizeUnidadMedida(suministro.unidad_medida);
+        const unidadIdInicial = suministro.id_unidad_medida ??
+          resolveUnidadId(unidadNormalizada) ??
+          resolveUnidadId(suministro.unidad_medida);
         const categoriaId = suministro.id_categoria_suministro || getCategoriaIdFromName(suministro.tipo_suministro || suministro.categoria);
         const fechaNormalizada = normalizeFecha(suministro.fecha_necesaria || suministro.fecha || initialData?.fecha);
         
@@ -539,6 +584,7 @@ export default function FormularioSuministros({
           descripcion_detallada: suministro.descripcion_detallada || '',
           cantidad: suministro.cantidad?.toString() || '',
           unidad_medida: unidadNormalizada,
+          id_unidad_medida: unidadIdInicial || null,
           precio_unitario: suministro.precio_unitario?.toString() || '',
           estado: suministro.estado || 'Entregado',
           fecha_necesaria: fechaNormalizada,
@@ -574,7 +620,7 @@ export default function FormularioSuministros({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [initialData, normalizeUnidadMedida, normalizeCategoria, normalizeFecha]);
+  }, [initialData, normalizeUnidadMedida, normalizeCategoria, normalizeFecha, resolveUnidadId]);
 
   // =================== FUNCIONES DE VALIDACIÓN Y AUTOCOMPLETADO OPTIMIZADAS ===================
   
@@ -964,8 +1010,14 @@ export default function FormularioSuministros({
       }
       
       // También actualizar el ID de unidad de medida
-      additionalFields.id_unidad_medida = unidadSymbolToId[normalizedValue] || null;
-      
+      let unidadMedidaId = unidadSymbolToId[normalizedValue];
+      if (!unidadMedidaId && normalizedValue) {
+        const lowerNormalized = normalizedValue.toLowerCase?.();
+        unidadMedidaId = (lowerNormalized && unidadSymbolToId[lowerNormalized]) || resolveUnidadId(normalizedValue);
+      }
+
+      additionalFields.id_unidad_medida = unidadMedidaId || null;
+
     } else if (field === 'id_categoria_suministro') {
       // Solo normalizar si el valor no es null/undefined
       if (value !== null && value !== undefined) {
@@ -1017,7 +1069,7 @@ export default function FormularioSuministros({
     } else if (field === 'codigo_producto' && value.length >= 2) {
       searchCodeSuggestions(value, id);
     }
-  }, [normalizeUnidadMedida, normalizeCategoria, searchNameSuggestions, searchCodeSuggestions]);
+  }, [normalizeUnidadMedida, normalizeCategoria, searchNameSuggestions, searchCodeSuggestions, unidadSymbolToId, resolveUnidadId]);
 
   // Función mejorada para manejar cambios en el folio del proveedor
   const handleFolioChange = (value) => {
@@ -1731,13 +1783,22 @@ export default function FormularioSuministros({
                       value={(() => {
                         const currentValue = suministro.unidad_medida;
                         const isValid = currentValue && unidades[currentValue];
-                        const defaultSymbol = unidadKeys[0] || '';
                         
-                        // Solo log en desarrollo y con debugging habilitado, y evitar spam
-                        if (process.env.NODE_ENV === 'development' && globalThis.debugForms && !isValid) {
+                        if (isValid) return currentValue;
+                        
+                        // Si no es válido, buscar el símbolo basado en id_unidad_medida
+                        if (suministro.id_unidad_medida) {
+                          const unidadDinamica = unidadesDinamicas.find(u => 
+                            u.id_unidad === suministro.id_unidad_medida || 
+                            u.id === suministro.id_unidad_medida
+                          );
+                          if (unidadDinamica && unidadDinamica.simbolo && unidades[unidadDinamica.simbolo]) {
+                            return unidadDinamica.simbolo;
+                          }
                         }
                         
-                        return isValid ? currentValue : defaultSymbol;
+                        // Fallback al primer símbolo
+                        return unidadKeys[0] || '';
                       })()}
                       onChange={(e) => actualizarSuministro(suministro.id_temp, 'unidad_medida', e.target.value)}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-500"

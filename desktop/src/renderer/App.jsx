@@ -21,6 +21,7 @@ import Herramientas from './pages/Herramientas';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 import ProfilePage from './pages/ProfilePage';
 import ConfigurationPage from './pages/ConfigurationPage';
+import AdeudosGenerales from './components/AdeudosGenerales';
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 
 // Importar router de presupuestos
@@ -50,6 +51,7 @@ function MainApp() {
     '/reportes': 'Reportes',
     '/suministros': 'Suministros',
     '/proveedores': 'Proveedores',
+    '/adeudos-generales': 'Adeudos',
     '/diagnostico': 'Diagnóstico',
     '/configuracion': 'Configuración',
     '/perfil': 'Mi Perfil',
@@ -125,7 +127,8 @@ function MainApp() {
         usuarios: 'Usuarios',
         roles: 'Roles',
         config: 'Configuración',
-        presupuestos: 'Presupuestos'
+        presupuestos: 'Presupuestos',
+        'adeudos-generales': 'Adeudos'
       };
       
       return <AccessDenied moduleName={moduleNames[currentModule]} />;
@@ -160,6 +163,8 @@ function MainApp() {
         return <Proveedores />;
       case '/herramientas':
         return <Herramientas />;
+      case '/adeudos-generales':
+        return <AdeudosGenerales />;
       case '/configuracion':
         return <ConfigurationPage />;
       case '/usuarios':

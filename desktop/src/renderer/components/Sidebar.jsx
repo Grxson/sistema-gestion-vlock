@@ -26,7 +26,8 @@ import {
   RectangleGroupIcon,
   CalculatorIcon,
   ChevronDownIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  BanknotesIcon
 } from '@heroicons/react/24/outline';
 
 
@@ -57,6 +58,7 @@ const navigationItems = [
     permissionModule: 'herramientas',
     hasSubmenu: false
   },
+  { name: 'Adeudos', href: '/adeudos-generales', icon: BanknotesIcon, current: false, permissionModule: 'adeudos' },
   { 
     name: 'Presupuestos', 
     href: '/presupuestos', 
@@ -153,7 +155,8 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
       'roles': 'roles.ver',
       'configuracion': 'configuracion.ver',
       'finanzas': 'finanzas.gastos.ver',
-      'proyectos': 'proyectos.ver'
+      'proyectos': 'proyectos.ver',
+      'adeudos': 'adeudos.ver'
     };
     
     // Obtener el código de permiso para este módulo
