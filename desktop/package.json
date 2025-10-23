@@ -1,6 +1,6 @@
 {
   "name": "vlock-sistema-gestion",
-  "version": "1.2.1-beta",
+  "version": "2.0.0",
   "description": "Vlock Sistema de Gestión",
   "main": "src/main/index.js",
   "homepage": "https://vlock.com",
@@ -8,16 +8,18 @@
     "start": "npm run build && electron .",
     "dev": "concurrently -k \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
-    "dev:electron": "wait-on http://localhost:3000 && cross-env NODE_ENV=development ELECTRON_DISABLE_SECURITY_WARNINGS=true electron .",
+    "dev:electron": "wait-on http://localhost:3000 && cross-env NODE_ENV=development ELECTRON_DISABLE_SECURITY_WARNINGS=true electron . --no-sandbox",
     "build": "vite build",
     "build:electron": "npm run build && electron-builder",
-    "dist": "npm run build && electron-builder --publish=never",
-    "dist:win": "npm run build && electron-builder --win --publish=never",
-    "dist:mac": "npm run build && electron-builder --mac --publish=never",
-    "dist:linux": "npm run build && electron-builder --linux --publish=never"
+    "prepare-icons": "node prepare-icons.js",
+    "dist": "npm run prepare-icons && npm run build && electron-builder --publish=never",
+    "dist:win": "npm run prepare-icons && npm run build && electron-builder --win --publish=never",
+    "dist:mac": "npm run prepare-icons && npm run build && electron-builder --mac --publish=never",
+    "dist:linux": "npm run prepare-icons && npm run build && electron-builder --linux --publish=never",
+    "dist:all": "npm run prepare-icons && npm run build && electron-builder --win --linux --publish=never"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": ["vlock", "gestion", "nomina", "proyectos", "suministros"],
+  "author": "Vlock",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
@@ -103,10 +105,19 @@
           "arch": [
             "x64"
           ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
         }
       ],
       "icon": "build/icon.png",
-      "category": "Office"
+      "category": "Office",
+      "maintainer": "Vlock",
+      "vendor": "Vlock",
+      "synopsis": "Sistema de Gestión Empresarial"
     },
     "nsis": {
       "oneClick": false,
