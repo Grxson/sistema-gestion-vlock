@@ -7,6 +7,18 @@ const { verifyToken, verifyRole } = require('../middlewares/auth');
 router.use(verifyToken);
 router.use(verifyRole([1]));
 
+// Obtener estadísticas de auditoría
+router.get('/estadisticas', auditoriaController.getEstadisticas);
+
+// Obtener lista de tablas disponibles
+router.get('/tablas', auditoriaController.getTablas);
+
+// Exportar registros a Excel
+router.get('/exportar/excel', auditoriaController.exportarExcel);
+
+// Exportar registros a PDF
+router.get('/exportar/pdf', auditoriaController.exportarPDF);
+
 // Obtener registros de auditoría (con filtros y paginación)
 router.get('/', auditoriaController.getRegistrosAuditoria);
 

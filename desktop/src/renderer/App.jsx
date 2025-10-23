@@ -18,6 +18,7 @@ import Suministros from './pages/Suministros';
 import Proveedores from './pages/Proveedores';
 import Proyectos from './pages/Proyectos';
 import Herramientas from './pages/Herramientas';
+import Auditoria from './pages/Auditoria';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 import ProfilePage from './pages/ProfilePage';
 import ConfigurationPage from './pages/ConfigurationPage';
@@ -46,6 +47,7 @@ function MainApp() {
     '/nomina': 'Nomina',
     '/contratos': 'Contratos',
     '/oficios': 'Oficios',
+    '/auditoria': 'Auditoría',
     '/usuarios': 'Usuarios',
     '/roles': 'Roles',
     '/reportes': 'Reportes',
@@ -147,14 +149,7 @@ function MainApp() {
       case '/oficios':
         return <Oficios />;
       case '/auditoria':
-        return (
-          <div className="text-center py-20">
-            <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl p-10 max-w-md mx-auto">
-              <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">Módulo de Auditoría</h2>
-              <p className="text-gray-600 dark:text-gray-400">En desarrollo...</p>
-            </div>
-          </div>
-        );
+        return <Auditoria />;
       case '/reportes':
         return <Reportes />;
       case '/suministros':
