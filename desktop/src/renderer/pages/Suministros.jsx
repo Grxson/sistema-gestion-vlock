@@ -615,12 +615,12 @@ const Suministros = () => {
         }
 
           try {
-            // Usar todos los suministros para que coincida con el Total Gastado general
-            chartDataProcessed.analisisPorTipoGasto = await processAnalisisPorTipoGasto(suministrosData);
-          } catch (error) {
-            console.error('❌ Error en analisisPorTipoGasto:', error);
-          chartDataProcessed.analisisPorTipoGasto = null;
-        }
+          // Usar datos filtrados para que responda a los filtros de gráficas
+          chartDataProcessed.analisisPorTipoGasto = await processAnalisisPorTipoGasto(filteredData, chartFilters);
+        } catch (error) {
+          console.error('❌ Error en analisisPorTipoGasto:', error);
+        chartDataProcessed.analisisPorTipoGasto = null;
+      }  
 
         try {
           chartDataProcessed.tendenciaEntregas = processTendenciaEntregas(filteredData);
@@ -1278,7 +1278,7 @@ const Suministros = () => {
   };
 
   // Procesar análisis por tipo de gasto (Proyecto vs Administrativo)
-  const processAnalisisPorTipoGasto = async (data) => {
+  const processAnalisisPorTipoGasto = async (data, filters = {}) => {
     try {
       const gastosPorTipo = {};
       const cantidadPorTipo = {};
@@ -1292,6 +1292,29 @@ const Suministros = () => {
         });
         nominasData = nominasResponse.data || [];
         console.log('📊 Nóminas cargadas para análisis:', nominasData.length);
+        
+        // Aplicar filtros a las nóminas
+        if (filters.proyectoId) {
+          nominasData = nominasData.filter(nomina => {
+            const proyectoIdNomina = nomina.id_proyecto || (nomina.proyecto && nomina.proyecto.id_proyecto);
+            return proyectoIdNomina && proyectoIdNomina.toString() === filters.proyectoId.toString();
+          });
+          console.log('📊 Nóminas filtradas por proyecto:', nominasData.length);
+        }
+        
+        // Filtro por rango de fechas
+        if (filters.fechaInicio || filters.fechaFin) {
+          nominasData = nominasData.filter(nomina => {
+            const fechaNomina = new Date(nomina.fecha_pago || nomina.createdAt);
+            if (isNaN(fechaNomina.getTime())) return false;
+            
+            const matchesFechaInicio = !filters.fechaInicio || fechaNomina >= new Date(filters.fechaInicio);
+            const matchesFechaFin = !filters.fechaFin || fechaNomina <= new Date(filters.fechaFin);
+            
+            return matchesFechaInicio && matchesFechaFin;
+          });
+          console.log('📊 Nóminas filtradas por fecha:', nominasData.length);
+        }
       } catch (nominaError) {
         console.warn('⚠️ No se pudieron cargar datos de nómina:', nominaError);
       }

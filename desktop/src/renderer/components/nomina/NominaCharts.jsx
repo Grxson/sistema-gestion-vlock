@@ -37,7 +37,7 @@ ChartJS.register(
 );
 
 export default function NominaCharts({ chartsData, loading }) {
-  const [selectedChart, setSelectedChart] = useState('estados');
+  const [selectedChart, setSelectedChart] = useState('proyectos');
   const [showFullscreen, setShowFullscreen] = useState(false);
 
   if (loading || !chartsData) {
@@ -51,7 +51,7 @@ export default function NominaCharts({ chartsData, loading }) {
     );
   }
 
-  const { estadosDistribution, monthlyPayments, topEmpleados } = chartsData;
+  const { proyectosDistribution, monthlyPayments, topEmpleados } = chartsData;
 
   // Configuración común para las gráficas
   const commonOptions = {
@@ -111,15 +111,15 @@ export default function NominaCharts({ chartsData, loading }) {
     }
   };
 
-  // Datos para gráfica de distribución por estado
-  const estadosChartData = {
-    labels: estadosDistribution.labels,
+  // Datos para gráfica de nómina por proyecto
+  const proyectosChartData = {
+    labels: proyectosDistribution.labels,
     datasets: [
       {
-        label: 'Nóminas',
-        data: estadosDistribution.data,
-        backgroundColor: estadosDistribution.colors,
-        borderColor: estadosDistribution.colors.map(color => color),
+        label: 'Monto Total',
+        data: proyectosDistribution.data,
+        backgroundColor: proyectosDistribution.colors,
+        borderColor: proyectosDistribution.colors.map(color => color),
         borderWidth: 2,
         hoverOffset: 4,
       },
@@ -186,13 +186,13 @@ export default function NominaCharts({ chartsData, loading }) {
 
   const charts = [
     {
-      id: 'estados',
-      title: 'Distribución por Estado',
-      description: 'Nóminas clasificadas por su estado actual',
+      id: 'proyectos',
+      title: 'Nómina por Proyecto',
+      description: 'Distribución de nóminas por proyecto',
       icon: ChartPieIcon,
       component: (
         <Doughnut 
-          data={estadosChartData} 
+          data={proyectosChartData} 
           options={{
             ...commonOptions,
             plugins: {
@@ -200,6 +200,18 @@ export default function NominaCharts({ chartsData, loading }) {
               legend: {
                 ...commonOptions.plugins.legend,
                 position: 'right',
+              },
+              tooltip: {
+                ...commonOptions.plugins.tooltip,
+                callbacks: {
+                  label: function(context) {
+                    const label = context.label || '';
+                    const value = formatCurrency(context.parsed);
+                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                    const percentage = ((context.parsed / total) * 100).toFixed(1);
+                    return `${label}: ${value} (${percentage}%)`;
+                  }
+                }
               }
             }
           }} 
@@ -320,30 +332,96 @@ export default function NominaCharts({ chartsData, loading }) {
         </div>
       )}
 
-      {/* Estadísticas Adicionales */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Resumen de Estados */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-          <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-            Resumen por Estado
+      {/* Tabla Desglosada de Nómina por Proyecto */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+          <h4 className="text-lg font-medium text-gray-900 dark:text-white">
+            Desglose Detallado por Proyecto
           </h4>
-          <div className="space-y-3">
-            {estadosDistribution.labels.map((label, index) => (
-              <div key={index} className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <div 
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: estadosDistribution.colors[index] }}
-                  ></div>
-                  <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
-                </div>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                  {estadosDistribution.data[index]}
-                </span>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Información completa de nóminas por proyecto
+          </p>
         </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-900">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Proyecto
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Monto Total
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Nóminas
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  Empleados
+                </th>
+                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  %
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+              {proyectosDistribution.detalles.map((detalle, index) => {
+                const total = proyectosDistribution.data.reduce((a, b) => a + b, 0);
+                const percentage = ((detalle.monto / total) * 100).toFixed(1);
+                return (
+                  <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex items-center space-x-2">
+                        <div 
+                          className="w-3 h-3 rounded-full flex-shrink-0"
+                          style={{ backgroundColor: proyectosDistribution.colors[index] }}
+                        ></div>
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">
+                          {detalle.proyecto}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900 dark:text-white">
+                      {formatCurrency(detalle.monto)}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400">
+                      {detalle.cantidad}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400">
+                      {detalle.empleados}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300">
+                        {percentage}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              {/* Fila de totales */}
+              <tr className="bg-gray-50 dark:bg-gray-900 font-semibold">
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                  TOTAL
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                  {formatCurrency(proyectosDistribution.data.reduce((a, b) => a + b, 0))}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                  {proyectosDistribution.cantidad.reduce((a, b) => a + b, 0)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                  {proyectosDistribution.empleados.reduce((a, b) => a + b, 0)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                  100%
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Estadísticas Adicionales */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
         {/* Top 5 Empleados */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">

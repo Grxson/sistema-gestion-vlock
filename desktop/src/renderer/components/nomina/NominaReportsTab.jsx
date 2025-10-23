@@ -3,6 +3,7 @@ import { formatCurrency } from '../../utils/currency';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { useEmpleados } from '../../contexts/EmpleadosContext';
+import api from '../../services/api';
 import * as XLSX from 'xlsx';
 import NominaWeeklySummary from './NominaWeeklySummary';
 import NominaCharts from './NominaCharts';
@@ -34,6 +35,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [weeklyReportsData, setWeeklyReportsData] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [proyectos, setProyectos] = useState([]);
 
   // Función para exportar a Excel
   const exportToExcel = () => {
@@ -138,16 +140,29 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     }
   };
 
+  // Cargar proyectos
+  useEffect(() => {
+    const loadProyectos = async () => {
+      try {
+        const response = await api.getProyectos();
+        setProyectos(response.data || []);
+      } catch (error) {
+        console.error('Error cargando proyectos:', error);
+      }
+    };
+    loadProyectos();
+  }, []);
+
   // Calcular datos semanales
   useEffect(() => {
-    if (nominas && empleados) {
+    if (nominas && empleados && proyectos.length > 0) {
       calculateWeeklyData();
       calculateChartsData();
       calculatePaymentsData();
       calculateMonthlyData();
       calculateWeeklyReportsData();
     }
-  }, [nominas, empleados, selectedPeriod, selectedYear]);
+  }, [nominas, empleados, proyectos, selectedPeriod, selectedYear]);
 
   const calculateWeeklyData = () => {
     const today = new Date();
@@ -200,12 +215,59 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   };
 
   const calculateChartsData = () => {
-    // Datos para gráfica de distribución por estado
-    const estadosCount = nominas.reduce((acc, nomina) => {
-      const estado = nomina.estado || 'Sin estado';
-      acc[estado] = (acc[estado] || 0) + 1;
-      return acc;
-    }, {});
+    // Datos para gráfica de nómina por proyecto
+    const proyectosData = {};
+    nominas.forEach(nomina => {
+      const proyectoId = nomina.id_proyecto || (nomina.proyecto && nomina.proyecto.id_proyecto);
+      
+      // Buscar nombre del proyecto en el array de proyectos
+      let proyectoNombre = 'Administrativo';
+      if (proyectoId) {
+        const proyecto = proyectos.find(p => p.id_proyecto === proyectoId);
+        proyectoNombre = proyecto ? proyecto.nombre : `Proyecto ${proyectoId}`;
+      }
+      
+      if (!proyectosData[proyectoNombre]) {
+        proyectosData[proyectoNombre] = {
+          monto: 0,
+          cantidad: 0,
+          empleados: new Set()
+        };
+      }
+      
+      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
+      proyectosData[proyectoNombre].monto += (isNaN(monto) ? 0 : monto);
+      proyectosData[proyectoNombre].cantidad += 1;
+      
+      const empleadoId = nomina.id_empleado || (nomina.empleado && nomina.empleado.id_empleado);
+      if (empleadoId) {
+        proyectosData[proyectoNombre].empleados.add(empleadoId);
+      }
+    });
+    
+    // Convertir Set a número para empleados únicos
+    Object.keys(proyectosData).forEach(proyecto => {
+      proyectosData[proyecto].empleadosUnicos = proyectosData[proyecto].empleados.size;
+      delete proyectosData[proyecto].empleados;
+    });
+    
+    // Ordenar por monto descendente
+    const proyectosOrdenados = Object.entries(proyectosData)
+      .sort((a, b) => b[1].monto - a[1].monto);
+    
+    // Colores para proyectos
+    const coloresProyectos = [
+      '#3B82F6', // Azul
+      '#10B981', // Verde
+      '#F59E0B', // Ámbar
+      '#EF4444', // Rojo
+      '#8B5CF6', // Púrpura
+      '#06B6D4', // Cian
+      '#84CC16', // Lima
+      '#F97316', // Naranja
+      '#EC4899', // Rosa
+      '#6B7280'  // Gris
+    ];
 
     // Datos para gráfica de pagos por semana del mes actual (4 semanas)
     const weeklyData = {};
@@ -269,10 +331,18 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       .slice(0, 10);
 
     setChartsData({
-      estadosDistribution: {
-        labels: Object.keys(estadosCount),
-        data: Object.values(estadosCount),
-        colors: ['#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#6B7280']
+      proyectosDistribution: {
+        labels: proyectosOrdenados.map(([nombre]) => nombre),
+        data: proyectosOrdenados.map(([, data]) => data.monto),
+        cantidad: proyectosOrdenados.map(([, data]) => data.cantidad),
+        empleados: proyectosOrdenados.map(([, data]) => data.empleadosUnicos),
+        colors: proyectosOrdenados.map((_, index) => coloresProyectos[index % coloresProyectos.length]),
+        detalles: proyectosOrdenados.map(([nombre, data]) => ({
+          proyecto: nombre,
+          monto: data.monto,
+          cantidad: data.cantidad,
+          empleados: data.empleadosUnicos
+        }))
       },
       monthlyPayments: {
         labels: weeksOfMonth,
@@ -589,7 +659,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
       {/* Tabs */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="border-b border-gray-200 dark:border-gray-700">
+        <div className="border-b border-gray-200 dark:border-gray-700"> 
           <nav className="flex space-x-8 px-6" aria-label="Tabs">
             {tabs.map((tab) => {
               const Icon = tab.icon;
