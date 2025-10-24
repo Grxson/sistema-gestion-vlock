@@ -161,7 +161,11 @@ const createNomina = async (req, res) => {
             pago_parcial = false,
             monto_a_pagar = null,
             liquidar_adeudos = false,
-            es_pago_semanal = false
+            es_pago_semanal = false,
+            // Nuevos campos: período y semana seleccionados por el usuario
+            periodo_anio,
+            periodo_mes,
+            semana_del_mes
         } = req.body;
 
         // Validaciones básicas
@@ -182,8 +186,32 @@ const createNomina = async (req, res) => {
         const aplicarInfonavit = aplicar_infonavit !== false; // Por defecto aplica Infonavit a menos que se especifique false
 
         // Buscar o crear la semana en la tabla semanas_nomina
-        const fechaActual = new Date();
-        const infoSemana = generarInfoSemana(fechaActual);
+        // Si el frontend envía período y semana, usarlos; si no, usar fecha actual (retrocompatibilidad)
+        let infoSemana;
+        if (periodo_anio && periodo_mes && semana_del_mes) {
+            // Calcular la fecha de inicio de la semana basándose en el período y semana del mes
+            const primerDiaDelMes = new Date(periodo_anio, periodo_mes - 1, 1);
+            const diasHastaLunes = (8 - primerDiaDelMes.getDay()) % 7;
+            const primerLunes = new Date(periodo_anio, periodo_mes - 1, 1 + diasHastaLunes);
+            
+            // Calcular fecha de inicio de la semana seleccionada
+            const fechaInicioSemana = new Date(primerLunes);
+            fechaInicioSemana.setDate(primerLunes.getDate() + (semana_del_mes - 1) * 7);
+            
+            infoSemana = generarInfoSemana(fechaInicioSemana);
+            
+            console.log('🔍 [CREATE_NOMINA] Usando período y semana del usuario:', {
+                periodo_anio,
+                periodo_mes,
+                semana_del_mes,
+                fechaCalculada: fechaInicioSemana.toISOString()
+            });
+        } else {
+            // Retrocompatibilidad: usar fecha actual si no se envían los datos
+            const fechaActual = new Date();
+            infoSemana = generarInfoSemana(fechaActual);
+            console.log('⚠️ [CREATE_NOMINA] Usando fecha actual (retrocompatibilidad)');
+        }
         
         console.log('🔍 [CREATE_NOMINA] Información de semana calculada:', {
             semanaISO: infoSemana.semanaISO,
@@ -447,22 +475,10 @@ const updateNomina = async (req, res) => {
         }
 
         // Usar el monto_total enviado desde el frontend si está disponible
-        let nuevoMontoTotal = nomina.monto_total;
-        
-        console.log('🔍 [BACKEND_UPDATE] Datos recibidos:', {
-            id,
-            monto_total_from_frontend: req.body.monto_total,
-            dias_laborados,
-            pago_semanal,
-            horas_extra,
-            bonos,
-            deducciones
-        });
-        
+        let nuevoMontoTotal = nomina.monto_total;        
         // Si el frontend envía monto_total, usarlo directamente (ya viene calculado correctamente)
         if (req.body.monto_total !== undefined) {
             nuevoMontoTotal = parseFloat(req.body.monto_total);
-            console.log('🔍 [BACKEND_UPDATE] Usando monto_total del frontend:', nuevoMontoTotal);
         } else if (dias_laborados !== undefined || pago_semanal !== undefined || 
             horas_extra !== undefined || deducciones !== undefined || bonos !== undefined) {
                 

@@ -15,6 +15,7 @@ import DateRangePicker from './ui/DateRangePicker';
 import NominaReportsTab from './nomina/NominaReportsTab';
 import ConfirmModal from './ui/ConfirmModal';
 import useDeleteNomina from '../hooks/useDeleteNomina';
+import { generarInfoSemana } from '../utils/weekCalculator';
 import {
   PlusIcon,
   CalendarIcon,
@@ -179,12 +180,55 @@ export default function Nomina() {
     };
   };
 
-  // Función para verificar si un empleado tiene nómina generada
+  // Función para verificar si un empleado tiene nómina generada EN LA SEMANA ACTUAL
   const getNominaStatus = (empleado) => {
-    const nominasEmpleado = nominas.filter(nomina => 
-      nomina.empleado?.id_empleado === empleado.id_empleado ||
-      nomina.id_empleado === empleado.id_empleado
-    );
+    // Obtener información de la semana actual del sistema
+    const hoy = new Date();
+    const infoSemanaActual = generarInfoSemana(hoy);
+    
+    // Debug: Log para ver la semana actual
+    console.log('🔍 [getNominaStatus] Semana actual del sistema:', {
+      año: infoSemanaActual.año,
+      semanaISO: infoSemanaActual.semanaISO,
+      etiqueta: infoSemanaActual.etiqueta
+    });
+    
+    // Filtrar nóminas del empleado que pertenezcan a la semana actual
+    const nominasEmpleado = nominas.filter(nomina => {
+      const perteneceAlEmpleado = nomina.empleado?.id_empleado === empleado.id_empleado ||
+                                   nomina.id_empleado === empleado.id_empleado;
+      
+      if (!perteneceAlEmpleado) return false;
+      
+      // Debug: Log para ver la información de la nómina
+      console.log('🔍 [getNominaStatus] Nómina del empleado:', {
+        id_nomina: nomina.id_nomina,
+        empleado: empleado.nombre,
+        semana: nomina.semana,
+        id_semana: nomina.id_semana
+      });
+      
+      // Verificar si la nómina pertenece a la semana actual
+      // Comparar por año y semana ISO
+      const semanaNomina = nomina.semana;
+      if (semanaNomina) {
+        const perteneceASemanaActual = semanaNomina.anio === infoSemanaActual.año && 
+                                       semanaNomina.semana_iso === infoSemanaActual.semanaISO;
+        
+        console.log('🔍 [getNominaStatus] Comparación de semanas:', {
+          nominaAño: semanaNomina.anio,
+          nominaSemanaISO: semanaNomina.semana_iso,
+          actualAño: infoSemanaActual.año,
+          actualSemanaISO: infoSemanaActual.semanaISO,
+          perteneceASemanaActual
+        });
+        
+        return perteneceASemanaActual;
+      }
+      
+      console.log('⚠️ [getNominaStatus] Nómina sin información de semana');
+      return false;
+    });
     
     if (nominasEmpleado.length === 0) {
       return { status: 'none', count: 0, latest: null };

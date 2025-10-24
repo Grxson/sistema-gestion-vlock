@@ -1,7 +1,7 @@
 import React from 'react';
-import { BanknotesIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon } from '@heroicons/react/24/outline';
+import { BanknotesIcon, ArrowTrendingUpIcon, ArrowTrendingDownIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 
-const AdeudosStats = ({ estadisticas, formatCurrency }) => {
+const AdeudosStats = ({ estadisticas, formatCurrency, filtrosActivos }) => {
   if (!estadisticas) return null;
 
   return (
@@ -42,21 +42,20 @@ const AdeudosStats = ({ estadisticas, formatCurrency }) => {
         </div>
       </div>
 
-      <div
-        className={`rounded-lg shadow p-6 text-white ${
-          estadisticas.montos.balance >= 0
-            ? 'bg-gradient-to-br from-blue-500 to-blue-600'
-            : 'bg-gradient-to-br from-orange-500 to-orange-600'
-        }`}
-      >
+      <div className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg shadow p-6 text-white relative">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm opacity-90">Balance</p>
+            <p className="text-sm text-purple-100">Total Pagado</p>
             <p className="text-2xl font-bold mt-1">
-              {formatCurrency(estadisticas.montos.balance)}
+              {formatCurrency(estadisticas.montos.totalPagado || 0)}
             </p>
+            {filtrosActivos && (
+              <p className="text-xs text-purple-200 mt-1">
+                📅 Con filtro de fechas
+              </p>
+            )}
           </div>
-          <BanknotesIcon className="h-10 w-10 opacity-80" />
+          <CheckCircleIcon className="h-10 w-10 text-purple-200" />
         </div>
       </div>
     </div>

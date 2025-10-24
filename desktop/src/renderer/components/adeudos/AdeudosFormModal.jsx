@@ -65,6 +65,21 @@ const AdeudosFormModal = ({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Fecha de vencimiento (opcional)
+            </label>
+            <input
+              type="date"
+              value={formData.fecha_vencimiento || ''}
+              onChange={(e) => setFormData({ ...formData, fecha_vencimiento: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-200 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+            />
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Se mostrarán alertas 3 días antes del vencimiento (ajustado por fines de semana)
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Notas (opcional)
             </label>
             <textarea

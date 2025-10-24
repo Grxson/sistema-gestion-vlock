@@ -18,7 +18,13 @@
     "dist:linux": "npm run prepare-icons && npm run build && electron-builder --linux --publish=never",
     "dist:all": "npm run prepare-icons && npm run build && electron-builder --win --linux --publish=never"
   },
-  "keywords": ["vlock", "gestion", "nomina", "proyectos", "suministros"],
+  "keywords": [
+    "vlock",
+    "gestion",
+    "nomina",
+    "proyectos",
+    "suministros"
+  ],
   "author": "Vlock",
   "license": "ISC",
   "type": "commonjs",
@@ -29,6 +35,7 @@
     "concurrently": "^9.2.0",
     "cross-env": "^10.0.0",
     "date-fns": "^4.1.0",
+    "framer-motion": "^12.23.24",
     "html2canvas": "^1.4.1",
     "jspdf": "^3.0.3",
     "jspdf-autotable": "^5.0.2",

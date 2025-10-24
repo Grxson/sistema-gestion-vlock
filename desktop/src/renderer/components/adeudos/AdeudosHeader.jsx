@@ -1,7 +1,7 @@
 import React from 'react';
-import { PlusIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
 
-const AdeudosHeader = ({ onAdd }) => {
+const AdeudosHeader = ({ onAdd, onExport }) => {
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
@@ -10,13 +10,22 @@ const AdeudosHeader = ({ onAdd }) => {
           Gestión de préstamos recibidos y otorgados
         </p>
       </div>
-      <button
-        onClick={onAdd}
-        className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors shadow-sm"
-      >
-        <PlusIcon className="h-5 w-5 mr-2" />
-        Agregar Adeudo
-      </button>
+      <div className="flex gap-3">
+        <button
+          onClick={onExport}
+          className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm"
+        >
+          <ArrowDownTrayIcon className="h-5 w-5 mr-2" />
+          Exportar Excel
+        </button>
+        <button
+          onClick={onAdd}
+          className="inline-flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors shadow-sm"
+        >
+          <PlusIcon className="h-5 w-5 mr-2" />
+          Agregar Adeudo
+        </button>
+      </div>
     </div>
   );
 };

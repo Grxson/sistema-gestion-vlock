@@ -45,7 +45,7 @@ const getRegistrosAuditoria = async (req, res) => {
             tabla,
             fecha_inicio,
             fecha_fin,
-            limite = 100,
+            limite = 50,
             pagina = 1
         } = req.query;
 

@@ -36,10 +36,7 @@ const useAuditoriaData = () => {
 
     try {
       const parametros = {
-        ...filtros,
-        ...params,
-        pagina: params.pagina || paginacion.pagina,
-        limite: params.limite || paginacion.limite
+        ...params
       };
 
       // Limpiar parámetros vacíos
@@ -52,12 +49,10 @@ const useAuditoriaData = () => {
       const response = await auditoriaService.getRegistros(parametros);
       
       setRegistros(response.registros || []);
-      setPaginacion(response.paginacion || {
-        total: 0,
-        pagina: 1,
-        limite: 50,
-        totalPaginas: 0
-      });
+      // Preservar el límite actual si no viene en la respuesta
+      if (response.paginacion) {
+        setPaginacion(response.paginacion);
+      }
     } catch (err) {
       console.error('Error al cargar registros:', err);
       setError(err.message || 'Error al cargar registros de auditoría');
@@ -65,7 +60,7 @@ const useAuditoriaData = () => {
     } finally {
       setLoading(false);
     }
-  }, [filtros, paginacion.pagina, paginacion.limite, showToast]);
+  }, [showToast]);
 
   /**
    * Actualizar filtros
@@ -127,9 +122,15 @@ const useAuditoriaData = () => {
     cargarRegistros();
   }, [cargarRegistros]);
 
-  // Cargar datos iniciales
+  // Cargar datos cuando cambien filtros o paginación
   useEffect(() => {
-    cargarRegistros();
+    const parametros = {
+      ...filtros,
+      pagina: paginacion.pagina,
+      limite: paginacion.limite
+    };
+    cargarRegistros(parametros);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtros, paginacion.pagina, paginacion.limite]);
 
   return {

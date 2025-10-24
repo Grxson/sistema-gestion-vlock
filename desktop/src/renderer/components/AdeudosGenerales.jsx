@@ -5,6 +5,9 @@ import AdeudosStats from './adeudos/AdeudosStats';
 import AdeudosFilters from './adeudos/AdeudosFilters';
 import AdeudosTable from './adeudos/AdeudosTable';
 import AdeudosFormModal from './adeudos/AdeudosFormModal';
+import PagoParcialModal from './adeudos/PagoParcialModal';
+import AdeudosExport from './adeudos/AdeudosExport';
+import AlertasVencimiento from './adeudos/AlertasVencimiento';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
@@ -18,28 +21,39 @@ const AdeudosGenerales = () => {
   const [mostrarModal, setMostrarModal] = useState(false);
   const [adeudoEditando, setAdeudoEditando] = useState(null);
   const [estadisticas, setEstadisticas] = useState(null);
+  const [mostrarModalPago, setMostrarModalPago] = useState(false);
+  const [adeudoParaPago, setAdeudoParaPago] = useState(null);
+  const [mostrarModalExport, setMostrarModalExport] = useState(false);
+  const [fechaInicio, setFechaInicio] = useState('');
+  const [fechaFin, setFechaFin] = useState('');
 
   // Estado del formulario
   const [formulario, setFormulario] = useState({
     nombre_entidad: '',
     tipo_adeudo: 'nos_deben',
     monto: '',
+    fecha_vencimiento: '',
     notas: ''
   });
 
   useEffect(() => {
     cargarAdeudos();
     cargarEstadisticas();
-  }, [filtroTipo, filtroEstado]);
+  }, [filtroTipo, filtroEstado, fechaInicio, fechaFin]);
 
   const cargarAdeudos = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
       
-      let url = `${API_URL}/adeudos-generales?`;
-      if (filtroTipo !== 'todos') url += `tipo=${filtroTipo}&`;
-      if (filtroEstado !== 'todos') url += `estado=${filtroEstado}`;
+      // Construir URL con parámetros
+      const params = new URLSearchParams();
+      if (filtroTipo !== 'todos') params.append('tipo', filtroTipo);
+      if (filtroEstado !== 'todos') params.append('estado', filtroEstado);
+      if (fechaInicio) params.append('fecha_inicio', fechaInicio);
+      if (fechaFin) params.append('fecha_fin', fechaFin);
+      
+      const url = `${API_URL}/adeudos-generales${params.toString() ? '?' + params.toString() : ''}`;
 
       const response = await fetch(url, {
         headers: {
@@ -71,7 +85,15 @@ const AdeudosGenerales = () => {
   const cargarEstadisticas = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/adeudos-generales/estadisticas`, {
+      let url = `${API_URL}/adeudos-generales/estadisticas`;
+      
+      // Agregar parámetros de fecha si existen
+      const params = new URLSearchParams();
+      if (fechaInicio) params.append('fecha_inicio', fechaInicio);
+      if (fechaFin) params.append('fecha_fin', fechaFin);
+      if (params.toString()) url += `?${params.toString()}`;
+      
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -149,21 +171,70 @@ const AdeudosGenerales = () => {
     }
   };
 
-  const marcarComoPagado = async (id) => {
-    if (!confirm('¿Estás seguro de marcar este adeudo como pagado?')) return;
+  const abrirModalPago = (adeudo) => {
+    setAdeudoParaPago(adeudo);
+    setMostrarModalPago(true);
+  };
 
+  const cerrarModalPago = () => {
+    setMostrarModalPago(false);
+    setAdeudoParaPago(null);
+  };
+
+  const registrarPagoParcial = async (datosPago) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/adeudos-generales/${id}/pagar`, {
+      const response = await fetch(`${API_URL}/adeudos-generales/${adeudoParaPago.id_adeudo_general}/pago-parcial`, {
         method: 'PUT',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify(datosPago)
       });
 
       if (!response.ok) {
         const raw = await response.text();
-        console.error('Error marcando como pagado:', raw);
+        console.error('Error registrando pago:', raw);
+        showError('Error al registrar pago', 'No se pudo procesar el pago');
+        return;
+      }
+
+      const data = await response.json();
+
+      if (data.success) {
+        showSuccess('Pago registrado', data.message || 'El pago se registró correctamente');
+        cerrarModalPago();
+        cargarAdeudos();
+        cargarEstadisticas();
+      } else {
+        showError('Error al registrar pago', data.message || 'No se pudo procesar el pago');
+      }
+    } catch (error) {
+      console.error('Error registrando pago:', error);
+      showError('Error al registrar pago', error.message || 'Ocurrió un error inesperado');
+    }
+  };
+
+  const marcarComoPagado = async (id) => {
+    if (!confirm('¿Estás seguro de liquidar completamente este adeudo?')) return;
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_URL}/adeudos-generales/${id}/liquidar`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          notas_pago: 'Liquidación completa desde interfaz'
+        })
+      });
+
+      if (!response.ok) {
+        const raw = await response.text();
+        console.error('Error liquidando adeudo:', raw);
         showError('No se pudo liquidar el adeudo', 'Intenta nuevamente más tarde');
         return;
       }
@@ -171,14 +242,14 @@ const AdeudosGenerales = () => {
       const data = await response.json();
 
       if (data.success) {
-        showSuccess('Adeudo liquidado', 'El adeudo se marcó como pagado');
+        showSuccess('Adeudo liquidado', data.message || 'El adeudo se liquidó completamente');
         cargarAdeudos();
         cargarEstadisticas();
       } else {
         showError('No se pudo liquidar el adeudo', data.message || 'Intenta nuevamente más tarde');
       }
     } catch (error) {
-      console.error('Error marcando como pagado:', error);
+      console.error('Error liquidando adeudo:', error);
       showError('No se pudo liquidar el adeudo', error.message || 'Ocurrió un error inesperado');
     }
   };
@@ -223,6 +294,7 @@ const AdeudosGenerales = () => {
       nombre_entidad: '',
       tipo_adeudo: 'nos_deben',
       monto: '',
+      fecha_vencimiento: '',
       notas: ''
     });
     setMostrarModal(true);
@@ -234,6 +306,7 @@ const AdeudosGenerales = () => {
       nombre_entidad: adeudo.nombre_entidad,
       tipo_adeudo: adeudo.tipo_adeudo,
       monto: adeudo.monto,
+      fecha_vencimiento: adeudo.fecha_vencimiento ? new Date(adeudo.fecha_vencimiento).toISOString().split('T')[0] : '',
       notas: adeudo.notas || ''
     });
     setMostrarModal(true);
@@ -246,6 +319,7 @@ const AdeudosGenerales = () => {
       nombre_entidad: '',
       tipo_adeudo: 'nos_deben',
       monto: '',
+      fecha_vencimiento: '',
       notas: ''
     });
   };
@@ -267,11 +341,18 @@ const AdeudosGenerales = () => {
 
   return (
     <div className="space-y-6">
-      <AdeudosHeader onAdd={abrirModalNuevo} />
+      {/* Componente de alertas flotante */}
+      <AlertasVencimiento />
+
+      <AdeudosHeader 
+        onAdd={abrirModalNuevo}
+        onExport={() => setMostrarModalExport(true)}
+      />
 
       <AdeudosStats
         estadisticas={estadisticas}
         formatCurrency={formatearMoneda}
+        filtrosActivos={!!(fechaInicio || fechaFin)}
       />
 
       <AdeudosFilters
@@ -281,6 +362,10 @@ const AdeudosGenerales = () => {
         setFiltroEstado={setFiltroEstado}
         busqueda={busqueda}
         setBusqueda={setBusqueda}
+        fechaInicio={fechaInicio}
+        setFechaInicio={setFechaInicio}
+        fechaFin={fechaFin}
+        setFechaFin={setFechaFin}
       />
 
       <AdeudosTable
@@ -289,6 +374,7 @@ const AdeudosGenerales = () => {
         onMarkPaid={marcarComoPagado}
         onEdit={abrirModalEditar}
         onDelete={eliminarAdeudo}
+        onRegistrarPago={abrirModalPago}
         formatCurrency={formatearMoneda}
         formatDate={formatearFecha}
         filterText={busqueda}
@@ -301,6 +387,22 @@ const AdeudosGenerales = () => {
         formData={formulario}
         setFormData={setFormulario}
         isEditing={!!adeudoEditando}
+      />
+
+      <PagoParcialModal
+        isOpen={mostrarModalPago}
+        onClose={cerrarModalPago}
+        onSubmit={registrarPagoParcial}
+        adeudo={adeudoParaPago}
+        formatCurrency={formatearMoneda}
+      />
+
+      <AdeudosExport
+        adeudos={adeudos}
+        onClose={() => setMostrarModalExport(false)}
+        formatCurrency={formatearMoneda}
+        formatDate={formatearFecha}
+        isOpen={mostrarModalExport}
       />
     </div>
   );

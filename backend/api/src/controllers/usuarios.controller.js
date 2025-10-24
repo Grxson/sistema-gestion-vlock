@@ -1,6 +1,7 @@
 const models = require('../models');
 const Usuario = models.Usuarios;
 const Roles = models.Roles;
+const Auditoria = models.Auditoria;
 const bcrypt = require('bcrypt');
 const { Op } = require('sequelize');
 
@@ -274,8 +275,26 @@ const deleteUsuario = async (req, res) => {
             });
         }
 
-        // Eliminar el usuario
-        await usuario.destroy();
+        // Eliminar registros relacionados antes de borrar el usuario
+        const transaction = await models.sequelize.transaction();
+
+        try {
+            // Eliminar registros de auditoría asociados
+            if (Auditoria) {
+                await Auditoria.destroy({
+                    where: { id_usuario: id },
+                    transaction
+                });
+            }
+
+            // Eliminar el usuario
+            await usuario.destroy({ transaction });
+
+            await transaction.commit();
+        } catch (relatedError) {
+            await transaction.rollback();
+            throw relatedError;
+        }
 
         res.status(200).json({
             message: 'Usuario eliminado exitosamente'

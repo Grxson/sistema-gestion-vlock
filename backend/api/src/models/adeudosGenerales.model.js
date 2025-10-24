@@ -20,13 +20,29 @@ module.exports = (sequelize) => {
     monto: {
       type: DataTypes.DECIMAL(12, 2),
       allowNull: false,
-      comment: 'Cantidad del adeudo'
+      comment: 'Cantidad del adeudo (monto actual, puede cambiar con pagos)'
+    },
+    monto_original: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      comment: 'Monto original del adeudo (se mantiene constante)'
+    },
+    monto_pagado: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: false,
+      defaultValue: 0.00,
+      comment: 'Total pagado hasta el momento'
+    },
+    monto_pendiente: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true,
+      comment: 'Monto que falta por pagar (monto_original - monto_pagado)'
     },
     estado: {
-      type: DataTypes.ENUM('pendiente', 'pagado'),
+      type: DataTypes.ENUM('pendiente', 'parcial', 'pagado'),
       allowNull: false,
       defaultValue: 'pendiente',
-      comment: 'Estado del adeudo'
+      comment: 'Estado del adeudo: pendiente, parcial (con pagos), pagado (liquidado)'
     },
     fecha_registro: {
       type: DataTypes.DATE,
@@ -38,6 +54,11 @@ module.exports = (sequelize) => {
       type: DataTypes.DATE,
       allowNull: true,
       comment: 'Fecha en que se liquidó el adeudo'
+    },
+    fecha_vencimiento: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: 'Fecha de vencimiento del adeudo para alertas'
     },
     notas: {
       type: DataTypes.TEXT,

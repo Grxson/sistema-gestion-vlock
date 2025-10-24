@@ -27,7 +27,8 @@ import {
   CalculatorIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  BanknotesIcon
+  BanknotesIcon,
+  LockClosedIcon
 } from '@heroicons/react/24/outline';
 
 
@@ -35,12 +36,23 @@ import {
 // Definición de los elementos de navegación con sus respectivos códigos de permiso
 const navigationItems = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, current: true, permissionModule: 'dashboard' },
+  // Gestión de Personal
   { name: 'Empleados', href: '/empleados', icon: UserGroupIcon, current: false, permissionModule: 'empleados' },
-  { name: 'Proyectos', href: '/proyectos', icon: RectangleGroupIcon, current: false, permissionModule: 'proyectos' },
   { name: 'Nómina', href: '/nomina', icon: CurrencyDollarIcon, current: false, permissionModule: 'nomina' },
   { name: 'Contratos', href: '/contratos', icon: DocumentTextIcon, current: false, permissionModule: 'contratos' },
   { name: 'Oficios', href: '/oficios', icon: BuildingOfficeIcon, current: false, permissionModule: 'oficios' },
-  { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false, permissionModule: 'auditoria' },
+  
+  // Proyectos y Recursos
+  { name: 'Proyectos', href: '/proyectos', icon: RectangleGroupIcon, current: false, permissionModule: 'proyectos' },
+  { 
+    name: 'Presupuestos', 
+    href: '/presupuestos/en-desarrollo', 
+    icon: CalculatorIcon, 
+    current: false, 
+    permissionModule: 'presupuestos', 
+    hasSubmenu: false,
+    badge: ' '
+  },
   { 
     name: 'Suministros', 
     href: '/suministros', 
@@ -58,16 +70,12 @@ const navigationItems = [
     permissionModule: 'herramientas',
     hasSubmenu: false
   },
+  
+  // Finanzas
   { name: 'Adeudos', href: '/adeudos-generales', icon: BanknotesIcon, current: false, permissionModule: 'adeudos' },
-  { 
-    name: 'Presupuestos', 
-    href: '/presupuestos', 
-    icon: CalculatorIcon, 
-    current: false, 
-    permissionModule: 'presupuestos', 
-    hasSubmenu: false
-  },
-  { name: 'Reportes', href: '/reportes', icon: ChartBarIcon, current: false, permissionModule: 'reportes' },
+  
+  // Administración
+  { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false, permissionModule: 'auditoria' },
   { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false, permissionModule: 'usuarios' },
   { name: 'Roles', href: '/roles', icon: ShieldCheckIcon, current: false, permissionModule: 'roles' },
   { name: 'Configuración', href: '/configuracion', icon: CogIcon, current: false, permissionModule: 'configuracion' },
@@ -249,6 +257,7 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {navigation.map((item, index) => {
           const isActive = currentPath === item.href;
+          const isComingSoon = Boolean(item.badge);
           return (
             <div key={item.name} className="relative">
               {/* Indicador - solo visible cuando está activo */}
@@ -316,8 +325,14 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
                   ${isCollapsed ? 'opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0' : 'opacity-100 translate-x-0'}
                   ${isActive ? 'font-semibold' : 'font-medium'}
                 `}>
-                  <span className="flex items-center">
-                    {item.name}
+                  <span className="flex items-center space-x-2">
+                    <span>{item.name}</span>
+                    {isComingSoon && !isCollapsed && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                        <LockClosedIcon className="w-3.5 h-3.5 mr-1" />
+                        {item.badge}
+                      </span>
+                    )}
                   </span>
                   {item.hasSubmenu && !isCollapsed && (
                     <ChevronDownIcon 
@@ -428,13 +443,6 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
               'w-full flex items-center px-4 py-3 text-sm rounded-lg transition-all duration-300 relative'
             )}
           >
-            {/* Hover effect sutil */}
-            <div className={`
-              absolute inset-0 bg-gradient-to-r from-transparent via-orange-50/50 to-transparent dark:via-orange-700/20
-              transform transition-transform duration-500 rounded-lg
-              ${hoveredItem === 'diagnostico' ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
-              ${currentPath === '/diagnostico' ? 'hidden' : 'block'}
-            `}></div>
             
             <WrenchScrewdriverIcon 
               className={classNames(
@@ -465,12 +473,6 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
             transition-all duration-300 relative
           "
         >
-          {/* Hover effect sutil */}
-          <div className={`
-            absolute inset-0 bg-gradient-to-r from-transparent via-yellow-50/50 to-transparent dark:via-yellow-700/20
-            transform transition-transform duration-500 rounded-lg
-            ${hoveredItem === 'theme' ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}
-          `}></div>
           
           <div className="relative">
             {isDarkMode ? (

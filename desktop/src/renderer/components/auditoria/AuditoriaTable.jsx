@@ -66,10 +66,10 @@ const AuditoriaTable = ({
 
   if (loading) {
     return (
-      <div className="rounded-xl border border-gray-200/70 dark:border-dark-300/60 bg-white dark:bg-dark-200 shadow-lg p-6">
-        <div className="animate-pulse space-y-4">
+      <div className="rounded-xl border border-gray-200 dark:border-dark-300 bg-white dark:bg-dark-200 p-6 shadow-sm">
+        <div className="space-y-4 animate-pulse">
           {[...Array(5)].map((_, index) => (
-            <div key={index} className="h-16 bg-gray-200/70 dark:bg-dark-300 rounded"></div>
+            <div key={index} className="h-16 rounded bg-gray-200 dark:bg-dark-300"></div>
           ))}
         </div>
       </div>
@@ -91,13 +91,10 @@ const AuditoriaTable = ({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-gray-200/70 dark:border-dark-300/60 bg-white dark:bg-dark-200 shadow-lg">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-slate-100/70 via-transparent to-transparent dark:from-slate-700/25 dark:via-transparent dark:to-transparent" />
-      <div className="relative">
-        {/* Tabla */}
+    <div className="rounded-xl border border-gray-200 dark:border-dark-300 bg-white dark:bg-dark-200 shadow-sm">
       <div className="overflow-x-auto">
-        <table className="w-full">
-          <thead className="bg-gray-50/90 dark:bg-dark-300/80 border-b border-gray-200 dark:border-dark-300 backdrop-blur-sm">
+        <table className="min-w-full table-auto">
+          <thead className="bg-gray-50 dark:bg-dark-300 border-b border-gray-200 dark:border-dark-300">
             <tr>
               <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 <div className="flex items-center gap-2">
@@ -134,17 +131,17 @@ const AuditoriaTable = ({
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-dark-300/80">
+          <tbody className="divide-y divide-gray-200 dark:divide-dark-300">
             {registros.map((registro) => (
               <React.Fragment key={registro.id_auditoria}>
-                <tr className="transition-colors hover:bg-gray-50/80 dark:hover:bg-dark-300/70">
+                <tr className="transition-colors hover:bg-gray-50 dark:hover:bg-dark-300">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                     {formatearFecha(registro.fecha_hora)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-blue-100/80 dark:bg-blue-500/20 flex items-center justify-center">
-                        <FaUser className="text-blue-600 dark:text-blue-300 text-xs" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 dark:border-dark-300 bg-gray-50 dark:bg-dark-200">
+                        <FaUser className="text-xs text-gray-600 dark:text-gray-200" />
                       </div>
                       <span className="font-medium text-gray-900 dark:text-gray-100">
                         {registro.usuario?.nombre_usuario || 'N/A'}
@@ -152,17 +149,17 @@ const AuditoriaTable = ({
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium inline-flex items-center gap-1 ${getAccionColor(registro.accion)}`}>
+                    <span className={`inline-flex items-center gap-1 rounded border border-gray-200 dark:border-dark-300 px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 ${getAccionColor(registro.accion)}`}>
                       <span>{getAccionIcon(registro.accion)}</span>
                       {registro.accion}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
-                    <span className="px-3 py-1 bg-gray-100/80 dark:bg-dark-300/70 text-gray-700 dark:text-gray-200 rounded-lg text-xs font-mono">
+                    <span className="rounded px-3 py-1 text-xs font-mono text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-dark-300">
                       {registro.tabla}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300/90 max-w-md truncate">
+                  <td className="px-6 py-4 text-sm text-gray-700 dark:text-gray-300 max-w-2xl truncate">
                     {registro.descripcion || '-'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
@@ -181,7 +178,7 @@ const AuditoriaTable = ({
                 
                 {/* Fila expandida con detalles */}
                 {registroExpandido === registro.id_auditoria && (
-                  <tr className="bg-gray-50/90 dark:bg-dark-300/70">
+                  <tr className="bg-gray-50 dark:bg-dark-300/70">
                     <td colSpan="7" className="px-6 py-5">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Datos Antiguos */}
@@ -217,73 +214,6 @@ const AuditoriaTable = ({
         </table>
       </div>
 
-      {/* Paginación */}
-      {paginacion && paginacion.totalPaginas > 1 && (
-        <div className="bg-gray-50/95 dark:bg-dark-300/80 px-6 py-4 border-t border-gray-200 dark:border-dark-300 backdrop-blur-sm">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-700 dark:text-gray-300">
-              Mostrando <span className="font-medium">{((paginacion.pagina - 1) * paginacion.limite) + 1}</span> a{' '}
-              <span className="font-medium">
-                {Math.min(paginacion.pagina * paginacion.limite, paginacion.total)}
-              </span>{' '}
-              de <span className="font-medium">{paginacion.total}</span> registros
-            </div>
-            
-            <div className="flex gap-2">
-              <button
-                onClick={() => onCambiarPagina(paginacion.pagina - 1)}
-                disabled={paginacion.pagina === 1}
-                className="px-4 py-2 rounded-lg border border-gray-200/90 dark:border-dark-300 bg-white/90 dark:bg-dark-200/80 text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50/90 dark:hover:bg-dark-300/80 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-              >
-                <FaChevronLeft />
-                Anterior
-              </button>
-              
-              <div className="flex items-center gap-1">
-                {[...Array(paginacion.totalPaginas)].map((_, index) => {
-                  const numeroPagina = index + 1;
-                  // Mostrar solo algunas páginas alrededor de la actual
-                  if (
-                    numeroPagina === 1 ||
-                    numeroPagina === paginacion.totalPaginas ||
-                    (numeroPagina >= paginacion.pagina - 1 && numeroPagina <= paginacion.pagina + 1)
-                  ) {
-                    return (
-                      <button
-                        key={numeroPagina}
-                        onClick={() => onCambiarPagina(numeroPagina)}
-                        className={`px-4 py-2 rounded-lg transition-colors border ${
-                          numeroPagina === paginacion.pagina
-                            ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                            : 'border-gray-200/90 dark:border-dark-300 bg-white/90 dark:bg-dark-200/80 text-gray-700 dark:text-gray-200 hover:bg-gray-50/80 dark:hover:bg-dark-300/80'
-                        }`}
-                      >
-                        {numeroPagina}
-                      </button>
-                    );
-                  } else if (
-                    numeroPagina === paginacion.pagina - 2 ||
-                    numeroPagina === paginacion.pagina + 2
-                  ) {
-                    return <span key={numeroPagina} className="px-2 text-gray-500">...</span>;
-                  }
-                  return null;
-                })}
-              </div>
-              
-              <button
-                onClick={() => onCambiarPagina(paginacion.pagina + 1)}
-                disabled={paginacion.pagina === paginacion.totalPaginas}
-                className="px-4 py-2 bg-white dark:bg-dark-100 border border-gray-300 dark:border-dark-300 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-dark-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-              >
-                Siguiente
-                <FaChevronRight />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      </div>
     </div>
   );
 };

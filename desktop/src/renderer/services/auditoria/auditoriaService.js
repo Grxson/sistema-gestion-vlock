@@ -12,7 +12,7 @@ class AuditoriaService {
   async getRegistros(params = {}) {
     try {
       const response = await api.get('/auditoria', { params });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al obtener registros de auditoría:', error);
       throw error;
@@ -27,7 +27,7 @@ class AuditoriaService {
   async getRegistro(id) {
     try {
       const response = await api.get(`/auditoria/${id}`);
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al obtener registro de auditoría:', error);
       throw error;
@@ -42,7 +42,7 @@ class AuditoriaService {
   async getEstadisticas(params = {}) {
     try {
       const response = await api.get('/auditoria/estadisticas', { params });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al obtener estadísticas de auditoría:', error);
       throw error;
@@ -57,7 +57,7 @@ class AuditoriaService {
   async getActividadPorUsuario(params = {}) {
     try {
       const response = await api.get('/auditoria/actividad-usuario', { params });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al obtener actividad por usuario:', error);
       throw error;
@@ -72,7 +72,7 @@ class AuditoriaService {
   async getActividadPorTabla(params = {}) {
     try {
       const response = await api.get('/auditoria/actividad-tabla', { params });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al obtener actividad por tabla:', error);
       throw error;
@@ -90,7 +90,7 @@ class AuditoriaService {
         params,
         responseType: 'blob'
       });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al exportar a Excel:', error);
       throw error;
@@ -108,7 +108,7 @@ class AuditoriaService {
         params,
         responseType: 'blob'
       });
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al exportar a PDF:', error);
       throw error;
@@ -122,7 +122,7 @@ class AuditoriaService {
   async getUsuarios() {
     try {
       const response = await api.get('/usuarios');
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al obtener usuarios:', error);
       throw error;
@@ -136,7 +136,7 @@ class AuditoriaService {
   async getTablas() {
     try {
       const response = await api.get('/auditoria/tablas');
-      return response.data;
+      return response;
     } catch (error) {
       console.error('Error al obtener tablas:', error);
       throw error;

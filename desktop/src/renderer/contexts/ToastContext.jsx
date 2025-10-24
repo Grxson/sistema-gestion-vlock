@@ -99,6 +99,27 @@ export const ToastProvider = ({ children }) => {
     setToasts([]);
   }, []);
 
+  const showToast = useCallback((message, type = 'info', options = {}) => {
+    const titles = {
+      success: 'Éxito',
+      error: 'Error',
+      warning: 'Aviso',
+      info: 'Información'
+    };
+
+    const handlers = {
+      success: showSuccess,
+      error: showError,
+      warning: showWarning,
+      info: showInfo
+    };
+
+    const handler = handlers[type] || showInfo;
+    const title = options.title || titles[type] || titles.info;
+
+    return handler(title, message, options);
+  }, [showSuccess, showError, showWarning, showInfo]);
+
   const value = {
     showSuccess,
     showError,
@@ -107,7 +128,8 @@ export const ToastProvider = ({ children }) => {
     showSessionExpired,
     clearAll,
     addToast,
-    removeToast
+    removeToast,
+    showToast
   };
 
   return (

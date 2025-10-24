@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   TrashIcon, 
   UserMinusIcon, 
@@ -16,6 +16,25 @@ const EmpleadoConfirmModal = ({
 }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [confirmText, setConfirmText] = useState('');
+
+  // Soporte de teclado: ESC para cerrar, ENTER para confirmar
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      // ESC para cerrar
+      if (e.key === 'Escape' && !isLoading) {
+        handleClose();
+      }
+      // ENTER para confirmar (solo si el texto de confirmación es válido)
+      if (e.key === 'Enter' && confirmText === getModalConfig().confirmText && !isLoading) {
+        handleConfirm();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, confirmText, isLoading]);
 
   if (!isOpen) return null;
 

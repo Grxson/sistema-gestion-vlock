@@ -470,13 +470,16 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       const idProyecto = formData.selectedEmpleado.id_proyecto || 
                         formData.selectedEmpleado.proyecto?.id_proyecto || 1;
 
-      // Generar información de semana dinámicamente usando la fecha actual
-      const fechaActual = new Date();
-      const infoSemana = obtenerInfoSemanaCompleta(fechaActual);
+      // Usar el período y semana seleccionados por el usuario
+      // NO usar la fecha actual, sino los datos del formulario
+      const [anio, mes] = formData.selectedPeriodo.split('-').map(Number);
 
       const nominaData = {
         id_empleado: formData.selectedEmpleado.id_empleado,
-        // id_semana se maneja automáticamente en el backend
+        // Enviar período y semana seleccionados por el usuario
+        periodo_anio: anio,
+        periodo_mes: mes,
+        semana_del_mes: formData.semanaNum,
         id_proyecto: idProyecto,
         dias_laborados: formData.diasLaborados || 6, // Usar el valor ingresado por el usuario
         pago_semanal: pagoIngresado, // Contiene el pago semanal

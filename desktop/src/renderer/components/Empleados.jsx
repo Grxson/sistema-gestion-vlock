@@ -9,6 +9,7 @@ import DateInput from './ui/DateInput';
 import EmpleadoConfirmModal from './EmpleadoConfirmModal';
 import AutoCompleteOficio from './ui/AutoCompleteOficio';
 import AutoCompleteProyecto from './ui/AutoCompleteProyecto';
+import EmpleadosGrid from './Empleados/EmpleadosGrid';
 import { STANDARD_ICONS } from '../constants/icons';
 import {
   MagnifyingGlassIcon,
@@ -18,7 +19,9 @@ import {
   BanknotesIcon,
   CalendarIcon,
   BuildingOfficeIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  Squares2X2Icon,
+  ListBulletIcon
 } from '@heroicons/react/24/outline';
 
 export default function Empleados() {
@@ -43,6 +46,12 @@ export default function Empleados() {
     proyecto: '',
     oficio: '',
     activo: 'all'
+  });
+  
+  // Estado para la vista (grid o lista) - se guarda en localStorage
+  const [viewMode, setViewMode] = useState(() => {
+    const savedView = localStorage.getItem('empleados_view_mode');
+    return savedView || 'list'; // 'grid' o 'list'
   });
   const { hasPermission } = usePermissions();
   const { showSuccess, showError, showWarning, showInfo } = useToast();
@@ -94,6 +103,40 @@ export default function Empleados() {
     fetchContratos();
     fetchProyectos();
   }, []);
+  
+  // Guardar preferencia de vista en localStorage
+  useEffect(() => {
+    localStorage.setItem('empleados_view_mode', viewMode);
+  }, [viewMode]);
+  
+  // Soporte de teclado para el modal de crear/editar: ESC para cerrar
+  useEffect(() => {
+    if (!showModal) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        resetForm();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showModal]);
+  
+  // Soporte de teclado para el modal de perfil: ESC para cerrar
+  useEffect(() => {
+    if (!showProfileModal) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowProfileModal(false);
+        setSelectedEmpleado(null);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showProfileModal]);
 
   // Los empleados se cargan automáticamente desde el contexto al inicializar
   
@@ -377,22 +420,52 @@ export default function Empleados() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">Empleados</h1>
           <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
             Gestiona la información de los empleados
           </p>
         </div>
-        <PermissionButton 
-          permissionCode="empleados.crear"
-          onClick={() => setShowModal(true)}
-          className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm hover:shadow-md"
-          disabledMessage="No tienes permiso para crear empleados"
-        >
-          <STANDARD_ICONS.CREATE className="h-4 w-4 mr-2" />
-          Nuevo Empleado
-        </PermissionButton>
+        <div className="flex items-center gap-3">
+          {/* Toggle de vista */}
+          <div className="flex items-center bg-gray-100 dark:bg-dark-200 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('list')}
+              className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                viewMode === 'list'
+                  ? 'bg-white dark:bg-dark-100 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+              title="Vista de lista"
+            >
+              <ListBulletIcon className="h-4 w-4 mr-1.5" />
+              Lista
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center px-3 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                viewMode === 'grid'
+                  ? 'bg-white dark:bg-dark-100 text-primary-600 dark:text-primary-400 shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+              }`}
+              title="Vista de cuadrícula"
+            >
+              <Squares2X2Icon className="h-4 w-4 mr-1.5" />
+              Grid
+            </button>
+          </div>
+          
+          <PermissionButton 
+            permissionCode="empleados.crear"
+            onClick={() => setShowModal(true)}
+            className="inline-flex items-center px-5 py-2.5 border border-transparent text-sm font-medium rounded-lg shadow-sm hover:shadow-md"
+            disabledMessage="No tienes permiso para crear empleados"
+          >
+            <STANDARD_ICONS.CREATE className="h-4 w-4 mr-2" />
+            Nuevo Empleado
+          </PermissionButton>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -465,10 +538,20 @@ export default function Empleados() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white dark:bg-dark-100 shadow overflow-hidden sm:rounded-md transition-colors duration-200">
-        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-          {filteredEmpleados.map((empleado) => (
+      {/* Vista condicional: Grid o Lista */}
+      {viewMode === 'grid' ? (
+        <EmpleadosGrid
+          empleados={filteredEmpleados}
+          onViewProfile={handleViewProfile}
+          onEdit={handleEdit}
+          onActivar={handleActivar}
+          onDesactivar={handleDesactivar}
+          onDeletePermanente={handleDeletePermanente}
+        />
+      ) : (
+        <div className="bg-white dark:bg-dark-100 shadow overflow-hidden sm:rounded-md transition-colors duration-200">
+          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+            {filteredEmpleados.map((empleado) => (
             <li key={empleado.id_empleado}>
               <div className="px-4 py-4 sm:px-6 hover:bg-gray-50 dark:hover:bg-dark-100">
                 <div className="flex items-center justify-between">
@@ -577,24 +660,41 @@ export default function Empleados() {
                 </div>
               </div>
             </li>
-          ))}
-        </ul>
-        
-        {filteredEmpleados.length === 0 && (
-          <div className="text-center py-12">
-            <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No hay empleados</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {empleados.length === 0 ? 'Cargando empleados...' : 'No se encontraron empleados con los filtros aplicados.'}
-            </p>
-            {empleados.length > 0 && (
-              <p className="mt-1 text-xs text-gray-400">
-                Total de empleados: {empleados.length}
+            ))}
+          </ul>
+          
+          {filteredEmpleados.length === 0 && (
+            <div className="text-center py-12">
+              <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No hay empleados</h3>
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {empleados.length === 0 ? 'Cargando empleados...' : 'No se encontraron empleados con los filtros aplicados.'}
               </p>
-            )}
-          </div>
-        )}
-      </div>
+              {empleados.length > 0 && (
+                <p className="mt-1 text-xs text-gray-400">
+                  Total de empleados: {empleados.length}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Estado vacío para vista grid */}
+      {viewMode === 'grid' && filteredEmpleados.length === 0 && (
+        <div className="text-center py-16 bg-white dark:bg-dark-100 rounded-lg border border-gray-200 dark:border-gray-700">
+          <UserIcon className="mx-auto h-16 w-16 text-gray-400" />
+          <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">No hay empleados</h3>
+          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+            {empleados.length === 0 ? 'Cargando empleados...' : 'No se encontraron empleados con los filtros aplicados.'}
+          </p>
+          {empleados.length > 0 && (
+            <p className="mt-1 text-xs text-gray-400">
+              Total de empleados: {empleados.length}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (
