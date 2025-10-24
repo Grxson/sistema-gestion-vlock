@@ -16,13 +16,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) => {
-  console.log('🔍 [EDIT_MODAL] Props recibidos:', {
-    isOpen,
-    nominaData: !!nominaData,
-    empleado: !!empleado,
-    empleadoId: empleado?.id_empleado,
-    nominaId: nominaData?.id_nomina
-  });
+
   const { isDarkMode } = useTheme();
   const { showSuccess, showError, showInfo } = useToast();
   
@@ -41,16 +35,8 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
   
   const [calculoNomina, setCalculoNomina] = useState(null);
 
-  // Log cuando cambia calculoNomina
-  useEffect(() => {
-    console.log('🔍 [CALCULO_NOMINA_STATE] Estado actualizado:', calculoNomina);
-  }, [calculoNomina]);
-
-  // Efecto adicional para recalcular cuando cambien los valores numéricos
   useEffect(() => {
     if (isOpen && empleado && formData.diasLaborados && formData.diasLaborados > 0) {
-      console.log('🔍 [RECALCULO_AUTOMATICO] Detectado cambio en valores, recalculando...');
-      // Pequeño delay para evitar múltiples cálculos simultáneos
       const timeoutId = setTimeout(() => {
         calcularNomina();
       }, 300);
@@ -75,7 +61,6 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
   // Cargar datos iniciales cuando se abre el modal
   useEffect(() => {
     if (isOpen && nominaData) {
-      console.log('🔍 [EDIT_MODAL] Cargando datos de nómina:', nominaData);
       
       const newFormData = {
         diasLaborados: nominaData.dias_laborados && nominaData.dias_laborados > 0 ? nominaData.dias_laborados : 6, // Forzar valor válido
@@ -90,17 +75,13 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
         liquidarAdeudos: nominaData.liquidar_adeudos || false
       };
       
-      console.log('🔍 [EDIT_MODAL] Datos del formulario establecidos:', newFormData);
-      console.log('🔍 [EDIT_MODAL] Tipo de diasLaborados:', typeof newFormData.diasLaborados);
       setFormData(newFormData);
     }
   }, [isOpen, nominaData]);
 
   // Calcular nómina cuando cambian los datos
   useEffect(() => {
-    console.log('🔍 [USE_EFFECT] Ejecutándose con formData:', formData);
     
-    // Validar días laborados de la misma manera que en calcularNomina
     let diasLaborados = 0;
     
     if (typeof formData.diasLaborados === 'string') {
@@ -116,25 +97,10 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
       diasLaborados = 0;
     }
     
-    console.log('🔍 [USE_EFFECT] Validación de días laborados:', {
-      original: formData.diasLaborados,
-      procesado: diasLaborados,
-      esValido: diasLaborados > 0,
-      empleado: !!empleado,
-      isOpen
-    });
+
     
     if (isOpen && empleado && diasLaborados > 0) {
-      console.log('🔍 [EDIT_MODAL] Recalculando nómina automáticamente...');
       calcularNomina();
-    } else {
-      console.log('🔍 [USE_EFFECT] No se puede calcular:', {
-        isOpen,
-        empleado: !!empleado,
-        diasLaborados: diasLaborados,
-        formDataDiasLaborados: formData.diasLaborados,
-        tipo: typeof formData.diasLaborados
-      });
     }
   }, [
     formData.diasLaborados, 
@@ -149,7 +115,6 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
   ]);
 
   const calcularNomina = async () => {
-    console.log('🔍 [CALCULO] Iniciando cálculo con formData:', formData);
     
     // Validar que los días laborados sean un número válido mayor a 0
     let diasLaborados = 0;
@@ -167,21 +132,8 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
       diasLaborados = 0;
     }
     
-    console.log('🔍 [CALCULO] Procesamiento de días laborados:', {
-      original: formData.diasLaborados,
-      tipoOriginal: typeof formData.diasLaborados,
-      procesado: diasLaborados,
-      tipoProcesado: typeof diasLaborados,
-      esValido: diasLaborados > 0
-    });
-    
+
     if (!empleado || !diasLaborados || diasLaborados <= 0) {
-      console.log('🔍 [CALCULO] No se puede calcular - datos insuficientes:', {
-        empleado: !!empleado,
-        diasLaborados: diasLaborados,
-        formDataDiasLaborados: formData.diasLaborados,
-        tipo: typeof formData.diasLaborados
-      });
       return;
     }
     
@@ -190,12 +142,6 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
       
       // Validación final estricta
       if (diasLaborados <= 0 || isNaN(diasLaborados) || !Number.isInteger(diasLaborados)) {
-        console.log('🔍 [CALCULO] ERROR CRÍTICO: días laborados inválidos antes de crear datosNomina:', {
-          diasLaborados,
-          esMayorA0: diasLaborados > 0,
-          esNaN: isNaN(diasLaborados),
-          esEntero: Number.isInteger(diasLaborados)
-        });
         return;
       }
 
@@ -217,43 +163,14 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
         esPagoSemanal: true
       };
 
-      console.log('🔍 [CALCULO] Validación final:', {
-        diasLaborados,
-        tipo: typeof diasLaborados,
-        esMayorA0: diasLaborados > 0,
-        formDataOriginal: formData.diasLaborados,
-        tipoOriginal: typeof formData.diasLaborados,
-        pagoSemanal,
-        pagoDiario: pagoSemanal / 6,
-        salarioBaseProporcional,
-        pagoPorDia: pagoSemanal, // Para horas extra
-        calculo: `${diasLaborados} días × $${(pagoSemanal / 6).toFixed(2)} = $${salarioBaseProporcional.toFixed(2)}`
-      });
+
 
       // Validación adicional antes de enviar al servicio
       if (diasLaborados <= 0 || isNaN(diasLaborados) || !Number.isInteger(diasLaborados)) {
-        console.log('🔍 [CALCULO] ERROR: días laborados inválidos:', {
-          diasLaborados,
-          esMayorA0: diasLaborados > 0,
-          esNaN: isNaN(diasLaborados),
-          esEntero: Number.isInteger(diasLaborados)
-        });
         return;
       }
 
-      console.log('🔍 [CALCULO] Enviando datos al servicio:', datosNomina);
-      console.log('🔍 [CALCULO] Verificación detallada:', {
-        diasLaborados: datosNomina.diasLaborados,
-        tipoDiasLaborados: typeof datosNomina.diasLaborados,
-        esMayorA0: datosNomina.diasLaborados > 0,
-        pagoPorDia: datosNomina.pagoPorDia,
-        tipoPagoPorDia: typeof datosNomina.pagoPorDia,
-        empleado: empleado,
-        pagoSemanal: empleado?.pago_semanal
-      });
-      
       const calculo = await nominasServices.calculadora.calcularNomina(datosNomina);
-      console.log('🔍 [CALCULO] Respuesta del servicio:', calculo);
       setCalculoNomina(calculo);
       
     } catch (error) {
@@ -268,7 +185,6 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
   };
 
   const handleInputChange = (field, value) => {
-    console.log('🔍 [INPUT_CHANGE] Campo cambiado:', field, 'Valor:', value);
     
     setFormData(prev => ({
       ...prev,
@@ -349,17 +265,7 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
       
       const montoTotalCalculado = salarioBase + horasExtra + bonos - deducciones;
       
-      console.log('🔍 [SAVE] Cálculo directo:', {
-        pagoSemanal,
-        diasLaborados: formData.diasLaborados,
-        pagoDiario: pagoSemanal / 6,
-        salarioBase,
-        horasExtra,
-        bonos,
-        deducciones,
-        montoTotalCalculado
-      });
-      
+
       const updateData = {
         dias_laborados: formData.diasLaborados,
         horas_extra: formData.horasExtra === '' ? 0 : parseFloat(formData.horasExtra) || 0,
@@ -373,15 +279,6 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
         liquidar_adeudos: formData.liquidarAdeudos,
         monto_total: montoTotalCalculado // ✅ Actualizar el monto total calculado
       };
-      
-      console.log('🔄 [EDIT_MODAL] Actualizando nómina:', nominaData.id_nomina, updateData);
-      console.log('🔄 [EDIT_MODAL] Monto total calculado:', montoTotalCalculado);
-      console.log('🔄 [EDIT_MODAL] Verificación final monto_total:', {
-        montoTotalCalculado,
-        tipo: typeof montoTotalCalculado,
-        updateDataMontoTotal: updateData.monto_total,
-        esIgual: montoTotalCalculado === updateData.monto_total
-      });
       
       const response = await nominasServices.nominas.update(nominaData.id_nomina, updateData);
       
@@ -811,8 +708,6 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
           <button
             type="button"
             onClick={() => {
-              console.log('🔍 [TEST] Forzando cálculo manual...');
-              console.log('🔍 [TEST] Estado actual:', { formData, empleado, calculoNomina });
               calcularNomina();
             }}
             className="px-3 py-1 text-xs font-medium text-yellow-800 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-800 hover:bg-yellow-200 dark:hover:bg-yellow-700 rounded transition-colors duration-200"

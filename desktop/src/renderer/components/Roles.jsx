@@ -155,7 +155,6 @@ export default function Roles() {
     
     try {
       const permisos = await fetchPermisosRol(rol.id_rol);
-      console.log('Permisos obtenidos:', permisos);
       
       // Crear un mapa de id_accion -> permiso para facilitar la búsqueda
       const permisosMap = {};
@@ -193,15 +192,10 @@ export default function Roles() {
         if (permiso.id_accion === idAccion) {
           // Asegurarse de que estamos manejando un valor booleano
           const nuevoValor = permiso.permitido === true ? false : true;
-          console.log(`Cambiando permiso ${permiso.codigo} de ${permiso.permitido} a ${nuevoValor}`);
           return { ...permiso, permitido: nuevoValor };
         }
         return permiso;
       });
-      
-      // Verificar el estado actualizado
-      const permisoActualizado = updatedPermisos.find(p => p.id_accion === idAccion);
-      console.log('Estado actualizado del permiso:', permisoActualizado);
       
       return updatedPermisos;
     });
@@ -222,9 +216,7 @@ export default function Roles() {
           }
           return permiso;
         });
-        
-        console.log(`Cambiando todos los permisos del módulo ${modulo} a ${nuevoEstado ? 'permitido' : 'denegado'}`);
-        
+              
         return updatedPermisos;
       });
     }
@@ -264,7 +256,6 @@ export default function Roles() {
         permitido: permiso.permitido
       }));
       
-      console.log('Permisos a guardar:', permisosToSave);
       await apiService.updatePermisosRol(selectedRol.id_rol, permisosToSave);
       
       // Actualiza la lista de roles para reflejar los cambios

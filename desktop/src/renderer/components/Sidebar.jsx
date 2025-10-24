@@ -132,13 +132,11 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
     
     // Si está cargando permisos, no mostrar módulos hasta que esté listo
     if (permissionsLoading) {
-      console.log(`[Sidebar] Módulo ${item.name}: Cargando permisos...`);
       return item.href === '/';
     }
     
     // Para usuarios admin, mostrar todos los módulos
     if (user?.rol === 'admin' || user?.id_rol === 1) {
-      console.log(`[Sidebar] Usuario admin, mostrando módulo: ${item.name}`);
       return true;
     }
 
@@ -169,12 +167,6 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
     
     // Verificar si el usuario tiene el permiso específico "ver" para este módulo
     const hasAccess = hasPermission(permissionCode);
-    console.log(`[Sidebar] Módulo ${item.name} (${permissionCode}): ${hasAccess ? 'Visible' : 'Oculto'} | Usuario rol: ${user?.id_rol} | Admin: ${user?.id_rol === 1}`);
-    
-    // Log adicional para debug
-    if (hasAccess && user?.id_rol !== 1) {
-      console.log(`[Sidebar] ⚠️ Usuario NO-ADMIN tiene acceso a ${item.name} - verificar si es correcto`);
-    }
     
     return hasAccess;
   });
@@ -182,7 +174,6 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
   // Si el usuario no tiene acceso a ningún módulo excepto Dashboard, mostrar un mensaje en la consola
   if (navigation.length <= 1) {
     console.warn('¡Advertencia! El usuario solo tiene acceso al Dashboard. Verifica la configuración de permisos.');
-    console.log('El usuario actual es:', user);
   }
 
   const handleLogout = () => {

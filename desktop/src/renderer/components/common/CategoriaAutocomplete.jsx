@@ -49,19 +49,11 @@ const CategoriaAutocomplete = ({
 
   // Inicializar la categoría seleccionada cuando hay un valor
   useEffect(() => {
-    console.log('🔄 useEffect ejecutándose:', { 
-      value, 
-      allCategoriasLength: allCategorias.length, 
-      selectedCategoriaId: selectedCategoria?.id_categoria,
-      currentSearchTerm: searchTerm 
-    });
     
     if (value && allCategorias.length > 0) {
       const categoria = allCategorias.find(cat => cat.id_categoria == value);
-      console.log('🔍 Buscando categoría con ID:', value, 'encontrada:', categoria);
       
       if (categoria) {
-        console.log('✅ Actualizando categoría seleccionada:', categoria);
         setSelectedCategoria(categoria);
         // Forzar actualización del searchTerm solo si es diferente
         if (searchTerm !== categoria.nombre) {
@@ -69,7 +61,6 @@ const CategoriaAutocomplete = ({
         }
       }
     } else if (value === null || value === '') {
-      console.log('🧹 Limpiando categoría seleccionada, value:', value);
       setSelectedCategoria(null);
       setSearchTerm('');
     }
@@ -129,23 +120,14 @@ const CategoriaAutocomplete = ({
 
   // Manejar selección de categoría
   const handleCategoriaSelect = (categoria) => {
-    console.log('🎯 handleCategoriaSelect ejecutándose con:', categoria);
-    console.log('🎯 Estado actual antes:', { selectedCategoria: selectedCategoria?.nombre, searchTerm, value });
-    
-    // Actualizar estado local inmediatamente
     setSelectedCategoria(categoria);
     setSearchTerm(categoria.nombre); // Asegurar que se establece el nombre
     setShowDropdown(false);
     setFilteredCategorias([]);
     setHighlightedIndex(-1);
     
-    console.log('🎯 Estados actualizados localmente a:', categoria.nombre);
-    console.log('🎯 Llamando onChange con ID:', categoria.id_categoria);
-    
-    // Llamar a onChange inmediatamente
     if (onChange) {
       onChange(categoria.id_categoria);
-      console.log('🎯 onChange ejecutado con:', categoria.id_categoria);
     }
   };
 
@@ -171,14 +153,11 @@ const CategoriaAutocomplete = ({
   const handleSaveCategoria = async (categoriaData) => {
     try {
       setIsCreating(true);
-      console.log('🆕 Creando nueva categoría:', categoriaData);
       
       const response = await api.post('/config/categorias', categoriaData);
-      console.log('🆕 Respuesta completa de la API:', response);
       
       // La respuesta del backend viene en response.data
       const newCategoria = response.data || response;
-      console.log('🆕 Nueva categoría extraída:', newCategoria);
 
       // Validar que la respuesta tenga la estructura correcta
       if (!newCategoria || !newCategoria.id_categoria || !newCategoria.nombre) {
@@ -186,16 +165,11 @@ const CategoriaAutocomplete = ({
         throw new Error('La respuesta de la API no tiene la estructura esperada');
       }
 
-      console.log('🆕 Nueva categoría válida:', newCategoria);
-
-      // Actualizar lista de categorías
       setAllCategorias(prev => [...prev, newCategoria]);
 
-      // Seleccionar la nueva categoría
       setSelectedCategoria(newCategoria);
       setSearchTerm(newCategoria.nombre || '');
 
-      console.log('🆕 Llamando onChange con nueva categoría ID:', newCategoria.id_categoria);
       if (onChange) {
         onChange(newCategoria.id_categoria);
       }
@@ -279,7 +253,6 @@ const CategoriaAutocomplete = ({
 
   // Limpiar selección
   const handleClear = () => {
-    console.log('🧹 Limpiando campo de categoría');
     setSelectedCategoria(null);
     setSearchTerm('');
     setShowDropdown(false);

@@ -125,10 +125,8 @@ export default function Dashboard() {
           chartData.gastosPorProyecto = reporteDashboard.data.consumoPorObra || [];
         }
         
-        console.log('Datos de suministros cargados:', suministrosData.length);
-        console.log('Datos para gráficas:', chartData);
       } catch (error) {
-        console.log('Error al obtener suministros:', error.message);
+        console.error('Error al obtener suministros:', error.message);
       }
 
       // Datos de proveedores
@@ -143,9 +141,8 @@ export default function Dashboard() {
           (Array.isArray(proveedores.data) ? proveedores.data : []) :
           (Array.isArray(proveedores) ? proveedores : []);
         proveedoresStats = estadisticas.data || {};
-        console.log('Datos de proveedores cargados:', proveedoresData.length);
       } catch (error) {
-        console.log('Error al obtener proveedores:', error.message);
+        console.error('Error al obtener proveedores:', error.message);
       }
 
       // Datos de proyectos
@@ -155,9 +152,8 @@ export default function Dashboard() {
         proyectosData = proyectos.data ? 
           (Array.isArray(proyectos.data) ? proyectos.data : []) :
           (Array.isArray(proyectos) ? proyectos : []);
-        console.log('Datos de proyectos cargados:', proyectosData.length);
       } catch (error) {
-        console.log('Error al obtener proyectos:', error.message);
+        console.error('Error al obtener proyectos:', error.message);
       }
 
       // Calcular proveedores activos

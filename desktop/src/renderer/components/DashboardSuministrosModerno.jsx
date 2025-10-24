@@ -114,7 +114,6 @@ export default function DashboardSuministrosModerno() {
     try {
       setLoading(true);
       const response = await apiService.getDashboardSuministros(filtros);
-      console.log('📊 Dashboard data:', response.data);
       setDashboardData(response.data);
     } catch (error) {
       console.error('❌ Error al cargar dashboard:', error);

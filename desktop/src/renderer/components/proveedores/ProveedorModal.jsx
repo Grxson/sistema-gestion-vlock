@@ -164,10 +164,8 @@ const ProveedorModal = ({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('🚀 [ProveedorModal] Iniciando submit del formulario');
     
     if (!validateForm()) {
-      console.log('❌ [ProveedorModal] Validación del formulario falló');
       return;
     }
 
@@ -186,9 +184,7 @@ const ProveedorModal = ({
         cuentaBancaria: formData.cuentaBancaria.trim() || null
       };
 
-      console.log('📤 [ProveedorModal] Enviando datos:', submitData);
       await onSave(submitData);
-      console.log('✅ [ProveedorModal] onSave completado exitosamente');
     } catch (error) {
       console.error('❌ [ProveedorModal] Error en submit:', error);
     } finally {

@@ -114,13 +114,6 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
       fetchCategorias();
       
       if (herramienta && (mode === 'edit' || mode === 'view' || mode === 'duplicate')) {
-        // Debug: Log de los datos de la herramienta recibidos
-        console.log('🔍 Datos de herramienta recibidos:', {
-          herramienta,
-          stock_inicial: herramienta.stock_inicial,
-          stock: herramienta.stock,
-          mode
-        });
 
         setFormData({
           id_categoria_herr: herramienta.id_categoria_herr || '',
@@ -289,17 +282,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
         stock_inicial: parseInt(formData.stock_inicial) || 0,
         estado: parseInt(formData.estado) || 1
       };
-
-      // Debug: Log de los datos que se van a enviar
-      console.log('🔍 Datos del formulario a enviar:', {
-        mode,
-        formData,
-        processedData,
-        stock_inicial: processedData.stock_inicial,
-        stock: processedData.stock
-      });
       
-      // Función para manejar la subida de imagen después de guardar
       const handleImageUploadAfterSave = async (savedHerramienta) => {
         if (selectedImage && savedHerramienta?.id_herramienta) {
           const imageUrl = await handleImageUpload(savedHerramienta.id_herramienta);
@@ -575,16 +558,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     try {
       setLoadingMovimientos(true);
       
-      console.log('Iniciando eliminación del historial...');
-      console.log('ID de herramienta:', herramienta.id_herramienta);
-      
       const result = await api.deleteMovimientosHerramienta(herramienta.id_herramienta);
-      console.log('Respuesta del servidor:', result);
       
       if (result.success) {        
-        console.log('✅ Eliminación exitosa');
         
-        // Limpiar la lista de movimientos inmediatamente
         setMovimientos([]);
         
         // Mostrar notificación de éxito
@@ -597,21 +574,15 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
         if (onRefresh) {
           try {
             await onRefresh();
-            console.log('✅ Datos del componente padre refrescados');
           } catch (refreshError) {
             console.warn('⚠️ Error al refrescar datos del componente padre (no crítico):', refreshError);
-            // No mostramos este error al usuario porque la eliminación fue exitosa
           }
         }
         
       } else {
-        console.error('❌ Operación no exitosa:', result);
         throw new Error(result.message || 'Error desconocido al eliminar historial');
       }
     } catch (error) {
-      console.error('❌ Error al eliminar historial:', error);
-      console.error('Tipo de error:', error.constructor.name);
-      console.error('Stack trace:', error.stack);
       alert(`Error al eliminar historial:\n\n${error.message || 'Error de conexión'}`);
     } finally {
       setLoadingMovimientos(false);

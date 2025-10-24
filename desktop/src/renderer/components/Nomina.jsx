@@ -37,23 +37,15 @@ export default function Nomina() {
   const { empleados, getEmpleadosActivos, refreshEmpleados } = useEmpleados();
   
   // Hook para manejar eliminación de nóminas
-  console.log('🔍 [Nomina] Inicializando hook useDeleteNomina');
   const deleteNominaModal = useDeleteNomina(
     (message) => {
-      console.log('🔍 [Nomina] onSuccess callback ejecutado:', message);
       showSuccess('Éxito', message);
       fetchData(); // Recargar las nóminas
     },
     (message) => {
-      console.log('🔍 [Nomina] onError callback ejecutado:', message);
       showError('Error', message);
     }
   );
-  
-  // Debug: verificar empleados del contexto (solo en desarrollo)
-  if (process.env.NODE_ENV === 'development') {
-    console.log('🔍 [Nomina] Empleados del contexto:', empleados.length, empleados);
-  }
   
   const [nominas, setNominas] = useState([]);
   const [estadisticas, setEstadisticas] = useState(null);
@@ -168,32 +160,12 @@ export default function Nomina() {
 
   // Función para calcular el subtotal de la semana actual
   const getSubtotalSemanaActual = () => {
-    const nominasFiltradas = getNominasFiltradas();
-    
-    // Debug: verificar estructura de las nóminas
-    console.log('🔍 [Subtotal] Nóminas filtradas:', nominasFiltradas);
-    console.log('🔍 [Subtotal] Campos de monto disponibles:', nominasFiltradas.map(n => ({
-      id: n.id_nomina || n.id,
-      monto_total: n.monto_total,
-      monto: n.monto,
-      pago_semanal: n.pago_semanal,
-      monto_a_pagar: n.monto_a_pagar
-    })));
-    
+    const nominasFiltradas = getNominasFiltradas();    
     const subtotal = nominasFiltradas.reduce((total, nomina) => {
       // Intentar diferentes campos de monto y convertir a número
       const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-      console.log(`💰 [Subtotal] Nómina ${nomina.id_nomina || nomina.id}:`, {
-        monto_total: nomina.monto_total,
-        monto: nomina.monto,
-        pago_semanal: nomina.pago_semanal,
-        monto_calculado: monto
-      });
       return total + (isNaN(monto) ? 0 : monto);
     }, 0);
-    
-    console.log('💰 [Subtotal] Total calculado:', subtotal);
-    console.log('📊 [Subtotal] Cantidad de nóminas:', nominasFiltradas.length);
     
     return {
       total: subtotal,
@@ -234,9 +206,7 @@ export default function Nomina() {
       // Por defecto, considerar como draft si no se reconoce el estado
       status = 'draft';
     }
-    
-    console.log('🔍 [NOMINA_STATUS] Empleado:', empleado.id_empleado, 'Estado original:', latest.estado, 'Estado procesado:', status);
-    
+  
     return {
       status: status,
       count: nominasEmpleado.length,
@@ -246,7 +216,6 @@ export default function Nomina() {
 
   // Función para ver preview de nómina
   const verPreviewNomina = async (empleado) => {
-    console.log('🔍 [PREVIEW] Función verPreviewNomina llamada para empleado:', empleado.id_empleado);
     try {
       setSelectedEmpleadoPreview(empleado);
       
@@ -329,18 +298,12 @@ export default function Nomina() {
       // Actualizar estado de la nómina a "Pagado" si estaba en "borrador" o "Pendiente"
       if (nominaPreviewData.estado === 'borrador' || nominaPreviewData.estado === 'Borrador' || nominaPreviewData.estado === 'Pendiente') {
         try {
-          console.log('🔄 [PDF] Actualizando estado de nómina:', {
-            id: nominaPreviewData.id_nomina,
-            estadoActual: nominaPreviewData.estado,
-            nuevoEstado: 'Pagado'
-          });
           
           await nominasServices.nominas.marcarComoPagada(nominaPreviewData.id_nomina);
           showSuccess('Estado actualizado', 'La nómina ha sido marcada como pagada');
           
           // Refrescar datos
           await fetchData();
-          console.log('✅ [PDF] Datos refrescados después de cambiar estado');
         } catch (error) {
           console.error('❌ [PDF] Error actualizando estado:', error);
           showError('Error', 'No se pudo actualizar el estado de la nómina');
@@ -355,9 +318,7 @@ export default function Nomina() {
 
 
 
-  const editarNominaDirecta = async (empleado) => {
-    console.log('🔍 [EDITAR_DIRECTA] Función editarNominaDirecta llamada para empleado:', empleado.id_empleado);
-    
+  const editarNominaDirecta = async (empleado) => {    
     try {
       // Buscar la nómina más reciente del empleado
       const nominasEmpleado = nominas.filter(nomina => 
@@ -372,16 +333,12 @@ export default function Nomina() {
       
       const latestNomina = nominasEmpleado.sort((a, b) => 
         new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
-      )[0];
-      
-      console.log('🔍 [EDITAR_DIRECTA] Nómina más reciente encontrada:', latestNomina.id_nomina);
-      
+      )[0];      
       // Obtener datos frescos de la nómina
       const response = await nominasServices.nominas.getById(latestNomina.id_nomina);
       
       if (response.success && response.data) {
         const nominaData = response.data;
-        console.log('🔍 [EDITAR_DIRECTA] Datos de nómina obtenidos:', nominaData);
         
         // Almacenar datos de la nómina para editar
         setNominaToEdit(nominaData);
@@ -389,14 +346,6 @@ export default function Nomina() {
         
         // Abrir modal de edición
         setShowEditModal(true);
-        
-        console.log('🔍 [EDITAR_DIRECTA] Datos establecidos:', {
-          nominaData: nominaData,
-          empleado: empleado,
-          showEditModal: true,
-          selectedEmpleadoPreview: empleado,
-          nominaToEdit: nominaData
-        });
         
         showInfo('Editando Nómina', 'Abriendo editor de nómina...');
       } else {
@@ -411,7 +360,6 @@ export default function Nomina() {
 
   // Función para eliminar nómina (simplificada usando el hook)
   const eliminarNomina = (empleado) => {
-    console.log('🔍 [ELIMINAR] Función eliminarNomina llamada para empleado:', empleado.id_empleado);
     
     // Buscar la nómina más reciente del empleado
     const nominasEmpleado = nominas.filter(nomina => 
@@ -427,9 +375,7 @@ export default function Nomina() {
     const latestNomina = nominasEmpleado.sort((a, b) => 
       new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
     )[0];
-    
-    console.log('🔍 [ELIMINAR] Nómina más reciente encontrada:', latestNomina.id_nomina);
-    
+        
     // Usar el hook para manejar la eliminación
     deleteNominaModal.deleteNomina(empleado, latestNomina);
   };
@@ -486,13 +432,7 @@ export default function Nomina() {
   const handleNominaSuccess = async () => {
     try {
       // Refrescar empleados desde el contexto global
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 [Nomina] Refrescando empleados en handleNominaSuccess...');
-      }
       await refreshEmpleados();
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ [Nomina] Empleados refrescados en handleNominaSuccess');
-      }
       
       // Recargar otros datos
       await fetchData();
@@ -504,11 +444,7 @@ export default function Nomina() {
       
       // Mostrar mensaje de éxito
       showSuccess('Éxito', 'Nómina procesada correctamente');
-      
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ [Nomina] Todos los datos refrescados correctamente');
-      }
-    } catch (error) {
+      } catch (error) {
       console.error('❌ [Nomina] Error refrescando datos:', error);
       showError('Error', 'Nómina procesada pero hubo un problema al refrescar los datos');
     }
@@ -516,7 +452,6 @@ export default function Nomina() {
 
   // Función para refrescar datos cuando se liquida un adeudo
   const handleAdeudoLiquidado = async () => {
-    console.log('🔄 [Nomina] Adeudo liquidado, refrescando estadísticas...');
     // Refrescar estadísticas y datos
     await fetchData();
   };
@@ -554,33 +489,18 @@ export default function Nomina() {
       await nominasServices.inicializar();
       
       // Refrescar empleados desde el contexto global
-      if (process.env.NODE_ENV === 'development') {
-        console.log('🔄 [Nomina] Refrescando empleados desde el contexto...');
-      }
       const empleadosRefrescados = await refreshEmpleados();
-      if (process.env.NODE_ENV === 'development') {
-        console.log('✅ [Nomina] Empleados refrescados:', empleadosRefrescados?.length || 0);
-        console.log('✅ [Nomina] Empleados del contexto después del refresh:', empleados.length);
-        console.log('✅ [Nomina] Empleados del contexto después del refresh (datos):', empleados);
-        
+      
         // Esperar un poco para que el estado se actualice
         await new Promise(resolve => setTimeout(resolve, 100));
-        console.log('✅ [Nomina] Empleados del contexto después del delay:', empleados.length);
-        
-        // Verificar que los empleados se están pasando correctamente al wizard
-        console.log('🔍 [Nomina] Verificando empleados para el wizard:', empleados.length, empleados);
-        console.log('🔍 [Nomina] Verificando empleados para el wizard (después del delay):', empleados.length, empleados);
-      }
       
       // Fetch nominas usando el nuevo servicio
       let nominasData = [];
       try {
         const nominasResponse = await nominasServices.nominas.getAll();
         nominasData = nominasResponse.data || [];
-        console.log('📊 [Nomina] Nominas cargadas:', nominasData);
         setNominas(nominasData);
       } catch (error) {
-        console.log('Nomina endpoint not available yet');
         setNominas([]);
       }
 
@@ -589,12 +509,10 @@ export default function Nomina() {
         const estadisticasData = await nominasServices.empleados.getEstadisticasEmpleados();
         setEstadisticas(estadisticasData);
       } catch (error) {
-        console.log('Error loading statistics:', error);
         setEstadisticas(null);
       }
 
     } catch (error) {
-      console.error('Error fetching data:', error);
       showError('Error', 'No se pudieron cargar los datos');
     } finally {
       setLoading(false);
@@ -736,7 +654,6 @@ export default function Nomina() {
                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Mensual</p>
                     <p className="text-lg font-semibold text-gray-900 dark:text-white">
                       {formatCurrency(estadisticas?.totalSalariosMensuales || 0)}
-                      {console.log(estadisticas)}
                     </p>
                   </div>
                 </div>
@@ -922,15 +839,12 @@ export default function Nomina() {
                               </button>
                               {(() => {
                                 const status = getNominaStatus(empleado);
-                                console.log('🔍 [BOTON_EDITAR] Estado para empleado', empleado.id_empleado, ':', status);
                                 // Solo mostrar botón de editar para nóminas en estado 'draft' (borrador)
                                 const shouldShow = status.status === 'draft';
-                                console.log('🔍 [BOTON_EDITAR] ¿Mostrar botón para empleado', empleado.id_empleado, '?', shouldShow);
                                 return shouldShow;
                               })() && (
                                 <button 
                                   onClick={() => {
-                                    console.log('🔍 [BOTON_EDITAR] Clickeado para empleado:', empleado.id_empleado);
                                     editarNominaDirecta(empleado);
                                   }}
                                   className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
@@ -947,7 +861,6 @@ export default function Nomina() {
                               })() && (
                                 <button 
                                   onClick={() => {
-                                    console.log('🔍 [BOTON_ELIMINAR] Clickeado para empleado:', empleado.id_empleado);
                                     eliminarNomina(empleado);
                                   }}
                                   className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
@@ -1026,9 +939,6 @@ export default function Nomina() {
             {getNominasFiltradas().length > 0 ? (
               <div className="space-y-3">
                 {(showAllNominas ? getNominasFiltradas() : getNominasFiltradas().slice(0, 10)).map((nomina, index) => {
-                  // Debug: verificar estructura de cada nómina
-                  console.log(`📋 [Nomina] Nómina ${index}:`, nomina);
-                  
                   // Obtener nombre del empleado
                   const nombreEmpleado = typeof nomina.empleado === 'object' && nomina.empleado
                     ? `${nomina.empleado.nombre || ''} ${nomina.empleado.apellido || ''}`.trim()
@@ -1320,7 +1230,6 @@ export default function Nomina() {
         )}
 
         {/* Nomina Wizard Simplificado */}
-        {process.env.NODE_ENV === 'development' && console.log('🔍 [Nomina] Pasando empleados al wizard:', empleados.length, empleados)}
         <NominaWizardSimplificado 
           isOpen={showWizard}
           onClose={() => {
@@ -1360,11 +1269,6 @@ export default function Nomina() {
 
         {/* Modal de Preview de Nómina */}
         {showNominaPreview && nominaPreviewData && selectedEmpleadoPreview && (
-          console.log('🔍 [PREVIEW] Renderizando preview de nómina:', {
-            showNominaPreview,
-            nominaPreviewData: nominaPreviewData?.id_nomina,
-            selectedEmpleadoPreview: selectedEmpleadoPreview?.id_empleado
-          }),
           <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
             <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-4xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
               {/* Header del Preview */}

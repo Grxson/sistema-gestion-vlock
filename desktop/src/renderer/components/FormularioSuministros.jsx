@@ -319,7 +319,6 @@ export default function FormularioSuministros({
       dynamicMapping[`id:${unidadId}`] = unidadId;
     });
 
-    console.log('🔄 Mapeo dinámico de unidades actualizado:', dynamicMapping);
     return dynamicMapping;
   }, [unidadesDinamicas]);
 
@@ -976,19 +975,6 @@ export default function FormularioSuministros({
 
   // Función optimizada para actualizar suministros con debounce en autocompletado
   const actualizarSuministro = useCallback((id, field, value) => {
-    console.log(`🔄 actualizarSuministro: ${id}, ${field}:`, value);
-    
-    // Debug específico para unidades de medida (solo en desarrollo)
-    if (process.env.NODE_ENV === 'development' && field === 'unidad_medida') {
-      console.log(`🔍 Debug actualizarSuministro - unidad_medida:`, {
-        valor_recibido: value,
-        tipo_valor: typeof value,
-        unidades_disponibles: Object.keys(unidades),
-        es_valida_en_dinamicas: !!unidades[value],
-        es_valida_en_por_defecto: !!UNIDADES_MEDIDA[value]
-      });
-    }
-    
     // Normalizar ciertos campos antes de guardarlos
     let normalizedValue = value;
     let additionalFields = {};
@@ -1025,20 +1011,7 @@ export default function FormularioSuministros({
       } else {
         normalizedValue = null; // Mantener null explícitamente
       }
-      console.log(`📂 Categoría normalizada: ${value} -> ${normalizedValue}`);
-    }
-    
-    console.log(`💾 Guardando en estado: ${field} = ${normalizedValue}`);
-    
-    // Debug específico para unidades de medida después de normalización (solo en desarrollo)
-    if (process.env.NODE_ENV === 'development' && field === 'unidad_medida') {
-      console.log(`🔍 Debug después de normalización:`, {
-        valor_original: value,
-        valor_normalizado: normalizedValue,
-        cambio_ocurrio: value !== normalizedValue
-      });
-    }
-    
+    }    
     // Actualizar estado de manera optimizada
     setSuministros(prev => {
       // Verificar si realmente hay cambio para evitar re-renders innecesarios
@@ -1278,17 +1251,6 @@ export default function FormularioSuministros({
           // Mapear unidad de medida a ID
           const unidadMedidaId = s.id_unidad_medida; // Respetar selección del usuario
           
-          // Debug: Log de la unidad de medida antes de enviar (solo en desarrollo)
-          if (process.env.NODE_ENV === 'development') {
-            console.log('🔍 Debug unidad_medida:', {
-              suministro: s.nombre,
-              unidad_medida_original: s.unidad_medida,
-              id_unidad_medida: unidadMedidaId,
-              unidades_disponibles: Object.keys(unidades),
-              es_valida: !!unidades[s.unidad_medida]
-            });
-          }
-          
           return {
             id_suministro: s.id_suministro || null, // Incluir ID si existe (para actualización)
             id_categoria_suministro: s.id_categoria_suministro,
@@ -1349,14 +1311,12 @@ export default function FormularioSuministros({
 
   const handleProveedorSaved = async (proveedorData) => {
     try {
-      console.log('📤 [FormularioSuministros] Creando proveedor:', proveedorData);
       
       // Llamar a la API para crear el proveedor
       const response = await api.createProveedor(proveedorData);
       
       if (response.success) {
         const nuevoProveedor = response.data;
-        console.log('✅ [FormularioSuministros] Proveedor creado:', nuevoProveedor);
         
         // Cerrar modal
         setShowProveedorModal(false);
@@ -1682,8 +1642,6 @@ export default function FormularioSuministros({
                       value={suministro.id_categoria_suministro}
                       onCategoriesUpdated={onCategoriesUpdated}
                       onChange={(value) => {
-                        console.log(`🎯 CategoriaAutocomplete onChange: ${value} para suministro ${suministro.id_temp}`);
-                        console.log(`🎯 Tipo de valor recibido:`, typeof value, value);
                         
                         // Actualizar inmediatamente usando el callback de estado para evitar problemas de timing
                         setSuministros(prev => {
@@ -1693,14 +1651,11 @@ export default function FormularioSuministros({
                               : s
                           );
                           const updatedItem = updated.find(s => s.id_temp === suministro.id_temp);
-                          console.log(`💾 Estado actualizado para suministro ${suministro.id_temp}:`, 
-                            updatedItem?.id_categoria_suministro);
                           return updated;
                         });
                       }}
                       placeholder="Buscar o crear categoría..."
                       onCreateNew={(newCategoria) => {
-                        console.log('🆕 Nueva categoría creada en formulario:', newCategoria);
                         // Asegurar que se asigne la nueva categoría inmediatamente
                         if (newCategoria && newCategoria.id_categoria) {
                           setSuministros(prev => prev.map(s => 

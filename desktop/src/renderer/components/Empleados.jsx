@@ -90,8 +90,6 @@ export default function Empleados() {
 
   useEffect(() => {
     // Solo cargar datos auxiliares, los empleados se cargan automáticamente desde el contexto
-    console.log('🔄 [Empleados] Cargando datos auxiliares...');
-    console.log('🔄 [Empleados] Estado inicial de empleados:', empleados.length);
     fetchOficios();
     fetchContratos();
     fetchProyectos();
@@ -130,8 +128,6 @@ export default function Empleados() {
 
   // Refrescar empleados cuando cambien los filtros
   useEffect(() => {
-    console.log('🔄 [Empleados] Refrescando empleados con filtros:', filters);
-    console.log('🔄 [Empleados] fetchEmpleados function:', typeof fetchEmpleados);
     fetchEmpleados(filters).catch(error => {
       console.error('❌ [Empleados] Error al refrescar empleados:', error);
     });
@@ -368,17 +364,9 @@ export default function Empleados() {
     (empleado.proyecto?.nombre || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Debug: verificar el estado de empleados
-  console.log('🔍 [Empleados] Estado actual:', {
-    empleados: empleados.length,
-    loading: empleadosLoading,
-    filtered: filteredEmpleados.length,
-    searchTerm,
-    empleadosData: empleados
-  });
+
 
   if (empleadosLoading) {
-    console.log('🔄 [Empleados] Mostrando loading...');
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>

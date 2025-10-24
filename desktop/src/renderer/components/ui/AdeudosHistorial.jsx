@@ -35,7 +35,6 @@ const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
         // Cargar todos los adeudos (pendientes y liquidados)
         adeudosData = await nominasServices.adeudos.getAllAdeudos();
       }
-      console.log('Adeudos cargados:', adeudosData);
       setAdeudos(adeudosData);
     } catch (error) {
       console.error('Error loading debts:', error);
@@ -95,26 +94,19 @@ const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
     }
 
     try {
-      console.log('🔄 [ADEUDOS] Liquidando adeudo con ID:', adeudoId);
-      console.log('🔄 [ADEUDOS] Adeudos antes de liquidar:', adeudos);
       
       await nominasServices.adeudos.liquidarAdeudo(adeudoId);
-      console.log('✅ [ADEUDOS] Adeudo liquidado exitosamente en el backend');
       
       // Actualizar el estado local inmediatamente
       setAdeudos(prevAdeudos => {
-        console.log('🔄 [ADEUDOS] Actualizando estado local, adeudos previos:', prevAdeudos);
-        
         const updatedAdeudos = prevAdeudos.map(adeudo => {
           const currentId = adeudo.id_adeudo || adeudo.id;
-          console.log(`🔍 [ADEUDOS] Comparando: currentId=${currentId} (tipo: ${typeof currentId}) vs adeudoId=${adeudoId} (tipo: ${typeof adeudoId})`);
           
           // Convertir ambos a número para comparación
           const currentIdNum = parseInt(currentId);
           const adeudoIdNum = parseInt(adeudoId);
           
           if (currentIdNum === adeudoIdNum) {
-            console.log('✅ [ADEUDOS] Encontrado adeudo para actualizar:', adeudo);
             return { 
               ...adeudo, 
               estado: 'Liquidado', 
@@ -126,7 +118,6 @@ const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
           return adeudo;
         });
         
-        console.log('✅ [ADEUDOS] Adeudos actualizados:', updatedAdeudos);
         return updatedAdeudos;
       });
       
@@ -287,8 +278,6 @@ const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
         ) : (
           <div className="space-y-4 max-h-96 overflow-y-auto">
             {adeudosAVisualizar.map((adeudo, index) => {
-              // Debug: verificar estructura del adeudo
-              console.log(`Adeudo ${index}:`, adeudo);
               return (
                 <div
                   key={adeudo.id_adeudo || adeudo.id || `adeudo-${index}`}
