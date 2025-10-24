@@ -4,6 +4,7 @@
 
 /**
  * Calcula la semana ISO para una fecha dada (estándar ISO 8601)
+ * Algoritmo corregido según ISO 8601
  * @param {Date} fecha - Fecha para calcular la semana ISO
  * @returns {number} Número de semana ISO (1-53)
  */
@@ -11,27 +12,31 @@ function calcularSemanaISO(fecha) {
   // Crear una copia de la fecha para no modificar la original
   const fechaTemp = new Date(fecha.getTime());
   
-  // Algoritmo ISO 8601 estándar
-  // 1. Encontrar el jueves de la semana (ISO 8601 define la semana por su jueves)
+  // Establecer a las 12:00 para evitar problemas con cambios de horario
+  fechaTemp.setHours(12, 0, 0, 0);
+  
+  // Encontrar el jueves de esta semana (ISO 8601 define la semana por su jueves)
   const dia = fechaTemp.getDay();
-  const diff = fechaTemp.getDate() - dia + 4; // 4 = jueves (0=domingo, 1=lunes, ..., 4=jueves)
-  const jueves = new Date(fechaTemp.setDate(diff));
+  const jueves = new Date(fechaTemp);
+  jueves.setDate(fechaTemp.getDate() - dia + (dia === 0 ? -3 : 4));
   
-  // 2. Obtener el año del jueves
-  const año = jueves.getFullYear();
+  // Obtener el año del jueves (este es el año ISO de la semana)
+  const añoISO = jueves.getFullYear();
   
-  // 3. Encontrar el primer jueves del año
-  const primerEnero = new Date(año, 0, 1);
+  // Encontrar el primer jueves del año ISO
+  const primerEnero = new Date(añoISO, 0, 1);
   const diaPrimerEnero = primerEnero.getDay();
-  const diasHastaPrimerJueves = (4 - diaPrimerEnero + 7) % 7;
-  const primerJueves = new Date(año, 0, 1 + diasHastaPrimerJueves);
   
-  // 4. Calcular la semana ISO
-  const diasTranscurridos = Math.floor((jueves - primerJueves) / (1000 * 60 * 60 * 24));
-  const semanaISO = Math.floor(diasTranscurridos / 7) + 1;
+  // Calcular días hasta el primer jueves
+  const diasHastaPrimerJueves = (11 - diaPrimerEnero) % 7;
+  const primerJueves = new Date(añoISO, 0, 1 + diasHastaPrimerJueves);
   
-  // 5. Asegurar que esté en el rango correcto (1-53)
-  return Math.max(1, Math.min(53, semanaISO));
+  // Calcular la diferencia en semanas
+  const diferenciaMilisegundos = jueves - primerJueves;
+  const diferenciaDias = Math.floor(diferenciaMilisegundos / (1000 * 60 * 60 * 24));
+  const semanaISO = Math.floor(diferenciaDias / 7) + 1;
+  
+  return semanaISO;
 }
 
 /**

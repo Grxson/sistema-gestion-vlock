@@ -67,6 +67,7 @@ export function calcularSemanaDelMes(fecha) {
 
 /**
  * Calcula la semana ISO para una fecha dada (estándar ISO 8601)
+ * Algoritmo corregido según ISO 8601
  * @param {Date} fecha - Fecha para calcular la semana ISO
  * @returns {number} Número de semana ISO (1-53)
  */
@@ -74,32 +75,38 @@ export function calcularSemanaISO(fecha) {
   // Crear una copia de la fecha para no modificar la original
   const fechaTemp = new Date(fecha.getTime());
   
-  // Ajustar al lunes de la semana (ISO 8601: lunes = día 1)
+  // Establecer a las 12:00 para evitar problemas con cambios de horario
+  fechaTemp.setHours(12, 0, 0, 0);
+  
+  // Encontrar el jueves de esta semana (ISO 8601 define la semana por su jueves)
   const dia = fechaTemp.getDay();
-  const diff = fechaTemp.getDate() - dia + (dia === 0 ? -6 : 1);
-  const lunes = new Date(fechaTemp.setDate(diff));
+  const jueves = new Date(fechaTemp);
+  jueves.setDate(fechaTemp.getDate() - dia + (dia === 0 ? -3 : 4));
   
-  // Obtener el año de la semana (puede ser diferente al año de la fecha)
-  const añoSemana = lunes.getFullYear();
+  // Obtener el año del jueves (este es el año ISO de la semana)
+  const añoISO = jueves.getFullYear();
   
-  // Calcular el primer lunes del año
-  const primerEnero = new Date(añoSemana, 0, 1);
+  // Encontrar el primer jueves del año ISO
+  const primerEnero = new Date(añoISO, 0, 1);
   const diaPrimerEnero = primerEnero.getDay();
-  const diasHastaPrimerLunes = diaPrimerEnero === 0 ? 1 : 8 - diaPrimerEnero;
-  const primerLunesAño = new Date(añoSemana, 0, diasHastaPrimerLunes);
   
-  // Si el primer lunes está en el año anterior, ajustar
-  if (primerLunesAño.getFullYear() < añoSemana) {
-    primerLunesAño.setFullYear(añoSemana - 1);
-    primerLunesAño.setMonth(11, 31 - (7 - diasHastaPrimerLunes));
-  }
+  // Calcular días hasta el primer jueves
+  // Si el 1 de enero es jueves (4), días = 0
+  // Si es viernes (5), días = 6 (jueves anterior)
+  // Si es sábado (6), días = 5
+  // Si es domingo (0), días = 4
+  // Si es lunes (1), días = 3
+  // Si es martes (2), días = 2
+  // Si es miércoles (3), días = 1
+  const diasHastaPrimerJueves = (11 - diaPrimerEnero) % 7;
+  const primerJueves = new Date(añoISO, 0, 1 + diasHastaPrimerJueves);
   
-  // Calcular la diferencia en días y convertir a semanas
-  const diasTranscurridos = Math.floor((lunes - primerLunesAño) / (1000 * 60 * 60 * 24));
-  const semanaISO = Math.floor(diasTranscurridos / 7) + 1;
+  // Calcular la diferencia en semanas
+  const diferenciaMilisegundos = jueves - primerJueves;
+  const diferenciaDias = Math.floor(diferenciaMilisegundos / (1000 * 60 * 60 * 24));
+  const semanaISO = Math.floor(diferenciaDias / 7) + 1;
   
-  // Asegurar que esté en el rango correcto (1-53)
-  return Math.max(1, Math.min(53, semanaISO));
+  return semanaISO;
 }
 
 /**

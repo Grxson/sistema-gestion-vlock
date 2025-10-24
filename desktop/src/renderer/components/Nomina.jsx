@@ -186,13 +186,6 @@ export default function Nomina() {
     const hoy = new Date();
     const infoSemanaActual = generarInfoSemana(hoy);
     
-    // Debug: Log para ver la semana actual
-    console.log('🔍 [getNominaStatus] Semana actual del sistema:', {
-      año: infoSemanaActual.año,
-      semanaISO: infoSemanaActual.semanaISO,
-      etiqueta: infoSemanaActual.etiqueta
-    });
-    
     // Filtrar nóminas del empleado que pertenezcan a la semana actual
     const nominasEmpleado = nominas.filter(nomina => {
       const perteneceAlEmpleado = nomina.empleado?.id_empleado === empleado.id_empleado ||
@@ -200,33 +193,14 @@ export default function Nomina() {
       
       if (!perteneceAlEmpleado) return false;
       
-      // Debug: Log para ver la información de la nómina
-      console.log('🔍 [getNominaStatus] Nómina del empleado:', {
-        id_nomina: nomina.id_nomina,
-        empleado: empleado.nombre,
-        semana: nomina.semana,
-        id_semana: nomina.id_semana
-      });
-      
       // Verificar si la nómina pertenece a la semana actual
       // Comparar por año y semana ISO
       const semanaNomina = nomina.semana;
       if (semanaNomina) {
-        const perteneceASemanaActual = semanaNomina.anio === infoSemanaActual.año && 
-                                       semanaNomina.semana_iso === infoSemanaActual.semanaISO;
-        
-        console.log('🔍 [getNominaStatus] Comparación de semanas:', {
-          nominaAño: semanaNomina.anio,
-          nominaSemanaISO: semanaNomina.semana_iso,
-          actualAño: infoSemanaActual.año,
-          actualSemanaISO: infoSemanaActual.semanaISO,
-          perteneceASemanaActual
-        });
-        
-        return perteneceASemanaActual;
+        return semanaNomina.anio === infoSemanaActual.año && 
+               semanaNomina.semana_iso === infoSemanaActual.semanaISO;
       }
       
-      console.log('⚠️ [getNominaStatus] Nómina sin información de semana');
       return false;
     });
     
