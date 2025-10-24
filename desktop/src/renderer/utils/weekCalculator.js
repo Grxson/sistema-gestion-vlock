@@ -79,9 +79,21 @@ export function calcularSemanaISO(fecha) {
   fechaTemp.setHours(12, 0, 0, 0);
   
   // Encontrar el jueves de esta semana (ISO 8601 define la semana por su jueves)
+  // En ISO 8601, la semana va de lunes a domingo
+  // El domingo pertenece a la semana que termina ese día
   const dia = fechaTemp.getDay();
   const jueves = new Date(fechaTemp);
-  jueves.setDate(fechaTemp.getDate() - dia + (dia === 0 ? -3 : 4));
+  
+  // Calcular días hasta el jueves de la semana ISO
+  // Domingo (0) -> jueves está 3 días atrás (jueves de la semana que termina el domingo)
+  // Lunes (1) -> jueves está 3 días adelante
+  // Martes (2) -> jueves está 2 días adelante
+  // Miércoles (3) -> jueves está 1 día adelante
+  // Jueves (4) -> es el mismo día (0 días)
+  // Viernes (5) -> jueves está 1 día atrás
+  // Sábado (6) -> jueves está 2 días atrás
+  const diasHastaJueves = dia === 0 ? -3 : (4 - dia);
+  jueves.setDate(fechaTemp.getDate() + diasHastaJueves);
   
   // Obtener el año del jueves (este es el año ISO de la semana)
   const añoISO = jueves.getFullYear();
