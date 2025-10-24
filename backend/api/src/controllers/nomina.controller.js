@@ -1627,37 +1627,52 @@ const verificarDuplicados = async (req, res) => {
         // Extraer año y mes del período
         const [año, mes] = periodo.split('-').map(Number);
         
-        // Calcular la fecha específica que corresponde a la semana del mes solicitada
-        // Necesitamos encontrar una fecha que esté en esa semana específica del mes
-        const primerDiaDelMes = new Date(año, mes - 1, 1); // mes - 1 porque es 0-indexado
-        const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
+        // NUEVO ALGORITMO: Usar semanas ISO 8601 en lugar de filas del calendario
+        // Calcular todas las semanas ISO que tocan el mes solicitado
+        const primerDiaDelMes = new Date(año, mes - 1, 1);
+        const ultimoDiaDelMes = new Date(año, mes, 0);
         
-        // Calcular en qué fila del calendario está la semana solicitada
-        const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
+        // Obtener todas las semanas ISO que tocan este mes
+        const semanasDelMes = [];
+        let fechaActual = new Date(primerDiaDelMes);
         
-        let fechaReferencia;
-        if (semanaNum === 1) {
-            // Semana 1: usar el primer día del mes
-            fechaReferencia = primerDiaDelMes;
-        } else {
-            // Semanas 2+: calcular el primer día de esa semana
-            const diasHastaSemana = diasEnPrimeraFila + (semanaNum - 2) * 7;
-            fechaReferencia = new Date(año, mes - 1, 1 + diasHastaSemana);
+        while (fechaActual <= ultimoDiaDelMes) {
+            const infoSemanaActual = generarInfoSemana(fechaActual);
+            
+            // Verificar si esta semana ya está en el array (evitar duplicados)
+            const yaExiste = semanasDelMes.some(s => 
+                s.año === infoSemanaActual.año && 
+                s.semanaISO === infoSemanaActual.semanaISO
+            );
+            
+            if (!yaExiste) {
+                semanasDelMes.push(infoSemanaActual);
+            }
+            
+            // Avanzar 7 días
+            fechaActual.setDate(fechaActual.getDate() + 7);
         }
         
-        console.log('🔍 [VERIFICAR_DUPLICADOS] Cálculo de fecha de referencia:', {
+        console.log('🔍 [VERIFICAR_DUPLICADOS] Semanas ISO del mes:', {
             año,
             mes,
-            semanaNum,
-            primerDiaDelMes: primerDiaDelMes.toLocaleDateString('es-MX'),
-            diaPrimerDia,
-            diasEnPrimeraFila,
-            fechaReferencia: fechaReferencia.toLocaleDateString('es-MX')
+            totalSemanas: semanasDelMes.length,
+            semanas: semanasDelMes.map(s => `ISO ${s.semanaISO} (${s.etiqueta})`)
         });
         
-        const infoSemana = generarInfoSemana(fechaReferencia);
+        // Validar que la semana solicitada existe
+        if (semanaNum > semanasDelMes.length) {
+            return res.status(400).json({
+                success: false,
+                message: `El mes ${mes}/${año} solo tiene ${semanasDelMes.length} semanas ISO. Solicitaste la semana ${semanaNum}.`
+            });
+        }
         
-        console.log('🔍 [VERIFICAR_DUPLICADOS] Información de semana calculada:', {
+        // Obtener la semana ISO correspondiente (semanaNum - 1 porque el array es 0-indexado)
+        const infoSemana = semanasDelMes[semanaNum - 1];
+        
+        console.log('🔍 [VERIFICAR_DUPLICADOS] Semana seleccionada:', {
+            semanaNumero: semanaNum,
             semanaISO: infoSemana.semanaISO,
             año: infoSemana.año,
             etiqueta: infoSemana.etiqueta
@@ -1719,8 +1734,8 @@ const verificarDuplicados = async (req, res) => {
                 }
             } : null,
             message: existe 
-                ? `Ya existe una nómina para este empleado en la semana ${semana} del período ${periodo}`
-                : `No existe nómina para este empleado en la semana ${semana} del período ${periodo}`
+                ? `Ya existe una nómina para este empleado en la ${infoSemana.etiqueta} (Semana ${semana} de ${periodo})`
+                : `No existe nómina para este empleado en la ${infoSemana.etiqueta} (Semana ${semana} de ${periodo})`
         });
 
     } catch (error) {

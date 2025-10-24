@@ -33,12 +33,6 @@ function calcularSemanaISO(fecha) {
   const diasHastaJueves = dia === 0 ? -3 : (4 - dia);
   jueves.setDate(fechaTemp.getDate() + diasHastaJueves);
   
-  console.log('✅ [ALGORITMO_CORREGIDO] Usando algoritmo ISO 8601 actualizado (2025-10-24)', {
-    fechaOriginal: fechaTemp.toLocaleDateString('es-MX'),
-    diaOriginal: dia,
-    jueves: jueves.toLocaleDateString('es-MX')
-  });
-  
   // Obtener el año del jueves (este es el año ISO de la semana)
   const añoISO = jueves.getFullYear();
   
