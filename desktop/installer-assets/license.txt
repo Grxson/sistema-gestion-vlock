@@ -1,0 +1,76 @@
+ACUERDO DE LICENCIA DE USUARIO FINAL (EULA)
+Vlock Sistema de Gestión v2.0.0
+
+Copyright © 2025 Vlock Constructora
+Todos los derechos reservados.
+
+1. DEFINICIONES
+Para efectos de este acuerdo:
+- Licenciante: Vlock Constructora
+- Software: Vlock Sistema de Gestión v2.0.0 y cualquier módulo, actualización o componente asociado.
+- Usuario Autorizado: Personal interno de Vlock Constructora que acceda al software con autorización expresa para desempeño de funciones laborales u operativas internas.
+
+2. CONCESIÓN DE LICENCIA
+El software se licencia, no se vende.
+Se otorga al Usuario Autorizado una licencia limitada, no exclusiva, revocable e intransferible para usar el software únicamente para actividades internas de Vlock Constructora.
+
+3. USO PERMITIDO
+El Usuario Autorizado puede:
+- Instalar y usar el software en equipos propiedad de Vlock Constructora o destinados a sus operaciones internas
+- Acceder mediante red interna o servicios propios aprobados por la empresa
+- Realizar copias de respaldo exclusivamente para contingencias operativas
+
+4. RESTRICCIONES
+El Usuario Autorizado NO puede:
+- Sublicenciar, compartir acceso o permitir el uso por terceros ajenos a la empresa
+- Descompilar, aplicar ingeniería inversa, modificar o crear obras derivadas del software
+- Extraer elementos del software para otros sistemas o proyectos
+- Eliminar avisos de copyright o de propiedad industrial
+- Usar el software para actividades ilegales o fuera de la operación corporativa
+
+5. PROPIEDAD INTELECTUAL
+Todo el Software es propiedad exclusiva de Vlock Constructora, protegido por leyes de derechos de autor y tratados internacionales.
+Este acuerdo no transfiere propiedad intelectual alguna al Usuario Autorizado.
+
+6. PROPIEDAD DE LOS DATOS
+Toda la información y datos ingresados al Software son propiedad exclusiva de Vlock Constructora.
+El Licenciante no adquiere ningún derecho sobre dichos datos distintos a su uso técnico para la correcta operación del sistema.
+
+7. CONFIDENCIALIDAD
+El Usuario Autorizado deberá mantener confidencial:
+- Los datos procesados por el Software
+- La estructura técnica y funcional del sistema
+- Accesos, credenciales y configuraciones internas
+
+8. GARANTÍA LIMITADA
+El Software se proporciona “TAL CUAL”, sin garantía expresa o implícita de funcionamiento libre de errores o interrupciones.
+
+9. LIMITACIÓN DE RESPONSABILIDAD
+Vlock Constructora no será responsable por:
+- Daños directos, indirectos, incidentales, especiales o consecuentes
+- Pérdida de información o interrupciones operativas
+
+10. SOPORTE TÉCNICO
+El soporte será proporcionado a través de los canales internos autorizados por Vlock Constructora.
+
+11. ACTUALIZACIONES
+Las actualizaciones pueden incluir términos adicionales que deberán ser aceptados para su instalación y uso.
+
+12. AUDITORÍA INTERNA
+Vlock Constructora podrá auditar el uso del Software para verificar el cumplimiento de este acuerdo.
+
+13. TERMINACIÓN
+Esta licencia podrá terminar si:
+- Se incumple cualquier cláusula de este acuerdo
+- Vlock Constructora decide sustituir o descontinuar el software
+Al concluir la licencia, el Usuario Autorizado deberá cesar todo uso del Software.
+
+14. LEY APLICABLE Y JURISDICCIÓN
+Este acuerdo se rige por las leyes de los Estados Unidos Mexicanos.
+Cualquier controversia será resuelta ante tribunales competentes en Jalisco, México.
+
+Al instalar, acceder o utilizar el Software, usted declara haber leído y aceptado los términos de esta licencia.
+Si no está de acuerdo con los mismos, no use el Software.
+
+Contacto interno: soporte@vlockconstructora.mx
+Última actualización: Octubre 2025

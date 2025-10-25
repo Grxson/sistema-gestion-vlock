@@ -54,7 +54,9 @@
     "autoprefixer": "^10.4.21",
     "electron": "^37.3.0",
     "electron-builder": "^25.1.8",
+    "png-to-ico": "^3.0.1",
     "postcss": "^8.5.6",
+    "sharp": "^0.34.4",
     "tailwindcss": "^3.4.17",
     "vite": "^7.1.2"
   },
@@ -129,8 +131,25 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "allowElevation": true,
+      "perMachine": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "menuCategory": true,
+      "runAfterFinish": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeader": "build/installerHeader.bmp",
+      "installerSidebar": "build/installerSidebar.bmp",
+      "uninstallerSidebar": "build/installerSidebar.bmp",
+      "installerHeaderIcon": "build/icon.ico",
+      "license": "build/license.txt",
+      "warningsAsErrors": false,
+      "displayLanguageSelector": false,
+      "language": "3082",
+      "multiLanguageInstaller": false,
+      "deleteAppDataOnUninstall": false,
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     }
   }
 }
