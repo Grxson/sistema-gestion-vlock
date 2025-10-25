@@ -136,9 +136,11 @@ const calcularNomina = (
     esPagoSemanal = false
 ) => {
     // Cálculo de salario base
-    // Para pago semanal: pagoPorDia ya es el pago semanal completo
+    // Para pago semanal: convertir a equivalente diario (semana de 6 días) y multiplicar por los días laborados
     // Para pago diario: pagoPorDia * diasLaborados
-    const salarioBase = esPagoSemanal ? pagoPorDia : diasLaborados * pagoPorDia;
+    const salarioBase = esPagoSemanal
+        ? (pagoPorDia / 6) * diasLaborados
+        : diasLaborados * pagoPorDia;
     
     // Cálculo de horas extra
     const montoHorasExtra = calcularHorasExtra(horasExtra, pagoPorDia, esPagoSemanal);

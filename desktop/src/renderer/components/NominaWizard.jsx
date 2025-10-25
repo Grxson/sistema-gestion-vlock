@@ -316,7 +316,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       
       const diasLaborados = formData.diasLaborados || 6;
       const pagoPorDia = pagoSemanal / 6; // Equivalente diario fijo (semana de 6 días)
-      const salarioBase = pagoSemanal; // Para pago semanal, el salario base es el pago semanal completo
+      const salarioBase = pagoPorDia * diasLaborados; // Salario proporcional a los días laborados
       
       const datosNomina = {
         diasLaborados: diasLaborados, // Usar el valor ingresado por el usuario
@@ -1700,7 +1700,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-600 dark:text-gray-400">
-                          {formData.selectedEmpleado?.pago_semanal ? 'Salario Semanal:' : `Salario Base (${formData.diasLaborados} días):`}
+                          {formData.selectedEmpleado?.pago_semanal ? `Salario proporcional (${formData.diasLaborados} días):` : `Salario Base (${formData.diasLaborados} días):`}
                         </span>
                         <span className="font-medium text-gray-900 dark:text-white">
                           {formatCurrency(calculoNomina.salarioBase)}
