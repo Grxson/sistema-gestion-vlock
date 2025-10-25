@@ -189,22 +189,57 @@ const createNomina = async (req, res) => {
         // Si el frontend envía período y semana, usarlos; si no, usar fecha actual (retrocompatibilidad)
         let infoSemana;
         if (periodo_anio && periodo_mes && semana_del_mes) {
-            // Calcular la fecha de inicio de la semana basándose en el período y semana del mes
+            // USAR EL MISMO ALGORITMO QUE verificarDuplicados
+            // Calcular todas las semanas ISO que tocan el mes solicitado
             const primerDiaDelMes = new Date(periodo_anio, periodo_mes - 1, 1);
-            const diasHastaLunes = (8 - primerDiaDelMes.getDay()) % 7;
-            const primerLunes = new Date(periodo_anio, periodo_mes - 1, 1 + diasHastaLunes);
+            const ultimoDiaDelMes = new Date(periodo_anio, periodo_mes, 0);
             
-            // Calcular fecha de inicio de la semana seleccionada
-            const fechaInicioSemana = new Date(primerLunes);
-            fechaInicioSemana.setDate(primerLunes.getDate() + (semana_del_mes - 1) * 7);
+            // Obtener todas las semanas ISO que tocan este mes
+            const semanasDelMes = [];
+            let fechaActual = new Date(primerDiaDelMes);
             
-            infoSemana = generarInfoSemana(fechaInicioSemana);
+            while (fechaActual <= ultimoDiaDelMes) {
+                const infoSemanaActual = generarInfoSemana(fechaActual);
+                
+                // Verificar si esta semana ya está en el array (evitar duplicados)
+                const yaExiste = semanasDelMes.some(s => 
+                    s.año === infoSemanaActual.año && 
+                    s.semanaISO === infoSemanaActual.semanaISO
+                );
+                
+                if (!yaExiste) {
+                    semanasDelMes.push(infoSemanaActual);
+                }
+                
+                // Avanzar 7 días
+                fechaActual.setDate(fechaActual.getDate() + 7);
+            }
+            
+            console.log('🔍 [CREATE_NOMINA] Semanas ISO del mes:', {
+                año: periodo_anio,
+                mes: periodo_mes,
+                totalSemanas: semanasDelMes.length,
+                semanas: semanasDelMes.map(s => `ISO ${s.semanaISO} (${s.etiqueta})`)
+            });
+            
+            // Validar que la semana solicitada existe
+            if (semana_del_mes > semanasDelMes.length) {
+                return res.status(400).json({
+                    success: false,
+                    message: `El mes ${periodo_mes}/${periodo_anio} solo tiene ${semanasDelMes.length} semanas ISO. Solicitaste la semana ${semana_del_mes}.`
+                });
+            }
+            
+            // Obtener la semana ISO correspondiente (semana_del_mes - 1 porque el array es 0-indexado)
+            infoSemana = semanasDelMes[semana_del_mes - 1];
             
             console.log('🔍 [CREATE_NOMINA] Usando período y semana del usuario:', {
                 periodo_anio,
                 periodo_mes,
                 semana_del_mes,
-                fechaCalculada: fechaInicioSemana.toISOString()
+                semanaISO: infoSemana.semanaISO,
+                año: infoSemana.año,
+                etiqueta: infoSemana.etiqueta
             });
         } else {
             // Retrocompatibilidad: usar fecha actual si no se envían los datos
@@ -247,6 +282,33 @@ const createNomina = async (req, res) => {
 
         // Usar el ID de la semana encontrada/creada
         const idSemanaCorrecto = semanaNomina.id_semana;
+
+        // VALIDACIÓN CRÍTICA: Verificar que no exista ya una nómina para este empleado en esta semana
+        const nominaExistente = await NominaEmpleado.findOne({
+            where: {
+                id_empleado: id_empleado,
+                id_semana: idSemanaCorrecto
+            }
+        });
+
+        if (nominaExistente) {
+            console.log('❌ [CREATE_NOMINA] Ya existe nómina para este empleado en esta semana:', {
+                id_empleado,
+                id_semana: idSemanaCorrecto,
+                semana_iso: infoSemana.semanaISO,
+                año: infoSemana.año,
+                id_nomina_existente: nominaExistente.id_nomina
+            });
+            return res.status(400).json({
+                success: false,
+                message: `Ya existe una nómina para este empleado en la ${infoSemana.etiqueta}. No se pueden crear nóminas duplicadas para el mismo empleado en la misma semana del mismo período.`,
+                nominaExistente: {
+                    id_nomina: nominaExistente.id_nomina,
+                    estado: nominaExistente.estado,
+                    monto_total: nominaExistente.monto_total
+                }
+            });
+        }
 
         // Utilizar la función de cálculo de nómina
         const resultado = calcularNomina(
@@ -1687,6 +1749,7 @@ const verificarDuplicados = async (req, res) => {
         });
 
         if (!semanaNomina) {
+            console.log('✅ [VERIFICAR_DUPLICADOS] No existe semana configurada, no hay duplicados');
             return res.status(200).json({
                 success: true,
                 existe: false,
@@ -1694,7 +1757,9 @@ const verificarDuplicados = async (req, res) => {
             });
         }
         
-        // Buscar nóminas existentes para este empleado en esta semana
+        // CORRECCIÓN CRÍTICA: Buscar nóminas del empleado en esta semana ISO específica
+        // Esto asegura que no se puedan crear múltiples nóminas del mismo empleado
+        // en la misma semana ISO del mismo año
         const nominasExistentes = await NominaEmpleado.findAll({
             where: {
                 id_empleado: id_empleado,
@@ -1714,7 +1779,15 @@ const verificarDuplicados = async (req, res) => {
             ]
         });
 
-        console.log('🔍 [VERIFICAR_DUPLICADOS] Nóminas encontradas:', nominasExistentes.length);
+        console.log('🔍 [VERIFICAR_DUPLICADOS] Nóminas encontradas:', {
+            cantidad: nominasExistentes.length,
+            id_empleado,
+            id_semana: semanaNomina.id_semana,
+            semana_iso: infoSemana.semanaISO,
+            año: infoSemana.año,
+            periodo,
+            semana: semanaNum
+        });
 
         const existe = nominasExistentes.length > 0;
         const nominaExistente = existe ? nominasExistentes[0] : null;
@@ -1731,6 +1804,12 @@ const verificarDuplicados = async (req, res) => {
                     nombre: nominaExistente.empleado.nombre,
                     apellido: nominaExistente.empleado.apellido,
                     nss: nominaExistente.empleado.nss
+                },
+                semana: {
+                    id_semana: nominaExistente.semana.id_semana,
+                    anio: nominaExistente.semana.anio,
+                    semana_iso: nominaExistente.semana.semana_iso,
+                    etiqueta: nominaExistente.semana.etiqueta
                 }
             } : null,
             message: existe 

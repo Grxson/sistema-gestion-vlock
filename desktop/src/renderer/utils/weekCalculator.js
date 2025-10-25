@@ -128,21 +128,30 @@ export function calcularSemanaISO(fecha) {
  */
 export function generarInfoSemana(fecha) {
   const fechaTemp = new Date(fecha.getTime());
+  fechaTemp.setHours(12, 0, 0, 0);
   
   // Calcular semana ISO
   const semanaISO = calcularSemanaISO(fechaTemp);
   
-  // Ajustar al lunes de la semana
+  // Encontrar el jueves de esta semana para determinar el año ISO correcto
   const dia = fechaTemp.getDay();
-  const diff = fechaTemp.getDate() - dia + (dia === 0 ? -6 : 1);
-  const lunes = new Date(fechaTemp.setDate(diff));
+  const diasHastaJueves = dia === 0 ? -3 : (4 - dia);
+  const jueves = new Date(fechaTemp);
+  jueves.setDate(fechaTemp.getDate() + diasHastaJueves);
+  
+  // El año ISO es el año del jueves de la semana (estándar ISO 8601)
+  const añoISO = jueves.getFullYear();
+  
+  // Encontrar el lunes de la semana ISO (lunes a domingo)
+  const diasHastaLunes = dia === 0 ? -6 : (1 - dia);
+  const lunes = new Date(fechaTemp);
+  lunes.setDate(fechaTemp.getDate() + diasHastaLunes);
+  lunes.setHours(0, 0, 0, 0);
   
   // Calcular fin de la semana (domingo)
   const domingo = new Date(lunes);
   domingo.setDate(lunes.getDate() + 6);
-  
-  // Obtener año de la semana (puede ser diferente al año de la fecha)
-  const añoSemana = lunes.getFullYear();
+  domingo.setHours(23, 59, 59, 999);
   
   // Generar etiqueta más descriptiva
   const mesInicio = lunes.toLocaleDateString('es-MX', { month: 'long' });
@@ -150,18 +159,18 @@ export function generarInfoSemana(fecha) {
   
   let etiqueta;
   if (lunes.getMonth() === domingo.getMonth()) {
-    etiqueta = `Semana ${semanaISO} - ${mesInicio} ${añoSemana}`;
+    etiqueta = `Semana ${semanaISO} - ${mesInicio} ${añoISO}`;
   } else {
-    etiqueta = `Semana ${semanaISO} - ${mesInicio}/${mesFin} ${añoSemana}`;
+    etiqueta = `Semana ${semanaISO} - ${mesInicio}/${mesFin} ${añoISO}`;
   }
   
   return {
-    año: añoSemana,
+    año: añoISO,
     semanaISO,
     etiqueta,
     fechaInicio: lunes,
     fechaFin: domingo,
-    periodo: `${añoSemana}-${String(lunes.getMonth() + 1).padStart(2, '0')}`
+    periodo: `${añoISO}-${String(lunes.getMonth() + 1).padStart(2, '0')}`
   };
 }
 

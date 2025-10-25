@@ -154,7 +154,38 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     }
   }, [formData.selectedEmpleado, formData.selectedPeriodo, formData.semanaNum]);
 
-  // Auto-actualizar semana cuando cambie el período al período actual
+  // Auto-actualizar período y semana cuando cambie el mes/año (escalable)
+  useEffect(() => {
+    // Verificar cada minuto si cambió el mes/año
+    const interval = setInterval(() => {
+      const periodoActual = generarPeriodoActual();
+      const semanaActual = detectarSemanaActual();
+      
+      // Si el período cambió (nuevo mes o año), actualizar automáticamente
+      if (formData.selectedPeriodo !== periodoActual) {
+        console.log('🔄 [AUTO-UPDATE] Detectado cambio de período:', {
+          anterior: formData.selectedPeriodo,
+          nuevo: periodoActual
+        });
+        updateFormData({ 
+          selectedPeriodo: periodoActual,
+          semanaNum: semanaActual 
+        });
+      } 
+      // Si estamos en el período actual pero la semana cambió
+      else if (formData.selectedPeriodo === periodoActual && formData.semanaNum !== semanaActual) {
+        console.log('🔄 [AUTO-UPDATE] Detectado cambio de semana:', {
+          anterior: formData.semanaNum,
+          nuevo: semanaActual
+        });
+        updateFormData({ semanaNum: semanaActual });
+      }
+    }, 60000); // Verificar cada minuto
+    
+    return () => clearInterval(interval);
+  }, [formData.selectedPeriodo, formData.semanaNum]);
+
+  // Auto-actualizar semana cuando el usuario cambie manualmente el período
   useEffect(() => {
     const periodoActual = generarPeriodoActual();
     if (formData.selectedPeriodo === periodoActual) {
