@@ -7,7 +7,7 @@ import AdeudosTable from './adeudos/AdeudosTable';
 import AdeudosFormModal from './adeudos/AdeudosFormModal';
 import PagoParcialModal from './adeudos/PagoParcialModal';
 import AdeudosExport from './adeudos/AdeudosExport';
-import AlertasVencimiento from './adeudos/AlertasVencimiento';
+import { eventBus, EVENTS } from '../utils/eventBus';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 
@@ -162,6 +162,18 @@ const AdeudosGenerales = () => {
         cerrarModal();
         cargarAdeudos();
         cargarEstadisticas();
+        
+        // Emitir evento para actualizar notificaciones
+        if (adeudoEditando) {
+          eventBus.emit(EVENTS.ADEUDO_ACTUALIZADO, { 
+            id: adeudoEditando.id_adeudo_general,
+            accion: 'actualizado'
+          });
+        } else {
+          eventBus.emit(EVENTS.ADEUDO_CREADO, { 
+            accion: 'creado'
+          });
+        }
       } else {
         showError('Error al guardar adeudo', data.message || 'No se pudo completar la solicitud');
       }
@@ -207,6 +219,12 @@ const AdeudosGenerales = () => {
         cerrarModalPago();
         cargarAdeudos();
         cargarEstadisticas();
+        
+        // Emitir evento para actualizar notificaciones
+        eventBus.emit(EVENTS.ADEUDO_ACTUALIZADO, { 
+          id: adeudoParaPago.id_adeudo_general,
+          accion: 'pago_parcial'
+        });
       } else {
         showError('Error al registrar pago', data.message || 'No se pudo procesar el pago');
       }
@@ -245,6 +263,12 @@ const AdeudosGenerales = () => {
         showSuccess('Adeudo liquidado', data.message || 'El adeudo se liquidó completamente');
         cargarAdeudos();
         cargarEstadisticas();
+        
+        // Emitir evento para actualizar notificaciones
+        eventBus.emit(EVENTS.ADEUDO_PAGADO, { 
+          id: id,
+          accion: 'liquidado'
+        });
       } else {
         showError('No se pudo liquidar el adeudo', data.message || 'Intenta nuevamente más tarde');
       }
@@ -279,6 +303,12 @@ const AdeudosGenerales = () => {
         showSuccess('Adeudo eliminado', 'El adeudo se eliminó correctamente');
         cargarAdeudos();
         cargarEstadisticas();
+        
+        // Emitir evento para actualizar notificaciones
+        eventBus.emit(EVENTS.ADEUDO_ELIMINADO, { 
+          id: id,
+          accion: 'eliminado'
+        });
       } else {
         showError('Error al eliminar adeudo', data.message || 'No se pudo eliminar el adeudo seleccionado');
       }
@@ -341,9 +371,6 @@ const AdeudosGenerales = () => {
 
   return (
     <div className="space-y-6">
-      {/* Componente de alertas flotante */}
-      <AlertasVencimiento />
-
       <AdeudosHeader 
         onAdd={abrirModalNuevo}
         onExport={() => setMostrarModalExport(true)}

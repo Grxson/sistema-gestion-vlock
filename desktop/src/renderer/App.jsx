@@ -31,6 +31,12 @@ import PresupuestosRouter from './components/presupuestos/PresupuestosRouter';
 // Importar componente AccessDenied
 import AccessDenied from './components/AccessDenied';
 
+// Importar componente de alertas de vencimiento (se muestra en toda la app)
+import AlertasVencimiento from './components/adeudos/AlertasVencimiento';
+
+// Importar panel de notificaciones para el header
+import NotificacionesPanel from './components/NotificacionesPanel';
+
 function MainApp() {
   const [currentPath, setCurrentPath] = useState(() => {
     // Recuperar la ruta guardada o usar la predeterminada
@@ -211,6 +217,8 @@ function MainApp() {
                     day: 'numeric'
                   })}
                 </div>
+                {/* Panel de notificaciones */}
+                <NotificacionesPanel />
               </div>
             </div>
           </div>
@@ -221,6 +229,9 @@ function MainApp() {
           {renderContent()}
         </main>
       </div>
+
+      {/* Alertas de vencimiento - Se muestran en toda la aplicación */}
+      <AlertasVencimiento />
     </div>
   );
 }

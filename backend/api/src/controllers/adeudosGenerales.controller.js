@@ -583,6 +583,10 @@ const getAdeudosConAlertas = async (req, res) => {
     const hoy = new Date();
     hoy.setHours(0, 0, 0, 0);
 
+    // Calcular fecha límite (3 días atrás para incluir vencidos recientes)
+    const hace3Dias = new Date(hoy);
+    hace3Dias.setDate(hoy.getDate() - 3);
+
     // Obtener adeudos no pagados con fecha de vencimiento
     const adeudos = await models.Adeudo_general.findAll({
       where: {
@@ -591,7 +595,7 @@ const getAdeudosConAlertas = async (req, res) => {
         },
         fecha_vencimiento: {
           [Op.not]: null,
-          [Op.gte]: hoy // Solo futuros o de hoy
+          [Op.gte]: hace3Dias // Incluye vencidos hasta 3 días atrás
         }
       },
       include: [

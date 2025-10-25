@@ -53,16 +53,11 @@ const debeAlertarHoy = (fechaVencimiento, estado) => {
   const vencimiento = new Date(fechaVencimiento);
   vencimiento.setHours(0, 0, 0, 0);
 
-  // No alertar si ya venció
-  if (vencimiento < hoy) {
-    return false;
-  }
-
-  const fechaInicio = calcularFechaInicioAlertas(vencimiento);
-  fechaInicio.setHours(0, 0, 0, 0);
-
-  // Alertar si hoy está entre la fecha de inicio y el vencimiento
-  return hoy >= fechaInicio && hoy <= vencimiento;
+  const diasRestantes = calcularDiasRestantes(fechaVencimiento);
+  
+  // Alertar si vence en los próximos 7 días O si ya venció (para mostrar vencidos también)
+  // Cambiado: ahora incluye adeudos vencidos hasta 3 días atrás
+  return diasRestantes !== null && diasRestantes >= -3 && diasRestantes <= 7;
 };
 
 /**
