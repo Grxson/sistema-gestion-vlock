@@ -32,20 +32,25 @@ npm run dist:all
 
 ## Proceso de Empaquetado
 
-El proceso automático realiza los siguientes pasos:
+El proceso automático realiza los siguientes pasos **en este orden**:
 
-1. **Preparar iconos** (`npm run prepare-icons`)
-   - Copia el logo de la aplicación
-   - Prepara iconos para cada plataforma
-
-2. **Compilar frontend** (`npm run build`)
+1. **Compilar frontend** (`npm run build`)
    - Vite compila React + Tailwind
    - Optimiza assets y código
-   - Genera bundle de producción
+   - Genera bundle de producción en `build/`
+   - **Importante**: Vacía la carpeta `build/` antes de compilar
+
+2. **Preparar iconos** (`npm run prepare-icons`)
+   - Se ejecuta **después** del build
+   - Genera `icon.ico` para Windows
+   - Genera `icon.png` para Linux
+   - Copia licencia y recursos del instalador
+   - **Nota**: Debe ejecutarse después del build para no ser eliminado
 
 3. **Empaquetar con Electron Builder**
    - Crea instaladores específicos por plataforma
    - Incluye todas las dependencias necesarias
+   - Usa los iconos generados en el paso anterior
    - Firma digitalmente (si está configurado)
 
 ## Configuración de Iconos

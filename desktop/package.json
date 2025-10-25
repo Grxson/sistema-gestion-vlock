@@ -12,11 +12,11 @@
     "build": "vite build",
     "build:electron": "npm run build && electron-builder",
     "prepare-icons": "node prepare-icons.js",
-    "dist": "npm run prepare-icons && npm run build && electron-builder --publish=never",
-    "dist:win": "npm run prepare-icons && npm run build && electron-builder --win --publish=never",
-    "dist:mac": "npm run prepare-icons && npm run build && electron-builder --mac --publish=never",
-    "dist:linux": "npm run prepare-icons && npm run build && electron-builder --linux --publish=never",
-    "dist:all": "npm run prepare-icons && npm run build && electron-builder --win --linux --publish=never"
+    "dist": "npm run build && npm run prepare-icons && electron-builder --publish=never",
+    "dist:win": "npm run build && npm run prepare-icons && electron-builder --win --publish=never",
+    "dist:mac": "npm run build && npm run prepare-icons && electron-builder --mac --publish=never",
+    "dist:linux": "npm run build && npm run prepare-icons && electron-builder --linux --publish=never",
+    "dist:all": "npm run build && npm run prepare-icons && electron-builder --win --linux --publish=never"
   },
   "keywords": [
     "vlock",
