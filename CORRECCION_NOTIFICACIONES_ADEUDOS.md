@@ -97,29 +97,30 @@ return {
 - Fallback a `monto` para adeudos antiguos
 - Siempre retorna un valor numérico válido
 
-## 📊 Rango de Alertas Actualizado
+## 📊 Comportamiento Corregido
 
-### Antes:
-- Solo adeudos futuros (0 a 7 días)
-- Adeudos vencidos: ❌ No se mostraban
+### Ejemplos de Cálculo:
 
-### Después:
-- Adeudos vencidos recientes: -3 a -1 días ✅
-- Adeudos que vencen hoy: 0 días ✅
-- Adeudos próximos a vencer: 1 a 7 días ✅
+| Fecha Vencimiento | Fecha Actual | Días Calculados | Nivel | Mensaje |
+|-------------------|--------------|-----------------|-------|---------|
+| 26 oct 2025 | 27 oct 2025 | -1 | vencido | "Venció hace 1 día(s)" ✅ |
+| 26 oct 2025 | 26 oct 2025 | 0 | critico | "Vence hoy" ✅ |
+| 26 oct 2025 | 25 oct 2025 | 1 | alto | "Vence mañana" ✅ |
+| 26 oct 2025 | 24 oct 2025 | 2 | alto | "Vence en 2 días" ✅ |
 
-### Ejemplos:
+### Tabla Completa de Alertas:
 
-| Fecha Vencimiento | Días Restantes | ¿Se muestra? | Nivel | Mensaje |
-|-------------------|----------------|--------------|-------|---------|
-| Hace 4 días | -4 | ❌ No | - | - |
-| Hace 3 días | -3 | ✅ Sí | vencido | "Venció hace 3 día(s)" |
-| Hace 1 día | -1 | ✅ Sí | vencido | "Venció hace 1 día(s)" |
-| Hoy | 0 | ✅ Sí | critico | "Vence hoy" |
-| Mañana | 1 | ✅ Sí | alto | "Vence mañana" |
-| En 2 días | 2 | ✅ Sí | alto | "Vence en 2 días" |
-| En 7 días | 7 | ✅ Sí | bajo | "Vence en 7 días" |
-| En 8 días | 8 | ❌ No | - | - |
+| Días Restantes | ¿Se muestra? | Nivel | Mensaje | Color |
+|----------------|--------------|-------|---------|-------|
+| -4 o menos | ❌ No | - | - | - |
+| -3 | ✅ Sí | vencido | "Venció hace 3 día(s)" | Rojo intenso |
+| -1 | ✅ Sí | vencido | "Venció hace 1 día(s)" | Rojo intenso |
+| 0 | ✅ Sí | critico | "Vence hoy" | Rojo |
+| 1 | ✅ Sí | alto | "Vence mañana" | Naranja |
+| 2 | ✅ Sí | alto | "Vence en 2 días" | Naranja |
+| 3-5 | ✅ Sí | medio | "Vence en X días" | Amarillo |
+| 6-7 | ✅ Sí | bajo | "Vence en X días" | Azul |
+| 8+ | ❌ No | - | - | - |
 
 ## 🎯 Niveles de Urgencia
 
@@ -143,7 +144,7 @@ El sistema de eventos ya implementado asegura que:
 
 ## 🧪 Pruebas
 
-### Verificar que funciona:
+### Pasos para verificar la corrección:
 
 1. **Reinicia el backend**:
 ```bash
@@ -154,47 +155,72 @@ npm start
 
 2. **Recarga la aplicación desktop** (Ctrl+R o Cmd+R)
 
-3. **Deberías ver**:
-   - Todas las notificaciones de adeudos pendientes
-   - Adeudos vencidos con mensaje "Venció hace X día(s)"
-   - Adeudos que vencen hoy con mensaje "Vence hoy"
-   - Badge actualizado con el número correcto
+3. **Verifica el cálculo de días**:
+   - Crea un adeudo con fecha de vencimiento = HOY
+   - Debería mostrar: "Vence hoy" ✅
+   - NO debería mostrar: "Venció hace 1 día(s)" ❌
 
-4. **Prueba pagar un adeudo**:
-   - Las notificaciones se actualizan automáticamente
-   - El adeudo desaparece del panel
-   - El badge se actualiza
+4. **Verifica el monto**:
+   - Abre el panel de notificaciones (campana)
+   - Los montos deben mostrar valores reales, no $0.00
+   - Ejemplo: "$8,381.50" en lugar de "$0.00"
+
+5. **Prueba diferentes fechas**:
+   - Adeudo que vence mañana → "Vence mañana"
+   - Adeudo que venció ayer → "Venció hace 1 día(s)"
+   - Adeudo que vence en 3 días → "Vence en 3 días"
 
 ### Verificar en consola del navegador:
 
 Deberías ver logs como:
 ```
-🔔 [NotificacionesPanel] Adeudo pagado, recargando alertas...
+🔔 [NotificacionesPanel] Recargando alertas...
 [API:xxxxx] 🌐 Enviando petición a /adeudos-generales/alertas
 [API:xxxxx] ✅ Respuesta recibida (200) en XXms
 ```
 
+### Casos de prueba específicos:
+
+| Escenario | Fecha Vencimiento | Resultado Esperado |
+|-----------|-------------------|-------------------|
+| Vence hoy | 26/10/2025 (hoy) | "Vence hoy" + monto correcto |
+| Venció ayer | 25/10/2025 | "Venció hace 1 día(s)" + monto correcto |
+| Vence mañana | 27/10/2025 | "Vence mañana" + monto correcto |
+
 ## 📝 Archivos Modificados
 
-1. `/backend/api/src/utils/alertasVencimiento.js`
-   - Función `debeAlertarHoy()` simplificada
-   - Ahora incluye rango -3 a 7 días
+### Frontend:
+1. **`/desktop/src/renderer/utils/alertasVencimiento.js`**
+   - Función `calcularDiasRestantes()` corregida
+   - Parseo manual de fechas para evitar zona horaria
+   - Cambio de `Math.ceil()` a `Math.floor()`
 
-2. `/backend/api/src/controllers/adeudosGenerales.controller.js`
+### Backend:
+2. **`/backend/api/src/utils/alertasVencimiento.js`**
+   - Función `calcularDiasRestantes()` corregida
+   - Cambio de `Math.ceil()` a `Math.floor()`
+
+3. **`/backend/api/src/controllers/adeudosGenerales.controller.js`**
    - Función `getAdeudosConAlertas()` actualizada
-   - Query incluye `fecha_vencimiento >= hace3Dias`
+   - Cálculo automático de `monto_pendiente` cuando es NULL
+   - Fallback a `monto_original - monto_pagado`
 
 ## 🎉 Resultado Final
 
-- ✅ Todas las notificaciones se muestran correctamente
-- ✅ Adeudos vencidos aparecen con mensaje claro
-- ✅ Actualización en tiempo real funciona
-- ✅ Badge muestra el número correcto
-- ✅ Panel de notificaciones completo
-- ✅ Popups flotantes actualizados
+### Problemas Resueltos:
+- ✅ **Cálculo de días correcto**: "Vence hoy" cuando vence HOY (no "Venció hace 1 día")
+- ✅ **Montos visibles**: Muestra montos reales en lugar de $0.00
+- ✅ **Consistencia frontend-backend**: Ambos usan el mismo algoritmo
+- ✅ **Sin problemas de zona horaria**: Parseo manual de fechas
+
+### Impacto:
+- ✅ Notificaciones precisas y confiables
+- ✅ Usuarios ven información correcta
+- ✅ Mejor experiencia de usuario
+- ✅ Sin confusión en fechas de vencimiento
 
 ---
 
-**Fecha**: 25 de octubre de 2025  
+**Fecha**: 27 de octubre de 2025  
 **Versión**: 2.0.0  
-**Estado**: ✅ Corregido y probado
+**Estado**: ✅ Corregido y listo para pruebas

@@ -1,7 +1,7 @@
 import React from 'react';
-import { PlusIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, ArrowDownTrayIcon, ChartPieIcon } from '@heroicons/react/24/outline';
 
-const AdeudosHeader = ({ onAdd, onExport }) => {
+const AdeudosHeader = ({ onAdd, onExport, onShowChart }) => {
   return (
     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
       <div>
@@ -11,6 +11,13 @@ const AdeudosHeader = ({ onAdd, onExport }) => {
         </p>
       </div>
       <div className="flex gap-3">
+        <button
+          onClick={onShowChart}
+          className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-sm"
+        >
+          <ChartPieIcon className="h-5 w-5 mr-2" />
+          Ver Gráfica
+        </button>
         <button
           onClick={onExport}
           className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors shadow-sm"

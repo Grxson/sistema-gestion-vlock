@@ -36,13 +36,28 @@ import {
 // Definición de los elementos de navegación con sus respectivos códigos de permiso
 const navigationItems = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, current: true, permissionModule: 'dashboard' },
-  // Gestión de Personal
-  { name: 'Empleados', href: '/empleados', icon: UserGroupIcon, current: false, permissionModule: 'empleados' },
   { name: 'Nómina', href: '/nomina', icon: CurrencyDollarIcon, current: false, permissionModule: 'nomina' },
-  { name: 'Contratos', href: '/contratos', icon: DocumentTextIcon, current: false, permissionModule: 'contratos' },
+  { 
+    name: 'Suministros', 
+    href: '/suministros', 
+    icon: TruckIcon, 
+    current: false, 
+    permissionModule: 'suministros',
+    hasSubmenu: false
+  },
+  { name: 'Adeudos', href: '/adeudos-generales', icon: BanknotesIcon, current: false, permissionModule: 'adeudos' },
+  { 
+    name: 'Inventario', 
+    href: '/herramientas', 
+    icon: WrenchScrewdriverIcon, 
+    current: false, 
+    permissionModule: 'herramientas',
+    hasSubmenu: false
+  },
+  { name: 'Empleados', href: '/empleados', icon: UserGroupIcon, current: false, permissionModule: 'empleados' },
   { name: 'Oficios', href: '/oficios', icon: BuildingOfficeIcon, current: false, permissionModule: 'oficios' },
-  
-  // Proyectos y Recursos
+  { name: 'Proveedores', href: '/proveedores', icon: BuildingStorefrontIcon, current: false, permissionModule: 'proveedores' },
+  { name: 'Contratos', href: '/contratos', icon: DocumentTextIcon, current: false, permissionModule: 'contratos' },
   { name: 'Proyectos', href: '/proyectos', icon: RectangleGroupIcon, current: false, permissionModule: 'proyectos' },
   { 
     name: 'Presupuestos', 
@@ -53,26 +68,6 @@ const navigationItems = [
     hasSubmenu: false,
     badge: ' '
   },
-  { 
-    name: 'Suministros', 
-    href: '/suministros', 
-    icon: TruckIcon, 
-    current: false, 
-    permissionModule: 'suministros',
-    hasSubmenu: false
-  },
-  { name: 'Proveedores', href: '/proveedores', icon: BuildingStorefrontIcon, current: false, permissionModule: 'proveedores' },
-  { 
-    name: 'Herramientas', 
-    href: '/herramientas', 
-    icon: WrenchScrewdriverIcon, 
-    current: false, 
-    permissionModule: 'herramientas',
-    hasSubmenu: false
-  },
-  
-  // Finanzas
-  { name: 'Adeudos', href: '/adeudos-generales', icon: BanknotesIcon, current: false, permissionModule: 'adeudos' },
   
   // Administración
   { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false, permissionModule: 'auditoria' },

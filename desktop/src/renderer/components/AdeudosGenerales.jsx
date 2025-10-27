@@ -7,6 +7,7 @@ import AdeudosTable from './adeudos/AdeudosTable';
 import AdeudosFormModal from './adeudos/AdeudosFormModal';
 import PagoParcialModal from './adeudos/PagoParcialModal';
 import AdeudosExport from './adeudos/AdeudosExport';
+import AdeudosChartModal from './adeudos/AdeudosChartModal';
 import { eventBus, EVENTS } from '../utils/eventBus';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
@@ -24,6 +25,7 @@ const AdeudosGenerales = () => {
   const [mostrarModalPago, setMostrarModalPago] = useState(false);
   const [adeudoParaPago, setAdeudoParaPago] = useState(null);
   const [mostrarModalExport, setMostrarModalExport] = useState(false);
+  const [mostrarModalGrafica, setMostrarModalGrafica] = useState(false);
   const [fechaInicio, setFechaInicio] = useState('');
   const [fechaFin, setFechaFin] = useState('');
 
@@ -374,6 +376,7 @@ const AdeudosGenerales = () => {
       <AdeudosHeader 
         onAdd={abrirModalNuevo}
         onExport={() => setMostrarModalExport(true)}
+        onShowChart={() => setMostrarModalGrafica(true)}
       />
 
       <AdeudosStats
@@ -430,6 +433,13 @@ const AdeudosGenerales = () => {
         formatCurrency={formatearMoneda}
         formatDate={formatearFecha}
         isOpen={mostrarModalExport}
+      />
+
+      <AdeudosChartModal
+        isOpen={mostrarModalGrafica}
+        onClose={() => setMostrarModalGrafica(false)}
+        estadisticas={estadisticas}
+        formatCurrency={formatearMoneda}
       />
     </div>
   );
