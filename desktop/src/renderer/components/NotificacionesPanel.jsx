@@ -109,12 +109,6 @@ const NotificacionesPanel = () => {
 
   const togglePanel = () => {
     setMostrarPanel(!mostrarPanel);
-    if (!mostrarPanel) {
-      // Al abrir el panel, marcar todas como leídas
-      setTimeout(() => {
-        marcarTodasComoLeidas();
-      }, 1000);
-    }
   };
 
   const alertasNoLeidas = alertas.filter(
@@ -244,8 +238,7 @@ const NotificacionesPanel = () => {
                   return (
                     <div
                       key={adeudo.id_adeudo_general}
-                      className={`p-4 hover:bg-gray-100/50 dark:hover:bg-gray-700/30 transition-colors cursor-pointer ${nivelColor}`}
-                      onClick={() => marcarComoLeida(adeudo.id_adeudo_general)}
+                      className={`p-4 transition-colors ${nivelColor} ${esLeida ? 'opacity-80' : 'hover:bg-gray-100/50 dark:hover:bg-gray-700/30'}`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex-shrink-0 mt-1">
@@ -287,6 +280,20 @@ const NotificacionesPanel = () => {
                             </p>
                           )}
                         </div>
+                      </div>
+
+                      <div className="mt-3 flex justify-end">
+                        <button
+                          onClick={() => marcarComoLeida(adeudo.id_adeudo_general)}
+                          disabled={esLeida}
+                          className={`inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                            esLeida
+                              ? 'bg-gray-200 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-default'
+                              : 'bg-primary-600 hover:bg-primary-700 text-white'
+                          }`}
+                        >
+                          {esLeida ? 'Notificación leída' : 'Marcar como leída'}
+                        </button>
                       </div>
                     </div>
                   );

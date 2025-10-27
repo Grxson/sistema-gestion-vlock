@@ -64,9 +64,10 @@ export class CalculadoraNominaService {
         horasExtra = 0,
         bonos = 0,
         deduccionesAdicionales = 0,
-        aplicarISR = true,
-        aplicarIMSS = true,
-        aplicarInfonavit = true,
+        monto_isr = 0,
+        monto_imss = 0,
+        monto_infonavit = 0,
+        descuentos = 0,
         esPagoSemanal = false
       } = datosNomina;
 
@@ -89,14 +90,17 @@ export class CalculadoraNominaService {
       const subtotal = salarioBaseCalculado + montoHorasExtra + bonos;
       
       // Cálculo de deducciones
+      // Solo calcular automáticamente si el monto es exactamente 0 Y el usuario lo dejó en 0 intencionalmente
+      // Si está vacío o es 0, NO aplicar (el usuario debe ingresar un valor > 0 para aplicar)
       const deducciones = {
-        isr: aplicarISR ? this.calcularISR(subtotal) : 0,
-        imss: aplicarIMSS ? this.calcularIMSS(subtotal) : 0,
-        infonavit: aplicarInfonavit ? this.calcularInfonavit(subtotal) : 0,
-        adicionales: parseFloat(deduccionesAdicionales) || 0
+        isr: monto_isr > 0 ? monto_isr : 0,
+        imss: monto_imss > 0 ? monto_imss : 0,
+        infonavit: monto_infonavit > 0 ? monto_infonavit : 0,
+        adicionales: parseFloat(deduccionesAdicionales) || 0,
+        descuentos: parseFloat(descuentos) || 0
       };
       
-      deducciones.total = deducciones.isr + deducciones.imss + deducciones.infonavit + deducciones.adicionales;
+      deducciones.total = deducciones.isr + deducciones.imss + deducciones.infonavit + deducciones.adicionales + deducciones.descuentos;
       
       // Monto final
       const montoTotal = subtotal - deducciones.total;

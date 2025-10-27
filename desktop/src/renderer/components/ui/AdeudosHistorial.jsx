@@ -9,19 +9,23 @@ import {
   PencilIcon,
   TrashIcon,
   ChevronDownIcon,
-  ChevronUpIcon
+  ChevronUpIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import { formatCurrency } from '../../utils/currency';
 import nominasServices from '../../services/nominas';
 
 const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
   const [adeudos, setAdeudos] = useState([]);
+  const [nominas, setNominas] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [soloPendientes, setSoloPendientes] = useState(false);
+  const [mostrarNominas, setMostrarNominas] = useState(true);
 
   useEffect(() => {
     cargarAdeudos();
+    cargarNominasNoCompletadas();
   }, [empleado]);
 
   const cargarAdeudos = async () => {
@@ -41,6 +45,38 @@ const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
       setError('Error al cargar adeudos');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarNominasNoCompletadas = async () => {
+    try {
+      const response = await nominasServices.nominas.getAll();
+        console.log('🔍 [ADEUDOS_HISTORIAL] Response completo:', response);
+      
+      // El servicio devuelve { success: true, data: [...], ... }
+      const todasNominas = response.data || [];
+      console.log('🔍 [ADEUDOS_HISTORIAL] Total nóminas cargadas:', todasNominas.length);
+      
+      // Filtrar nóminas que NO estén en estado Completado o Pagado
+      const nominasNoCompletadas = todasNominas.filter(nomina => {
+        const estado = nomina.estado?.toLowerCase();
+        const esNoCompletada = estado !== 'completado' && estado !== 'pagado';
+        console.log(`  - Nómina #${nomina.id_nomina}: Estado="${nomina.estado}" -> ${esNoCompletada ? 'INCLUIR' : 'EXCLUIR'}`);
+        return esNoCompletada;
+      });
+      
+      console.log('🔍 [ADEUDOS_HISTORIAL] Nóminas no completadas:', nominasNoCompletadas.length);
+      
+      // Si hay empleado específico, filtrar por ese empleado
+      if (empleado) {
+        const nominasEmpleado = nominasNoCompletadas.filter(n => n.id_empleado === empleado.id_empleado);
+        console.log(`🔍 [ADEUDOS_HISTORIAL] Nóminas del empleado ${empleado.id_empleado}:`, nominasEmpleado.length);
+        setNominas(nominasEmpleado);
+      } else {
+        setNominas(nominasNoCompletadas);
+      }
+    } catch (error) {
+      console.error('❌ [ADEUDOS_HISTORIAL] Error loading nominas:', error);
     }
   };
 
@@ -262,7 +298,6 @@ const AdeudosHistorial = ({ empleado, onClose, onAdeudoLiquidado }) => {
             </button>
           )}
         </div>
-
         {/* Lista de Adeudos */}
         {error ? (
           <div className="text-center py-8">

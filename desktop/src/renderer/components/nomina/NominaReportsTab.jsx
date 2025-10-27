@@ -24,6 +24,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const { isDarkMode } = useTheme();
   const { showError, showSuccess } = useToast();
   const { empleados } = useEmpleados();
+
   
   const [activeTab, setActiveTab] = useState('summary');
   const [weeklyData, setWeeklyData] = useState(null);
@@ -37,9 +38,124 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [proyectos, setProyectos] = useState([]);
 
+  const esPagoParcial = (valor) => {
+    if (valor === null || valor === undefined) {
+      return false;
+    }
+
+    if (typeof valor === 'boolean') {
+      return valor;
+    }
+
+    if (typeof valor === 'number') {
+      return valor === 1;
+    }
+
+    if (typeof valor === 'string') {
+      const normalizado = valor.trim().toLowerCase();
+      return normalizado === 'parcial' || normalizado === '1' || normalizado === 'true';
+    }
+
+    return false;
+  };
+
+  // Estados para filtrado de fechas en tabla detallada
+  const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today', 'thisWeek', 'lastWeek', 'thisMonth', 'custom'
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [filteredNominas, setFilteredNominas] = useState(nominas || []);
+
+  // Función para obtener el rango de fechas según el filtro seleccionado
+  const getDateRange = (filter) => {
+    const now = new Date();
+    let startDate, endDate;
+
+    switch (filter) {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+        break;
+      
+      case 'thisWeek':
+        const dayOfWeek = now.getDay();
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Lunes como primer día
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - diff);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      
+      case 'lastWeek':
+        const lastWeekDay = now.getDay();
+        const lastWeekDiff = lastWeekDay === 0 ? 6 : lastWeekDay - 1;
+        startDate = new Date(now);
+        startDate.setDate(now.getDate() - lastWeekDiff - 7);
+        startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6);
+        endDate.setHours(23, 59, 59, 999);
+        break;
+      
+      case 'thisMonth':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+        break;
+      
+      case 'custom':
+        if (customStartDate && customEndDate) {
+          startDate = new Date(customStartDate);
+          startDate.setHours(0, 0, 0, 0);
+          endDate = new Date(customEndDate);
+          endDate.setHours(23, 59, 59, 999);
+        }
+        break;
+      
+      default: // 'all'
+        return null;
+    }
+
+    return { startDate, endDate };
+  };
+
+  // Aplicar filtros de fecha
+  useEffect(() => {
+    if (!nominas || nominas.length === 0) {
+      setFilteredNominas([]);
+      return;
+    }
+
+    // Debug: verificar si hay nóminas parciales
+    const parciales = nominas.filter(n => esPagoParcial(n.tipo_pago));
+    if (parciales.length > 0) {
+      console.log('📊 Nóminas parciales encontradas:', parciales.length, parciales);
+    }
+
+    if (dateFilter === 'all') {
+      setFilteredNominas(nominas);
+      return;
+    }
+
+    const dateRange = getDateRange(dateFilter);
+    if (!dateRange) {
+      setFilteredNominas(nominas);
+      return;
+    }
+
+    const { startDate, endDate } = dateRange;
+    const filtered = nominas.filter(nomina => {
+      const nominaDate = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
+      return nominaDate >= startDate && nominaDate <= endDate;
+    });
+
+    setFilteredNominas(filtered);
+  }, [nominas, dateFilter, customStartDate, customEndDate]);
+
   // Función para exportar a Excel
   const exportToExcel = () => {
-    if (!nominas || nominas.length === 0) {
+    const nominasToExport = filteredNominas.length > 0 ? filteredNominas : nominas;
+    if (!nominasToExport || nominasToExport.length === 0) {
       showError('Error', 'No hay datos para exportar');
       return;
     }
@@ -72,38 +188,78 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       };
 
       // Preparar datos para Excel
-      const datosExcel = nominas.map((nomina, index) => {
+      const datosExcel = nominasToExport.map((nomina, index) => {
         const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
-        const pagoDiario = empleado?.pago_semanal ? empleado.pago_semanal / 6 : 0;
-        const diasTrabajados = nomina.dias_laborados || 6;
-        const pagoTotal = nomina.monto_total || nomina.monto || 0;
+        const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+        const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+        const horasExtra = parseFloat(nomina.horas_extra) || 0;
+        const bonos = parseFloat(nomina.bonos) || 0;
+        const isr = parseFloat(nomina.deducciones_isr) || 0;
+        const imss = parseFloat(nomina.deducciones_imss) || 0;
+        const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
+        const descuentos = parseFloat(nomina.descuentos) || 0;
+        const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
         const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
         const semanaDelMes = calcularSemanaDelMes(fechaNomina);
+        
+        // Determinar tipo de pago
+        const tipoPago = esPagoParcial(nomina.tipo_pago) ? 'PARCIAL' : 'COMPLETA';
+        
+        // Determinar estado
+        let estado = 'PENDIENTE';
+        if (nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado') {
+          estado = 'PAGADO';
+        } else if (nomina.estado === 'borrador' || nomina.estado === 'Borrador') {
+          estado = 'BORRADOR';
+        }
 
         return {
           'Empleado': empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado',
           'Oficio': empleado?.oficio?.nombre || 'Sin oficio',
-          'Pago Diario': pagoDiario,
-          'Días Trabajados': diasTrabajados,
-          'Pago Total': pagoTotal,
+          'Días Laborados': diasLaborados,
+          'Sueldo Base': sueldoBase,
+          'Horas Extra': horasExtra,
+          'Bonos': bonos,
+          'ISR': isr,
+          'IMSS': imss,
+          'Infonavit': infonavit,
+          'Descuentos': descuentos,
           'Semana': `Semana ${semanaDelMes}`,
+          'Total a Pagar': totalAPagar,
+          'Tipo Pago': tipoPago,
+          'Status': estado,
           'Fecha': fechaNomina.toLocaleDateString('es-MX')
         };
       });
 
       // Agregar fila de totales
-      const totalPago = nominas.reduce((total, nomina) => {
-        const monto = parseFloat(nomina.monto_total || nomina.monto || 0);
+      const totalSueldoBase = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.pago_semanal) || 0), 0);
+      const totalHorasExtra = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.horas_extra) || 0), 0);
+      const totalBonos = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.bonos) || 0), 0);
+      const totalISR = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.deducciones_isr) || 0), 0);
+      const totalIMSS = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.deducciones_imss) || 0), 0);
+      const totalInfonavit = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.deducciones_infonavit) || 0), 0);
+      const totalDescuentos = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.descuentos) || 0), 0);
+      const totalAPagar = nominasToExport.reduce((total, nomina) => {
+        const monto = parseFloat(nomina.monto_total || nomina.monto);
         return total + (isNaN(monto) ? 0 : monto);
       }, 0);
 
       datosExcel.push({
         'Empleado': 'TOTALES',
-        'Oficio': `${nominas.length} empleados`,
-        'Pago Diario': '-',
-        'Días Trabajados': '-',
-        'Pago Total': totalPago,
+        'Oficio': `${nominasToExport.length} empleados`,
+        'Días Laborados': '-',
+        'Sueldo Base': totalSueldoBase,
+        'Horas Extra': totalHorasExtra,
+        'Bonos': totalBonos,
+        'ISR': totalISR,
+        'IMSS': totalIMSS,
+        'Infonavit': totalInfonavit,
+        'Descuentos': totalDescuentos,
         'Semana': '-',
+        'Total a Pagar': totalAPagar,
+        'Tipo Pago': '-',
+        'Status': '-',
         'Fecha': '-'
       });
 
@@ -115,13 +271,34 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       const colWidths = [
         { wch: 25 }, // Empleado
         { wch: 20 }, // Oficio
-        { wch: 15 }, // Pago Diario
-        { wch: 15 }, // Días Trabajados
-        { wch: 15 }, // Pago Total
+        { wch: 10 }, // Días Laborados
+        { wch: 12 }, // Sueldo Base
+        { wch: 12 }, // Horas Extra
+        { wch: 12 }, // Bonos
+        { wch: 12 }, // ISR
+        { wch: 12 }, // IMSS
+        { wch: 12 }, // Infonavit
+        { wch: 12 }, // Descuentos
         { wch: 12 }, // Semana
+        { wch: 15 }, // Total a Pagar
+        { wch: 12 }, // Tipo Pago
+        { wch: 12 }, // Status
         { wch: 12 }  // Fecha
       ];
       ws['!cols'] = colWidths;
+
+      // Aplicar formato de número a las columnas numéricas
+      const range = XLSX.utils.decode_range(ws['!ref']);
+      for (let row = range.s.r + 1; row <= range.e.r; row++) {
+        // Columnas: D=Sueldo Base, E=Horas Extra, F=Bonos, G=ISR, H=IMSS, I=Infonavit, J=Descuentos, L=Total a Pagar
+        ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'L'].forEach(col => {
+          const cellAddress = col + (row + 1);
+          if (ws[cellAddress] && typeof ws[cellAddress].v === 'number') {
+            ws[cellAddress].t = 'n'; // Tipo número
+            ws[cellAddress].z = '#,##0.00'; // Formato con 2 decimales y separador de miles
+          }
+        });
+      }
 
       // Agregar hoja al libro
       XLSX.utils.book_append_sheet(wb, ws, 'Nóminas Detalladas');
@@ -843,7 +1020,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                 </h3>
                 <div className="flex items-center space-x-4">
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {nominas?.length || 0} nóminas generadas
+                    {filteredNominas?.length || 0} de {nominas?.length || 0} nóminas
                   </div>
                   <button
                     onClick={exportToExcel}
@@ -857,7 +1034,95 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                 </div>
               </div>
               
-              {nominas && nominas.length > 0 ? (
+              {/* Filtros de fecha */}
+              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                  {/* Botones de filtro rápido */}
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setDateFilter('all')}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        dateFilter === 'all'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Todas
+                    </button>
+                    <button
+                      onClick={() => setDateFilter('today')}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        dateFilter === 'today'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Hoy
+                    </button>
+                    <button
+                      onClick={() => setDateFilter('thisWeek')}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        dateFilter === 'thisWeek'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Esta Semana
+                    </button>
+                    <button
+                      onClick={() => setDateFilter('lastWeek')}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        dateFilter === 'lastWeek'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Semana Pasada
+                    </button>
+                    <button
+                      onClick={() => setDateFilter('thisMonth')}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        dateFilter === 'thisMonth'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Este Mes
+                    </button>
+                    <button
+                      onClick={() => setDateFilter('custom')}
+                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                        dateFilter === 'custom'
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                      }`}
+                    >
+                      Personalizado
+                    </button>
+                  </div>
+                  
+                  {/* Inputs de fecha personalizada */}
+                  {dateFilter === 'custom' && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="date"
+                        value={customStartDate}
+                        onChange={(e) => setCustomStartDate(e.target.value)}
+                        className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      />
+                      <span className="text-gray-500 dark:text-gray-400">a</span>
+                      <input
+                        type="date"
+                        value={customEndDate}
+                        onChange={(e) => setCustomEndDate(e.target.value)}
+                        className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+              
+              {filteredNominas && filteredNominas.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
@@ -868,29 +1133,77 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Oficio
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Pago Diario
+                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Días Lab.
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Días Trabajados
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Sueldo Base
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Pago Total
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Horas Extra
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Bonos
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          ISR
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          IMSS
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Infonavit
+                        </th>
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Descuentos
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Semana
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Total a Pagar
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Tipo Pago
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                          Status
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Fecha
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {nominas.map((nomina, index) => {
+                      {filteredNominas.map((nomina, index) => {
                         const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
-                        const pagoDiario = empleado?.pago_semanal ? empleado.pago_semanal / 6 : 0;
-                        const diasTrabajados = nomina.dias_laborados || 6;
-                        const pagoTotal = nomina.monto_total || nomina.monto || 0;
+                        const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+                        const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+                        const horasExtra = parseFloat(nomina.horas_extra) || 0;
+                        const bonos = parseFloat(nomina.bonos) || 0;
+                        const isr = parseFloat(nomina.deducciones_isr) || 0;
+                        const imss = parseFloat(nomina.deducciones_imss) || 0;
+                        const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
+                        const descuentos = parseFloat(nomina.descuentos) || 0;
+                        const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
+                        
+                        // Determinar tipo de pago
+                        const esParcial = esPagoParcial(nomina.tipo_pago);
+                        const tipoPago = esParcial ? 'PARCIAL' : 'COMPLETA';
+                        const tipoPagoColor = esParcial 
+                          ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+                          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+                        
+                        // Determinar estado
+                        let estado = 'PENDIENTE';
+                        let estadoColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+                        if (nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado') {
+                          estado = 'PAGADO';
+                          estadoColor = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                        } else if (nomina.estado === 'borrador' || nomina.estado === 'Borrador') {
+                          estado = 'BORRADOR';
+                          estadoColor = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                        }
                         
                         // Calcular semana del mes
                         const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
@@ -933,27 +1246,67 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                 {empleado?.oficio?.nombre || 'Sin oficio'}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 py-4 whitespace-nowrap">
+                              <div className="text-sm text-center font-medium text-gray-900 dark:text-white">
+                                {diasLaborados}
+                              </div>
+                            </td>
+                            <td className="px-3 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900 dark:text-white">
-                                {formatCurrency(pagoDiario)}
+                                {formatCurrency(sueldoBase)}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900 dark:text-white">
-                                {diasTrabajados}
+                                {horasExtra > 0 ? formatCurrency(horasExtra) : '-'}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {formatCurrency(pagoTotal)}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="px-3 py-4 whitespace-nowrap">
                               <div className="text-sm text-gray-900 dark:text-white">
-                                Semana {semanaDelMes}
+                                {bonos > 0 ? formatCurrency(bonos) : '-'}
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                            <td className="px-3 py-4 whitespace-nowrap">
+                              <div className="text-sm text-red-600 dark:text-red-400">
+                                {isr > 0 ? `-${formatCurrency(isr)}` : '-'}
+                              </div>
+                            </td>
+                            <td className="px-3 py-4 whitespace-nowrap">
+                              <div className="text-sm text-red-600 dark:text-red-400">
+                                {imss > 0 ? `-${formatCurrency(imss)}` : '-'}
+                              </div>
+                            </td>
+                            <td className="px-3 py-4 whitespace-nowrap">
+                              <div className="text-sm text-red-600 dark:text-red-400">
+                                {infonavit > 0 ? `-${formatCurrency(infonavit)}` : '-'}
+                              </div>
+                            </td>
+                            <td className="px-3 py-4 whitespace-nowrap">
+                              <div className="text-sm text-red-600 dark:text-red-400">
+                                {descuentos > 0 ? `-${formatCurrency(descuentos)}` : '-'}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {semanaDelMes}
+                              </div>
+                            </td>
+                            <td className="px-3 py-4 whitespace-nowrap">
+                              <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                                {formatCurrency(totalAPagar)}
+                              </div>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${tipoPagoColor}`}>
+                                {tipoPago}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap">
+                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${estadoColor}`}>
+                                {estado}
+                              </span>
+                            </td>
+                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                               {fechaNomina.toLocaleDateString('es-MX')}
                             </td>
                           </tr>
@@ -969,28 +1322,68 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-500 dark:text-gray-400">
-                            {nominas.length} empleados
+                            {filteredNominas.length} empleados
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm text-center text-gray-500 dark:text-gray-400">
+                            -
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-gray-900 dark:text-white">
+                            {formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.pago_semanal) || 0), 0))}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-gray-900 dark:text-white">
+                            {formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.horas_extra) || 0), 0))}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-gray-900 dark:text-white">
+                            {formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.bonos) || 0), 0))}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-red-600 dark:text-red-400">
+                            -{formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.deducciones_isr) || 0), 0))}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-red-600 dark:text-red-400">
+                            -{formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.deducciones_imss) || 0), 0))}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-red-600 dark:text-red-400">
+                            -{formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.deducciones_infonavit) || 0), 0))}
+                          </div>
+                        </td>
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-sm font-bold text-red-600 dark:text-red-400">
+                            -{formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.descuentos) || 0), 0))}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-500 dark:text-gray-400">
                             -
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            -
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-lg font-bold text-primary-600 dark:text-primary-400">
-                            {formatCurrency(nominas.reduce((total, nomina) => {
-                              const monto = parseFloat(nomina.monto_total || nomina.monto || 0);
+                        <td className="px-3 py-4 whitespace-nowrap">
+                          <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                            {formatCurrency(filteredNominas.reduce((total, nomina) => {
+                              const monto = parseFloat(nomina.monto_total || nomina.monto);
                               return total + (isNaN(monto) ? 0 : monto);
                             }, 0))}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            -
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
                           <div className="text-sm text-gray-500 dark:text-gray-400">
                             -
                           </div>

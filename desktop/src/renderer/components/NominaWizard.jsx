@@ -79,9 +79,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     horasExtra: 0,
     bonos: 0,
     deduccionesAdicionales: 0,
-    aplicarISR: false, // Siempre false por defecto
-    aplicarIMSS: false, // Siempre false por defecto
-    aplicarInfonavit: false, // Siempre false por defecto
+    montoISR: '',
+    montoIMSS: '',
+    montoInfonavit: '',
+    descuentos: '', // Para adelantos
     // Nuevos campos para pagos parciales
     pagoParcial: false,
     montoAPagar: 0,
@@ -114,28 +115,17 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     if (formData.selectedEmpleado && formData.selectedEmpleado.pago_semanal) {
       calcularNomina();
     }
-  }, [formData.selectedEmpleado, formData.diasLaborados, formData.horasExtra, formData.bonos, formData.deduccionesAdicionales, formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
-
-  // Efecto específico para días laborados
-  useEffect(() => {
-    if (formData.selectedEmpleado && formData.diasLaborados && formData.diasLaborados > 0) {
-      calcularNomina();
-    }
-  }, [formData.diasLaborados]);
-
-  // Efecto específico para horas extra, bonos y deducciones
-  useEffect(() => {
-    if (formData.selectedEmpleado && (formData.horasExtra !== '' || formData.bonos !== '' || formData.deduccionesAdicionales !== '')) {
-      calcularNomina();
-    }
-  }, [formData.horasExtra, formData.bonos, formData.deduccionesAdicionales]);
-
-  // Efecto específico para configuraciones de impuestos
-  useEffect(() => {
-    if (formData.selectedEmpleado) {
-      calcularNomina();
-    }
-  }, [formData.aplicarISR, formData.aplicarIMSS, formData.aplicarInfonavit]);
+  }, [
+    formData.selectedEmpleado, 
+    formData.diasLaborados, 
+    formData.horasExtra, 
+    formData.bonos, 
+    formData.deduccionesAdicionales,
+    formData.montoISR,
+    formData.montoIMSS,
+    formData.montoInfonavit,
+    formData.descuentos
+  ]);
 
   // Validar datos cuando cambian
   useEffect(() => {
@@ -325,11 +315,14 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         horasExtra: formData.horasExtra || 0,
         bonos: formData.bonos || 0,
         deduccionesAdicionales: formData.deduccionesAdicionales || 0,
-        aplicarISR: formData.aplicarISR,
-        aplicarIMSS: formData.aplicarIMSS,
-        aplicarInfonavit: formData.aplicarInfonavit,
+        monto_isr: parseFloat(formData.montoISR) || 0,
+        monto_imss: parseFloat(formData.montoIMSS) || 0,
+        monto_infonavit: parseFloat(formData.montoInfonavit) || 0,
+        descuentos: parseFloat(formData.descuentos) || 0,
         esPagoSemanal: true // Siempre es pago semanal
       };
+
+      console.log('🔍 [WIZARD] Datos enviados al cálculo:', datosNomina);
 
       const calculo = await nominasServices.calculadora.calcularNomina(datosNomina);
       setCalculoNomina(calculo);
@@ -518,9 +511,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         horas_extra: formData.horasExtra || 0,
         bonos: formData.bonos || 0,
         deducciones_adicionales: formData.deduccionesAdicionales || 0,
-        aplicar_isr: formData.aplicarISR,
-        aplicar_imss: formData.aplicarIMSS,
-        aplicar_infonavit: formData.aplicarInfonavit,
+        monto_isr: parseFloat(formData.montoISR) || 0,
+        monto_imss: parseFloat(formData.montoIMSS) || 0,
+        monto_infonavit: parseFloat(formData.montoInfonavit) || 0,
+        descuentos: parseFloat(formData.descuentos) || 0,
         // Datos de pago parcial
         pago_parcial: formData.pagoParcial,
         monto_a_pagar: formData.pagoParcial ? formData.montoAPagar : null,
@@ -611,9 +605,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
           horas_extra: nominaData.horas_extra,
           bonos: nominaData.bonos,
           deducciones_adicionales: nominaData.deducciones_adicionales,
-          aplicar_isr: nominaData.aplicar_isr,
-          aplicar_imss: nominaData.aplicar_imss,
-          aplicar_infonavit: nominaData.aplicar_infonavit,
+          monto_isr: nominaData.monto_isr,
+          monto_imss: nominaData.monto_imss,
+          monto_infonavit: nominaData.monto_infonavit,
+          descuentos: nominaData.descuentos,
           pago_parcial: nominaData.pago_parcial,
           monto_a_pagar: nominaData.monto_a_pagar,
           liquidar_adeudos: nominaData.liquidar_adeudos
@@ -1231,7 +1226,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                     </h5>
                     
                     <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                             Horas Extra
@@ -1244,7 +1239,6 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             onChange={(e) => {
                               const value = e.target.value;
                               if (value === '') {
-                                // Permitir campo vacío temporalmente
                                 updateFormData({ horasExtra: '' });
                               } else {
                                 const num = parseFloat(value);
@@ -1254,7 +1248,6 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                               }
                             }}
                             onBlur={(e) => {
-                              // Solo restaurar valor por defecto cuando pierde el foco y está vacío
                               if (e.target.value === '') {
                                 updateFormData({ horasExtra: 0 });
                               }
@@ -1275,7 +1268,6 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             onChange={(e) => {
                               const value = e.target.value;
                               if (value === '') {
-                                // Permitir campo vacío temporalmente
                                 updateFormData({ bonos: '' });
                               } else {
                                 const num = parseFloat(value);
@@ -1285,7 +1277,6 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                               }
                             }}
                             onBlur={(e) => {
-                              // Solo restaurar valor por defecto cuando pierde el foco y está vacío
                               if (e.target.value === '') {
                                 updateFormData({ bonos: 0 });
                               }
@@ -1293,76 +1284,139 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                           />
                         </div>
-                      </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                          Deducciones Adicionales
-                        </label>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={formData.deduccionesAdicionales}
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            if (value === '') {
-                              // Permitir campo vacío temporalmente
-                              updateFormData({ deduccionesAdicionales: '' });
-                            } else {
-                              const num = parseFloat(value);
-                              if (!isNaN(num) && num >= 0) {
-                                updateFormData({ deduccionesAdicionales: num });
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Deducciones Adicionales
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={formData.deduccionesAdicionales}
+                            onChange={(e) => {
+                              const value = e.target.value;
+                              if (value === '') {
+                                updateFormData({ deduccionesAdicionales: '' });
+                              } else {
+                                const num = parseFloat(value);
+                                if (!isNaN(num) && num >= 0) {
+                                  updateFormData({ deduccionesAdicionales: num });
+                                }
                               }
-                            }
-                          }}
-                          onBlur={(e) => {
-                            // Solo restaurar valor por defecto cuando pierde el foco y está vacío
-                            if (e.target.value === '') {
-                              updateFormData({ deduccionesAdicionales: 0 });
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                        />
+                            }}
+                            onBlur={(e) => {
+                              if (e.target.value === '') {
+                                updateFormData({ deduccionesAdicionales: 0 });
+                              }
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                          />
+                        </div>
                       </div>
 
-                      {/* Opciones fiscales */}
-                      <div className="space-y-3">
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id="aplicarISR"
-                            checked={formData.aplicarISR}
-                            onChange={(e) => updateFormData({ aplicarISR: e.target.checked })}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <label htmlFor="aplicarISR" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            Aplicar ISR
-                          </label>
-                        </div>
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id="aplicarIMSS"
-                            checked={formData.aplicarIMSS}
-                            onChange={(e) => updateFormData({ aplicarIMSS: e.target.checked })}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <label htmlFor="aplicarIMSS" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            Aplicar IMSS
-                          </label>
-                        </div>
-                        <div className="flex items-center">
-                          <input
-                            type="checkbox"
-                            id="aplicarInfonavit"
-                            checked={formData.aplicarInfonavit}
-                            onChange={(e) => updateFormData({ aplicarInfonavit: e.target.checked })}
-                            className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-                          />
-                          <label htmlFor="aplicarInfonavit" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                            Aplicar Infonavit
-                          </label>
+                      {/* Deducciones Fiscales - Grid de 2 columnas */}
+                      <div>
+                        <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
+                          Deducciones Fiscales (ingresar monto solo si aplica)
+                        </h5>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {/* ISR */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              ISR
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={formData.montoISR}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                updateFormData({ montoISR: value === '' ? '' : value });
+                              }}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  updateFormData({ montoISR: 0 });
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                              placeholder="0.00 (dejar en 0 si no aplica)"
+                            />
+                          </div>
+
+                          {/* IMSS */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              IMSS
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={formData.montoIMSS}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                updateFormData({ montoIMSS: value === '' ? '' : value });
+                              }}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  updateFormData({ montoIMSS: 0 });
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                              placeholder="0.00 (dejar en 0 si no aplica)"
+                            />
+                          </div>
+
+                          {/* Infonavit */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Infonavit
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={formData.montoInfonavit}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                updateFormData({ montoInfonavit: value === '' ? '' : value });
+                              }}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  updateFormData({ montoInfonavit: 0 });
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                              placeholder="0.00 (dejar en 0 si no aplica)"
+                            />
+                          </div>
+
+                          {/* Descuentos (Adelantos) */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Descuentos (Adelantos)
+                            </label>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={formData.descuentos}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                updateFormData({ descuentos: value === '' ? '' : value });
+                              }}
+                              onBlur={(e) => {
+                                if (e.target.value === '') {
+                                  updateFormData({ descuentos: 0 });
+                                }
+                              }}
+                              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                              placeholder="0.00"
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1580,6 +1634,12 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                               <span>-{formatCurrency(calculoNomina.deducciones.adicionales)}</span>
                             </div>
                           )}
+                          {calculoNomina.deducciones.descuentos > 0 && (
+                            <div className="flex justify-between">
+                              <span>Descuentos (Adelantos):</span>
+                              <span>-{formatCurrency(calculoNomina.deducciones.descuentos)}</span>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="flex justify-between border-t-2 border-green-300 dark:border-green-600 pt-2">
@@ -1732,20 +1792,29 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                         </span>
                       </div>
                       
-                      <div className="flex justify-between">
-                        <span className="text-red-600 dark:text-red-400">
-                          Deducciones:
-                          <span className="text-xs text-gray-400 ml-1">
-                            (ISR: {formatCurrency(calculoNomina.deducciones.isr)}, 
-                            IMSS: {formatCurrency(calculoNomina.deducciones.imss)}, 
-                            Infonavit: {formatCurrency(calculoNomina.deducciones.infonavit)}, 
-                            Adicionales: {formatCurrency(calculoNomina.deducciones.adicionales)})
+                      {(calculoNomina.deducciones.isr > 0 || calculoNomina.deducciones.imss > 0 || 
+                        calculoNomina.deducciones.infonavit > 0 || calculoNomina.deducciones.adicionales > 0 ||
+                        calculoNomina.deducciones.descuentos > 0) && (
+                        <div className="flex justify-between">
+                          <span className="text-red-600 dark:text-red-400">
+                            Deducciones:
+                            <span className="text-xs text-gray-400 ml-1">
+                              ({calculoNomina.deducciones.isr > 0 && `ISR: ${formatCurrency(calculoNomina.deducciones.isr)}`}
+                              {calculoNomina.deducciones.isr > 0 && (calculoNomina.deducciones.imss > 0 || calculoNomina.deducciones.infonavit > 0 || calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
+                              {calculoNomina.deducciones.imss > 0 && `IMSS: ${formatCurrency(calculoNomina.deducciones.imss)}`}
+                              {calculoNomina.deducciones.imss > 0 && (calculoNomina.deducciones.infonavit > 0 || calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
+                              {calculoNomina.deducciones.infonavit > 0 && `Infonavit: ${formatCurrency(calculoNomina.deducciones.infonavit)}`}
+                              {calculoNomina.deducciones.infonavit > 0 && (calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
+                              {calculoNomina.deducciones.adicionales > 0 && `Adicionales: ${formatCurrency(calculoNomina.deducciones.adicionales)}`}
+                              {calculoNomina.deducciones.adicionales > 0 && calculoNomina.deducciones.descuentos > 0 && ', '}
+                              {calculoNomina.deducciones.descuentos > 0 && `Descuentos: ${formatCurrency(calculoNomina.deducciones.descuentos)}`})
+                            </span>
                           </span>
-                        </span>
-                        <span className="font-medium text-red-600 dark:text-red-400">
-                          -{formatCurrency(calculoNomina.deducciones.total)}
-                        </span>
-                      </div>
+                          <span className="font-medium text-red-600 dark:text-red-400">
+                            -{formatCurrency(calculoNomina.deducciones.total)}
+                          </span>
+                        </div>
+                      )}
                       
                       <div className="flex justify-between border-t-2 border-gray-300 dark:border-gray-600 pt-3">
                         <span className="font-bold text-xl text-gray-900 dark:text-white">

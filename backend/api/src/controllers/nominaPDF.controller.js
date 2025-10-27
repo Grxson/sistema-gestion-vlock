@@ -536,55 +536,80 @@ const generarReciboPDF = async (req, res) => {
         
         currentY += 10;
         
-        // Deducciones - usar los datos exactos de la nómina
-        if (nomina.deducciones && nomina.deducciones > 0) {
-            let contadorDeduccion = 1;
-            
-            // Mostrar ISR solo si está aplicado
-            if (nomina.aplicar_isr && nomina.deducciones_isr && nomina.deducciones_isr > 0) {
-                doc.fontSize(8)
-                   .font('Helvetica')
-                   .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-                   .text('045', col2X, currentY)
-                   .text('ISR', col3X, currentY)
-                   .text(`$${parseFloat(nomina.deducciones_isr).toFixed(2)}`, col4X, currentY);
-                currentY += 15;
-                contadorDeduccion++;
-            }
-            
-            // Mostrar IMSS solo si está aplicado
-            if (nomina.aplicar_imss && nomina.deducciones_imss && nomina.deducciones_imss > 0) {
-                doc.fontSize(8)
-                   .font('Helvetica')
-                   .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-                   .text('052', col2X, currentY)
-                   .text('IMSS', col3X, currentY)
-                   .text(`$${parseFloat(nomina.deducciones_imss).toFixed(2)}`, col4X, currentY);
-                currentY += 15;
-                contadorDeduccion++;
-            }
-            
-            // Mostrar Infonavit solo si está aplicado
-            if (nomina.aplicar_infonavit && nomina.deducciones_infonavit && nomina.deducciones_infonavit > 0) {
-                doc.fontSize(8)
-                   .font('Helvetica')
-                   .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-                   .text('053', col2X, currentY)
-                   .text('Infonavit', col3X, currentY)
-                   .text(`$${parseFloat(nomina.deducciones_infonavit).toFixed(2)}`, col4X, currentY);
-                currentY += 15;
-                contadorDeduccion++;
-            }
-            
-            // Mostrar deducciones adicionales si existen
-            if (nomina.deducciones_adicionales && nomina.deducciones_adicionales > 0) {
-                doc.fontSize(8)
-                   .font('Helvetica')
-                   .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-                   .text('999', col2X, currentY)
-                   .text('Adicionales', col3X, currentY)
-                   .text(`$${parseFloat(nomina.deducciones_adicionales).toFixed(2)}`, col4X, currentY);
-            }
+        // Deducciones - mostrar todas las deducciones aplicadas
+        let contadorDeduccion = 1;
+        let hayDeducciones = false;
+        
+        // Mostrar ISR si está aplicado (monto > 0)
+        if (nomina.deducciones_isr && nomina.deducciones_isr > 0) {
+            doc.fontSize(8)
+               .font('Helvetica')
+               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+               .text('045', col2X, currentY)
+               .text('ISR', col3X, currentY)
+               .text(`$${parseFloat(nomina.deducciones_isr).toFixed(2)}`, col4X, currentY);
+            currentY += 15;
+            contadorDeduccion++;
+            hayDeducciones = true;
+        }
+        
+        // Mostrar IMSS si está aplicado (monto > 0)
+        if (nomina.deducciones_imss && nomina.deducciones_imss > 0) {
+            doc.fontSize(8)
+               .font('Helvetica')
+               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+               .text('052', col2X, currentY)
+               .text('IMSS', col3X, currentY)
+               .text(`$${parseFloat(nomina.deducciones_imss).toFixed(2)}`, col4X, currentY);
+            currentY += 15;
+            contadorDeduccion++;
+            hayDeducciones = true;
+        }
+        
+        // Mostrar Infonavit si está aplicado (monto > 0)
+        if (nomina.deducciones_infonavit && nomina.deducciones_infonavit > 0) {
+            doc.fontSize(8)
+               .font('Helvetica')
+               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+               .text('053', col2X, currentY)
+               .text('Infonavit', col3X, currentY)
+               .text(`$${parseFloat(nomina.deducciones_infonavit).toFixed(2)}`, col4X, currentY);
+            currentY += 15;
+            contadorDeduccion++;
+            hayDeducciones = true;
+        }
+        
+        // Mostrar deducciones adicionales si existen
+        if (nomina.deducciones_adicionales && nomina.deducciones_adicionales > 0) {
+            doc.fontSize(8)
+               .font('Helvetica')
+               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+               .text('999', col2X, currentY)
+               .text('Adicionales', col3X, currentY)
+               .text(`$${parseFloat(nomina.deducciones_adicionales).toFixed(2)}`, col4X, currentY);
+            currentY += 15;
+            contadorDeduccion++;
+            hayDeducciones = true;
+        }
+        
+        // Mostrar descuentos (adelantos) si existen
+        if (nomina.descuentos && nomina.descuentos > 0) {
+            doc.fontSize(8)
+               .font('Helvetica')
+               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+               .text('998', col2X, currentY)
+               .text('Descuentos (Adelantos)', col3X, currentY)
+               .text(`$${parseFloat(nomina.descuentos).toFixed(2)}`, col4X, currentY);
+            currentY += 15;
+            hayDeducciones = true;
+        }
+        
+        // Si no hay deducciones, mostrar mensaje
+        if (!hayDeducciones) {
+            doc.fontSize(8)
+               .font('Helvetica-Oblique')
+               .text('Sin deducciones aplicadas', col1X, currentY);
+            currentY += 15;
         }
 
         currentY += 15; // Reducir espacio antes del resumen

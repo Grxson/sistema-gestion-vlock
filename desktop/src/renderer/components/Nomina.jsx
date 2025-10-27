@@ -1288,7 +1288,7 @@ export default function Nomina() {
         {/* Modal de Preview de Nómina */}
         {showNominaPreview && nominaPreviewData && selectedEmpleadoPreview && (
           <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-            <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-4xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
+            <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-5xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
               {/* Header del Preview */}
               <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
@@ -1372,184 +1372,214 @@ export default function Nomina() {
                   </div>
                 </div>
 
-                {/* Información del Empleado */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Información del Empleado</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Nombre</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {selectedEmpleadoPreview.nombre} {selectedEmpleadoPreview.apellido}
-                      </p>
+                {/* Grid principal: Información a la izquierda, Cálculos a la derecha */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                  {/* Columna izquierda: Información del Empleado y Detalles (2/3) */}
+                  <div className="lg:col-span-2 space-y-4">
+                    {/* Información del Empleado */}
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">Información del Empleado</h3>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">Nombre</p>
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">
+                            {selectedEmpleadoPreview.nombre} {selectedEmpleadoPreview.apellido}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">NSS</p>
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">{selectedEmpleadoPreview.nss}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">RFC</p>
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">{selectedEmpleadoPreview.rfc}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">Proyecto</p>
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">
+                            {selectedEmpleadoPreview.proyecto?.nombre || 'Sin proyecto'}
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">NSS</p>
-                      <p className="font-medium text-gray-900 dark:text-white">{selectedEmpleadoPreview.nss}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">RFC</p>
-                      <p className="font-medium text-gray-900 dark:text-white">{selectedEmpleadoPreview.rfc}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Proyecto</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {selectedEmpleadoPreview.proyecto?.nombre || 'Sin proyecto'}
-                      </p>
+
+                    {/* Detalles de la Nómina */}
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                      <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">Detalles de la Nómina</h3>
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                        <div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">Período</p>
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">
+                            {(() => {
+                              const fecha = nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt ? 
+                                new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt) : 
+                                new Date();
+                              const año = fecha.getFullYear();
+                              const mes = fecha.getMonth() + 1;
+                              return `${año}-${String(mes).padStart(2, '0')}`;
+                            })()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">Semana</p>
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">
+                            {(() => {
+                              const fecha = nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt ? 
+                                new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt) : 
+                                new Date();
+                              function calcularSemanaDelMes(fecha) {
+                                const año = fecha.getFullYear();
+                                const mes = fecha.getMonth();
+                                const dia = fecha.getDate();
+                                const primerDiaDelMes = new Date(año, mes, 1);
+                                const diaPrimerDia = primerDiaDelMes.getDay();
+                                const diasEnPrimeraFila = 7 - diaPrimerDia;
+                                if (dia <= diasEnPrimeraFila) return 1;
+                                const diasRestantes = dia - diasEnPrimeraFila;
+                                return 1 + Math.ceil(diasRestantes / 7);
+                              }
+                              return `Semana ${calcularSemanaDelMes(fecha)}`;
+                            })()}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">Días Laborados</p>
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">
+                            {nominaPreviewData.dias_laborados || 6}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">Pago Semanal</p>
+                          <p className="font-medium text-sm text-gray-900 dark:text-white">
+                            {formatCurrency(nominaPreviewData.pago_semanal || 0)}
+                          </p>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Detalles de la Nómina */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Detalles de la Nómina</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Período</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {(() => {
-                          // Usar fecha actual si no hay fecha de creación
-                          const fecha = nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt ? 
-                            new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt) : 
-                            new Date();
-                          const año = fecha.getFullYear();
-                          const mes = fecha.getMonth() + 1;
-                          return `${año}-${String(mes).padStart(2, '0')}`;
-                        })()}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Semana</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {(() => {
-                          // Usar fecha actual si no hay fecha de creación
-                          const fecha = nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt ? 
-                            new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt) : 
-                            new Date();
-                            // Usar el  |mismo algoritmo que el wizard (basado en calendario visual)
-                          function calcularSemanaDelMes(fecha) {
-                            const año = fecha.getFullYear();
-                            const mes = fecha.getMonth();
-                            const dia = fecha.getDate();
-                            
-                            // Obtener el primer día del mes
-                            const primerDiaDelMes = new Date(año, mes, 1);
-                            const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
-                            
-                            // Calcular en qué fila del calendario está la fecha
-                            // Primera fila: días del mes anterior + días del mes actual
-                            const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
-                            
-                            if (dia <= diasEnPrimeraFila) {
-                              // La fecha está en la primera fila
-                              return 1;
-                            } else {
-                              // La fecha está en una fila posterior
-                              const diasRestantes = dia - diasEnPrimeraFila;
-                              const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
-                              
-                              // Calcular cuántas semanas tiene realmente el mes
-                              const ultimoDiaDelMes = new Date(año, mes + 1, 0);
-                              const diasEnElMes = ultimoDiaDelMes.getDate();
-                              const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
-                              const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
-                              const totalFilas = 1 + filasAdicionales;
-                              
-                              // Limitar al número real de semanas del mes
-                              return Math.max(1, Math.min(semanaDelMes, totalFilas));
-                            }
-                          }
-                          
-                          const semanaFinal = calcularSemanaDelMes(fecha);
-                          return `Semana ${semanaFinal}`;
-                        })()}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Días Laborados</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {nominaPreviewData.es_pago_semanal ? 6 : (nominaPreviewData.dias_laborados || 'N/A')}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Pago Semanal</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(nominaPreviewData.pago_semanal || 0)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Fecha de Creación</p>
-                      <p className="font-medium text-gray-900 dark:text-white">
-                        {new Date(nominaPreviewData.fecha_creacion || nominaPreviewData.createdAt).toLocaleDateString('es-MX')}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Cálculos */}
-                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 mb-6">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-3">Cálculos</h3>
-                  <div className="space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-600 dark:text-gray-400">Salario Base:</span>
-                      <span className="font-medium text-gray-900 dark:text-white">
-                        {formatCurrency(nominaPreviewData.pago_semanal || 0)}
-                      </span>
-                    </div>
-                    {nominaPreviewData.horas_extra > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Horas Extra:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(nominaPreviewData.horas_extra || 0)}                                                                                      
+                  {/* Columna derecha: Cálculos (1/3) */}
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">Cálculos</h3>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600 dark:text-gray-400">Salario Base:</span>
+                        <span className="font-semibold text-gray-900 dark:text-white">
+                          {formatCurrency(nominaPreviewData.pago_semanal || 0)}
                         </span>
                       </div>
-                    )}
-                    {nominaPreviewData.bonos > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Bonos:</span>
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {formatCurrency(nominaPreviewData.bonos || 0)}
-                        </span>
-                      </div>
-                    )}
-                    {nominaPreviewData.deducciones > 0 && (
-                      <div className="flex justify-between">
-                        <span className="text-gray-600 dark:text-gray-400">Deducciones:</span>
-                        <span className="font-medium text-red-600 dark:text-red-400">
-                          -{formatCurrency(nominaPreviewData.deducciones || 0)}
-                        </span>
-                      </div>
-                    )}
-                    <div className="border-t border-gray-300 dark:border-gray-600 pt-2">
-                      {nominaPreviewData.pago_parcial ? (
-                        <>
-                          <div className="flex justify-between mb-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Monto Original:</span>
-                            <span className="text-sm font-medium text-gray-900 dark:text-white">
-                              {formatCurrency(nominaPreviewData.monto_total || 0)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between mb-2">
-                            <span className="text-sm text-gray-600 dark:text-gray-400">Monto Pagado:</span>
-                            <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                              {formatCurrency(nominaPreviewData.monto_pagado || 0)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-lg font-medium text-gray-900 dark:text-white">Pendiente:</span>
-                            <span className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                              {formatCurrency((nominaPreviewData.monto_total || 0) - (nominaPreviewData.monto_pagado || 0))}
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        <div className="flex justify-between">
-                          <span className="text-lg font-medium text-gray-900 dark:text-white">Total a Pagar:</span>
-                          <span className="text-lg font-bold text-green-600 dark:text-green-400">
-                            {formatCurrency(nominaPreviewData.monto_total || 0)}
+                      {nominaPreviewData.horas_extra > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Horas Extra:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {formatCurrency(nominaPreviewData.horas_extra || 0)}                                                                                      
                           </span>
                         </div>
                       )}
-                    </div>
+                      {nominaPreviewData.bonos > 0 && (
+                        <div className="flex justify-between text-sm">
+                          <span className="text-gray-600 dark:text-gray-400">Bonos:</span>
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {formatCurrency(nominaPreviewData.bonos || 0)}
+                          </span>
+                        </div>
+                      )}
+                    
+                    {/* Deducciones Detalladas */}
+                    {(nominaPreviewData.deducciones_isr > 0 || nominaPreviewData.deducciones_imss > 0 || 
+                      nominaPreviewData.deducciones_infonavit > 0 || nominaPreviewData.deducciones_adicionales > 0 || 
+                      nominaPreviewData.descuentos > 0) && (
+                      <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                        <h5 className="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">Deducciones:</h5>
+                        <div className="space-y-0.5">
+                          {nominaPreviewData.deducciones_isr > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">ISR:</span>
+                              <span className="font-medium text-red-600 dark:text-red-400">
+                                -{formatCurrency(nominaPreviewData.deducciones_isr)}
+                              </span>
+                            </div>
+                          )}
+                          {nominaPreviewData.deducciones_imss > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">IMSS:</span>
+                              <span className="font-medium text-red-600 dark:text-red-400">
+                                -{formatCurrency(nominaPreviewData.deducciones_imss)}
+                              </span>
+                            </div>
+                          )}
+                          {nominaPreviewData.deducciones_infonavit > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">Infonavit:</span>
+                              <span className="font-medium text-red-600 dark:text-red-400">
+                                -{formatCurrency(nominaPreviewData.deducciones_infonavit)}
+                              </span>
+                            </div>
+                          )}
+                          {nominaPreviewData.deducciones_adicionales > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">Adicionales:</span>
+                              <span className="font-medium text-red-600 dark:text-red-400">
+                                -{formatCurrency(nominaPreviewData.deducciones_adicionales)}
+                              </span>
+                            </div>
+                          )}
+                          {nominaPreviewData.descuentos > 0 && (
+                            <div className="flex justify-between text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">Descuentos:</span>
+                              <span className="font-medium text-red-600 dark:text-red-400">
+                                -{formatCurrency(nominaPreviewData.descuentos)}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex justify-between text-xs font-semibold pt-1 mt-1 border-t border-gray-200 dark:border-gray-700">
+                            <span className="text-gray-700 dark:text-gray-300">Total:</span>
+                            <span className="text-red-600 dark:text-red-400">
+                              -{formatCurrency(
+                                (nominaPreviewData.deducciones_isr || 0) +
+                                (nominaPreviewData.deducciones_imss || 0) +
+                                (nominaPreviewData.deducciones_infonavit || 0) +
+                                (nominaPreviewData.deducciones_adicionales || 0) +
+                                (nominaPreviewData.descuentos || 0)
+                              )}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                      <div className="border-t-2 border-gray-300 dark:border-gray-600 pt-2 mt-2">
+                        {nominaPreviewData.pago_parcial ? (
+                          <>
+                            <div className="flex justify-between mb-1 text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">Monto Original:</span>
+                              <span className="font-medium text-gray-900 dark:text-white">
+                                {formatCurrency(nominaPreviewData.monto_total || 0)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between mb-1 text-xs">
+                              <span className="text-gray-600 dark:text-gray-400">Monto Pagado:</span>
+                              <span className="font-medium text-green-600 dark:text-green-400">
+                                {formatCurrency(nominaPreviewData.monto_pagado || 0)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-base font-bold text-gray-900 dark:text-white">Pendiente:</span>
+                              <span className="text-base font-bold text-orange-600 dark:text-orange-400">
+                                {formatCurrency((nominaPreviewData.monto_total || 0) - (nominaPreviewData.monto_pagado || 0))}
+                              </span>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="flex justify-between">
+                            <span className="text-base font-bold text-gray-900 dark:text-white">Total a Pagar:</span>
+                            <span className="text-base font-bold text-green-600 dark:text-green-400">
+                              {formatCurrency(nominaPreviewData.monto_total || 0)}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                  </div>
                   </div>
                 </div>
               </div>

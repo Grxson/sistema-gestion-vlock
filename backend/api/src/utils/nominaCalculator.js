@@ -133,7 +133,11 @@ const calcularNomina = (
     aplicarIMSS = true,
     aplicarInfonavit = true,
     deduccionesAdicionales = 0,
-    esPagoSemanal = false
+    esPagoSemanal = false,
+    montoISR = 0,
+    montoIMSS = 0,
+    montoInfonavit = 0,
+    descuentos = 0
 ) => {
     // Cálculo de salario base
     // Para pago semanal: convertir a equivalente diario (semana de 6 días) y multiplicar por los días laborados
@@ -149,14 +153,16 @@ const calcularNomina = (
     const subtotal = salarioBase + montoHorasExtra + bonos;
     
     // Cálculo de deducciones
+    // Solo aplicar si el monto es > 0 (el usuario debe ingresar un valor para aplicar)
     const deducciones = {
-        isr: aplicarISR ? calcularISR(subtotal) : 0,
-        imss: aplicarIMSS ? calcularIMSS(subtotal) : 0,
-        infonavit: aplicarInfonavit ? calcularInfonavit(subtotal) : 0,
-        adicionales: parseFloat(deduccionesAdicionales) || 0
+        isr: montoISR > 0 ? montoISR : 0,
+        imss: montoIMSS > 0 ? montoIMSS : 0,
+        infonavit: montoInfonavit > 0 ? montoInfonavit : 0,
+        adicionales: parseFloat(deduccionesAdicionales) || 0,
+        descuentos: parseFloat(descuentos) || 0
     };
     
-    deducciones.total = deducciones.isr + deducciones.imss + deducciones.infonavit + deducciones.adicionales;
+    deducciones.total = deducciones.isr + deducciones.imss + deducciones.infonavit + deducciones.adicionales + deducciones.descuentos;
     
     // Monto final
     const montoTotal = subtotal - deducciones.total;

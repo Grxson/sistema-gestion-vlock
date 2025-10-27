@@ -28,40 +28,40 @@ module.exports = (sequelize) => {
       allowNull: false,
       comment: 'Pago semanal del empleado'
     },
-    es_pago_semanal: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,
-      comment: 'Indica si el empleado tiene pago semanal'
-    },
     horas_extra: {
-      type: DataTypes.DECIMAL(10,2)
-    },
-    deducciones: {
-      type: DataTypes.DECIMAL(10,2)
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      defaultValue: 0
     },
     deducciones_isr: {
-      type: DataTypes.DECIMAL(10,2)
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      defaultValue: 0,
+      comment: 'Monto de ISR (0 = no aplicado, >0 = monto aplicado)'
     },
     deducciones_imss: {
-      type: DataTypes.DECIMAL(10,2)
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      defaultValue: 0,
+      comment: 'Monto de IMSS (0 = no aplicado, >0 = monto aplicado)'
     },
     deducciones_infonavit: {
-      type: DataTypes.DECIMAL(10,2)
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      defaultValue: 0,
+      comment: 'Monto de Infonavit (0 = no aplicado, >0 = monto aplicado)'
     },
     deducciones_adicionales: {
-      type: DataTypes.DECIMAL(10,2)
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      defaultValue: 0,
+      comment: 'Otras deducciones'
     },
-    aplicar_isr: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true
-    },
-    aplicar_imss: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true
-    },
-    aplicar_infonavit: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: true
+    descuentos: {
+      type: DataTypes.DECIMAL(10,2),
+      allowNull: true,
+      defaultValue: 0,
+      comment: 'Descuentos adicionales (adelantos, préstamos, etc.)'
     },
     bonos: {
       type: DataTypes.DECIMAL(10,2)
@@ -70,37 +70,8 @@ module.exports = (sequelize) => {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false
     },
-    version: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      defaultValue: 1
-    },
-    creada_por: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    revisada_por: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    pagada_por: {
-      type: DataTypes.INTEGER,
-      allowNull: true
-    },
-    fecha_revision: {
-      type: DataTypes.DATE,
-      allowNull: true
-    },
     fecha_pago: {
       type: DataTypes.DATE,
-      allowNull: true
-    },
-    motivo_ultimo_cambio: {
-      type: DataTypes.TEXT,
-      allowNull: true
-    },
-    archivo_pdf_path: {
-      type: DataTypes.STRING(500),
       allowNull: true
     },
     estado: {

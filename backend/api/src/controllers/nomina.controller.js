@@ -154,9 +154,10 @@ const createNomina = async (req, res) => {
             horas_extra,
             deducciones_adicionales,
             bonos,
-            aplicar_isr,
-            aplicar_imss,
-            aplicar_infonavit,
+            monto_isr,
+            monto_imss,
+            monto_infonavit,
+            descuentos,
             // Nuevos campos para pagos parciales
             pago_parcial = false,
             monto_a_pagar = null,
@@ -181,9 +182,10 @@ const createNomina = async (req, res) => {
         const horasExtraNum = parseFloat(horas_extra || 0);
         const deduccionesAdicionalesNum = parseFloat(deducciones_adicionales || 0);
         const bonosNum = parseFloat(bonos || 0);
-        const aplicarISR = aplicar_isr !== false; // Por defecto aplica ISR a menos que se especifique false
-        const aplicarIMSS = aplicar_imss !== false; // Por defecto aplica IMSS a menos que se especifique false
-        const aplicarInfonavit = aplicar_infonavit !== false; // Por defecto aplica Infonavit a menos que se especifique false
+        const montoISRNum = parseFloat(monto_isr || 0);
+        const montoIMSSNum = parseFloat(monto_imss || 0);
+        const montoInfonavitNum = parseFloat(monto_infonavit || 0);
+        const descuentosNum = parseFloat(descuentos || 0);
 
         // Buscar o crear la semana en la tabla semanas_nomina
         // Si el frontend envía período y semana, usarlos; si no, usar fecha actual (retrocompatibilidad)
@@ -311,16 +313,21 @@ const createNomina = async (req, res) => {
         }
 
         // Utilizar la función de cálculo de nómina
+        // Si monto > 0: usar manual, si monto = 0: calcular automático
         const resultado = calcularNomina(
             diasLaboradosNum,
             pagoSemanalNum,
             horasExtraNum,
             bonosNum,
-            aplicarISR,
-            aplicarIMSS,
-            aplicarInfonavit,
+            true, // aplicarISR (siempre true, se controla con monto)
+            true, // aplicarIMSS (siempre true, se controla con monto)
+            true, // aplicarInfonavit (siempre true, se controla con monto)
             deduccionesAdicionalesNum,
-            es_pago_semanal // Pasar el flag de pago semanal
+            es_pago_semanal,
+            montoISRNum,
+            montoIMSSNum,
+            montoInfonavitNum,
+            descuentosNum
         );
 
         // Determinar el monto a pagar
@@ -416,9 +423,7 @@ const createNomina = async (req, res) => {
             deducciones_imss: resultado.deducciones.imss,
             deducciones_infonavit: resultado.deducciones.infonavit,
             deducciones_adicionales: resultado.deducciones.adicionales,
-            aplicar_isr: aplicarISR,
-            aplicar_imss: aplicarIMSS,
-            aplicar_infonavit: aplicarInfonavit,
+            descuentos: resultado.deducciones.descuentos || 0,
             bonos: bonosNum,
             monto_total: resultado.montoTotal,
             monto_pagado: montoAPagar, // Nuevo campo para el monto realmente pagado
