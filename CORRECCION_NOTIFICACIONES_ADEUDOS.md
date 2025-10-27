@@ -1,82 +1,101 @@
 # 🔧 Corrección de Notificaciones de Adeudos
 
-## 🐛 Problemas Identificados
+## 🐛 Problemas Identificados (27 de octubre de 2025)
 
-### 1. No se mostraban todos los adeudos pendientes
-**Síntoma**: Solo aparecía 1 notificación cuando había 4 adeudos pendientes
+### 1. Cálculo incorrecto de días restantes
+**Síntoma**: Cuando un adeudo vence HOY, muestra "Venció hace 1 día(s)" en lugar de "Vence hoy"
 
-**Causa**: El controlador filtraba adeudos con `fecha_vencimiento >= hoy`, excluyendo los vencidos
-```javascript
-// ANTES (incorrecto):
-fecha_vencimiento: {
-  [Op.gte]: hoy // Solo futuros o de hoy
-}
-```
+**Causa**: 
+- Uso de `Math.ceil()` en lugar de `Math.floor()` para calcular días
+- Problemas de zona horaria al parsear fechas con `new Date(fechaVencimiento)`
+- La fecha se interpretaba en UTC causando desfase de 1 día
 
-### 2. Mensajes confusos en adeudos vencidos
-**Síntoma**: Mostraba "Vence hace 1 día" y "Vence HOY" al mismo tiempo
+**Ejemplo del error**:
+- Fecha de vencimiento: 26 de octubre de 2025
+- Fecha actual: 26 de octubre de 2025
+- Resultado esperado: "Vence hoy" (0 días)
+- Resultado erróneo: "Venció hace 1 día(s)" (-1 días)
 
-**Causa**: La función `debeAlertarHoy()` rechazaba adeudos ya vencidos
+### 2. Monto en $0.00 en notificaciones
+**Síntoma**: Los popups de notificaciones muestran "$0.00" en lugar del monto pendiente real
+
+**Causa**: El campo `monto_pendiente` puede ser NULL en algunos adeudos antiguos que no tienen el campo calculado
 
 ## ✅ Soluciones Implementadas
 
-### 1. Incluir Adeudos Vencidos Recientes
+### 1. Corrección del Cálculo de Días Restantes (Frontend)
 
-**Archivo**: `/backend/api/src/controllers/adeudosGenerales.controller.js`
+**Archivo**: `/desktop/src/renderer/utils/alertasVencimiento.js`
 
-**Cambio**:
+**Cambio en `calcularDiasRestantes()`**:
 ```javascript
-// DESPUÉS (correcto):
-const hace3Dias = new Date(hoy);
-hace3Dias.setDate(hoy.getDate() - 3);
+// ANTES (incorrecto):
+const vencimiento = new Date(fechaVencimiento);
+vencimiento.setHours(0, 0, 0, 0);
+const diferencia = vencimiento - hoy;
+return Math.ceil(diferencia / (1000 * 60 * 60 * 24)); // ❌ Math.ceil
 
-// Obtener adeudos no pagados con fecha de vencimiento
-const adeudos = await models.Adeudo_general.findAll({
-  where: {
-    estado: {
-      [Op.in]: ['pendiente', 'parcial']
-    },
-    fecha_vencimiento: {
-      [Op.not]: null,
-      [Op.gte]: hace3Dias // Incluye vencidos hasta 3 días atrás
-    }
-  },
-  // ...
-});
+// DESPUÉS (correcto):
+// Parsear fecha correctamente (formato YYYY-MM-DD)
+const fechaStr = fechaVencimiento.split('T')[0]; // Tomar solo la parte de fecha
+const [year, month, day] = fechaStr.split('-').map(Number);
+const vencimiento = new Date(year, month - 1, day); // Mes es 0-indexed
+vencimiento.setHours(0, 0, 0, 0);
+
+const diferencia = vencimiento - hoy;
+const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24)); // ✅ Math.floor
+return dias;
 ```
 
-**Resultado**: Ahora incluye adeudos vencidos hasta 3 días atrás
+**Por qué funciona**:
+- Parsea la fecha manualmente para evitar problemas de zona horaria
+- Usa `Math.floor()` en lugar de `Math.ceil()` para redondear correctamente
+- Cuando vence HOY, diferencia = 0, `Math.floor(0) = 0` ✅
 
-### 2. Simplificar Lógica de Alertas
+### 2. Corrección del Cálculo de Días Restantes (Backend)
 
 **Archivo**: `/backend/api/src/utils/alertasVencimiento.js`
 
-**Cambio en `debeAlertarHoy()`**:
+**Cambio en `calcularDiasRestantes()`**:
 ```javascript
-// ANTES (complejo):
-const fechaInicio = calcularFechaInicioAlertas(vencimiento);
-fechaInicio.setHours(0, 0, 0, 0);
+// ANTES (incorrecto):
+const diferencia = vencimiento - hoy;
+return Math.ceil(diferencia / (1000 * 60 * 60 * 24)); // ❌ Math.ceil
 
-// No alertar si ya venció
-if (vencimiento < hoy) {
-  return false;
-}
+// DESPUÉS (correcto):
+const diferencia = vencimiento - hoy;
+const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24)); // ✅ Math.floor
+return dias;
+```
 
-// Alertar si hoy está entre la fecha de inicio y el vencimiento
-return hoy >= fechaInicio && hoy <= vencimiento;
+### 3. Cálculo Automático de `monto_pendiente`
 
-// DESPUÉS (simple):
-const diasRestantes = calcularDiasRestantes(fechaVencimiento);
+**Archivo**: `/backend/api/src/controllers/adeudosGenerales.controller.js`
 
-// Alertar si vence en los próximos 7 días O si ya venció (hasta 3 días atrás)
-return diasRestantes !== null && diasRestantes >= -3 && diasRestantes <= 7;
+**Cambio en `getAdeudosConAlertas()`**:
+```javascript
+// Calcular monto_pendiente si es null o undefined
+const adeudoJSON = adeudo.toJSON();
+const montoPendiente = adeudoJSON.monto_pendiente !== null && adeudoJSON.monto_pendiente !== undefined
+  ? parseFloat(adeudoJSON.monto_pendiente)
+  : parseFloat(adeudoJSON.monto_original || adeudoJSON.monto || 0) - parseFloat(adeudoJSON.monto_pagado || 0);
+
+return {
+  ...adeudoJSON,
+  monto_pendiente: montoPendiente, // ✅ Siempre tiene valor
+  alerta: {
+    diasRestantes,
+    nivelUrgencia,
+    mensaje: mensajeAlerta
+  }
+};
 ```
 
 **Ventajas**:
-- Lógica más clara y directa
-- Incluye adeudos vencidos recientes (-3 a 0 días)
-- Mantiene ventana de 7 días hacia adelante
-- Elimina cálculo innecesario de `fechaInicio`
+- Si `monto_pendiente` existe, lo usa
+- Si es NULL, lo calcula: `monto_original - monto_pagado`
+- Fallback a `monto` para adeudos antiguos
+- Siempre retorna un valor numérico válido
 
 ## 📊 Rango de Alertas Actualizado
 

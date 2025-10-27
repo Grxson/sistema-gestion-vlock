@@ -616,8 +616,15 @@ const getAdeudosConAlertas = async (req, res) => {
         const nivelUrgencia = obtenerNivelUrgencia(adeudo.fecha_vencimiento, adeudo.estado);
         const mensajeAlerta = obtenerMensajeAlerta(diasRestantes);
 
+        // Calcular monto_pendiente si es null o undefined
+        const adeudoJSON = adeudo.toJSON();
+        const montoPendiente = adeudoJSON.monto_pendiente !== null && adeudoJSON.monto_pendiente !== undefined
+          ? parseFloat(adeudoJSON.monto_pendiente)
+          : parseFloat(adeudoJSON.monto_original || adeudoJSON.monto || 0) - parseFloat(adeudoJSON.monto_pagado || 0);
+
         return {
-          ...adeudo.toJSON(),
+          ...adeudoJSON,
+          monto_pendiente: montoPendiente,
           alerta: {
             diasRestantes,
             nivelUrgencia,
