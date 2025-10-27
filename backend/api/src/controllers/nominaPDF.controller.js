@@ -153,8 +153,30 @@ const generarReciboPDF = async (req, res) => {
         const uploadsDir = path.join(__dirname, '..', 'uploads', 'recibos');
         await fs.ensureDir(uploadsDir);
 
-        // Nombre del archivo
-        const fileName = `recibo_${id_nomina}_${Date.now()}.pdf`;
+        // Generar nombre del archivo con formato: nomina_semana4_NombreEmpleado.pdf
+        const empleadoData = nomina.empleado;
+        const nombreEmpleado = `${empleadoData.nombre}_${empleadoData.apellido}`.replace(/\s+/g, '_');
+        
+        // Calcular número de semana del mes
+        let numeroSemana = 'N/A';
+        if (nomina.semana) {
+            const fechaInicio = new Date(nomina.semana.fecha_inicio);
+            const mes = fechaInicio.getMonth();
+            const dia = fechaInicio.getDate();
+            
+            const primerDiaDelMes = new Date(fechaInicio.getFullYear(), mes, 1);
+            const diaPrimerDia = primerDiaDelMes.getDay();
+            const diasEnPrimeraFila = 7 - diaPrimerDia;
+            
+            if (dia <= diasEnPrimeraFila) {
+                numeroSemana = 1;
+            } else {
+                const diasRestantes = dia - diasEnPrimeraFila;
+                numeroSemana = 1 + Math.ceil(diasRestantes / 7);
+            }
+        }
+        
+        const fileName = `nomina_semana${numeroSemana}_${nombreEmpleado}.pdf`;
         const filePath = path.join(uploadsDir, fileName);
 
         // Crear el documento PDF con márgenes más pequeños
@@ -319,8 +341,9 @@ const generarReciboPDF = async (req, res) => {
             // Usar la información de la semana desde la base de datos
             const semanaData = nomina.semana;
             const fechaInicio = new Date(semanaData.fecha_inicio);
+            const fechaFin = new Date(semanaData.fecha_fin);
             const año = fechaInicio.getFullYear();
-            const mes = fechaInicio.getMonth() + 1;
+            const mes = fechaInicio.getMonth();
             
             // Calcular semana del mes basada en la fecha de inicio de la semana
             function calcularSemanaDelMes(fecha) {
@@ -357,12 +380,21 @@ const generarReciboPDF = async (req, res) => {
             }
             
             semanaFinal = calcularSemanaDelMes(fechaInicio);
-            periodoInfo = `${año} ${mes.toString().padStart(2, '0')} - Semana ${semanaFinal}`;
+            
+            // Formatear fechas para el período
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                          'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const diaInicio = fechaInicio.getDate();
+            const diaFin = fechaFin.getDate();
+            const nombreMes = meses[mes];
+            
+            periodoInfo = `Semana ${semanaFinal} - del ${diaInicio} al ${diaFin} de ${nombreMes}`;
             
             console.log('🔍 [PDF] Información de semana desde BD:', {
                 semanaISO: semanaData.semana_iso,
                 año: semanaData.anio,
                 fechaInicio: fechaInicio.toLocaleDateString('es-MX'),
+                fechaFin: fechaFin.toLocaleDateString('es-MX'),
                 semanaDelMes: semanaFinal,
                 periodo: periodoInfo
             });
@@ -370,7 +402,7 @@ const generarReciboPDF = async (req, res) => {
             // Fallback: calcular desde fecha de creación si no hay información de semana
             const fechaCreacion = new Date(nomina.createdAt);
             const año = fechaCreacion.getFullYear();
-            const mes = fechaCreacion.getMonth() + 1;
+            const mes = fechaCreacion.getMonth();
             
             function calcularSemanaDelMes(fecha) {
                 const año = fecha.getFullYear();
@@ -398,7 +430,10 @@ const generarReciboPDF = async (req, res) => {
             }
             
             semanaFinal = calcularSemanaDelMes(fechaCreacion);
-            periodoInfo = `${año} ${mes.toString().padStart(2, '0')} - Semana ${semanaFinal}`;
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                          'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const nombreMes = meses[mes];
+            periodoInfo = `Semana ${semanaFinal} de ${nombreMes}`;
             
             console.log('🔍 [PDF] Calculando semana desde fecha de creación:', {
                 fechaCreacion: fechaCreacion.toLocaleDateString('es-MX'),
@@ -592,13 +627,34 @@ const generarReciboPDF = async (req, res) => {
             hayDeducciones = true;
         }
         
-        // Mostrar descuentos (adelantos) si existen
+        // Calcular y mostrar descuento por días no trabajados
+        const diasBase = 6; // Semana laboral de 6 días
+        const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+        const diasNoTrabajados = diasBase - diasLaborados;
+        
+        if (diasNoTrabajados > 0) {
+            // Calcular descuento por día no trabajado
+            const pagoDiario = pagoSemanal / diasBase;
+            const descuentoPorDias = pagoDiario * diasNoTrabajados;
+            
+            doc.fontSize(8)
+               .font('Helvetica')
+               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+               .text('997', col2X, currentY)
+               .text(`Descuento por ${diasNoTrabajados} día(s) no trabajado(s)`, col3X, currentY)
+               .text(`$${descuentoPorDias.toFixed(2)}`, col4X, currentY);
+            currentY += 15;
+            contadorDeduccion++;
+            hayDeducciones = true;
+        }
+        
+        // Mostrar otros descuentos (adelantos, préstamos, etc.) si existen
         if (nomina.descuentos && nomina.descuentos > 0) {
             doc.fontSize(8)
                .font('Helvetica')
                .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
                .text('998', col2X, currentY)
-               .text('Descuentos (Adelantos)', col3X, currentY)
+               .text('Otros descuentos', col3X, currentY)
                .text(`$${parseFloat(nomina.descuentos).toFixed(2)}`, col4X, currentY);
             currentY += 15;
             hayDeducciones = true;
@@ -621,63 +677,68 @@ const generarReciboPDF = async (req, res) => {
         
         currentY += 15; // Reducir espacio después del título
         
-        // Usar los montos exactos del sistema (como aparecen en la vista previa)
-        const totalDeducciones = parseFloat(nomina.deducciones) || 0;
-        const totalNeto = parseFloat(nomina.monto_total) || 0; // Usar el monto total exacto del sistema
+        // Calcular descuento por días no trabajados
+        const diasBaseSemana = 6;
+        const diasLaboradosEmpleado = parseInt(nomina.dias_laborados) || 6;
+        const diasNoTrabajadosEmpleado = diasBaseSemana - diasLaboradosEmpleado;
+        const pagoDiarioEmpleado = pagoSemanal / diasBaseSemana;
+        const descuentoPorDiasNoTrabajados = diasNoTrabajadosEmpleado > 0 ? (pagoDiarioEmpleado * diasNoTrabajadosEmpleado) : 0;
         
-        // Usar columnas para el resumen también
-        const resumenCol1X = margin + 300;
-        const resumenCol2X = margin + 450;
+        // Calcular deducciones totales correctamente
+        const totalDeducciones = (
+            parseFloat(nomina.deducciones_isr || 0) +
+            parseFloat(nomina.deducciones_imss || 0) +
+            parseFloat(nomina.deducciones_infonavit || 0) +
+            parseFloat(nomina.deducciones_adicionales || 0) +
+            descuentoPorDiasNoTrabajados +
+            parseFloat(nomina.descuentos || 0)
+        );
         
-        // Mostrar los datos exactos como en el sistema
-        doc.fontSize(9)
-           .font('Helvetica')
-           .text(`Subtotal $:`, resumenCol1X, currentY)
-           .text(`${totalPercepciones.toFixed(2)}`, resumenCol2X, currentY);
-        
-        currentY += 15;
-        
-        // Solo mostrar deducciones si realmente hay alguna aplicada
-        if (totalDeducciones > 0) {
-            doc.text(`Descuentos $:`, resumenCol1X, currentY)
-               .text(`${totalDeducciones.toFixed(2)}`, resumenCol2X, currentY);
-            currentY += 15;
-        }
-        
-        currentY += 15;
-        doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text(`Total de la Nómina $:`, resumenCol1X, currentY)
-           .text(`${totalNeto.toFixed(2)}`, resumenCol2X, currentY);
+        // Calcular monto total correcto (percepciones - deducciones)
+        const totalNeto = totalPercepciones - totalDeducciones;
         
         // Verificar si es un pago parcial
         const montoPagado = parseFloat(nomina.monto_pagado) || 0;
         const esPagoParcial = montoPagado > 0 && montoPagado < totalNeto;
         
-        if (esPagoParcial) {
-            currentY += 15;
-            doc.fontSize(10)
-               .font('Helvetica-Bold')
-               .fillColor('#0066CC') // Azul para destacar
-               .text(`Monto a Pagar $:`, resumenCol1X, currentY)
-               .text(`${montoPagado.toFixed(2)}`, resumenCol2X, currentY);
-            
-            currentY += 15;
-            doc.fontSize(10)
-               .font('Helvetica-Bold')
-               .fillColor('#CC0000') // Rojo para adeudo
-               .text(`Adeudo Pendiente $:`, resumenCol1X, currentY)
-               .text(`${(totalNeto - montoPagado).toFixed(2)}`, resumenCol2X, currentY);
-               
-            // Restaurar color negro
-            doc.fillColor('#000000');
-        }
+        // Usar columnas para el resumen también
+        const resumenCol1X = margin + 300;
+        const resumenCol2X = margin + 450;
+        
+        // Mostrar resumen simplificado y claro
+        doc.fontSize(9)
+           .font('Helvetica')
+           .text(`Total Percepciones:`, resumenCol1X, currentY)
+           .text(`$${totalPercepciones.toFixed(2)}`, resumenCol2X, currentY);
         
         currentY += 15;
-        doc.fontSize(10)
+        
+        // Solo mostrar deducciones si hay alguna
+        if (totalDeducciones > 0) {
+            doc.text(`Total Deducciones:`, resumenCol1X, currentY)
+               .text(`$${totalDeducciones.toFixed(2)}`, resumenCol2X, currentY);
+            currentY += 15;
+        }
+        
+        currentY += 5;
+        
+        // Mostrar el total a pagar (destacado)
+        doc.fontSize(11)
            .font('Helvetica-Bold')
-           .text(`Neto del recibo $:`, resumenCol1X, currentY)
-           .text(`${esPagoParcial ? montoPagado.toFixed(2) : totalNeto.toFixed(2)}`, resumenCol2X, currentY);
+           .fillColor('#000000')
+           .text(`TOTAL A PAGAR:`, resumenCol1X, currentY)
+           .text(`$${(esPagoParcial ? montoPagado : totalNeto).toFixed(2)}`, resumenCol2X, currentY);
+        
+        // Si es pago parcial, agregar nota informativa
+        if (esPagoParcial) {
+            currentY += 20;
+            doc.fontSize(8)
+               .font('Helvetica-Oblique')
+               .fillColor('#666666')
+               .text(`Nota: Este es un pago parcial de $${totalNeto.toFixed(2)}. Restante: $${(totalNeto - montoPagado).toFixed(2)}`, 
+                     margin, currentY, { align: 'center', width: pageWidth - 2 * margin });
+            doc.fillColor('#000000');
+        }
 
         currentY += 20; // Reducir espacio antes del importe en letra
 
