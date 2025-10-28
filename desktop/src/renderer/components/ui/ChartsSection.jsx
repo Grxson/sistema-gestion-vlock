@@ -10,22 +10,56 @@ const ChartsSection = ({
   empleados = [], 
   nominas = [], 
   estadisticas = {},
-  loading = false 
+  loading = false,
+  filtroProyecto = null,
+  filtroFechaInicio = '',
+  filtroFechaFin = ''
 }) => {
-  // Generar datos para gráficos
-  const getGastoNominaPorMes = () => {
-    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-    return meses.map((mes, index) => ({
-      mes,
-      gasto: nominas.filter(n => {
-        if (!n.createdAt) return false;
-        const fecha = new Date(n.createdAt);
-        return fecha.getMonth() === index;
-      }).reduce((sum, n) => sum + (n.monto_total || n.monto || 0), 0)
-    }));
+  // Filtros alineados y default a Pagado
+  const getFechaBaseNomina = (n) => {
+    const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
+    const d = base ? new Date(base) : null;
+    return d && !isNaN(d) ? d : null;
   };
+  const normalizarEstado = (e) => (e || '').toLowerCase();
 
-  const getDistribucionPorOficio = () => {
+  const filteredNominas = React.useMemo(() => {
+    const start = filtroFechaInicio ? new Date(filtroFechaInicio) : null;
+    const end = filtroFechaFin ? new Date(filtroFechaFin) : null;
+    const hasProyecto = !!filtroProyecto;
+    const proyectoId = hasProyecto ? (filtroProyecto.id || filtroProyecto) : null;
+    return (nominas || []).filter(n => {
+      // Estado: solo Pagado por defecto
+      const est = normalizarEstado(n.estado);
+      if (est !== 'pagado' && est !== 'pagada') return false;
+      // Fecha dentro del rango si hay
+      const d = getFechaBaseNomina(n);
+      if (!d) return false;
+      if (start && d < new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0)) return false;
+      if (end && d > new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999)) return false;
+      // Proyecto si aplica
+      if (hasProyecto) {
+        const nid = n.proyecto?.id || n.id_proyecto || n.proyecto_id;
+        if (!nid || String(nid) !== String(proyectoId)) return false;
+      }
+      return true;
+    });
+  }, [nominas, filtroFechaInicio, filtroFechaFin, filtroProyecto]);
+
+  // Generar datos para gráficos usando filteredNominas
+  const getGastoNominaPorMes = React.useMemo(() => {
+    const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+    const porMes = Array.from({ length: 12 }, (_, index) => ({ mes: meses[index], gasto: 0 }));
+    filteredNominas.forEach(n => {
+      const d = getFechaBaseNomina(n);
+      if (!d) return;
+      const monto = parseFloat(n.monto_total || n.monto || 0) || 0;
+      porMes[d.getMonth()].gasto += monto;
+    });
+    return porMes;
+  }, [filteredNominas]);
+
+  const getDistribucionPorOficio = React.useMemo(() => {
     const oficios = {};
     empleados.forEach(emp => {
       const oficio = emp.oficio?.nombre || 'Sin oficio';
@@ -36,23 +70,25 @@ const ChartsSection = ({
       count,
       porcentaje: (count / empleados.length) * 100
     }));
-  };
+  }, [empleados]);
 
-  const getEstadosNominas = () => {
+  const getEstadosNominas = React.useMemo(() => {
     const estados = {};
-    nominas.forEach(n => {
+    filteredNominas.forEach(n => {
       const estado = n.estado || 'Sin estado';
       estados[estado] = (estados[estado] || 0) + 1;
     });
-    return Object.entries(estados).map(([estado, count]) => ({
-      estado,
-      count
-    }));
-  };
+    return Object.entries(estados).map(([estado, count]) => ({ estado, count }));
+  }, [filteredNominas]);
 
-  const gastoPorMes = getGastoNominaPorMes();
-  const distribucionOficios = getDistribucionPorOficio();
-  const estadosNominas = getEstadosNominas();
+  const gastoPorMes = getGastoNominaPorMes;
+  const distribucionOficios = getDistribucionPorOficio;
+  const estadosNominas = getEstadosNominas;
+
+  // Total filtrado (solo Pagado + filtros aplicados)
+  const totalFiltrado = React.useMemo(() => {
+    return filteredNominas.reduce((sum, n) => sum + (parseFloat(n.monto_total || n.monto || 0) || 0), 0);
+  }, [filteredNominas]);
 
   if (loading) {
     return (
@@ -257,11 +293,11 @@ const ChartsSection = ({
             </div>
             
             <div className="text-center p-4 bg-white dark:bg-primary-900/30 rounded-lg">
-              <div className="text-3xl font-bold text-primary-600 dark:text-primary-400">
-                ${estadisticas?.totalSalariosMensuales?.toLocaleString() || '0'}
+              <div className="text-3xl font-bold text-primary-600 dark:text-primary-400" title="Total de nóminas Pagadas según filtros">
+                ${totalFiltrado.toLocaleString()}
               </div>
               <div className="text-sm text-primary-700 dark:text-primary-300">
-                Gasto Mensual Total
+                Total Filtrado (Pagado)
               </div>
             </div>
             

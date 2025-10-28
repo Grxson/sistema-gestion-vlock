@@ -1105,6 +1105,9 @@ export default function Nomina() {
                 nominas={nominas}
                 estadisticas={estadisticas}
                 loading={loading}
+                filtroProyecto={filtroProyecto}
+                filtroFechaInicio={filtroFechaInicio}
+                filtroFechaFin={filtroFechaFin}
               />
             )}
           </>

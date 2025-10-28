@@ -4,6 +4,7 @@ import { NominaService as nominasServices } from '../../services/nominas/nominaS
 import apiService from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import EditNominaModal from './EditNominaModal';
+import ConfirmModal from '../ui/ConfirmModal';
 
 // Caché simple en memoria por empleado
 const HIST_CACHE = new Map(); // key: empleadoId, value: { data, timestamp }
@@ -18,6 +19,7 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
   const [proyectosMap, setProyectosMap] = useState({});
   const [editingOpen, setEditingOpen] = useState(false);
   const [editingNomina, setEditingNomina] = useState(null);
+  const [deleteModal, setDeleteModal] = useState({ isOpen: false, nomina: null });
 
   const empleadoId = empleado?.id_empleado || empleado?.id;
 
@@ -252,14 +254,24 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
     }
   };
 
-  const eliminarNomina = async (n) => {
-    if (!confirm('Esta acción eliminará la nómina. ¿Deseas continuar?')) return;
+  const eliminarNomina = (n) => {
+    setDeleteModal({ isOpen: true, nomina: n });
+  };
+
+  const handleConfirmDelete = async () => {
+    const n = deleteModal.nomina;
+    if (!n) return;
     try {
+      // limpiar caché para que no muestre registros obsoletos
+      if (empleadoId) HIST_CACHE.delete(empleadoId);
+      // El backend debe realizar eliminación completa en cascada (nómina + historial + pagos relacionados)
       await nominasServices.delete(n.id_nomina || n.id);
+      setDeleteModal({ isOpen: false, nomina: null });
       await loadData();
     } catch (err) {
       console.error('Error eliminando nómina:', err);
       alert(err.message || 'No se pudo eliminar la nómina');
+      setDeleteModal({ isOpen: false, nomina: null });
     }
   };
 
@@ -374,13 +386,13 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
                     <td className="px-3 py-2 text-sm text-gray-800 dark:text-gray-100">{new Date(n?.createdAt || n?.fecha_pago || n?.fecha).toLocaleDateString()}</td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => abrirEditor(n)} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400" title="Editar">
+                        <button type="button" onClick={() => abrirEditor(n)} className="p-2 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 text-blue-600 dark:text-blue-400" title="Editar">
                           <PencilSquareIcon className="h-4 w-4" />
                         </button>
-                        <button onClick={() => eliminarNomina(n)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" title="Eliminar">
+                        <button type="button" onClick={() => eliminarNomina(n)} className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400" title="Eliminar">
                           <TrashIcon className="h-4 w-4" />
                         </button>
-                        <button onClick={() => descargarPDF(n)} className="p-2 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 text-primary-600 dark:text-primary-400" title="PDF">
+                        <button type="button" onClick={() => descargarPDF(n)} className="p-2 rounded-lg hover:bg-primary-50 dark:hover:bg-primary-900/20 text-primary-600 dark:text-primary-400" title="PDF">
                           <DocumentTextIcon className="h-4 w-4" />
                         </button>
                       </div>
@@ -403,6 +415,18 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
           setEditingNomina(null);
           await loadData();
         }}
+      />
+
+      {/* Confirmación de eliminación */}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={() => setDeleteModal({ isOpen: false, nomina: null })}
+        onConfirm={handleConfirmDelete}
+        title="Eliminar Nómina"
+        message={`¿Estás seguro de eliminar esta nómina?\n\nEsta acción eliminará:\n• La nómina\n• El historial de cambios\n• Los pagos relacionados\n\nEsta acción no se puede deshacer.`}
+        confirmText="Eliminar"
+        cancelText="Cancelar"
+        type="danger"
       />
     </div>
   );
