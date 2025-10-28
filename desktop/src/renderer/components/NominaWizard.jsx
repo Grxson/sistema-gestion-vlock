@@ -393,8 +393,12 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         throw new Error('No se recibió un PDF válido');
       }
       
-      // Crear nombre de archivo
-      const nombreArchivo = `nomina_${formData.selectedEmpleado.nombre.replace(/\s+/g, '_')}_${formData.selectedEmpleado.apellido.replace(/\s+/g, '_')}_${formData.selectedPeriodo}.pdf`;
+      // Crear nombre de archivo (formato unificado)
+      const nombreEmpleado = `${formData.selectedEmpleado.nombre || ''}_${formData.selectedEmpleado.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
+      const semanaMes = formData.semanaNum || 'X';
+      const now = new Date();
+      const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+      const nombreArchivo = `nomina_semana-${semanaMes}_${nombreEmpleado}_${ts}.pdf`;
       
       // Crear URL del blob y descargar
       const url = window.URL.createObjectURL(pdfBlob);
@@ -650,8 +654,12 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
               throw new Error('No se recibió un PDF válido');
             }
             
-            // Crear nombre de archivo
-            const nombreArchivo = `nomina_${formData.selectedEmpleado.nombre.replace(/\s+/g, '_')}_${formData.selectedEmpleado.apellido.replace(/\s+/g, '_')}_${formData.selectedPeriodo}.pdf`;
+            // Crear nombre de archivo (formato unificado)
+            const nombreEmpleado = `${formData.selectedEmpleado.nombre || ''}_${formData.selectedEmpleado.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
+            const semanaMes = formData.semanaNum || 'X';
+            const now = new Date();
+            const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+            const nombreArchivo = `nomina_semana-${semanaMes}_${nombreEmpleado}_${ts}.pdf`;
             
             // Crear URL del blob y descargar
             const url = window.URL.createObjectURL(pdfBlob);

@@ -153,7 +153,7 @@ const generarReciboPDF = async (req, res) => {
         const uploadsDir = path.join(__dirname, '..', 'uploads', 'recibos');
         await fs.ensureDir(uploadsDir);
 
-        // Generar nombre del archivo con formato: nomina_semana4_NombreEmpleado.pdf
+        // Generar nombre del archivo con formato: nomina_semana-<n>_<Nombre_Empleado>_<YYYYMMDD_HHMMSS>.pdf
         const empleadoData = nomina.empleado;
         const nombreEmpleado = `${empleadoData.nombre}_${empleadoData.apellido}`.replace(/\s+/g, '_');
         
@@ -176,7 +176,9 @@ const generarReciboPDF = async (req, res) => {
             }
         }
         
-        const fileName = `nomina_semana${numeroSemana}_${nombreEmpleado}.pdf`;
+        const now = new Date();
+        const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+        const fileName = `nomina_semana-${numeroSemana}_${nombreEmpleado}_${ts}.pdf`;
         const filePath = path.join(uploadsDir, fileName);
 
         // Crear el documento PDF con márgenes más pequeños
@@ -336,6 +338,7 @@ const generarReciboPDF = async (req, res) => {
         // Obtener información de la semana desde la base de datos
         let semanaFinal = 'N/A';
         let periodoInfo = '';
+        let semanaLinea = '';
         
         if (nomina.semana) {
             // Usar la información de la semana desde la base de datos
@@ -381,14 +384,27 @@ const generarReciboPDF = async (req, res) => {
             
             semanaFinal = calcularSemanaDelMes(fechaInicio);
             
-            // Formatear fechas para el período
-            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                          'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-            const diaInicio = fechaInicio.getDate();
-            const diaFin = fechaFin.getDate();
-            const nombreMes = meses[mes];
+            // Calcular rango lunes–sábado para mostrar
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const toMonday = (d) => {
+                const day = d.getDay(); // 0=domingo,1=lunes,...
+                const delta = day === 0 ? -6 : (1 - day); // ir hacia atrás/al mismo día para llegar a lunes
+                const m = new Date(d);
+                m.setDate(d.getDate() + delta);
+                m.setHours(12,0,0,0);
+                return m;
+            };
+            const monday = toMonday(fechaInicio);
+            const saturday = new Date(monday);
+            saturday.setDate(monday.getDate() + 5);
+            const d1 = monday.getDate();
+            const m1 = meses[monday.getMonth()];
+            const d2 = saturday.getDate();
+            const m2 = meses[saturday.getMonth()];
+            const rango = m1 === m2 ? `del ${d1} al ${d2} de ${m1}` : `del ${d1} de ${m1} al ${d2} de ${m2}`;
             
-            periodoInfo = `Semana ${semanaFinal} - del ${diaInicio} al ${diaFin} de ${nombreMes}`;
+            periodoInfo = `Semana ${semanaFinal} - ${rango}`;
+            semanaLinea = `Semana ${semanaFinal} (ISO ${semanaData.semana_iso})`;
             
             console.log('🔍 [PDF] Información de semana desde BD:', {
                 semanaISO: semanaData.semana_iso,
@@ -434,6 +450,7 @@ const generarReciboPDF = async (req, res) => {
                           'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
             const nombreMes = meses[mes];
             periodoInfo = `Semana ${semanaFinal} de ${nombreMes}`;
+            semanaLinea = `Semana ${semanaFinal}`;
             
             console.log('🔍 [PDF] Calculando semana desde fecha de creación:', {
                 fechaCreacion: fechaCreacion.toLocaleDateString('es-MX'),
@@ -447,6 +464,10 @@ const generarReciboPDF = async (req, res) => {
            .text(`Período: ${periodoInfo}`, empCol2X, col2Y);
         
         col2Y += 10;
+        if (semanaLinea) {
+            doc.text(`Semana: ${semanaLinea}`, empCol2X, col2Y);
+            col2Y += 10;
+        }
         doc.text(`Días de Pago: 6`, empCol2X, col2Y); // Siempre 6 días para pago semanal
         
         col2Y += 10;

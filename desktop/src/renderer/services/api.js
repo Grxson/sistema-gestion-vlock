@@ -69,10 +69,16 @@ class ApiService {
    * Limpia todos los datos de autenticación del almacenamiento local
    */
   clearAuthData() {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    localStorage.removeItem('authState');
-    console.log('[API] Datos de autenticación limpiados');
+    // Limpiar todos los items de autenticación
+    const authKeys = ['token', 'user', 'authState', 'currentPath'];
+    authKeys.forEach(key => {
+      try {
+        localStorage.removeItem(key);
+      } catch (e) {
+        console.warn(`[API] No se pudo limpiar ${key}:`, e.message);
+      }
+    });
+    console.log('[API] Datos de autenticación limpiados completamente');
   }
 
   // Configurar headers con autenticación
@@ -137,18 +143,41 @@ class ApiService {
       
       console.log(`[API:${requestId}] ✅ Respuesta recibida (${response.status}) en ${duration}ms`);
       
-      // Si la respuesta es 401, el token ha expirado
+      // Si la respuesta es 401, el token ha expirado o es inválido
       if (response.status === 401) {
         console.warn(`[API:${requestId}] ⚠️ Autenticación rechazada por el servidor (401)`);
         
-        // Limpiar datos de autenticación
-        this.clearAuthData();
-        
-        // Lanzar error específico para sesión expirada
-        const error = new Error('Sesión expirada');
-        error.code = 'SESSION_EXPIRED';
-        error.status = 401;
-        throw error;
+        try {
+          const errorData = await response.json();
+          console.warn(`[API:${requestId}] Código de error: ${errorData.code}`);
+          
+          // Solo limpiar datos si es TOKEN_EXPIRED (sesión expirada)
+          // No limpiar en otros casos como credenciales inválidas
+          if (errorData.code === 'TOKEN_EXPIRED') {
+            console.warn(`[API:${requestId}] Token expirado, limpiando datos de autenticación`);
+            this.clearAuthData();
+          }
+          
+          // Lanzar error específico
+          const error = new Error(errorData.message || 'Autenticación rechazada');
+          error.code = errorData.code || 'AUTH_FAILED';
+          error.status = 401;
+          throw error;
+        } catch (parseError) {
+          // Si no se puede parsear la respuesta
+          console.warn(`[API:${requestId}] No se pudo parsear respuesta 401:`, parseError.message);
+          
+          // Solo limpiar si hay un token válido (significa que fue sesión expirada)
+          if (this.getToken() && !this.isTokenExpired()) {
+            console.warn(`[API:${requestId}] Token válido pero rechazado, limpiando datos`);
+            this.clearAuthData();
+          }
+          
+          const error = new Error('Autenticación rechazada');
+          error.code = 'AUTH_FAILED';
+          error.status = 401;
+          throw error;
+        }
       }
       
       // Si la respuesta es 403, no tiene permiso
@@ -289,18 +318,40 @@ class ApiService {
   }
 
   async logout() {
+    console.log('[API] Iniciando proceso de logout...');
     try {
-      // Solo intentar hacer logout en el servidor si el token no está expirado
-      if (!this.isTokenExpired()) {
-        await this.post('/auth/logout');
+      // Intentar hacer logout en el servidor si el token existe
+      const token = this.getToken();
+      if (token) {
+        try {
+          // Usar fetch directamente para evitar que el middleware interfiera
+          const response = await fetch(`${this.baseURL}/auth/logout`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (response.ok) {
+            console.log('[API] Logout en servidor completado exitosamente');
+          } else {
+            console.warn('[API] Logout en servidor retornó status:', response.status);
+          }
+        } catch (serverError) {
+          // No fallar si hay error de conexión, el cliente aún puede limpiar su sesión
+          console.warn('[API] Error al hacer logout en servidor (continuando con limpieza local):', serverError.message);
+        }
       } else {
-        console.log('[API] Token expirado, saltando logout en servidor');
+        console.log('[API] No hay token, saltando logout en servidor');
       }
     } catch (error) {
-      console.error('Error al hacer logout:', error);
+      console.error('[API] Error inesperado en logout:', error);
     } finally {
-      // Siempre limpiar los datos locales
+      // SIEMPRE limpiar los datos locales, sin importar qué pasó
+      console.log('[API] Limpiando datos locales de autenticación...');
       this.clearAuthData();
+      console.log('[API] Logout completado');
     }
   }
 

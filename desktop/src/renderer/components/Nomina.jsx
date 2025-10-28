@@ -16,6 +16,7 @@ import NominaReportsTab from './nomina/NominaReportsTab';
 import ConfirmModal from './ui/ConfirmModal';
 import useDeleteNomina from '../hooks/useDeleteNomina';
 import { generarInfoSemana } from '../utils/weekCalculator';
+import NominaEmpleadoHistorialDrawer from './nomina/NominaEmpleadoHistorialDrawer';
 import {
   PlusIcon,
   CalendarIcon,
@@ -65,15 +66,142 @@ export default function Nomina() {
     // Cargar la pestaña activa desde localStorage, por defecto 'empleados'
     return localStorage.getItem('nomina-active-tab') || 'empleados';
   });
+  // Drawer historial de nómina por empleado
+  const [showHistorialDrawer, setShowHistorialDrawer] = useState(false);
+  const [empleadoHistorial, setEmpleadoHistorial] = useState(null);
+
+  // Filtros para empleados (deben declararse antes de los efectos que los usan)
+  const [filtroProyecto, setFiltroProyecto] = useState('');
+  const [filtroBusqueda, setFiltroBusqueda] = useState('');
+  const [filtroBusquedaInput, setFiltroBusquedaInput] = useState('');
+  const [filtroEstadoSemana, setFiltroEstadoSemana] = useState('all'); // all|none|draft|completed
+  // Paginación client-side
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  // Selección múltiple
+  const [selectedEmpleadoIds, setSelectedEmpleadoIds] = useState(new Set());
+  // Virtualización
+  const [virtScrollTop, setVirtScrollTop] = useState(0);
+  const [virtViewportHeight, setVirtViewportHeight] = useState(480);
+  const virtRowHeight = 64; // px aproximado por fila
+  const [virtBuffer, setVirtBuffer] = useState(5); // filas extra arriba/abajo
+  const virtContainerRef = React.useRef(null);
+
+  // Total mensual solo con nóminas Pagadas (mes/año actuales)
+  const getFechaBaseNomina = (n) => {
+    const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
+    const d = base ? new Date(base) : null;
+    return d && !isNaN(d) ? d : null;
+  };
+  const totalMensualPagado = React.useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    return (nominas || []).reduce((acc, n) => {
+      const estado = (n?.estado || '').toLowerCase();
+      if (estado !== 'pagado' && estado !== 'pagada') return acc;
+      const d = getFechaBaseNomina(n);
+      if (!d || d.getFullYear() !== y || d.getMonth() !== m) return acc;
+      const monto = parseFloat(n.monto_total || n.monto || 0);
+      return acc + (isNaN(monto) ? 0 : monto);
+    }, 0);
+  }, [nominas]);
 
   // Guardar la pestaña activa en localStorage cuando cambie
   useEffect(() => {
     localStorage.setItem('nomina-active-tab', activeTab);
   }, [activeTab]);
+
+  // Cargar filtros persistentes al montar
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('nomina-empleados-filtros') || '{}');
+      if (saved) {
+        if (saved.proyecto !== undefined) setFiltroProyecto(saved.proyecto);
+        if (saved.busqueda !== undefined) {
+          setFiltroBusqueda(saved.busqueda);
+          setFiltroBusquedaInput(saved.busqueda);
+        }
+        if (saved.estado !== undefined) setFiltroEstadoSemana(saved.estado);
+        if (saved.pageSize) setPageSize(saved.pageSize);
+      }
+    } catch {}
+  }, []);
+
+  // Persistir filtros cuando cambien
+  useEffect(() => {
+    const data = {
+      proyecto: filtroProyecto,
+      busqueda: filtroBusqueda,
+      estado: filtroEstadoSemana,
+      pageSize
+    };
+    localStorage.setItem('nomina-empleados-filtros', JSON.stringify(data));
+  }, [filtroProyecto, filtroBusqueda, filtroEstadoSemana, pageSize]);
+
+  // Normaliza valores de estado a los aceptados por backend
+  const normalizarEstadoValor = (estado) => {
+    const e = (estado || '').toLowerCase();
+    if (e === 'borrador') return 'Borrador';
+    if (e === 'pendiente') return 'Pendiente';
+    if (e === 'en_proceso' || e === 'en proceso') return 'En_Proceso';
+    if (e === 'aprobada' || e === 'aprobado') return 'Aprobada';
+    if (e === 'pagado' || e === 'pagada') return 'Pagado';
+    if (e === 'cancelada' || e === 'cancelado') return 'Cancelada';
+    return 'Pendiente';
+  };
+
+  // Cambio de estado desde la tabla del historial (update optimista)
+  const cambiarEstadoHistorial = async (nom, nuevoEstado) => {
+    const id = nom.id_nomina || nom.id;
+    const prev = nom.estado;
+    // Optimista en lista completa de nominas
+    setNominas((arr) => arr.map(item => ((item.id_nomina||item.id) === id ? { ...item, estado: nuevoEstado } : item)));
+    try {
+      await apiService.cambiarEstadoNomina(id, nuevoEstado);
+    } catch (err) {
+      // revertir si falla
+      setNominas((arr) => arr.map(item => ((item.id_nomina||item.id) === id ? { ...item, estado: prev } : item)));
+      showError('Error', err.message || 'No se pudo cambiar el estado');
+    }
+  };
+
+  // Debounce para búsqueda
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFiltroBusqueda(filtroBusquedaInput);
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [filtroBusquedaInput]);
+
+  // Medir viewport de virtualización
+  useEffect(() => {
+    const el = virtContainerRef.current;
+    if (!el) return;
+    const measure = () => setVirtViewportHeight(el.clientHeight || 480);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const abrirHistorialEmpleado = (empleado) => {
+    setEmpleadoHistorial(empleado);
+    setShowHistorialDrawer(true);
+  };
+
+  const cerrarHistorialEmpleado = () => {
+    setShowHistorialDrawer(false);
+    setEmpleadoHistorial(null);
+  };
+
+  const editarNominaDesdeHistorial = (nomina) => {
+    setNominaToEdit(nomina);
+    setShowEditModal(true);
+  };
   
-  // Filtros para empleados
-  const [filtroProyecto, setFiltroProyecto] = useState('');
-  const [filtroBusqueda, setFiltroBusqueda] = useState('');
+  // (Eliminado: duplicado de estados, se declararon antes de los efectos)
   
   // Filtros para historial de nóminas
   const [filtroFechaInicio, setFiltroFechaInicio] = useState('');
@@ -110,8 +238,258 @@ export default function Nomina() {
         emp.rfc?.toLowerCase().includes(busqueda)
       );
     }
+
+    // Filtrar por estado semana actual (pending|completed)
+    if (filtroEstadoSemana && filtroEstadoSemana !== 'all') {
+      empleadosActivos = empleadosActivos.filter(emp => {
+        const st = getNominaStatus(emp).status; // pending|completed
+        // Normalizar filtros antiguos a nuevo esquema
+        const target = (filtroEstadoSemana === 'draft' || filtroEstadoSemana === 'none')
+          ? 'pending'
+          : filtroEstadoSemana;
+        return st === target;
+      });
+    }
     
     return empleadosActivos;
+  };
+
+  // Helper: obtener última nómina de un empleado
+  const getLatestNominaForEmpleado = (empleado) => {
+    const nominasEmpleado = nominas.filter(nomina => 
+      nomina.empleado?.id_empleado === empleado.id_empleado ||
+      nomina.id_empleado === empleado.id_empleado
+    );
+    if (nominasEmpleado.length === 0) return null;
+    return nominasEmpleado.sort((a, b) => 
+      new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
+    )[0];
+  };
+
+  const toggleSelectEmpleado = (id) => {
+    setSelectedEmpleadoIds(prev => {
+      const ns = new Set(prev);
+      if (ns.has(id)) ns.delete(id); else ns.add(id);
+      return ns;
+    });
+  };
+
+  const toggleSelectAllPaged = () => {
+    const paged = getPagedEmpleados().items;
+    const allSelected = paged.every(e => selectedEmpleadoIds.has(e.id_empleado));
+    if (allSelected) {
+      // deseleccionar todos los de la página
+      setSelectedEmpleadoIds(prev => {
+        const ns = new Set(prev);
+        paged.forEach(e => ns.delete(e.id_empleado));
+        return ns;
+      });
+    } else {
+      // seleccionar todos los de la página
+      setSelectedEmpleadoIds(prev => {
+        const ns = new Set(prev);
+        paged.forEach(e => ns.add(e.id_empleado));
+        return ns;
+      });
+    }
+  };
+
+  const bulkGeneratePDFs = async () => {
+    const empleadosSel = getPagedEmpleados().items.filter(e => selectedEmpleadoIds.has(e.id_empleado));
+    if (empleadosSel.length === 0) return;
+    // Si solo hay 1 empleado, descargar PDF directo sin comprimir
+    if (empleadosSel.length === 1) {
+      const emp = empleadosSel[0];
+      try {
+        showInfo('Generando PDF', `Creando recibo para ${emp.nombre || 'empleado'}...`);
+        const latest = getLatestNominaForEmpleado(emp);
+        if (!latest) return;
+        const pdfBlob = await nominasServices.nominas.generarReciboPDF(latest.id_nomina || latest.id);
+        const url = window.URL.createObjectURL(pdfBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        const nombreEmpleado = `${emp.nombre || ''}_${emp.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
+        const semanaMes = (() => {
+          const semana = latest?.semana; if (!semana?.anio || !semana?.semana_iso) return 'X';
+          const baseDateStr = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt;
+          let per = latest?.periodo; if (!per && baseDateStr) { const d = new Date(baseDateStr); per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+          if (!per) return 'X';
+          const getWeeks = (periodo) => {
+            const [yy, mm] = periodo.split('-');
+            const year = parseInt(yy, 10); const month = parseInt(mm, 10) - 1;
+            const first = new Date(year, month, 1, 12, 0, 0, 0); const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+            const seen = new Set(); const list = [];
+            for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+              const temp = new Date(d); const dow = temp.getDay(); const delta = dow === 0 ? -3 : (4 - dow);
+              const th = new Date(temp); th.setDate(temp.getDate() + delta);
+              const isoYear = th.getFullYear(); const firstThu = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+              const fdow = firstThu.getDay(); const dfirst = fdow === 0 ? -3 : (4 - fdow);
+              const fth = new Date(firstThu); fth.setDate(firstThu.getDate() + dfirst);
+              const diff = Math.round((th - fth) / (24*3600*1000)); const isoWeek = 1 + Math.floor(diff/7);
+              const key = `${isoYear}-${isoWeek}`; if (!seen.has(key)) { seen.add(key); list.push({ anio: isoYear, semana_iso: isoWeek }); }
+            }
+            return list;
+          };
+          const weeks = getWeeks(per);
+          const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
+          return idx >= 0 ? (idx + 1) : 'X';
+        })();
+        const now = new Date();
+        const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+        a.download = `nomina_semana-${semanaMes}_${nombreEmpleado}_${ts}.pdf`;
+        document.body.appendChild(a); a.click();
+        window.URL.revokeObjectURL(url); document.body.removeChild(a);
+        showSuccess('Listo', 'PDF generado');
+      } catch (e) {
+        console.error('Error generando PDF:', e);
+      }
+      return;
+    }
+
+    // Si hay más de 1 empleado, comprimir en ZIP
+    showInfo('Generando ZIP', `Preparando recibos para ${empleadosSel.length} empleados...`);
+    let JSZip;
+    try {
+      JSZip = (await import('jszip')).default;
+    } catch (e) {
+      console.warn('JSZip no disponible, usando descarga individual', e);
+      // Fallback a descargas sueltas
+      for (const emp of empleadosSel) {
+        try {
+          const latest = getLatestNominaForEmpleado(emp);
+          if (!latest) continue;
+          const pdfBlob = await nominasServices.nominas.generarReciboPDF(latest.id_nomina || latest.id);
+          const url = window.URL.createObjectURL(pdfBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          const nombreEmpleado = `${emp.nombre || ''}_${emp.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
+          const periodo = latest.periodo || (() => { const b = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt; if (!b) return 'YYYY-MM'; const d = new Date(b); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+          const semanaMes = (() => {
+            const semana = latest?.semana; if (!semana?.anio || !semana?.semana_iso) return 'X';
+            const baseDateStr = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt;
+            let per = latest?.periodo; if (!per && baseDateStr) { const d = new Date(baseDateStr); per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+            if (!per) return 'X';
+            const getWeeks = (periodo) => {
+              const [yy, mm] = periodo.split('-');
+              const year = parseInt(yy, 10); const month = parseInt(mm, 10) - 1;
+              const first = new Date(year, month, 1, 12, 0, 0, 0); const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+              const seen = new Set(); const list = [];
+              for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+                const temp = new Date(d); const dow = temp.getDay(); const delta = dow === 0 ? -3 : (4 - dow);
+                const th = new Date(temp); th.setDate(temp.getDate() + delta);
+                const isoYear = th.getFullYear(); const firstThu = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+                const fdow = firstThu.getDay(); const dfirst = fdow === 0 ? -3 : (4 - fdow);
+                const fth = new Date(firstThu); fth.setDate(firstThu.getDate() + dfirst);
+                const diff = Math.round((th - fth) / (24*3600*1000)); const isoWeek = 1 + Math.floor(diff/7);
+                const key = `${isoYear}-${isoWeek}`; if (!seen.has(key)) { seen.add(key); list.push({ anio: isoYear, semana_iso: isoWeek }); }
+              }
+              return list;
+            };
+            const weeks = getWeeks(per);
+            const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
+            return idx >= 0 ? (idx + 1) : 'X';
+          })();
+          const now = new Date();
+          const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+          a.download = `nomina_semana-${semanaMes}_${nombreEmpleado}_${ts}.pdf`;
+          document.body.appendChild(a); a.click();
+          window.URL.revokeObjectURL(url); document.body.removeChild(a);
+        } catch (e2) { console.error('Error generando PDF masivo:', e2); }
+      }
+      showSuccess('Listo', 'PDFs generados');
+      return;
+    }
+
+    // Con JSZip, generar un ZIP
+    const zip = new JSZip();
+    const folder = zip.folder('recibos') || zip;
+    let added = 0;
+    for (const emp of empleadosSel) {
+      try {
+        const latest = getLatestNominaForEmpleado(emp);
+        if (!latest) continue;
+        const pdfBlob = await nominasServices.nominas.generarReciboPDF(latest.id_nomina || latest.id);
+        const nombreEmpleado = `${emp.nombre || ''}_${emp.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
+        const periodo = latest.periodo || (() => { const b = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt; if (!b) return 'YYYY-MM'; const d = new Date(b); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
+        const semanaMes = (() => {
+          const semana = latest?.semana; if (!semana?.anio || !semana?.semana_iso) return 'X';
+          const baseDateStr = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt;
+          let per = latest?.periodo; if (!per && baseDateStr) { const d = new Date(baseDateStr); per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+          if (!per) return 'X';
+          const getWeeks = (periodo) => {
+            const [yy, mm] = periodo.split('-');
+            const year = parseInt(yy, 10); const month = parseInt(mm, 10) - 1;
+            const first = new Date(year, month, 1, 12, 0, 0, 0); const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+            const seen = new Set(); const list = [];
+            for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+              const temp = new Date(d); const dow = temp.getDay(); const delta = dow === 0 ? -3 : (4 - dow);
+              const th = new Date(temp); th.setDate(temp.getDate() + delta);
+              const isoYear = th.getFullYear(); const firstThu = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+              const fdow = firstThu.getDay(); const dfirst = fdow === 0 ? -3 : (4 - fdow);
+              const fth = new Date(firstThu); fth.setDate(firstThu.getDate() + dfirst);
+              const diff = Math.round((th - fth) / (24*3600*1000)); const isoWeek = 1 + Math.floor(diff/7);
+              const key = `${isoYear}-${isoWeek}`; if (!seen.has(key)) { seen.add(key); list.push({ anio: isoYear, semana_iso: isoWeek }); }
+            }
+            return list;
+          };
+          const weeks = getWeeks(per);
+          const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
+          return idx >= 0 ? (idx + 1) : 'X';
+        })();
+        const now = new Date();
+        const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+        const fileName = `nomina_semana-${semanaMes}_${nombreEmpleado}_${ts}.pdf`;
+        folder.file(fileName, pdfBlob);
+        added++;
+      } catch (e) { console.error('Error agregando PDF al ZIP:', e); }
+    }
+
+    if (added === 0) { showInfo('Sin archivos', 'No se generaron PDFs para comprimir'); return; }
+    const blobZip = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 6 } });
+    const a = document.createElement('a');
+    const url = window.URL.createObjectURL(blobZip);
+    a.href = url;
+    const now = new Date();
+    const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+    a.download = `recibos_nomina_${stamp}.zip`;
+    document.body.appendChild(a); a.click();
+    window.URL.revokeObjectURL(url); document.body.removeChild(a);
+    showSuccess('ZIP generado', `Se descargó un ZIP con ${added} recibos`);
+  };
+
+  const bulkMarkAsPaid = async () => {
+    const empleadosSel = getPagedEmpleados().items.filter(e => selectedEmpleadoIds.has(e.id_empleado));
+    if (empleadosSel.length === 0) return;
+    showInfo('Actualizando estado', `Marcando pagadas ${empleadosSel.length} nóminas...`);
+    let ok = 0;
+    for (const emp of empleadosSel) {
+      try {
+        const latest = getLatestNominaForEmpleado(emp);
+        if (!latest) continue;
+        const estado = (latest.estado || '').toLowerCase();
+        if (estado === 'borrador' || estado === 'pendiente') {
+          await nominasServices.nominas.marcarComoPagada(latest.id_nomina || latest.id);
+          ok++;
+        }
+      } catch (e) { console.error('Error marcando pagada:', e); }
+    }
+    await fetchData();
+    showSuccess('Actualizado', `${ok} nóminas marcadas como pagadas`);
+  };
+
+  // Empleados paginados
+  const getPagedEmpleados = () => {
+    const list = getEmpleadosFiltrados();
+    const totalPages = Math.max(1, Math.ceil(list.length / pageSize));
+    const currentPage = Math.min(page, totalPages);
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    return {
+      items: list.slice(start, end),
+      total: list.length,
+      totalPages,
+      currentPage
+    };
   };
 
   const getNominasFiltradas = () => {
@@ -180,7 +558,7 @@ export default function Nomina() {
     };
   };
 
-  // Función para verificar si un empleado tiene nómina generada EN LA SEMANA ACTUAL
+  // Función para estado de nómina en la SEMANA ACTUAL
   const getNominaStatus = (empleado) => {
     // Obtener información de la semana actual del sistema
     const hoy = new Date();
@@ -205,7 +583,8 @@ export default function Nomina() {
     });
     
     if (nominasEmpleado.length === 0) {
-      return { status: 'none', count: 0, latest: null };
+      // Semana nueva sin nómina aún => Pendiente
+      return { status: 'pending', count: 0, latest: null, hasCurrentWeek: false, latestStatus: null };
     }
     
     const latest = nominasEmpleado.sort((a, b) => 
@@ -213,22 +592,21 @@ export default function Nomina() {
     )[0];
     
     // Determinar el estado de la nómina
-    const estado = latest.estado?.toLowerCase();
+    const estado = (latest.estado || '').toLowerCase();
     let status;
-    
-    if (estado === 'pagada' || estado === 'pagado' || estado === 'completada' || estado === 'completado') {
+    if (estado === 'pagada' || estado === 'pagado' || estado === 'completada' || estado === 'completado' || estado === 'aprobada' || estado === 'aprobado') {
       status = 'completed';
-    } else if (estado === 'borrador' || estado === 'pendiente') {
-      status = 'draft';
     } else {
-      // Por defecto, considerar como draft si no se reconoce el estado
-      status = 'draft';
+      // Borrador o pendiente (u otro intermedio) => Pending
+      status = 'pending';
     }
   
     return {
-      status: status,
+      status,
       count: nominasEmpleado.length,
-      latest: latest
+      latest,
+      hasCurrentWeek: true,
+      latestStatus: estado
     };
   };
 
@@ -290,9 +668,39 @@ export default function Nomina() {
         throw new Error('No se recibió un PDF válido');
       }
       
-      // Crear nombre de archivo
-      const nombreEmpleado = selectedEmpleadoPreview.nombre + '_' + selectedEmpleadoPreview.apellido;
-      const nombreArchivo = `nomina_${nombreEmpleado.replace(/\s+/g, '_')}_${nominaPreviewData.periodo || 'sin_periodo'}.pdf`;
+      // Crear nombre de archivo con formato solicitado
+      const nombreEmpleado = `${selectedEmpleadoPreview.nombre || ''}_${selectedEmpleadoPreview.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
+      const semanaMes = (() => {
+        const n = nominaPreviewData;
+        const semana = n?.semana;
+        if (!semana?.anio || !semana?.semana_iso) return 'X';
+        // Derivar periodo YYYY-MM desde fecha_inicio si existe
+        const baseDateStr = semana?.fecha_inicio || n?.fecha || n?.createdAt;
+        let per = n?.periodo; if (!per && baseDateStr) { const d = new Date(baseDateStr); per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
+        if (!per) return 'X';
+        const getWeeks = (periodo) => {
+          const [yy, mm] = periodo.split('-');
+          const year = parseInt(yy, 10); const month = parseInt(mm, 10) - 1;
+          const first = new Date(year, month, 1, 12, 0, 0, 0); const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+          const seen = new Set(); const list = [];
+          for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+            const temp = new Date(d); const dow = temp.getDay(); const delta = dow === 0 ? -3 : (4 - dow);
+            const th = new Date(temp); th.setDate(temp.getDate() + delta);
+            const isoYear = th.getFullYear(); const firstThu = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+            const fdow = firstThu.getDay(); const dfirst = fdow === 0 ? -3 : (4 - fdow);
+            const fth = new Date(firstThu); fth.setDate(firstThu.getDate() + dfirst);
+            const diff = Math.round((th - fth) / (24*3600*1000)); const isoWeek = 1 + Math.floor(diff/7);
+            const key = `${isoYear}-${isoWeek}`; if (!seen.has(key)) { seen.add(key); list.push({ anio: isoYear, semana_iso: isoWeek }); }
+          }
+          return list;
+        };
+        const weeks = getWeeks(per);
+        const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
+        return idx >= 0 ? (idx + 1) : 'X';
+      })();
+      const now = new Date();
+      const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+      const nombreArchivo = `nomina_semana-${semanaMes}_${nombreEmpleado}_${ts}.pdf`;
       
       // Crear URL del blob y descargar
       const url = window.URL.createObjectURL(pdfBlob);
@@ -564,6 +972,18 @@ export default function Nomina() {
               </p>
             </div>
             <div className="flex items-center space-x-3">
+              {/* Resumen filtros visibles */}
+              <div className="hidden md:flex items-center gap-2 mr-2">
+                {filtroProyecto && (
+                  <span className="px-2 py-1 text-xs rounded-full bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300 border border-primary-100 dark:border-primary-800">Proyecto filtrado</span>
+                )}
+                {filtroEstadoSemana !== 'all' && (
+                  <span className="px-2 py-1 text-xs rounded-full bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-100 dark:border-blue-800">Estado: {filtroEstadoSemana}</span>
+                )}
+                {filtroBusqueda && (
+                  <span className="px-2 py-1 text-xs rounded-full bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700">Búsqueda activa</span>
+                )}
+              </div>
               <button
                 onClick={() => {
                   setSelectedEmpleadoAdeudos(null);
@@ -670,8 +1090,8 @@ export default function Nomina() {
                   </div>
                   <div className="ml-3">
                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Mensual</p>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {formatCurrency(estadisticas?.totalSalariosMensuales || 0)}
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white" title="Suma de nóminas Pagadas del mes actual">
+                      {formatCurrency(totalMensualPagado)}
                     </p>
                   </div>
                 </div>
@@ -702,15 +1122,15 @@ export default function Nomina() {
               
               {/* Filtros Mejorados */}
               <div className="mt-4 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Buscar Empleado
                     </label>
                     <input
                       type="text"
-                      value={filtroBusqueda}
-                      onChange={(e) => setFiltroBusqueda(e.target.value)}
+                      value={filtroBusquedaInput}
+                      onChange={(e) => { setFiltroBusquedaInput(e.target.value); setPage(1); }}
                       placeholder="Nombre, apellido, NSS o RFC..."
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                     />
@@ -721,7 +1141,7 @@ export default function Nomina() {
                     </label>
                     <CustomSelect
                       value={filtroProyecto}
-                      onChange={setFiltroProyecto}
+                      onChange={(v) => { setFiltroProyecto(v); setPage(1); }}
                       placeholder="Seleccionar proyecto..."
                       options={[
                         { value: '', label: 'Todos los proyectos' },
@@ -734,13 +1154,28 @@ export default function Nomina() {
                       searchable={true}
                     />
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Estado (semana actual)
+                    </label>
+                    <select
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white text-sm"
+                      value={filtroEstadoSemana}
+                      onChange={(e) => { setFiltroEstadoSemana(e.target.value); setPage(1); }}
+                    >
+                      <option value="all">Todos</option>
+                      <option value="none">Sin nómina</option>
+                      <option value="draft">Borrador</option>
+                      <option value="completed">Pagada</option>
+                    </select>
+                  </div>
                 </div>
                 
                 {/* Botón para limpiar filtros */}
-                {(filtroBusqueda || filtroProyecto) && (
+                {(filtroBusqueda || filtroProyecto || (filtroEstadoSemana && filtroEstadoSemana !== 'all')) && (
                   <div className="flex justify-end">
                     <button
-                      onClick={limpiarFiltros}
+                      onClick={() => { limpiarFiltros(); setFiltroEstadoSemana('all'); setFiltroBusquedaInput(''); setPage(1); }}
                       className="inline-flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
                     >
                       Limpiar filtros
@@ -750,11 +1185,24 @@ export default function Nomina() {
               </div>
             </div>
             <div className="p-6">
+              {/* Barra de acciones masivas */}
+              {selectedEmpleadoIds.size > 0 && (
+                <div className="mb-4 p-3 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800 flex items-center justify-between">
+                  <div className="text-sm text-gray-700 dark:text-gray-300">Seleccionados: {selectedEmpleadoIds.size}</div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={bulkGeneratePDFs} className="px-3 py-1.5 text-sm bg-primary-600 hover:bg-primary-700 text-white rounded-md">Generar PDFs</button>
+                    <button onClick={bulkMarkAsPaid} className="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 text-white rounded-md">Marcar como pagadas</button>
+                  </div>
+                </div>
+              )}
               {Array.isArray(empleados) && getEmpleadosFiltrados().length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
+                        <th className="px-4 py-3">
+                          <input type="checkbox" onChange={toggleSelectAllPaged} checked={getPagedEmpleados().items.length > 0 && getPagedEmpleados().items.every(e => selectedEmpleadoIds.has(e.id_empleado))} />
+                        </th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                           Empleado
                         </th>
@@ -776,8 +1224,11 @@ export default function Nomina() {
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {getEmpleadosFiltrados().map((empleado, index) => (
+                      {getPagedEmpleados().items.map((empleado, index) => (
                         <tr key={empleado.id_empleado || `empleado-${index}`} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-150">
+                          <td className="px-4 py-3">
+                            <input type="checkbox" checked={selectedEmpleadoIds.has(empleado.id_empleado)} onChange={() => toggleSelectEmpleado(empleado.id_empleado)} />
+                          </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="h-10 w-10 flex-shrink-0">
@@ -824,27 +1275,20 @@ export default function Nomina() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             {(() => {
-                              const nominaStatus = getNominaStatus(empleado);
-                              if (nominaStatus.status === 'none') {
-                                return (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                                    Sin nómina
-                                  </span>
-                                );
-                              } else if (nominaStatus.status === 'draft') {
-                                return (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                                    Borrador ({nominaStatus.count})
-                                  </span>
-                                );
-                              } else {
-                                return (
-                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-                                    Completada ({nominaStatus.count})
-                                  </span>
-                                );
-                              }
-                            })()}
+                            const nominaStatus = getNominaStatus(empleado);
+                            if (nominaStatus.status === 'pending') {
+                              return (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                                  Pendiente{nominaStatus.count ? ` (${nominaStatus.count})` : ''}
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
+                                Completada ({nominaStatus.count})
+                              </span>
+                            );
+                          })()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                             <div className="flex space-x-2">
@@ -855,10 +1299,17 @@ export default function Nomina() {
                               >
                                 <EyeIcon className="h-4 w-4" />
                               </button>
+                              <button
+                                onClick={() => abrirHistorialEmpleado(empleado)}
+                                className="text-gray-600 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white"
+                                title="Historial de nómina"
+                              >
+                                <ClockIcon className="h-4 w-4" />
+                              </button>
                               {(() => {
-                                const status = getNominaStatus(empleado);
-                                // Solo mostrar botón de editar para nóminas en estado 'draft' (borrador)
-                                const shouldShow = status.status === 'draft';
+                                const st = getNominaStatus(empleado);
+                                // Mostrar editar si existe nómina de semana actual en borrador o pendiente
+                                const shouldShow = st.hasCurrentWeek && (st.latestStatus === 'borrador' || st.latestStatus === 'pendiente');
                                 return shouldShow;
                               })() && (
                                 <button 
@@ -872,9 +1323,9 @@ export default function Nomina() {
                                 </button>
                               )}
                               {(() => {
-                                const status = getNominaStatus(empleado);
-                                // Solo mostrar botón de eliminar para nóminas en estado 'draft' (borrador)
-                                const shouldShow = status.status === 'draft';
+                                const st = getNominaStatus(empleado);
+                                // Mostrar eliminar si existe nómina de semana actual en borrador o pendiente
+                                const shouldShow = st.hasCurrentWeek && (st.latestStatus === 'borrador' || st.latestStatus === 'pendiente');
                                 return shouldShow;
                               })() && (
                                 <button 
@@ -955,296 +1406,135 @@ export default function Nomina() {
           </div>
           <div className={`p-6 ${showAllNominas ? 'max-h-[600px] overflow-y-auto' : ''}`}>
             {getNominasFiltradas().length > 0 ? (
-              <div className="space-y-3">
-                {(showAllNominas ? getNominasFiltradas() : getNominasFiltradas().slice(0, 10)).map((nomina, index) => {
-                  // Obtener nombre del empleado
-                  const nombreEmpleado = typeof nomina.empleado === 'object' && nomina.empleado
-                    ? `${nomina.empleado.nombre || ''} ${nomina.empleado.apellido || ''}`.trim()
-                    : nomina.nombre_empleado || nomina.empleado || 'Sin empleado';
-                  
-                  // Obtener inicial del empleado
-                  const inicialEmpleado = typeof nomina.empleado === 'object' && nomina.empleado
-                    ? nomina.empleado.nombre?.charAt(0)?.toUpperCase()
-                    : nombreEmpleado.charAt(0)?.toUpperCase() || 'E';
-                  
-                  // Función para calcular semana del mes (mismo algoritmo que el wizard)
-                  const calcularSemanaDelMes = (fecha) => {
-                    const año = fecha.getFullYear();
-                    const mes = fecha.getMonth();
-                    const dia = fecha.getDate();
-                    
-                    // Obtener el primer día del mes
-                    const primerDiaDelMes = new Date(año, mes, 1);
-                    const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
-                    
-                    // Calcular en qué fila del calendario está la fecha
-                    // Primera fila: días del mes anterior + días del mes actual
-                    const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
-                    
-                    if (dia <= diasEnPrimeraFila) {
-                      // La fecha está en la primera fila
-                      return 1;
-                    } else {
-                      // La fecha está en una fila posterior
-                      const diasRestantes = dia - diasEnPrimeraFila;
-                      const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
-                      
-                      // Calcular cuántas semanas tiene realmente el mes
-                      const ultimoDiaDelMes = new Date(año, mes + 1, 0);
-                      const diasEnElMes = ultimoDiaDelMes.getDate();
-                      const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
-                      const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
-                      const totalFilas = 1 + filasAdicionales;
-                      
-                      // Limitar al número real de semanas del mes
-                      return Math.max(1, Math.min(semanaDelMes, totalFilas));
-                    }
-                  };
-
-                  // Obtener período y semana
-                  let periodo = 'Sin período';
-                  let semana = '';
-                  
-                  // Intentar obtener información de la semana desde la base de datos
-                  if (nomina.semana && typeof nomina.semana === 'object') {
-                    // Si tenemos información de la semana desde la BD
-                    const semanaData = nomina.semana;
-                    const fechaInicio = new Date(semanaData.fecha_inicio);
-                    const año = fechaInicio.getFullYear();
-                    const mes = fechaInicio.getMonth() + 1;
-                    const semanaDelMes = calcularSemanaDelMes(fechaInicio);
-                    
-                    periodo = `${año}-${mes.toString().padStart(2, '0')}`;
-                    semana = `Semana ${semanaDelMes}`;
-                  } else {
-                    // Fallback: calcular desde fecha de creación
-                    const fechaCreacion = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
-                    if (!isNaN(fechaCreacion.getTime())) {
-                      const año = fechaCreacion.getFullYear();
-                      const mes = fechaCreacion.getMonth() + 1;
-                      const semanaDelMes = calcularSemanaDelMes(fechaCreacion);
-                      
-                      periodo = `${año}-${mes.toString().padStart(2, '0')}`;
-                      semana = `Semana ${semanaDelMes}`;
-                    } else {
-                      // Último fallback: usar información existente
-                      if (typeof nomina.periodo === 'string') {
-                        periodo = nomina.periodo;
-                      } else if (typeof nomina.periodo === 'object' && nomina.periodo) {
-                        if (nomina.periodo.etiqueta) {
-                          periodo = nomina.periodo.etiqueta;
-                        } else if (nomina.periodo.semana_iso && nomina.periodo.anio) {
-                          periodo = `Semana ${nomina.periodo.semana_iso} - ${nomina.periodo.anio}`;
-                        } else if (nomina.periodo.fecha_inicio) {
-                          try {
-                            periodo = new Date(nomina.periodo.fecha_inicio).toLocaleDateString('es-MX', { year: 'numeric', month: 'short' });
-                          } catch (e) {
-                            periodo = 'Sin período';
+              <div className="w-full overflow-auto">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                  <thead className="bg-gray-50 dark:bg-gray-800/70 sticky top-0 z-10">
+                    <tr>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Empleado</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Período</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Semana</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Estado</th>
+                      <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-gray-300">Proyecto</th>
+                      <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-300">Días</th>
+                      <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-300">Hrs Extra</th>
+                      <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-300">Bonos</th>
+                      <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-300">Deducciones</th>
+                      <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-300">Total</th>
+                      <th className="px-3 py-2 text-right font-semibold text-gray-600 dark:text-gray-300">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
+                    {(showAllNominas ? getNominasFiltradas() : getNominasFiltradas().slice(0, 20)).map((n) => {
+                      const nombreEmpleado = n.empleado?.nombre ? `${n.empleado.nombre} ${n.empleado.apellido || ''}`.trim() : (n.nombre_empleado || '—');
+                      const periodoLabel = (() => {
+                        const b = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
+                        if (!b) return '—';
+                        const d = new Date(b);
+                        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                      })();
+                      // Calcular Semana (1-5) del mes a partir de la semana ISO que toca el mes
+                      const semanaMes = (() => {
+                        try {
+                          const periodo = periodoLabel;
+                          if (!periodo || !n?.semana?.anio || !n?.semana?.semana_iso) return '—';
+                          const [yStr, mStr] = periodo.split('-');
+                          const year = parseInt(yStr, 10);
+                          const month = parseInt(mStr, 10) - 1;
+                          const first = new Date(year, month, 1, 12, 0, 0, 0);
+                          const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+                          const seen = new Set();
+                          const list = [];
+                          for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+                            const temp = new Date(d);
+                            const dow = temp.getDay();
+                            const deltaToThursday = dow === 0 ? -3 : (4 - dow);
+                            const th = new Date(temp);
+                            th.setDate(temp.getDate() + deltaToThursday);
+                            const isoYear = th.getFullYear();
+                            const firstThursday = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+                            const firstDow = firstThursday.getDay();
+                            const deltaFirst = firstDow === 0 ? -3 : (4 - firstDow);
+                            const firstIsoWeekThursday = new Date(firstThursday);
+                            firstIsoWeekThursday.setDate(firstThursday.getDate() + deltaFirst);
+                            const diffDays = Math.round((th - firstIsoWeekThursday) / (24 * 3600 * 1000));
+                            const isoWeek = 1 + Math.floor(diffDays / 7);
+                            const key = `${isoYear}-${isoWeek}`;
+                            if (!seen.has(key)) {
+                              seen.add(key);
+                              list.push({ anio: isoYear, semana_iso: isoWeek });
+                            }
                           }
-                        } else {
-                          periodo = 'Sin período';
-                        }
-                      } else if (nomina.semana) {
-                        periodo = nomina.semana;
-                      } else {
-                        periodo = 'Sin período';
-                      }
-                    }
-                  }
-                  
-                  // Asegurar que periodo siempre sea un string
-                  if (typeof periodo !== 'string') {
-                    periodo = 'Sin período';
-                  }
-                  
-                  return (
-                  <div key={nomina.id_nomina || nomina.id || index} className="flex items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                    <div className="flex items-center space-x-3">
-                      <div className="h-8 w-8 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
-                        <span className="text-primary-600 dark:text-primary-400 text-sm font-medium">
-                          {inicialEmpleado}
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-white">
-                          {nombreEmpleado}
-                        </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {periodo}{semana ? ` • ${semana}` : ''} • {formatCurrency(nomina.monto_total || nomina.monto || 0)}
-                          {nomina.pago_parcial && (
-                            <span className="ml-2 text-orange-600 dark:text-orange-400 font-medium">
-                              (Parcial: {formatCurrency(nomina.monto_a_pagar || 0)})
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Información desglosada al lado del nombre */}
-                    <div className="flex items-center space-x-4 text-xs ml-6">
-                      <div className="text-center">
-                        <div className="text-blue-600 dark:text-blue-400 font-medium">
-                          {formatCurrency((nomina.pago_semanal || nomina.monto_total || 0) / 6)}
-                        </div>
-                        <div className="text-gray-500 dark:text-gray-400">por día</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-green-600 dark:text-green-400 font-medium">
-                          {nomina.dias_laborados && nomina.dias_laborados > 0 
-                            ? nomina.dias_laborados 
-                            : (nomina.es_pago_semanal ? 6 : 'N/A')}
-                        </div>
-                        <div className="text-gray-500 dark:text-gray-400">días</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-purple-600 dark:text-purple-400 font-medium">
-                          {formatCurrency(nomina.monto_total || nomina.monto || 0)}
-                        </div>
-                        <div className="text-gray-500 dark:text-gray-400">total</div>
-                      </div>
-                    </div>
-                    
-                    {/* Espacio flexible para empujar los botones a la derecha */}
-                    <div className="flex-1"></div>
-                    <div className="flex items-center space-x-2">
-                      <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        nomina.pago_parcial ? 
-                          'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' :
-                        nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado' ? 
-                          'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                        nomina.estado === 'pendiente' || nomina.estado === 'Pendiente' ? 
-                          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                        nomina.estado === 'Aprobada' || nomina.estado === 'aprobada' ? 
-                          'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                        nomina.estado === 'cancelada' || nomina.estado === 'Cancelada' ? 
-                          'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
-                        nomina.estado === 'generada' || nomina.estado === 'Generada' ? 
-                          'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' :
-                        nomina.estado === 'borrador' || nomina.estado === 'Borrador' ? 
-                          'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' :
-                          'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
-                      }`}>
-                        {nomina.pago_parcial ? 'Pago Parcial' : nomina.estado}
-                      </span>
-                      <button
-                        onClick={async () => {
-                          try {
-                            const blob = await nominasServices.nominas.generarReciboPDF(nomina.id_nomina || nomina.id);
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = `recibo-nomina-${nomina.id_nomina || nomina.id}.pdf`;
-                            document.body.appendChild(a);
-                            a.click();
-                            window.URL.revokeObjectURL(url);
-                            document.body.removeChild(a);
-                            showSuccess('Éxito', 'Recibo descargado correctamente');
-                          } catch (error) {
-                            console.error('Error downloading PDF:', error);
-                            showError('Error', 'No se pudo descargar el recibo');
-                          }
-                        }}
-                        className="p-1.5 text-gray-400 hover:text-primary-600 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg transition-colors duration-200"
-                        title="Descargar recibo PDF"
-                      >
-                        <DocumentTextIcon className="h-4 w-4" />
-                      </button>
-                      {nomina.pago_parcial && (
-                        <button
-                          onClick={() => abrirModalLiquidar(nomina)}
-                          className="p-1.5 text-green-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors duration-200"
-                          title="Liquidar adeudo pendiente"
-                        >
-                          <BanknotesIcon className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  );
-                })}
-                
-                {/* Subtotal de la semana */}
-                {getNominasFiltradas().length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600">
-                    <div className="bg-gradient-to-r from-primary-50 to-blue-50 dark:from-primary-900/20 dark:to-blue-900/20 rounded-lg p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="h-10 w-10 bg-primary-100 dark:bg-primary-900/30 rounded-full flex items-center justify-center">
-                            <span className="text-primary-600 dark:text-primary-400 text-lg font-bold">
-                              $
-                            </span>
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                              Subtotal de Nóminas
-                            </h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {getSubtotalSemanaActual().cantidad} nóminas • {getSubtotalSemanaActual().pagadas} pagadas • {getSubtotalSemanaActual().pendientes} pendientes
-                            </p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                            {formatCurrency(getSubtotalSemanaActual().total)}
-                          </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400">
-                            Total a pagar
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {getNominasFiltradas().length > 10 && (
-                  <div className="text-center pt-2">
-                    <button 
-                      onClick={() => setShowAllNominas(!showAllNominas)}
-                      className="inline-flex items-center text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 font-medium transition-colors duration-200"
-                    >
-                      {showAllNominas ? (
-                        <>
-                          <span>Ocultar nóminas</span>
-                          <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                          </svg>
-                        </>
-                      ) : (
-                        <>
-                          <span>Ver todas las nóminas ({getNominasFiltradas().length})</span>
-                          <svg className="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
+                          const idx = list.findIndex(w => w.anio === n.semana.anio && w.semana_iso === n.semana.semana_iso);
+                          return idx >= 0 ? (idx + 1) : '—';
+                        } catch { return '—'; }
+                      })();
+                      const dias = n.dias_laborados ?? (n.es_pago_semanal ? 6 : null);
+                      const horasExtra = n.horas_extra || 0;
+                      const bonos = n.bonos || 0;
+                      const deducciones = (n.deducciones !== undefined && n.deducciones !== null)
+                        ? n.deducciones
+                        : ((n.deducciones_isr || 0) + (n.deducciones_imss || 0) + (n.deducciones_infonavit || 0) + (n.descuentos || 0) + (n.deducciones_adicionales || 0));
+                      const ddTooltip = `ISR: ${formatCurrency(n.deducciones_isr||0)}\nIMSS: ${formatCurrency(n.deducciones_imss||0)}\nInfonavit: ${formatCurrency(n.deducciones_infonavit||0)}\nDescuentos: ${formatCurrency(n.descuentos||0)}\nAdicionales: ${formatCurrency(n.deducciones_adicionales||0)}`;
+                      return (
+                        <tr key={n.id_nomina || n.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/40">
+                          <td className="px-3 py-2 text-gray-800 dark:text-gray-100">{nombreEmpleado}</td>
+                          <td className="px-3 py-2 text-gray-800 dark:text-gray-100">{periodoLabel}</td>
+                          <td className="px-3 py-2 text-gray-800 dark:text-gray-100">{semanaMes}</td>
+                          <td className="px-3 py-2">
+                            <select
+                              className="text-xs px-2 py-1 rounded-md bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-200"
+                              value={normalizarEstadoValor(n.estado)}
+                              onChange={(e) => cambiarEstadoHistorial(n, e.target.value)}
+                            >
+                              {['Borrador','Pendiente','En_Proceso','Aprobada','Pagado','Cancelada'].map(opt => (
+                                <option key={opt} value={opt}>{opt === 'En_Proceso' ? 'En Proceso' : opt}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-3 py-2 text-gray-800 dark:text-gray-100">{n.proyecto?.nombre || 'Administrativo'}</td>
+                          <td className="px-3 py-2 text-right text-gray-800 dark:text-gray-100">{dias ?? '—'}</td>
+                          <td className="px-3 py-2 text-right text-gray-800 dark:text-gray-100">{horasExtra}</td>
+                          <td className="px-3 py-2 text-right text-gray-800 dark:text-gray-100">{formatCurrency(bonos)}</td>
+                          <td className="px-3 py-2 text-right text-gray-800 dark:text-gray-100" title={ddTooltip}>{formatCurrency(deducciones)}</td>
+                          <td className="px-3 py-2 text-right text-gray-800 dark:text-gray-100">{formatCurrency(n.monto_total || n.monto || 0)}</td>
+                          <td className="px-3 py-2">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={async () => {
+                                  try {
+                                    const blob = await nominasServices.nominas.generarReciboPDF(n.id_nomina || n.id);
+                                    const url = window.URL.createObjectURL(blob);
+                                    const a = document.createElement('a');
+                                    a.href = url;
+                                    a.download = `recibo-nomina-${n.id_nomina || n.id}.pdf`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                    document.body.removeChild(a);
+                                  } catch (error) {
+                                    console.error('Error downloading PDF:', error);
+                                    showError('Error', 'No se pudo descargar el recibo');
+                                  }
+                                }}
+                                className="p-1.5 text-primary-600 hover:text-primary-700 hover:bg-primary-50 dark:hover:bg-primary-900/20 rounded-lg"
+                                title="PDF"
+                              >
+                                <DocumentTextIcon className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             ) : (
-              <div className="text-center py-8">
-                <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400 mb-3" />
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {nominas.length === 0 
-                    ? 'Aún no hay nóminas procesadas'
-                    : 'No se encontraron nóminas con los filtros aplicados'
-                  }
-                </p>
-                {nominas.length > 0 && (filtroFechaInicio || filtroFechaFin) && (
-                  <button
-                    onClick={() => {
-                      setFiltroFechaInicio('');
-                      setFiltroFechaFin('');
-                    }}
-                    className="mt-2 text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300"
-                  >
-                    Limpiar filtros
-                  </button>
-                )}
-              </div>
+              <div className="text-center text-gray-500 dark:text-gray-400">No hay registros en el historial de nóminas</div>
             )}
           </div>
         </div>
+  
         )}
 
         {/* Nomina Wizard Simplificado */}
@@ -1812,6 +2102,13 @@ export default function Nomina() {
           </div>
         </div>
       )}
+      {/* Drawer Historial de Nómina por Empleado */}
+      <NominaEmpleadoHistorialDrawer
+        open={showHistorialDrawer}
+        empleado={empleadoHistorial}
+        onClose={cerrarHistorialEmpleado}
+        onEditarNomina={editarNominaDesdeHistorial}
+      />
     </div>
   );
 }

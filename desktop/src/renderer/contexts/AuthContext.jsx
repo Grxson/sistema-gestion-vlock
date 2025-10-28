@@ -66,12 +66,22 @@ export const AuthProvider = ({ children }) => {
       const token = apiService.getToken();
       
       if (!token) {
-        console.log('[AuthContext] No hay token, cerrando sesión');
+        console.log('[AuthContext] No hay token, usuario no autenticado');
         setLoading(false);
+        setIsAuthenticated(false);
         return;
       }
       
-      console.log('[AuthContext] Token encontrado, verificando con el servidor');
+      // Verificar si el token está expirado localmente primero
+      if (apiService.isTokenExpired()) {
+        console.log('[AuthContext] Token expirado localmente, limpiando sesión');
+        apiService.clearAuthData();
+        setLoading(false);
+        setIsAuthenticated(false);
+        return;
+      }
+      
+      console.log('[AuthContext] Token válido, verificando con el servidor');
       const response = await apiService.verifyAuth();
       
       if (!response || !response.usuario) {
@@ -89,20 +99,30 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('[AuthContext] Error verificando autenticación:', error);
       
-      // Si es un error de token expirado, mostrar notificación y cerrar sesión
-      if (error.code === 'TOKEN_EXPIRED' || error.code === 'SESSION_EXPIRED') {
-        console.log('[AuthContext] Token expirado, cerrando sesión y mostrando notificación');
-        showSessionExpired();
-        logout();
+      // Si es un error de token expirado o sesión expirada
+      if (error.code === 'TOKEN_EXPIRED' || error.code === 'SESSION_EXPIRED' || error.status === 401) {
+        console.log('[AuthContext] Token/sesión expirada detectada');
+        apiService.clearAuthData();
+        setIsAuthenticated(false);
+        setUser(null);
+        // No mostrar notificación en verificación inicial, solo si el usuario estaba autenticado
+        if (localStorage.getItem('authState')) {
+          showSessionExpired();
+        }
         return;
       }
+      
+      // Para otros errores (conexión, etc), simplemente desautenticar
+      console.warn('[AuthContext] Error de autenticación, desautenticando:', error.message);
+      apiService.clearAuthData();
+      setIsAuthenticated(false);
+      setUser(null);
       
       setAuthError({
         message: error.message || 'Error de autenticación',
         timestamp: new Date(),
         details: error.response?.data || {}
       });
-      logout();
     } finally {
       setLoading(false);
     }
@@ -127,6 +147,9 @@ export const AuthProvider = ({ children }) => {
       return response;
     } catch (error) {
       console.error('[AuthContext] Error al iniciar sesión:', error);
+      
+      // No mostrar notificación de sesión expirada durante login
+      // Solo mostrar el error del login
       setAuthError({
         message: error.message || 'Error al iniciar sesión',
         timestamp: new Date(),
@@ -137,17 +160,23 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Cerrar sesión
-  const logout = () => {
-    console.log('[AuthContext] Cerrando sesión...');
-    apiService.logout();
-    setUser(null);
-    setIsAuthenticated(false);
-    setLastVerified(null);
-    
-    // Limpiar cualquier otro dato de sesión
-    localStorage.removeItem('authState');
-    
-    console.log('[AuthContext] Sesión cerrada');
+  const logout = async () => {
+    console.log('[AuthContext] Iniciando cierre de sesión...');
+    try {
+      // Llamar al logout del servicio API (que maneja la limpieza)
+      await apiService.logout();
+    } catch (error) {
+      console.warn('[AuthContext] Error durante logout en servidor:', error.message);
+      // Continuar con la limpieza local de todas formas
+    } finally {
+      // Limpiar el estado local
+      setUser(null);
+      setIsAuthenticated(false);
+      setLastVerified(null);
+      setAuthError(null);
+      
+      console.log('[AuthContext] Sesión cerrada completamente');
+    }
   };
 
   // Registrar nuevo usuario

@@ -1,15 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAlert } from '../hooks/useAlert';
 import AlertContainer from './ui/AlertContainer';
+import apiService from '../services/api';
 import {
   EyeIcon,
   EyeSlashIcon,
   LockClosedIcon,
   UserIcon,
   SunIcon,
-  MoonIcon
+  MoonIcon,
+  ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
 
 export default function Login() {
@@ -23,6 +25,17 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [sessionExpiredWarning, setSessionExpiredWarning] = useState(false);
+
+  // Verificar si hay una sesión expirada al montar el componente
+  useEffect(() => {
+    const authState = localStorage.getItem('authState');
+    if (authState) {
+      setSessionExpiredWarning(true);
+      // Limpiar la sesión expirada
+      apiService.clearAuthData();
+    }
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -63,31 +76,63 @@ export default function Login() {
     }
     
     setLoading(true);
+    setSessionExpiredWarning(false);
+    let retryCount = 0;
+    const maxRetries = 2;
 
-    try {
-      await login(formData);
-      showSuccess('¡Bienvenido! Sesión iniciada correctamente', {
-        duration: 3000
-      });
-    } catch (error) {
-      const errorMessage = error.message || 'Error al iniciar sesión';
-      showError(errorMessage, {
-        title: 'Error de autenticación',
-        actions: [
-          {
-            label: 'Reintentar',
-            variant: 'primary',
-            onClick: () => {
-              // Limpiar el formulario y enfocar el campo de usuario
-              setFormData({ usuario: '', password: '' });
-              document.getElementById('usuario')?.focus();
+    const attemptLogin = async () => {
+      try {
+        console.log('[Login] Intentando iniciar sesión...');
+        await login(formData);
+        showSuccess('¡Bienvenido! Sesión iniciada correctamente', {
+          duration: 3000
+        });
+      } catch (error) {
+        retryCount++;
+        console.error(`[Login] Error en intento ${retryCount}:`, error.message);
+        
+        // Si es un error de conexión y hay reintentos disponibles, reintentar
+        if (retryCount < maxRetries && error.message.includes('conexión')) {
+          console.log(`[Login] Reintentando (${retryCount}/${maxRetries})...`);
+          await new Promise(resolve => setTimeout(resolve, 1000)); // Esperar 1 segundo
+          return attemptLogin();
+        }
+        
+        // Determinar el mensaje de error apropiado
+        let errorMessage = error.message || 'Error al iniciar sesión';
+        let errorTitle = 'Error de autenticación';
+        
+        // Si es un error de credenciales (401 sin TOKEN_EXPIRED)
+        if (error.status === 401 && error.code !== 'TOKEN_EXPIRED') {
+          errorMessage = 'Usuario o contraseña incorrectos';
+          errorTitle = 'Credenciales inválidas';
+        }
+        
+        // Si es un error de conexión
+        if (error.message.includes('conexión') || error.message.includes('Error de conexión')) {
+          errorTitle = 'Error de conexión';
+        }
+        
+        showError(errorMessage, {
+          title: errorTitle,
+          actions: [
+            {
+              label: 'Reintentar',
+              variant: 'primary',
+              onClick: () => {
+                // Limpiar el formulario y enfocar el campo de usuario
+                setFormData({ usuario: '', password: '' });
+                document.getElementById('usuario')?.focus();
+              }
             }
-          }
-        ]
-      });
-    } finally {
-      setLoading(false);
-    }
+          ]
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    await attemptLogin();
   };
 
   return (
@@ -159,6 +204,17 @@ export default function Login() {
             </div>
 
             <div className="glassmorphism rounded-2xl p-8 shadow-xl">
+              {sessionExpiredWarning && (
+                <div className="mb-6 p-4 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-lg flex items-start gap-3">
+                  <ExclamationTriangleIcon className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <h3 className="font-medium text-orange-900 dark:text-orange-200">Sesión expirada</h3>
+                    <p className="text-sm text-orange-800 dark:text-orange-300 mt-1">
+                      Tu sesión anterior ha expirado. Por favor, inicia sesión nuevamente.
+                    </p>
+                  </div>
+                </div>
+              )}
               <form className="space-y-6" onSubmit={handleSubmit}>
                 <div>
                   <label htmlFor="usuario" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

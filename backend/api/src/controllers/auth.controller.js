@@ -225,25 +225,33 @@ const logout = async (req, res) => {
         const id_usuario = req.usuario?.id_usuario;
         
         if (id_usuario && models.Auditoria) {
-            // Registrar evento de cierre de sesión en auditoría
-            await models.Auditoria.create({
-                id_usuario,
-                accion: 'LOGOUT',
-                tabla: 'usuarios',  // Tabla relacionada con la acción
-                descripcion: 'Cierre de sesión exitoso',
-                fecha_hora: new Date(),  // Campo requerido para la fecha y hora
-                ip: req.ip || req.connection.remoteAddress // Opcional: registrar IP del cliente
-            });
+            try {
+                // Registrar evento de cierre de sesión en auditoría
+                await models.Auditoria.create({
+                    id_usuario,
+                    accion: 'LOGOUT',
+                    tabla: 'usuarios',  // Tabla relacionada con la acción
+                    descripcion: 'Cierre de sesión exitoso',
+                    fecha_hora: new Date(),  // Campo requerido para la fecha y hora
+                    ip: req.ip || req.connection.remoteAddress // Opcional: registrar IP del cliente
+                });
+            } catch (auditError) {
+                // No fallar el logout si hay error en auditoría
+                console.warn('Advertencia: No se pudo registrar logout en auditoría:', auditError.message);
+            }
         }
         
         res.status(200).json({
-            message: 'Sesión cerrada exitosamente'
+            message: 'Sesión cerrada exitosamente',
+            success: true
         });
     } catch (error) {
         console.error('Error al cerrar sesión:', error);
-        res.status(500).json({
-            message: 'Error al cerrar sesión',
-            error: error.message
+        // Devolver 200 de todas formas porque el cliente necesita limpiar su sesión
+        res.status(200).json({
+            message: 'Sesión cerrada',
+            success: true,
+            warning: error.message
         });
     }
 };

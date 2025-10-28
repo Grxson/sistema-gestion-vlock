@@ -13,7 +13,8 @@ const verifyToken = (req, res, next) => {
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.status(401).json({
-                message: 'Se requiere token de autorización'
+                message: 'Se requiere token de autorización',
+                code: 'NO_TOKEN'
             });
         }
 
@@ -31,12 +32,23 @@ const verifyToken = (req, res, next) => {
     } catch (error) {
         if (error.name === 'TokenExpiredError') {
             return res.status(401).json({
-                message: 'Token expirado, inicie sesión nuevamente'
+                message: 'Token expirado, inicie sesión nuevamente',
+                code: 'TOKEN_EXPIRED',
+                timestamp: new Date().toISOString()
+            });
+        }
+
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({
+                message: 'Token inválido',
+                code: 'INVALID_TOKEN'
             });
         }
 
         return res.status(401).json({
-            message: 'Token inválido'
+            message: 'Error de autenticación',
+            code: 'AUTH_ERROR',
+            details: error.message
         });
     }
 };

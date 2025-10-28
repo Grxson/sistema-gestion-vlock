@@ -524,13 +524,21 @@ const updateNomina = async (req, res) => {
             dias_laborados,
             pago_semanal,
             horas_extra,
-            deducciones,
+            deducciones, // total opcional (retrocompatibilidad)
             bonos,
             estado,
+            // Nuevos campos de desglose
+            deducciones_isr,
+            deducciones_imss,
+            deducciones_infonavit,
+            deducciones_adicionales,
+            descuentos,
             // Campos para pago parcial
             pago_parcial,
             monto_a_pagar,
-            liquidar_adeudos
+            liquidar_adeudos,
+            // Permite forzar el monto_total desde frontend (si ya viene calculado)
+            monto_total
         } = req.body;
 
         // Verificar si existe la nómina
@@ -541,23 +549,52 @@ const updateNomina = async (req, res) => {
             });
         }
 
-        // Usar el monto_total enviado desde el frontend si está disponible
-        let nuevoMontoTotal = nomina.monto_total;        
-        // Si el frontend envía monto_total, usarlo directamente (ya viene calculado correctamente)
-        if (req.body.monto_total !== undefined) {
-            nuevoMontoTotal = parseFloat(req.body.monto_total);
-        } else if (dias_laborados !== undefined || pago_semanal !== undefined || 
-            horas_extra !== undefined || deducciones !== undefined || bonos !== undefined) {
-                
-            const diasLaboradosCalc = dias_laborados !== undefined ? parseFloat(dias_laborados) : nomina.dias_laborados;
-            const pagoSemanalCalc = pago_semanal !== undefined ? parseFloat(pago_semanal) : nomina.pago_semanal;
-            const horasExtraCalc = horas_extra !== undefined ? parseFloat(horas_extra) : (nomina.horas_extra || 0);
-            const deduccionesCalc = deducciones !== undefined ? parseFloat(deducciones) : (nomina.deducciones || 0);
-            const bonosCalc = bonos !== undefined ? parseFloat(bonos) : (nomina.bonos || 0);
-            
-            // Calcular salario base proporcional: (pago_semanal / 6) * dias_laborados
-            const salarioBaseProporcional = (pagoSemanalCalc / 6) * diasLaboradosCalc;
-            nuevoMontoTotal = salarioBaseProporcional + horasExtraCalc - deduccionesCalc + bonosCalc;
+        // Normalizar números helper
+        const toNum = (v, def = 0) => {
+            if (v === null || v === undefined || v === '') return def;
+            const n = parseFloat(v);
+            return isNaN(n) ? def : n;
+        };
+
+        // Calcular totales considerando el desglose
+        let nuevoMontoTotal = nomina.monto_total;
+        let nuevoISR = toNum(deducciones_isr, nomina.deducciones_isr || 0);
+        let nuevoIMSS = toNum(deducciones_imss, nomina.deducciones_imss || 0);
+        let nuevoInfonavit = toNum(deducciones_infonavit, nomina.deducciones_infonavit || 0);
+        let nuevasAdicionales = toNum(deducciones_adicionales, nomina.deducciones_adicionales || 0);
+        let nuevosDescuentos = toNum(descuentos, nomina.descuentos || 0);
+
+        // Si el frontend envía monto_total explícito, úsalo
+        if (monto_total !== undefined) {
+            nuevoMontoTotal = toNum(monto_total, nomina.monto_total);
+        } else {
+            // Recalcular cuando cambie algún campo relevante
+            if (
+                dias_laborados !== undefined ||
+                pago_semanal !== undefined ||
+                horas_extra !== undefined ||
+                bonos !== undefined ||
+                deducciones !== undefined ||
+                deducciones_isr !== undefined ||
+                deducciones_imss !== undefined ||
+                deducciones_infonavit !== undefined ||
+                deducciones_adicionales !== undefined ||
+                descuentos !== undefined
+            ) {
+                const diasLaboradosCalc = toNum(dias_laborados, nomina.dias_laborados);
+                const pagoSemanalCalc = toNum(pago_semanal, nomina.pago_semanal);
+                const horasExtraCalc = toNum(horas_extra, nomina.horas_extra || 0);
+                const bonosCalc = toNum(bonos, nomina.bonos || 0);
+
+                // Si envían 'deducciones' total, úsalo como base del total de deducciones; si no, suma desglose
+                const totalDeducciones =
+                    deducciones !== undefined
+                        ? toNum(deducciones)
+                        : (nuevoISR + nuevoIMSS + nuevoInfonavit + nuevasAdicionales + nuevosDescuentos);
+
+                const salarioBaseProporcional = (pagoSemanalCalc / 6) * diasLaboradosCalc;
+                nuevoMontoTotal = salarioBaseProporcional + horasExtraCalc + bonosCalc - totalDeducciones;
+            }
         }
 
         // Actualizar nómina
@@ -565,7 +602,13 @@ const updateNomina = async (req, res) => {
             dias_laborados: dias_laborados !== undefined ? dias_laborados : nomina.dias_laborados,
             pago_semanal: pago_semanal !== undefined ? pago_semanal : nomina.pago_semanal,
             horas_extra: horas_extra !== undefined ? horas_extra : nomina.horas_extra,
-            deducciones: deducciones !== undefined ? deducciones : nomina.deducciones,
+            // Guardar deducciones desglosadas y total
+            deducciones_isr: nuevoISR,
+            deducciones_imss: nuevoIMSS,
+            deducciones_infonavit: nuevoInfonavit,
+            deducciones_adicionales: nuevasAdicionales,
+            descuentos: nuevosDescuentos,
+            deducciones: deducciones !== undefined ? toNum(deducciones) : (nuevoISR + nuevoIMSS + nuevoInfonavit + nuevasAdicionales + nuevosDescuentos),
             bonos: bonos !== undefined ? bonos : nomina.bonos,
             monto_total: nuevoMontoTotal,
             estado: estado || nomina.estado,
@@ -1419,10 +1462,11 @@ const cambiarEstadoNomina = async (req, res) => {
         const { id_nomina } = req.params;
         const { estado } = req.body;
 
-        // Validaciones básicas
-        if (!estado || !['Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'].includes(estado)) {
+        // Validaciones básicas (permitir 'Borrador' y cualquier transición)
+        const estadosPermitidos = ['Borrador', 'Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'];
+        if (!estado || !estadosPermitidos.includes(estado)) {
             return res.status(400).json({
-                message: `Estado inválido: '${estado}'. Estados permitidos: Pendiente, En_Proceso, Aprobada, Pagado, Cancelada`
+                message: `Estado inválido: '${estado}'. Estados permitidos: ${estadosPermitidos.join(', ')}`
             });
         }
 
@@ -1434,53 +1478,8 @@ const cambiarEstadoNomina = async (req, res) => {
             });
         }
 
-        // Verificar transiciones válidas de estado
+        // Estado actual (solo para registro en historial)
         const estadoActual = nomina.estado;
-        let transicionValida = true;
-
-        switch(estadoActual) {
-            case 'Pendiente':
-                // Desde pendiente puede pasar a cualquier estado
-                break;
-            case 'En_Proceso':
-                // Desde en proceso puede ir a aprobada, pagado o cancelada
-                if (estado === 'Pendiente') {
-                    transicionValida = false;
-                }
-                break;
-            case 'Aprobada':
-                // Desde aprobada solo puede ir a pagado o cancelada
-                if (estado === 'Pendiente' || estado === 'En_Proceso') {
-                    transicionValida = false;
-                }
-                break;
-            case 'Pagado':
-                // Desde pagado no puede cambiar a ningún otro estado
-                if (estado !== 'Pagado') {
-                    transicionValida = false;
-                }
-                break;
-            case 'Cancelada':
-                // Desde cancelada no puede cambiar a ningún otro estado
-                if (estado !== 'Cancelada') {
-                    transicionValida = false;
-                }
-                break;
-        }
-
-        if (!transicionValida) {
-            return res.status(400).json({
-                message: `No se puede cambiar el estado de '${estadoActual}' a '${estado}'`
-            });
-        }
-
-        // Verificar que el estado sea uno de los valores permitidos
-        const estadosPermitidos = ['Pendiente', 'En_Proceso', 'Aprobada', 'Pagado', 'Cancelada'];
-        if (!estadosPermitidos.includes(estado)) {
-            return res.status(400).json({
-                message: `Estado inválido: '${estado}'. Estados permitidos: ${estadosPermitidos.join(', ')}`
-            });
-        }
 
         
         // Actualizar estado

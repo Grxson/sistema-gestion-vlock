@@ -69,6 +69,10 @@ const DateRangePicker = ({
     
     const thisWeekStart = new Date(today);
     thisWeekStart.setDate(today.getDate() - today.getDay());
+    const lastWeekStart = new Date(thisWeekStart);
+    lastWeekStart.setDate(thisWeekStart.getDate() - 7);
+    const lastWeekEnd = new Date(thisWeekStart);
+    lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
     
     const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     
@@ -90,6 +94,11 @@ const DateRangePicker = ({
         label: "Esta semana",
         start: thisWeekStart.toISOString().split('T')[0],
         end: today.toISOString().split('T')[0]
+      },
+      {
+        label: "Semana pasada",
+        start: lastWeekStart.toISOString().split('T')[0],
+        end: lastWeekEnd.toISOString().split('T')[0]
       },
       {
         label: "Este mes",
