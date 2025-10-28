@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { formatCurrency } from '../../utils/currency';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
@@ -8,6 +8,8 @@ import * as XLSX from 'xlsx';
 import NominaWeeklySummary from './NominaWeeklySummary';
 import NominaCharts from './NominaCharts';
 import NominaPaymentsList from './NominaPaymentsList';
+import DateRangePicker from '../ui/DateRangePicker';
+import { calcularSemanaDelMes } from '../../utils/weekCalculator';
 import {
   ChartBarIcon,
   CurrencyDollarIcon,
@@ -37,6 +39,62 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [selectedPeriod, setSelectedPeriod] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [proyectos, setProyectos] = useState([]);
+  const [drStart, setDrStart] = useState('');
+  const [drEnd, setDrEnd] = useState('');
+  const [filtroProyecto, setFiltroProyecto] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState('Pagado'); // default Pagado
+  const [searchText, setSearchText] = useState('');
+  // Visibilidad de columnas (persistente)
+  const [visibleCols, setVisibleCols] = useState({
+    empleado: true,
+    oficio: true,
+    dias: true,
+    sueldo: true,
+    horasExtra: true,
+    bonos: true,
+    isr: true,
+    imss: true,
+    infonavit: true,
+    descuentos: true,
+    semana: true,
+    total: true,
+    tipoPago: true,
+    status: true,
+    fecha: true,
+  });
+  const [showColsPicker, setShowColsPicker] = useState(false);
+  const [showColsPopover, setShowColsPopover] = useState(false);
+
+  // Restaurar pestaña activa desde preferencias
+  useEffect(() => {
+    try {
+      const savedTab = localStorage.getItem('nominaReports_activeTab');
+      if (savedTab) setActiveTab(savedTab);
+    } catch {}
+  }, []);
+
+  // Guardar pestaña activa
+  useEffect(() => {
+    try { localStorage.setItem('nominaReports_activeTab', activeTab); } catch {}
+  }, [activeTab]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('nominaTablaDetallada_visibleCols');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setVisibleCols((prev) => ({ ...prev, ...parsed }));
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('nominaTablaDetallada_visibleCols', JSON.stringify(visibleCols));
+    } catch {}
+  }, [visibleCols]);
+
+  const toggleCol = (key) => setVisibleCols((v) => ({ ...v, [key]: !v[key] }));
 
   const esPagoParcial = (valor) => {
     if (valor === null || valor === undefined) {
@@ -59,102 +117,155 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     return false;
   };
 
-  // Estados para filtrado de fechas en tabla detallada
-  const [dateFilter, setDateFilter] = useState('all'); // 'all', 'today', 'thisWeek', 'lastWeek', 'thisMonth', 'custom'
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
-  const [filteredNominas, setFilteredNominas] = useState(nominas || []);
-
-  // Función para obtener el rango de fechas según el filtro seleccionado
-  const getDateRange = (filter) => {
-    const now = new Date();
-    let startDate, endDate;
-
-    switch (filter) {
-      case 'today':
-        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-        endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
-        break;
-      
-      case 'thisWeek':
-        const dayOfWeek = now.getDay();
-        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Lunes como primer día
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - diff);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
-        endDate.setHours(23, 59, 59, 999);
-        break;
-      
-      case 'lastWeek':
-        const lastWeekDay = now.getDay();
-        const lastWeekDiff = lastWeekDay === 0 ? 6 : lastWeekDay - 1;
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - lastWeekDiff - 7);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6);
-        endDate.setHours(23, 59, 59, 999);
-        break;
-      
-      case 'thisMonth':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
-        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
-        break;
-      
-      case 'custom':
-        if (customStartDate && customEndDate) {
-          startDate = new Date(customStartDate);
-          startDate.setHours(0, 0, 0, 0);
-          endDate = new Date(customEndDate);
-          endDate.setHours(23, 59, 59, 999);
+  // Nominas filtradas (Fecha base: semana.fecha_inicio -> fecha_pago -> fecha/createdAt)
+  const filteredNominas = useMemo(() => {
+    const start = drStart ? new Date(drStart) : null;
+    const end = drEnd ? new Date(drEnd) : null;
+    const pid = filtroProyecto ? String(filtroProyecto) : '';
+    return (nominas || [])
+      .filter(n => {
+        // Estado
+        const est = (n.estado || '').toLowerCase();
+        if (filtroEstado && filtroEstado !== 'Todos') {
+          if (filtroEstado === 'Pagado') {
+            if (!(est === 'pagado' || est === 'pagada')) return false;
+          } else if (filtroEstado === 'Pendiente') {
+            if (!(est === 'pendiente' || est === 'borrador' || est === 'en_proceso' || est === 'en proceso')) return false;
+          } else if (filtroEstado === 'Aprobada') {
+            if (!(est === 'aprobada' || est === 'aprobado')) return false;
+          } else if (filtroEstado === 'Cancelada') {
+            if (!(est === 'cancelada' || est === 'cancelado')) return false;
+          }
         }
-        break;
-      
-      default: // 'all'
-        return null;
-    }
+        // Proyecto
+        if (pid) {
+          const nid = n.id_proyecto || n.proyecto?.id_proyecto || n.proyecto?.id;
+          if (!nid || String(nid) !== pid) return false;
+        }
+        // Fecha base
+        const base = n.semana?.fecha_inicio || n.fecha_pago || n.fecha || n.createdAt || n.fecha_creacion;
+        const d = base ? new Date(base) : null;
+        if (!d) return false;
+        if (start && d < new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0,0,0,0)) return false;
+        if (end && d > new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23,59,59,999)) return false;
+        // Búsqueda
+        if (searchText) {
+          const emp = `${n.empleado?.nombre || ''} ${n.empleado?.apellido || ''}`.toLowerCase();
+          const proj = (n.proyecto?.nombre || '').toLowerCase();
+          if (!emp.includes(searchText.toLowerCase()) && !proj.includes(searchText.toLowerCase())) return false;
+        }
+        return true;
+      });
+  }, [nominas, drStart, drEnd, filtroProyecto, filtroEstado, searchText]);
 
-    return { startDate, endDate };
-  };
+  // Totales filtrados (Fase B)
+  const totalesFiltrados = useMemo(() => {
+    const isPagada = (n) => {
+      const est = (n.estado || '').toLowerCase();
+      return est === 'pagado' || est === 'pagada' || est === 'completada' || est === 'completado';
+    };
+    const isPendienteOParcial = (n) => {
+      const est = (n.estado || '').toLowerCase();
+      return est === 'pendiente' || est === 'borrador' || est === 'en_proceso' || est === 'en proceso' || est === 'parcial';
+    };
+    const sum = (arr) => arr.reduce((acc, n) => acc + (parseFloat(n.monto_total || n.monto || 0) || 0), 0);
+    const pagadas = filteredNominas.filter(isPagada);
+    const pendientes = filteredNominas.filter(isPendienteOParcial);
+    return {
+      totalPagado: sum(pagadas),
+      totalPendiente: sum(pendientes),
+      countPagadas: pagadas.length,
+      countPendientes: pendientes.length,
+      countTotal: filteredNominas.length,
+    };
+  }, [filteredNominas]);
 
-  // Aplicar filtros de fecha
-  useEffect(() => {
-    if (!nominas || nominas.length === 0) {
-      setFilteredNominas([]);
-      return;
-    }
-
-    // Debug: verificar si hay nóminas parciales
-    const parciales = nominas.filter(n => esPagoParcial(n.tipo_pago));
-    if (parciales.length > 0) {
-      console.log('📊 Nóminas parciales encontradas:', parciales.length, parciales);
-    }
-
-    if (dateFilter === 'all') {
-      setFilteredNominas(nominas);
-      return;
-    }
-
-    const dateRange = getDateRange(dateFilter);
-    if (!dateRange) {
-      setFilteredNominas(nominas);
-      return;
-    }
-
-    const { startDate, endDate } = dateRange;
-    const filtered = nominas.filter(nomina => {
-      const nominaDate = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
-      return nominaDate >= startDate && nominaDate <= endDate;
+  // Agrupar por semana del mes y calcular subtotales (Fase B)
+  const gruposPorSemana = useMemo(() => {
+    const map = new Map();
+    filteredNominas.forEach((n) => {
+      const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt || n?.fecha_creacion;
+      const semana = getSemanaDelMes(base) || '—';
+      if (!map.has(semana)) {
+        map.set(semana, { rows: [], pagado: 0, comprometido: 0 });
+      }
+      const bucket = map.get(semana);
+      bucket.rows.push(n);
+      const monto = parseFloat(n.monto_total || n.monto || 0) || 0;
+      const est = (n.estado || '').toLowerCase();
+      if (est === 'pagado' || est === 'pagada' || est === 'completada' || est === 'completado') bucket.pagado += monto;
+      else bucket.comprometido += monto;
     });
+    return Array.from(map.entries()).sort((a, b) => {
+      const ai = a[0] === '—' ? 99 : a[0];
+      const bi = b[0] === '—' ? 99 : b[0];
+      return ai - bi;
+    });
+  }, [filteredNominas]);
 
-    setFilteredNominas(filtered);
-  }, [nominas, dateFilter, customStartDate, customEndDate]);
+  // Helpers: semana ISO (jueves) -> semana del mes (1-5) que toca el mes de la fecha
+  function getPeriodoFromDate(date) {
+    const d = new Date(date);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  }
 
-  // Función para exportar a Excel
-  const exportToExcel = () => {
-    const nominasToExport = filteredNominas.length > 0 ? filteredNominas : nominas;
+  function getWeeksTouchingMonth(periodo) {
+    if (!periodo || !/^[0-9]{4}-[0-9]{2}$/.test(periodo)) return [];
+    const [yearStr, monthStr] = periodo.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10) - 1;
+    const first = new Date(year, month, 1, 12, 0, 0, 0);
+    const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+    const seen = new Set();
+    const list = [];
+    for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
+      const temp = new Date(d);
+      const dow = temp.getDay();
+      const deltaToThursday = dow === 0 ? -3 : (4 - dow);
+      const th = new Date(temp);
+      th.setDate(temp.getDate() + deltaToThursday);
+      const isoYear = th.getFullYear();
+      const firstThursday = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+      const firstDow = firstThursday.getDay();
+      const deltaFirst = firstDow === 0 ? -3 : (4 - firstDow);
+      const firstIsoWeekThursday = new Date(firstThursday);
+      firstIsoWeekThursday.setDate(firstThursday.getDate() + deltaFirst);
+      const diffDays = Math.round((th - firstIsoWeekThursday) / (24 * 3600 * 1000));
+      const isoWeek = 1 + Math.floor(diffDays / 7);
+      const key = `${isoYear}-${isoWeek}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        list.push({ anio: isoYear, semana_iso: isoWeek });
+      }
+    }
+    return list;
+  }
+
+  function getSemanaDelMes(date) {
+    if (!date) return null;
+    const d = new Date(date);
+    const dow = d.getDay();
+    const deltaToThursday = dow === 0 ? -3 : (4 - dow);
+    const th = new Date(d);
+    th.setDate(d.getDate() + deltaToThursday);
+    const isoYear = th.getFullYear();
+    const firstThursday = new Date(isoYear, 0, 4, 12, 0, 0, 0);
+    const firstDow = firstThursday.getDay();
+    const deltaFirst = firstDow === 0 ? -3 : (4 - firstDow);
+    const firstIsoWeekThursday = new Date(firstThursday);
+    firstIsoWeekThursday.setDate(firstThursday.getDate() + deltaFirst);
+    const diffDays = Math.round((th - firstIsoWeekThursday) / (24 * 3600 * 1000));
+    const isoWeek = 1 + Math.floor(diffDays / 7);
+    const weeks = getWeeksTouchingMonth(getPeriodoFromDate(d));
+    const idx = weeks.findIndex(w => w.anio === isoYear && w.semana_iso === isoWeek);
+    return idx >= 0 ? (idx + 1) : null;
+  }
+
+  // Nota: el filtrado ahora se hace con useMemo (filteredNominas)
+
+  // Función para exportar a Excel (con fuente y sufijo opcional)
+  const exportToExcel = (source = null, nombreSufijo = '') => {
+    const nominasToExport = source ? source : (filteredNominas.length > 0 ? filteredNominas : nominas);
     if (!nominasToExport || nominasToExport.length === 0) {
       showError('Error', 'No hay datos para exportar');
       return;
@@ -303,9 +414,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       // Agregar hoja al libro
       XLSX.utils.book_append_sheet(wb, ws, 'Nóminas Detalladas');
 
-      // Generar nombre de archivo con fecha actual
+      // Generar nombre de archivo con fecha actual y sufijo si aplica
       const fechaActual = new Date();
-      const nombreArchivo = `nominas_detalladas_${fechaActual.getFullYear()}_${(fechaActual.getMonth() + 1).toString().padStart(2, '0')}_${fechaActual.getDate().toString().padStart(2, '0')}.xlsx`;
+      let nombreArchivo = `nominas_detalladas_${fechaActual.getFullYear()}_${(fechaActual.getMonth() + 1).toString().padStart(2, '0')}_${fechaActual.getDate().toString().padStart(2, '0')}`;
+      if (nombreSufijo) nombreArchivo += `_${nombreSufijo}`;
+      nombreArchivo += `.xlsx`;
 
       // Descargar archivo
       XLSX.writeFile(wb, nombreArchivo);
@@ -811,6 +924,25 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                       $
                     </span>
                   </div>
+              
+              {/* Tarjetas de Totales (Fase B) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
+                  <div className="text-xs text-gray-500">Total Pagado</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(totalesFiltrados.totalPagado)}</div>
+                  <div className="text-xs text-gray-500">{totalesFiltrados.countPagadas} nóminas</div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
+                  <div className="text-xs text-gray-500">Comprometido (Pendiente/Parcial)</div>
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalesFiltrados.totalPendiente)}</div>
+                  <div className="text-xs text-gray-500">{totalesFiltrados.countPendientes} nóminas</div>
+                </div>
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
+                  <div className="text-xs text-gray-500">Registros filtrados</div>
+                  <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">{totalesFiltrados.countTotal}</div>
+                  <div className="text-xs text-gray-500">Aplicando filtros</div>
+                </div>
+              </div>
                   <div>
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                       Total del Mes
@@ -974,7 +1106,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                 
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
                       <tr>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                           Semana
@@ -1023,7 +1155,14 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     {filteredNominas?.length || 0} de {nominas?.length || 0} nóminas
                   </div>
                   <button
-                    onClick={exportToExcel}
+                    onClick={() => {
+                      let suf = '';
+                      if (drStart && drEnd) {
+                        const s = new Date(drStart); const e = new Date(drEnd);
+                        suf = `${s.getFullYear()}-${String(s.getMonth()+1).padStart(2,'0')}-${String(s.getDate()).padStart(2,'0')}_a_${e.getFullYear()}-${String(e.getMonth()+1).padStart(2,'0')}-${String(e.getDate()).padStart(2,'0')}`;
+                      }
+                      exportToExcel(null, suf);
+                    }}
                     className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
                     <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1031,288 +1170,261 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     </svg>
                     Exportar Excel
                   </button>
+                  {/* Popover Columnas */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={()=>setShowColsPopover(v=>!v)}
+                      className="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 text-sm font-medium rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900"
+                      title="Columnas"
+                    >
+                      Columnas
+                    </button>
+                    {showColsPopover && (
+                      <div className="absolute right-0 mt-2 w-96 z-20 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg shadow-xl p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="text-xs font-semibold text-gray-700 dark:text-slate-200">Columnas visibles</div>
+                          <div className="flex gap-2">
+                            <button type="button" className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600" onClick={()=>{
+                              const allTrue = Object.fromEntries(Object.keys(visibleCols).map(k=>[k,true]));
+                              setVisibleCols(allTrue);
+                            }}>Mostrar todo</button>
+                            <button type="button" className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600" onClick={()=>{
+                              const allFalse = Object.fromEntries(Object.keys(visibleCols).map(k=>[k,false]));
+                              setVisibleCols(allFalse);
+                            }}>Ocultar todo</button>
+                            <button type="button" className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-600" onClick={()=>{
+                              setVisibleCols({empleado:true,oficio:true,dias:true,sueldo:true,horasExtra:true,bonos:true,isr:true,imss:true,infonavit:true,descuentos:true,semana:true,total:true,tipoPago:true,status:true,fecha:true});
+                            }}>Restablecer</button>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 text-xs">
+                          {[
+                            ['empleado','Empleado'],['oficio','Oficio'],['dias','Días'],['sueldo','Sueldo'],['horasExtra','Horas Extra'],['bonos','Bonos'],
+                            ['isr','ISR'],['imss','IMSS'],['infonavit','Infonavit'],['descuentos','Descuentos'],['semana','Semana'],['total','Total'],['tipoPago','Tipo Pago'],['status','Status'],['fecha','Fecha']
+                          ].map(([k,label])=> (
+                            <label key={k} className="inline-flex items-center justify-between gap-2 text-gray-800 dark:text-slate-200">
+                              <span>{label}</span>
+                              <input type="checkbox" className="accent-primary-500 dark:accent-primary-500" checked={!!visibleCols[k]} onChange={()=>toggleCol(k)} />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               
-              {/* Filtros de fecha */}
+              {/* Filtros alineados (DateRangePicker, Proyecto, Estado, Búsqueda) */}
               <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                  {/* Botones de filtro rápido */}
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setDateFilter('all')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        dateFilter === 'all'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      Todas
-                    </button>
-                    <button
-                      onClick={() => setDateFilter('today')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        dateFilter === 'today'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      Hoy
-                    </button>
-                    <button
-                      onClick={() => setDateFilter('thisWeek')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        dateFilter === 'thisWeek'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      Esta Semana
-                    </button>
-                    <button
-                      onClick={() => setDateFilter('lastWeek')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        dateFilter === 'lastWeek'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      Semana Pasada
-                    </button>
-                    <button
-                      onClick={() => setDateFilter('thisMonth')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        dateFilter === 'thisMonth'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      Este Mes
-                    </button>
-                    <button
-                      onClick={() => setDateFilter('custom')}
-                      className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                        dateFilter === 'custom'
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      Personalizado
-                    </button>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rango de fechas</label>
+                    <DateRangePicker
+                      startDate={drStart}
+                      endDate={drEnd}
+                      onChangeStart={setDrStart}
+                      onChangeEnd={setDrEnd}
+                      showQuickRanges
+                    />
                   </div>
-                  
-                  {/* Inputs de fecha personalizada */}
-                  {dateFilter === 'custom' && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="date"
-                        value={customStartDate}
-                        onChange={(e) => setCustomStartDate(e.target.value)}
-                        className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      />
-                      <span className="text-gray-500 dark:text-gray-400">a</span>
-                      <input
-                        type="date"
-                        value={customEndDate}
-                        onChange={(e) => setCustomEndDate(e.target.value)}
-                        className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                      />
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
+                    <select value={filtroProyecto} onChange={(e)=>setFiltroProyecto(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                      <option value="">Todos</option>
+                      {proyectos.map(p => (
+                        <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
+                      <select value={filtroEstado} onChange={(e)=>setFiltroEstado(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                        {['Pagado','Pendiente','Aprobada','Cancelada','Todos'].map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
                     </div>
-                  )}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
+                      <input value={searchText} onChange={(e)=>setSearchText(e.target.value)} placeholder="Empleado o Proyecto" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                    </div>
+                  </div>
                 </div>
               </div>
               
               {filteredNominas && filteredNominas.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
                       <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.empleado ? 'hidden' : ''}`}>
                           Empleado
                         </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.oficio ? 'hidden' : ''}`}>
                           Oficio
                         </th>
-                        <th className="px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.dias ? 'hidden' : ''}`}>
                           Días Lab.
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.sueldo ? 'hidden' : ''}`}>
                           Sueldo Base
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.horasExtra ? 'hidden' : ''}`}>
                           Horas Extra
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.bonos ? 'hidden' : ''}`}>
                           Bonos
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.isr ? 'hidden' : ''}`}>
                           ISR
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.imss ? 'hidden' : ''}`}>
                           IMSS
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.infonavit ? 'hidden' : ''}`}>
                           Infonavit
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.descuentos ? 'hidden' : ''}`}>
                           Descuentos
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.semana ? 'hidden' : ''}`}>
                           Semana
                         </th>
-                        <th className="px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.total ? 'hidden' : ''}`}>
                           Total a Pagar
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.tipoPago ? 'hidden' : ''}`}>
                           Tipo Pago
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.status ? 'hidden' : ''}`}>
                           Status
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                        <th className={`px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.fecha ? 'hidden' : ''}`}>
                           Fecha
                         </th>
                       </tr>
                     </thead>
                     <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {filteredNominas.map((nomina, index) => {
-                        const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
-                        const diasLaborados = parseInt(nomina.dias_laborados) || 6;
-                        const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
-                        const horasExtra = parseFloat(nomina.horas_extra) || 0;
-                        const bonos = parseFloat(nomina.bonos) || 0;
-                        const isr = parseFloat(nomina.deducciones_isr) || 0;
-                        const imss = parseFloat(nomina.deducciones_imss) || 0;
-                        const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
-                        const descuentos = parseFloat(nomina.descuentos) || 0;
-                        const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
-                        
-                        // Determinar tipo de pago
-                        const esParcial = esPagoParcial(nomina.tipo_pago);
-                        const tipoPago = esParcial ? 'PARCIAL' : 'COMPLETA';
-                        const tipoPagoColor = esParcial 
-                          ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
-                          : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-                        
-                        // Determinar estado
-                        let estado = 'PENDIENTE';
-                        let estadoColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-                        if (nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado') {
-                          estado = 'PAGADO';
-                          estadoColor = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-                        } else if (nomina.estado === 'borrador' || nomina.estado === 'Borrador') {
-                          estado = 'BORRADOR';
-                          estadoColor = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-                        }
-                        
-                        // Calcular semana del mes
-                        const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
-                        const calcularSemanaDelMes = (fecha) => {
-                          const año = fecha.getFullYear();
-                          const mes = fecha.getMonth();
-                          const dia = fecha.getDate();
+                      {gruposPorSemana.map(([semanaGrupo, bucket]) => (
+                        <React.Fragment key={`grupo-semana-${semanaGrupo}`}>
+                          {bucket.rows.map((nomina, index) => {
+                          const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
+                          const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+                          const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+                          const horasExtra = parseFloat(nomina.horas_extra) || 0;
+                          const bonos = parseFloat(nomina.bonos) || 0;
+                          const isr = parseFloat(nomina.deducciones_isr) || 0;
+                          const imss = parseFloat(nomina.deducciones_imss) || 0;
+                          const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
+                          const descuentos = parseFloat(nomina.descuentos) || 0;
+                          const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
                           
-                          const primerDiaDelMes = new Date(año, mes, 1);
-                          const diaPrimerDia = primerDiaDelMes.getDay();
-                          const diasEnPrimeraFila = 7 - diaPrimerDia;
+                          // Determinar tipo de pago
+                          const esParcial = esPagoParcial(nomina.tipo_pago);
+                          const tipoPago = esParcial ? 'PARCIAL' : 'COMPLETA';
+                          const tipoPagoColor = esParcial 
+                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
                           
-                          if (dia <= diasEnPrimeraFila) {
-                            return 1;
-                          } else {
-                            const diasRestantes = dia - diasEnPrimeraFila;
-                            const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
-                            
-                            const ultimoDiaDelMes = new Date(año, mes + 1, 0);
-                            const diasEnElMes = ultimoDiaDelMes.getDate();
-                            const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
-                            const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
-                            const totalFilas = 1 + filasAdicionales;
-                            
-                            return Math.max(1, Math.min(semanaDelMes, totalFilas));
+                          // Determinar estado
+                          let estado = 'PENDIENTE';
+                          let estadoColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+                          if (nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado') {
+                            estado = 'PAGADO';
+                            estadoColor = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                          } else if (nomina.estado === 'borrador' || nomina.estado === 'Borrador') {
+                            estado = 'BORRADOR';
+                            estadoColor = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
                           }
-                        };
-                        
-                        const semanaDelMes = calcularSemanaDelMes(fechaNomina);
-                        
-                        return (
-                          <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado'}
-                              </div>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-white">
-                                {empleado?.oficio?.nombre || 'Sin oficio'}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm text-center font-medium text-gray-900 dark:text-white">
-                                {diasLaborados}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-white">
-                                {formatCurrency(sueldoBase)}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-white">
-                                {horasExtra > 0 ? formatCurrency(horasExtra) : '-'}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-white">
-                                {bonos > 0 ? formatCurrency(bonos) : '-'}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm text-red-600 dark:text-red-400">
-                                {isr > 0 ? `-${formatCurrency(isr)}` : '-'}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm text-red-600 dark:text-red-400">
-                                {imss > 0 ? `-${formatCurrency(imss)}` : '-'}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm text-red-600 dark:text-red-400">
-                                {infonavit > 0 ? `-${formatCurrency(infonavit)}` : '-'}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm text-red-600 dark:text-red-400">
-                                {descuentos > 0 ? `-${formatCurrency(descuentos)}` : '-'}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-white">
-                                {semanaDelMes}
-                              </div>
-                            </td>
-                            <td className="px-3 py-4 whitespace-nowrap">
-                              <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-                                {formatCurrency(totalAPagar)}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${tipoPagoColor}`}>
-                                {tipoPago}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap">
-                              <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${estadoColor}`}>
-                                {estado}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                              {fechaNomina.toLocaleDateString('es-MX')}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                      
+                          
+                          // Calcular semana del mes con base correcta e ISO
+                          const fechaBase = nomina?.semana?.fecha_inicio || nomina?.fecha_pago || nomina?.fecha || nomina?.createdAt || nomina?.fecha_creacion;
+                          const semanaDelMes = getSemanaDelMes(fechaBase);
+                          
+                          return (
+                            <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                              <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.empleado ? 'hidden' : ''}`}>
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                  {empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado'}
+                                </div>
+                              </td>
+                              <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.oficio ? 'hidden' : ''}`}>
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  {empleado?.oficio?.nombre || 'Sin oficio'}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.dias ? 'hidden' : ''}`}>
+                                <div className="text-sm text-center font-medium text-gray-900 dark:text-white">
+                                  {diasLaborados}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.sueldo ? 'hidden' : ''}`}>
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  {formatCurrency(sueldoBase)}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.horasExtra ? 'hidden' : ''}`}>
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  {horasExtra > 0 ? formatCurrency(horasExtra) : '-'}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.bonos ? 'hidden' : ''}`}>
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  {bonos > 0 ? formatCurrency(bonos) : '-'}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.isr ? 'hidden' : ''}`}>
+                                <div className="text-sm text-red-600 dark:text-red-400">
+                                  {isr > 0 ? `-${formatCurrency(isr)}` : '-'}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.imss ? 'hidden' : ''}`}>
+                                <div className="text-sm text-red-600 dark:text-red-400">
+                                  {imss > 0 ? `-${formatCurrency(imss)}` : '-'}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.infonavit ? 'hidden' : ''}`}>
+                                <div className="text-sm text-red-600 dark:text-red-400">
+                                  {infonavit > 0 ? `-${formatCurrency(infonavit)}` : '-'}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.descuentos ? 'hidden' : ''}`}>
+                                <div className="text-sm text-red-600 dark:text-red-400">
+                                  {descuentos > 0 ? `-${formatCurrency(descuentos)}` : '-'}
+                                </div>
+                              </td>
+                              <td className={`px-4 py-4 whitespace-nowrap ${!visibleCols.semana ? 'hidden' : ''}`}>
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  {semanaDelMes}
+                                </div>
+                              </td>
+                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.total ? 'hidden' : ''}`}>
+                                <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                                  {formatCurrency(totalAPagar)}
+                                </div>
+                              </td>
+                              <td className={`px-4 py-4 whitespace-nowrap ${!visibleCols.tipoPago ? 'hidden' : ''}`}>
+                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${tipoPagoColor}`}>
+                                  {tipoPago}
+                                </span>
+                              </td>
+                              <td className={`px-4 py-4 whitespace-nowrap ${!visibleCols.status ? 'hidden' : ''}`}>
+                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${estadoColor}`}>
+                                  {estado}
+                                </span>
+                              </td>
+                              <td className={`px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 ${!visibleCols.fecha ? 'hidden' : ''}`}>
+                                {(() => {
+                                  const fc = nomina?.fecha_creacion || nomina?.createdAt;
+                                  return fc ? new Date(fc).toLocaleDateString('es-MX') : '';
+                                })()}
+                              </td>
+                            </tr>
+                          );
+                          })}
+                        </React.Fragment>
+                      ))}
+                    
                       {/* Fila de totales */}
                       <tr className="bg-gray-50 dark:bg-gray-700 border-t-2 border-gray-300 dark:border-gray-600">
                         <td className="px-6 py-4 whitespace-nowrap">
