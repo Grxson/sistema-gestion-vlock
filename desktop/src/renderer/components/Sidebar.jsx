@@ -46,6 +46,7 @@ const navigationItems = [
     hasSubmenu: false
   },
   { name: 'Adeudos', href: '/adeudos-generales', icon: BanknotesIcon, current: false, permissionModule: 'adeudos' },
+  { name: 'Ingresos', href: '/ingresos', icon: BanknotesIcon, current: false, permissionModule: 'ingresos' },
   { 
     name: 'Inventario', 
     href: '/herramientas', 
@@ -157,7 +158,8 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
       'configuracion': 'configuracion.ver',
       'finanzas': 'finanzas.gastos.ver',
       'proyectos': 'proyectos.ver',
-      'adeudos': 'adeudos.ver'
+      'adeudos': 'adeudos.ver',
+      'ingresos': 'ingresos.ver'
     };
     
     // Obtener el código de permiso para este módulo

@@ -8,7 +8,8 @@ const Pagination = ({
   totalItems = 0,
   onPageChange = () => {},
   onItemsPerPageChange = () => {},
-  showItemsPerPage = true
+  showItemsPerPage = true,
+  forceShow = false
 }) => {
   const startItem = ((currentPage - 1) * itemsPerPage) + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
@@ -62,7 +63,7 @@ const Pagination = ({
     return pages;
   };
 
-  if (totalPages <= 1) {
+  if (!forceShow && totalPages <= 1) {
     return null;
   }
 

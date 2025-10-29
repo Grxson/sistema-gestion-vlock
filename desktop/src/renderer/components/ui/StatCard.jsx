@@ -19,11 +19,11 @@ const StatCard = ({
 }) => {
   const colorClasses = {
     blue: {
-      bg: 'bg-blue-500',
+      bg: 'bg-blue-900',
       bgLight: 'bg-blue-50 dark:bg-blue-900/20',
       text: 'text-blue-600 dark:text-blue-400',
       textDark: 'text-blue-900 dark:text-blue-100',
-      border: 'border-blue-200 dark:border-blue-800'
+      border: 'border-blue-200 dark:border-blue-900'
     },
     green: {
       bg: 'bg-green-500',

@@ -27,7 +27,7 @@ module.exports = (sequelize) => {
   });
 
   Ingreso.associate = models => {
-    Ingreso.belongsTo(models.Proyecto, { foreignKey: 'id_proyecto' });
+    Ingreso.belongsTo(models.Proyectos, { foreignKey: 'id_proyecto', as: 'proyecto' });
   };
 
   return Ingreso;
