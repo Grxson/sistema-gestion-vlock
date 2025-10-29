@@ -1,16 +1,17 @@
 {
   "version": 2,
+  "outputDirectory": "desktop/build",
   "builds": [
     {
       "src": "desktop/package.json",
       "use": "@vercel/static-build",
       "config": {
-        "distDir": "desktop/dist"
+        "distDir": "desktop/build"
       }
     }
   ],
   "routes": [
     { "handle": "filesystem" },
-    { "src": "/(.*)", "dest": "desktop/dist/index.html" }
+    { "src": "/(.*)", "dest": "desktop/build/index.html" }
   ]
 }
