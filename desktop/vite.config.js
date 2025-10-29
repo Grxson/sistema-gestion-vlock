@@ -2,14 +2,15 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: './', // Usar rutas relativas para Electron
+  base: process.env.VERCEL ? '/' : './', // '/' para web (Vercel), './' para Electron
   root: './src/renderer',
   server: {
     port: 3000,
   },
   build: {
-    outDir: '../../build',
-    emptyOutDir: true
+    outDir: process.env.VERCEL ? '../../dist' : '../../build',
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 1500
   },
   plugins: [react()],
   css: {
