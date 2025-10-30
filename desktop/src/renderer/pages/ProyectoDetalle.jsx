@@ -3,6 +3,7 @@ import { usePermissions } from '../contexts/PermissionsContext';
 import ProyectoResumen from '../components/proyectos/ProyectoResumen';
 import ProyectoIngresosTable from '../components/proyectos/ProyectoIngresosTable';
 import ProyectoSuministrosTable from '../components/proyectos/ProyectoSuministrosTable';
+import ProyectoInfo from '../components/proyectos/ProyectoInfo';
 import { useProyectoDetalleData } from '../hooks/useProyectoDetalleData';
 
 function parseIdFromPath(currentPath) {
@@ -19,7 +20,7 @@ const ProyectoDetalle = ({ currentPath }) => {
   const id = parseIdFromPath(currentPath || window?.location?.pathname || '/proyectos');
   const canSeeCosts = hasModuleAccess('ingresos') || hasModuleAccess('suministros');
 
-  const [tab, setTab] = useState('resumen');
+  const [tab, setTab] = useState('informacion');
 
   const {
     proyecto,
@@ -65,13 +66,19 @@ const ProyectoDetalle = ({ currentPath }) => {
         {/* Tabs */}
         <div className="mb-4 border-b border-gray-200 dark:border-gray-700">
           <nav className="-mb-px flex gap-6">
-            {['resumen','ingresos','suministros'].map(t => (
+            {['informacion','resumen','ingresos','suministros'].map(t => (
               <button key={t} onClick={()=>setTab(t)} className={`px-3 pb-3 border-b-2 ${tab===t? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'} `}>
-                {t === 'resumen' ? 'Resumen' : t === 'ingresos' ? 'Ingresos' : 'Suministros'}
+                {t === 'informacion' ? 'Información' : t === 'resumen' ? 'Resumen' : t === 'ingresos' ? 'Ingresos' : 'Suministros'}
               </button>
             ))}
           </nav>
         </div>
+
+        {tab === 'informacion' && (
+          <div className="mt-6">
+            <ProyectoInfo proyecto={proyecto} />
+          </div>
+        )}
 
         {/* Contenido del tab seleccionado */}
         {tab === 'resumen' && (

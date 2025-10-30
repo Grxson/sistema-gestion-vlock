@@ -40,32 +40,50 @@ const ProyectoResumen = ({ proyecto, fechaInicio, setFechaInicio, fechaFin, setF
       return isNaN(n) ? 0 : n;
     };
 
-    const getMontoSuministro = (s) => {
-      // 1) Campos base
-      const base = s.total ?? s.total_neto ?? s.monto_total ?? s.monto ?? s.importe ?? s.costo_total ?? s.total_con_iva;
-      if (base !== undefined && base !== null && base !== '') {
-        const parsed = parseMonto(base);
-        if (!isNaN(parsed) && parsed > 0) return parsed;
+    const getMontoSuministro = (r) => {
+      // Alineado con el cálculo de Totales (Suministros.jsx)
+      // 1) Priorizar costo_total numérico
+      const costoTotalNum = parseFloat(r?.costo_total);
+      if (!isNaN(costoTotalNum) && costoTotalNum > 0) {
+        return Math.round(costoTotalNum * 100) / 100;
       }
-      // 2) Múltiple: sumar items
-      const items = s.items || s.articulos || s.detalle || s.detalles;
-      if (Array.isArray(items) && items.length > 0) {
-        const sumItems = items.reduce((acc, it) => {
-          const t = it.total ?? it.importe ?? it.monto ?? (parseFloat(it.precio || it.precio_unitario || 0) * parseFloat(it.cantidad || 1));
-          return acc + parseMonto(t);
+      // 2) cantidad * precio_unitario
+      const cantidadNum = parseFloat(r?.cantidad) || 0;
+      const precioNum = parseFloat(r?.precio_unitario) || 0;
+      const calc = Math.round((cantidadNum * precioNum) * 100) / 100;
+      if (calc > 0) return calc;
+
+      // 3) Suministro múltiple: sumar items si existen
+      const candidates = r?.items || r?.articulos || r?.detalle || r?.detalles;
+      if (Array.isArray(candidates) && candidates.length > 0) {
+        const sumItems = candidates.reduce((acc, it) => {
+          const base = it.total ?? it.importe ?? it.monto;
+          if (base !== undefined && base !== null && base !== '') {
+            return acc + parseMonto(base);
+          }
+          const cant = parseFloat(it.cantidad) || 0;
+          const pu = parseFloat(it.precio || it.precio_unitario) || 0;
+          return acc + (cant * pu);
         }, 0);
-        if (sumItems > 0) return sumItems;
+        if (sumItems > 0) return Math.round(sumItems * 100) / 100;
       }
-      // 3) Fallback: subtotal + iva
-      const subtotal = parseMonto(s.subtotal ?? 0);
-      const iva = parseMonto(s.iva ?? s.impuesto ?? 0);
-      return subtotal + iva;
+
+      // 4) Fallback: campos totales usuales
+      const baseFields = r.total ?? r.total_neto ?? r.monto_total ?? r.monto ?? r.importe ?? r.total_con_iva;
+      const parsedBase = parseMonto(baseFields);
+      if (!isNaN(parsedBase) && parsedBase > 0) return Math.round(parsedBase * 100) / 100;
+
+      // 5) Último recurso: subtotal + iva
+      const subtotal = parseMonto(r.subtotal ?? 0);
+      const iva = parseMonto(r.iva ?? r.impuesto ?? 0);
+      return Math.round((subtotal + iva) * 100) / 100;
     };
 
     const groupByMonth = (arr, key) => {
       const map = new Map();
       arr.forEach((r) => {
-        const d = new Date(r.fecha || r.createdAt || Date.now());
+        const dStr = r.fecha || r.fecha_pago || r.fecha_registro || r.createdAt;
+        const d = new Date(dStr || Date.now());
         const label = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         const val = parseMonto(r[key] ?? r.total ?? r.monto_total ?? r.importe ?? r.costo_total ?? r.total_con_iva ?? 0);
         map.set(label, (map.get(label) || 0) + val);
@@ -76,7 +94,7 @@ const ProyectoResumen = ({ proyecto, fechaInicio, setFechaInicio, fechaFin, setF
     const ingM = groupByMonth(ingresos, 'monto');
     // map suministros to normalized records with key 'valor' (incluye múltiples)
     const suministrosNorm = suministros.map(s => ({
-      fecha: s.fecha || s.createdAt || null,
+      fecha: s.fecha || s.fecha_necesaria || s.fecha_compra || s.fecha_registro || s.createdAt || null,
       valor: getMontoSuministro(s)
     }));
     const sumM = (() => {
