@@ -555,6 +555,12 @@ class ApiService {
     return this.get(`/proyectos/${id}/estadisticas`);
   }
 
+  // Métodos para ingresos
+  async getIngresos(params = {}) {
+    const queryString = new URLSearchParams(params).toString();
+    return this.get(`/ingresos${queryString ? '?' + queryString : ''}`);
+  }
+
   // Métodos para suministros
   async getSuministros(params = {}) {
     const queryString = new URLSearchParams(params).toString();

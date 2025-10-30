@@ -505,7 +505,7 @@ const Proyectos = () => {
                         <td className="px-8 py-6">
                           <div className="flex items-center gap-2">
                             <button
-                              onClick={() => handleEdit(proyecto)}
+                              onClick={() => window.navigateApp && window.navigateApp(`/proyectos/${proyecto.id_proyecto}`)}
                               className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors duration-200"
                               title="Ver detalles"
                             >

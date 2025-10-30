@@ -17,6 +17,7 @@ import Reportes from './components/Reportes';
 import Suministros from './pages/Suministros';
 import Proveedores from './pages/Proveedores';
 import Proyectos from './pages/Proyectos';
+import ProyectoDetalle from './pages/ProyectoDetalle';
 import Herramientas from './pages/Herramientas';
 import Auditoria from './pages/Auditoria';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
@@ -96,6 +97,13 @@ function MainApp() {
     // Eliminar la barra inicial para obtener el nombre del módulo
     return path.substring(1) || 'dashboard';
   };
+
+  useEffect(() => {
+    window.navigateApp = handleNavigate;
+    return () => {
+      if (window.navigateApp === handleNavigate) window.navigateApp = undefined;
+    };
+  }, [currentPath]);
 
   const renderContent = () => {
     // Mostrar un indicador de carga mientras se cargan los permisos
@@ -183,6 +191,9 @@ function MainApp() {
         // Si la ruta empieza con /presupuestos/, usar el router de presupuestos
         if (currentPath.startsWith('/presupuestos/')) {
           return <PresupuestosRouter currentPath={currentPath} onNavigate={handleNavigate} />;
+        }
+        if (currentPath.startsWith('/proyectos/')) {
+          return <ProyectoDetalle currentPath={currentPath} />;
         }
         // Si la ruta empieza con /suministros/, manejar las subrutas
         if (currentPath.startsWith('/suministros/')) {
