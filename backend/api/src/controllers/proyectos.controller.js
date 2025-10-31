@@ -59,7 +59,12 @@ const createProyecto = async (req, res) => {
             fecha_fin, 
             estado, 
             responsable, 
-            ubicacion 
+            ubicacion,
+            cliente_nombre,
+            tipo,
+            categoria,
+            presupuesto,
+            notas
         } = req.body;
 
         // Validaciones básicas
@@ -103,7 +108,12 @@ const createProyecto = async (req, res) => {
             fecha_fin: fechaFinLimpia,
             estado: estado || 'Activo',
             responsable: responsable?.trim() || null,
-            ubicacion: ubicacion?.trim() || null
+            ubicacion: ubicacion?.trim() || null,
+            cliente_nombre: cliente_nombre?.trim() || null,
+            tipo: tipo?.trim() || null,
+            categoria: categoria?.trim() || null,
+            presupuesto: presupuesto !== undefined && presupuesto !== null && `${presupuesto}`.trim() !== '' ? Number(presupuesto) : null,
+            notas: notas?.trim() || null
         });
 
         res.status(201).json({
@@ -131,7 +141,12 @@ const updateProyecto = async (req, res) => {
             fecha_fin, 
             estado, 
             responsable, 
-            ubicacion 
+            ubicacion,
+            cliente_nombre,
+            tipo,
+            categoria,
+            presupuesto,
+            notas
         } = req.body;
 
         const proyecto = await models.Proyectos.findByPk(id);
@@ -184,7 +199,12 @@ const updateProyecto = async (req, res) => {
             fecha_fin: fechaFinLimpia,
             estado: estado || proyecto.estado,
             responsable: responsable?.trim() || proyecto.responsable,
-            ubicacion: ubicacion?.trim() || proyecto.ubicacion
+            ubicacion: ubicacion?.trim() || proyecto.ubicacion,
+            cliente_nombre: cliente_nombre?.trim() ?? proyecto.cliente_nombre,
+            tipo: tipo?.trim() ?? proyecto.tipo,
+            categoria: categoria?.trim() ?? proyecto.categoria,
+            presupuesto: (presupuesto !== undefined) ? ( `${presupuesto}`.trim() === '' ? null : Number(presupuesto) ) : proyecto.presupuesto,
+            notas: notas?.trim() ?? proyecto.notas
         });
 
         res.json({

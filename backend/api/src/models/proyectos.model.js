@@ -29,6 +29,26 @@ module.exports = (sequelize) => {
     },
     ubicacion: {
       type: DataTypes.STRING(200)
+    },
+    cliente_nombre: {
+      type: DataTypes.STRING(150),
+      allowNull: true
+    },
+    tipo: {
+      type: DataTypes.STRING(50),
+      allowNull: true
+    },
+    categoria: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    },
+    presupuesto: {
+      type: DataTypes.DECIMAL(12, 2),
+      allowNull: true
+    },
+    notas: {
+      type: DataTypes.TEXT,
+      allowNull: true
     }
   }, {
     timestamps: false

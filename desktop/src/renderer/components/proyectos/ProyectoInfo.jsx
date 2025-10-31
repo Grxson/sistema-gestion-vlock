@@ -37,15 +37,13 @@ const ProyectoInfo = ({ proyecto }) => {
           <InfoRow label="Ubicación" value={proyecto.ubicacion} />
           <InfoRow label="Cliente" value={proyecto.cliente?.nombre || proyecto.cliente_nombre || proyecto.cliente || '—'} />
           <InfoRow label="Responsable" value={proyecto.responsable?.nombre || proyecto.responsable || '—'} />
-          <InfoRow label="Estado" value={proyecto.estado || proyecto.estatus || '—'} />
+          <InfoRow label="Estado" value={proyecto.estado || '—'} />
           <InfoRow label="Tipo" value={proyecto.tipo || proyecto.categoria || '—'} />
         </div>
         <div>
           <InfoRow label="Fecha inicio" value={formatoFecha(fechaInicio)} />
           <InfoRow label="Fecha fin" value={formatoFecha(fechaFin)} />
           <InfoRow label="Presupuesto" value={proyecto.presupuesto ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(proyecto.presupuesto)) : '—'} />
-          <InfoRow label="Costo estimado" value={proyecto.costo_estimado ? new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(proyecto.costo_estimado)) : '—'} />
-          <InfoRow label="Dirección fiscal" value={proyecto.direccion_fiscal || proyecto.direccion || '—'} />
           <InfoRow label="Notas" value={proyecto.notas || proyecto.descripcion || '—'} />
         </div>
       </div>

@@ -62,12 +62,11 @@ const ProyectoDetalle = ({ currentPath }) => {
           showProjectCard={true}
           showResumen={false}
         />
-
         {/* Tabs */}
-        <div className="mb-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="mb-4 border-b border-gray-200 dark:border-gray-700 p-2">
           <nav className="-mb-px flex gap-6">
             {['informacion','resumen','ingresos','suministros'].map(t => (
-              <button key={t} onClick={()=>setTab(t)} className={`px-3 pb-3 border-b-2 ${tab===t? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'} `}>
+              <button key={t} onClick={()=>setTab(t)} className={`px-3 pb-1 border-b-2 ${tab===t? 'border-primary-600 text-primary-600' : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'} `}>
                 {t === 'informacion' ? 'Información' : t === 'resumen' ? 'Resumen' : t === 'ingresos' ? 'Ingresos' : 'Suministros'}
               </button>
             ))}

@@ -60,7 +60,12 @@ const Proyectos = () => {
     fecha_fin: '',
     estado: 'Activo',
     responsable: '',
-    ubicacion: ''
+    ubicacion: '',
+    cliente_nombre: '',
+    tipo: '',
+    categoria: '',
+    presupuesto: '',
+    notas: ''
   });
 
   // Estados de confirmación
@@ -77,8 +82,13 @@ const Proyectos = () => {
   // Formatear fecha
   const formatDate = (dateString) => {
     if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES');
+     const [year, month, day] = dateString.split("-");
+  const date = new Date(year, month - 1, day); // <-- evita UTC
+  return date.toLocaleDateString("es-MX", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
   };
 
   // Cargar todos los proyectos (sin filtros del servidor)
@@ -153,7 +163,14 @@ const Proyectos = () => {
         responsable: formData.responsable?.trim() || null,
         ubicacion: formData.ubicacion?.trim() || null,
         fecha_inicio: formData.fecha_inicio || null,
-        fecha_fin: formData.fecha_fin || null
+        fecha_fin: formData.fecha_fin || null,
+        cliente_nombre: formData.cliente_nombre?.trim() || null,
+        tipo: formData.tipo?.trim() || null,
+        categoria: formData.categoria?.trim() || null,
+        presupuesto: (formData.presupuesto !== undefined && formData.presupuesto !== null && `${formData.presupuesto}`.trim() !== '')
+          ? Number(formData.presupuesto)
+          : null,
+        notas: formData.notas?.trim() || null
       };
 
       if (editingProyecto) {
@@ -192,7 +209,12 @@ const Proyectos = () => {
       fecha_fin: proyecto.fecha_fin || '',
       estado: proyecto.estado || 'Activo',
       responsable: proyecto.responsable || '',
-      ubicacion: proyecto.ubicacion || ''
+      ubicacion: proyecto.ubicacion || '',
+      cliente_nombre: proyecto.cliente_nombre || proyecto.cliente?.nombre || '',
+      tipo: proyecto.tipo || '',
+      categoria: proyecto.categoria || '',
+      presupuesto: proyecto.presupuesto != null ? String(proyecto.presupuesto) : '',
+      notas: proyecto.notas || ''
     });
     setShowModal(true);
   };
@@ -263,7 +285,12 @@ const Proyectos = () => {
       fecha_fin: '',
       estado: 'Activo',
       responsable: '',
-      ubicacion: ''
+      ubicacion: '',
+      cliente_nombre: '',
+      tipo: '',
+      categoria: '',
+      presupuesto: '',
+      notas: ''
     });
     setEditingProyecto(null);
   };
@@ -653,109 +680,225 @@ const Proyectos = () => {
       {/* Modal de formulario */}
       {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+          <div className="bg-white dark:bg-dark-100 rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
                 {editingProyecto ? 'Editar Proyecto' : 'Nuevo Proyecto'}
               </h3>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="p-6 space-y-8">
+              {/* Sección: Información general */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Nombre del proyecto *
-                </label>
-                <input
-                  type="text"
-                  name="nombre"
-                  value={formData.nombre}
-                  onChange={handleInputChange}
-                  required
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                />
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Información general</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Nombre del proyecto *
+                    </label>
+                    <input
+                      type="text"
+                      name="nombre"
+                      placeholder="Ej. Casa habitación Los Pinos"
+                      value={formData.nombre}
+                      onChange={handleInputChange}
+                      required
+                      maxLength={100}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="md:col-span-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Responsable
+                    </label>
+                    <input
+                      type="text"
+                      name="responsable"
+                      placeholder="Nombre del responsable"
+                      value={formData.responsable}
+                      onChange={handleInputChange}
+                      maxLength={100}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Descripción
+                    </label>
+                    <textarea
+                      name="descripcion"
+                      placeholder="Notas generales del proyecto, alcance, objetivos..."
+                      value={formData.descripcion}
+                      onChange={handleInputChange}
+                      rows={3}
+                      maxLength={1000}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
               </div>
 
+              {/* Sección: Fechas y estado */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Descripción
-                </label>
-                <textarea
-                  name="descripcion"
-                  value={formData.descripcion}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Fecha de inicio
-                  </label>
-                  <input
-                    type="date"
-                    name="fecha_inicio"
-                    value={formData.fecha_inicio}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Fecha de fin
-                  </label>
-                  <input
-                    type="date"
-                    name="fecha_fin"
-                    value={formData.fecha_fin}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Responsable
-                  </label>
-                  <input
-                    type="text"
-                    name="responsable"
-                    value={formData.responsable}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Estado
-                  </label>
-                  <select
-                    name="estado"
-                    value={formData.estado}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
-                  >
-                    <option value="Activo">Activo</option>
-                    <option value="Pausado">Pausado</option>
-                    <option value="Finalizado">Finalizado</option>
-                  </select>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Fechas y estado</h4>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Fecha de inicio
+                    </label>
+                    <input
+                      type="date"
+                      name="fecha_inicio"
+                      value={formData.fecha_inicio}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Fecha de fin
+                    </label>
+                    <input
+                      type="date"
+                      name="fecha_fin"
+                      value={formData.fecha_fin}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Estado actual
+                    </label>
+                    <select
+                      name="estado"
+                      value={formData.estado}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    >
+                      <option value="Activo">Activo</option>
+                      <option value="Pausado">Pausado</option>
+                      <option value="Finalizado">Finalizado</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Presupuesto (MXN)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      inputMode="decimal"
+                      name="presupuesto"
+                      placeholder="0.00"
+                      value={formData.presupuesto}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
                 </div>
               </div>
 
+              {/* Sección: Clasificación */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Ubicación
-                </label>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Clasificación</h4>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Tipo
+                    </label>
+                    <input
+                      type="text"
+                      name="tipo"
+                      placeholder="Ej. Vivienda, Comercial..."
+                      value={formData.tipo}
+                      onChange={handleInputChange}
+                      list="tipo-suggestions"
+                      maxLength={50}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                    <datalist id="tipo-suggestions">
+                      <option value="Vivienda" />
+                      <option value="Comercial" />
+                      <option value="Industrial" />
+                      <option value="Remodelación" />
+                      <option value="Mantenimiento" />
+                      <option value="Infraestructura" />
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Categoría
+                    </label>
+                    <input
+                      type="text"
+                      name="categoria"
+                      placeholder="Ej. Obra civil, Acabados..."
+                      value={formData.categoria}
+                      onChange={handleInputChange}
+                      list="categoria-suggestions"
+                      maxLength={100}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                    <datalist id="categoria-suggestions">
+                      <option value="Obra civil" />
+                      <option value="Acabados" />
+                      <option value="Instalaciones" />
+                      <option value="Arquitectura" />
+                      <option value="Estructuras" />
+                      <option value="Urbanización" />
+                    </datalist>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Cliente (nombre)
+                    </label>
+                    <input
+                      type="text"
+                      name="cliente_nombre"
+                      placeholder="Nombre del cliente"
+                      value={formData.cliente_nombre}
+                      onChange={handleInputChange}
+                      maxLength={150}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sección: Ubicación */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Ubicación</h4>
                 <input
                   type="text"
                   name="ubicacion"
+                  placeholder="Ciudad, estado o dirección breve"
                   value={formData.ubicacion}
                   onChange={handleInputChange}
+                  maxLength={200}
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
                 />
+              </div>
+
+              {/* Sección: Notas */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">Notas</h4>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Observaciones
+                  </label>
+                  <textarea
+                    name="notas"
+                    rows={3}
+                    placeholder="Observaciones adicionales, restricciones, contactos, etc."
+                    value={formData.notas}
+                    onChange={handleInputChange}
+                    maxLength={2000}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end space-x-3 pt-6 border-t border-gray-200 dark:border-gray-700">
