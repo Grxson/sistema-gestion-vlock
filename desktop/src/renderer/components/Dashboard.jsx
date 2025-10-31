@@ -8,6 +8,11 @@ import {
   BuildingOffice2Icon
 } from '@heroicons/react/24/outline';
 import {
+  BanknotesIcon,
+  ArrowTrendingUpIcon,
+  ArrowTrendingDownIcon,
+} from '@heroicons/react/24/solid';
+import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
@@ -71,6 +76,8 @@ export default function Dashboard() {
     proyectosActivos: 0,
     proveedoresTop: [],
     gastosSupplies: 0,
+    totalIngresos: 0,
+    balanceGeneral: 0,
     estadisticasDetalladas: null,
     chartData: {
       gastosPorMes: [],
@@ -81,6 +88,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState(new Date());
   const { hasPermission, hasModuleAccess } = usePermissions();
+  const currentUser = apiService.getCurrentUser();
 
   useEffect(() => {
     fetchDashboardData();
@@ -100,6 +108,7 @@ export default function Dashboard() {
       let proyectosData = [];
       let suministrosStats = null;
       let proveedoresStats = null;
+      let ingresosData = [];
       let chartData = {
         gastosPorMes: [],
         gastosPorProyecto: []
@@ -156,6 +165,14 @@ export default function Dashboard() {
         console.error('Error al obtener proyectos:', error.message);
       }
 
+      // Datos de ingresos
+      try {
+        const ingresos = await apiService.getIngresos();
+        ingresosData = ingresos?.data ? (Array.isArray(ingresos.data) ? ingresos.data : []) : (Array.isArray(ingresos) ? ingresos : []);
+      } catch (error) {
+        console.error('Error al obtener ingresos:', error.message);
+      }
+
       // Calcular proveedores activos
       const proveedoresActivos = Array.isArray(proveedoresData) ? 
         proveedoresData.filter(p => p.estado === 'activo' || p.activo === true).length : 0;
@@ -189,8 +206,21 @@ export default function Dashboard() {
         .sort((a, b) => b.cantidadSuministros - a.cantidadSuministros)
         .slice(0, 5);
 
-      // Calcular gasto total en suministros
-      const gastosTotalSuministros = suministrosData.reduce((sum, s) => sum + (parseFloat(s.costo_total || 0)), 0);
+      // Calcular gasto total en suministros (usar agregado oficial si existe)
+      const gastosTotalSuministros =
+        (suministrosStats && typeof suministrosStats.total_gastado === 'number')
+          ? suministrosStats.total_gastado
+          : suministrosData.reduce((sum, s) => sum + (parseFloat(s.costo_total || 0)), 0);
+
+      // Calcular ingresos totales (intenta diferentes campos comunes)
+      const totalIngresos = ingresosData.reduce((sum, i) => {
+        const monto = i.monto ?? i.total ?? i.importe ?? 0;
+        const num = parseFloat(monto) || 0;
+        return sum + num;
+      }, 0);
+
+      // Balance general
+      const balanceGeneral = totalIngresos - gastosTotalSuministros;
 
       // Proyectos activos
       const proyectosActivos = Array.isArray(proyectosData) ? 
@@ -204,6 +234,8 @@ export default function Dashboard() {
         proyectosActivos: proyectosActivos,
         proveedoresTop: proveedoresTop,
         gastosSupplies: gastosTotalSuministros,
+        totalIngresos: totalIngresos,
+        balanceGeneral: balanceGeneral,
         estadisticasDetalladas: {
           suministros: suministrosStats,
           proveedores: proveedoresStats
@@ -519,42 +551,49 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-        {updatedStats.map((item) => (
-          <div
-            key={item.name}
-            className="relative bg-white dark:bg-dark-100 pt-6 px-6 pb-6 shadow-lg dark:shadow-2xl rounded-xl overflow-hidden hover-scale card-shadow border border-gray-100 dark:border-gray-700 transition-all duration-300"
-          >
-            <dt>
-              <div className={`absolute top-4 right-4 ${item.color} rounded-xl p-3 shadow-lg`}>
-                <item.icon className="h-6 w-6 text-white" aria-hidden="true" />
-              </div>
-              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate pr-16">{item.name}</p>
-            </dt>
-            <dd className="mt-4 flex items-baseline">
-              <p className="text-3xl font-bold text-gray-900 dark:text-white">{item.stat}</p>
-              <p
-                className={classNames(
-                  item.changeType === 'increase' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400',
-                  'ml-3 flex items-baseline text-sm font-semibold'
-                )}
-              >
-                {item.changeType === 'increase' ? (
-                  <svg className="h-4 w-4 flex-shrink-0 mr-1" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M10 17a.75.75 0 01-.75-.75V5.612L5.29 9.77a.75.75 0 01-1.08-1.04l5.25-5.5a.75.75 0 011.08 0l5.25 5.5a.75.75 0 11-1.08 1.04L10.75 5.612V16.25A.75.75 0 0110 17z" clipRule="evenodd" />
-                  </svg>
-                ) : (
-                  <svg className="h-4 w-4 flex-shrink-0 mr-1" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                    <path fillRule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.08-1.04L9.25 14.388V3.75A.75.75 0 0110 3z" clipRule="evenodd" />
-                  </svg>
-                )}
-                {item.change}
-              </p>
-            </dd>
-          </div>
-        ))}
+      {/* Presentación / Hero */}
+      <div className="bg-white dark:bg-dark-100 rounded-xl border border-gray-100 dark:border-gray-700 shadow-lg dark:shadow-2xl p-6 flex items-center justify-between">
+        <div className="min-w-0">
+          <h2 className="text-xl font-bold text-gray-900 dark:text-white truncate">Bienvenido{currentUser?.nombre ? `, ${currentUser.nombre}` : ''}</h2>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 truncate">Vlock Sistema de Gestión. Visión rápida de ingresos, gastos y actividad reciente.</p>
+        </div>
+        <img src="/images/vlock_logo.png" alt="Vlock" className="h-10 sm:h-12 object-contain ml-4" />
       </div>
+
+      {/* KPIs Financieros */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* Ingresos Totales */}
+        <div className="relative bg-white dark:bg-dark-100 pt-6 px-6 pb-6 shadow-lg dark:shadow-2xl rounded-xl overflow-hidden hover-scale card-shadow border border-gray-100 dark:border-gray-700 transition-all duration-300">
+          <div className="absolute top-4 right-4 bg-emerald-500 rounded-xl p-3 shadow-lg">
+            <BanknotesIcon className="h-6 w-6 text-white" />
+          </div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate pr-16">Ingresos Totales</p>
+          <p className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">${dashboardData.totalIngresos.toLocaleString('es-MX')}</p>
+        </div>
+
+        {/* Gastos Totales (Suministros) */}
+        <div className="relative bg-white dark:bg-dark-100 pt-6 px-6 pb-6 shadow-lg dark:shadow-2xl rounded-xl overflow-hidden hover-scale card-shadow border border-gray-100 dark:border-gray-700 transition-all duration-300">
+          <div className="absolute top-4 right-4 bg-rose-500 rounded-xl p-3 shadow-lg">
+            <ArrowTrendingDownIcon className="h-6 w-6 text-white" />
+          </div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate pr-16">Gastos (Suministros)</p>
+          <p className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">${dashboardData.gastosSupplies.toLocaleString('es-MX')}</p>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Suma total de todos los gastos de suministros</p>
+        </div>
+
+        {/* Balance General */}
+        <div className="relative bg-white dark:bg-dark-100 pt-6 px-6 pb-6 shadow-lg dark:shadow-2xl rounded-xl overflow-hidden hover-scale card-shadow border border-gray-100 dark:border-gray-700 transition-all duration-300">
+          <div className="absolute top-4 right-4 bg-indigo-500 rounded-xl p-3 shadow-lg">
+            <ArrowTrendingUpIcon className="h-6 w-6 text-white" />
+          </div>
+          <p className="text-sm font-medium text-gray-500 dark:text-gray-400 truncate pr-16">Balance General</p>
+          <p className={`mt-4 text-3xl font-bold ${dashboardData.balanceGeneral >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
+            ${Math.abs(dashboardData.balanceGeneral).toLocaleString('es-MX')}
+          </p>
+        </div>
+      </div>
+
+      {/* Stats removidos por simplificación del dashboard */}
 
       {/* Gráficas de Análisis */}
       {dashboardData.chartData && (dashboardData.chartData.gastosPorMes.length > 0 || dashboardData.chartData.gastosPorProyecto.length > 0) && (
@@ -824,53 +863,8 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Sección de Actividad Reciente y Datos */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Recent Supplies - Ocupa 2 columnas en pantallas grandes */}
-        <div className="lg:col-span-2 bg-white dark:bg-dark-100 shadow-lg dark:shadow-2xl rounded-xl card-shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dark-200">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-              <ArchiveBoxIcon className="h-5 w-5 mr-2 text-indigo-600 dark:text-indigo-400" />
-              Suministros Recientes
-            </h3>
-          </div>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {dashboardData.suministrosRecientes.length > 0 ? (
-              dashboardData.suministrosRecientes.map((suministro) => (
-                <div key={suministro.id_suministro} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="h-12 w-12 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-full flex items-center justify-center shadow-md">
-                        <ArchiveBoxIcon className="h-6 w-6 text-white" />
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{suministro.descripcion || 'Suministro'}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {suministro.categoria?.nombre || 'Material'} - {suministro.cantidad || 0} {suministro.unidad || 'unidades'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        ${(suministro.costo_total || 0).toLocaleString('es-MX')}
-                      </span>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {suministro.fecha_creacion ? new Date(suministro.fecha_creacion).toLocaleDateString() : 'Sin fecha'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                <ArchiveBoxIcon className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-4" />
-                <p className="text-sm">No hay suministros registrados</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* System Activity - Ocupa 1 columna */}
+      {/* Resumen del Sistema (simplificado) */}
+      <div className="grid grid-cols-1 gap-6">
         <div className="bg-white dark:bg-dark-100 shadow-lg dark:shadow-2xl rounded-xl card-shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
           <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dark-200">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
@@ -951,211 +945,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Top Providers Section - Grid simétrico */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top Providers */}
-        <div className="bg-white dark:bg-dark-100 shadow-lg dark:shadow-2xl rounded-xl card-shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dark-200">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-              <TruckIcon className="h-5 w-5 mr-2 text-red-600 dark:text-red-400" />
-              Top Proveedores
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Proveedores con mayor volumen de ventas
-            </p>
-          </div>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            {dashboardData.proveedoresTop.length > 0 ? (
-              dashboardData.proveedoresTop.map((proveedor, index) => (
-                <div key={proveedor.id_proveedor} className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="h-12 w-12 bg-gradient-to-br from-red-500 to-red-600 rounded-full flex items-center justify-center shadow-md relative">
-                        <TruckIcon className="h-6 w-6 text-white" />
-                        {/* Badge de ranking */}
-                        <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full text-xs font-bold text-white flex items-center justify-center ${
-                          index === 0 ? 'bg-yellow-500' :
-                          index === 1 ? 'bg-gray-400' :
-                          index === 2 ? 'bg-orange-600' : 'bg-gray-500'
-                        }`}>
-                          {index + 1}
-                        </div>
-                      </div>
-                      <div className="ml-4">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-white">{proveedor.nombre || 'Proveedor'}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          {proveedor.cantidadSuministros || 0} suministros
-                        </p>
-                        <div className="flex items-center mt-1">
-                          <div className="w-20 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                            <div 
-                              className="bg-red-500 h-1.5 rounded-full" 
-                              style={{
-                                width: `${Math.min(100, ((proveedor.totalGastado || 0) / Math.max(...dashboardData.proveedoresTop.map(p => p.totalGastado || 0))) * 100)}%`
-                              }}
-                            ></div>
-                          </div>
-                          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
-                            {Math.round(((proveedor.totalGastado || 0) / dashboardData.gastosSupplies) * 100)}%
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">
-                        ${(proveedor.totalGastado || 0).toLocaleString('es-MX')}
-                      </span>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">Total gastado</p>
-                      <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-                        ${proveedor.cantidadSuministros > 0 ? 
-                          Math.round((proveedor.totalGastado || 0) / proveedor.cantidadSuministros).toLocaleString('es-MX') : 0}/suministro
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
-                <TruckIcon className="mx-auto h-12 w-12 text-gray-300 dark:text-gray-600 mb-4" />
-                <p className="text-sm">No hay proveedores registrados</p>
-              </div>
-            )}
-          </div>
-          {/* Resumen de proveedores */}
-          {dashboardData.proveedoresTop.length > 0 && (
-            <div className="px-6 py-4 bg-gray-50 dark:bg-dark-200 border-t border-gray-200 dark:border-gray-700">
-              <div className="grid grid-cols-2 gap-4 text-center">
-                <div>
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Proveedor Líder</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">
-                    {Math.round(((dashboardData.proveedoresTop[0]?.totalGastado || 0) / dashboardData.gastosSupplies) * 100)}% del total
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-gray-700 dark:text-gray-300">Promedio Top 3</div>
-                  <div className="text-xs text-gray-600 dark:text-gray-400">
-                    ${dashboardData.proveedoresTop.length >= 3 ? 
-                      Math.round(dashboardData.proveedoresTop.slice(0, 3).reduce((sum, p) => sum + (p.totalGastado || 0), 0) / 3).toLocaleString('es-MX') : 0}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Estadísticas Adicionales */}
-        <div className="bg-white dark:bg-dark-100 shadow-lg dark:shadow-2xl rounded-xl card-shadow border border-gray-100 dark:border-gray-700 overflow-hidden">
-          <div className="px-6 py-5 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-dark-200">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-              <ChartBarIcon className="h-5 w-5 mr-2 text-purple-600 dark:text-purple-400" />
-              Métricas de Rendimiento
-            </h3>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Indicadores clave del sistema
-            </p>
-          </div>
-          <div className="divide-y divide-gray-200 dark:divide-gray-700">
-            <div className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="h-3 w-3 bg-purple-400 dark:bg-purple-500 rounded-full shadow-sm"></div>
-                  <p className="ml-3 text-sm text-gray-900 dark:text-white">Proveedores Activos</p>
-                </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dark-200 px-2 py-1 rounded-full">
-                  {dashboardData.proveedoresActivos}
-                </span>
-              </div>
-              <div className="mt-2 ml-6">
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                  <div 
-                    className="bg-purple-500 h-1.5 rounded-full" 
-                    style={{
-                      width: `${Math.min(100, (dashboardData.proveedoresActivos / Math.max(dashboardData.totalProveedores, 1)) * 100)}%`
-                    }}
-                  ></div>
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {Math.round((dashboardData.proveedoresActivos / Math.max(dashboardData.totalProveedores, 1)) * 100)}% del total
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="h-3 w-3 bg-indigo-400 dark:bg-indigo-500 rounded-full shadow-sm"></div>
-                  <p className="ml-3 text-sm text-gray-900 dark:text-white">Diversificación</p>
-                </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dark-200 px-2 py-1 rounded-full">
-                  {dashboardData.totalProveedores > 0 ? 
-                    Math.round(dashboardData.totalSuministros / dashboardData.totalProveedores) : 0} avg
-                </span>
-              </div>
-              <div className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
-                Suministros promedio por proveedor
-              </div>
-            </div>
-            <div className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="h-3 w-3 bg-green-400 dark:bg-green-500 rounded-full shadow-sm"></div>
-                  <p className="ml-3 text-sm text-gray-900 dark:text-white">Concentración</p>
-                </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dark-200 px-2 py-1 rounded-full">
-                  {dashboardData.proveedoresTop.length > 0 && dashboardData.gastosSupplies > 0 ? 
-                    Math.round(((dashboardData.proveedoresTop[0]?.totalGastado || 0) / dashboardData.gastosSupplies) * 100) : 0}%
-                </span>
-              </div>
-              <div className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
-                Participación del proveedor principal
-              </div>
-            </div>
-            <div className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="h-3 w-3 bg-yellow-400 dark:bg-yellow-500 rounded-full shadow-sm"></div>
-                  <p className="ml-3 text-sm text-gray-900 dark:text-white">Ticket Promedio</p>
-                </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dark-200 px-2 py-1 rounded-full">
-                  ${dashboardData.totalSuministros > 0 ? 
-                    Math.round(dashboardData.gastosSupplies / dashboardData.totalSuministros).toLocaleString('es-MX') : 0}
-                </span>
-              </div>
-              <div className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
-                Gasto promedio por suministro
-              </div>
-            </div>
-            <div className="px-6 py-4 hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors duration-200">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <div className="h-3 w-3 bg-orange-400 dark:bg-orange-500 rounded-full shadow-sm"></div>
-                  <p className="ml-3 text-sm text-gray-900 dark:text-white">Productividad</p>
-                </div>
-                <span className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-dark-200 px-2 py-1 rounded-full">
-                  {dashboardData.proyectosActivos > 0 ? 
-                    Math.round(dashboardData.totalSuministros / dashboardData.proyectosActivos) : 0} items
-                </span>
-              </div>
-              <div className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
-                Suministros promedio por proyecto
-              </div>
-            </div>
-          </div>
-          {/* Footer con estadística destacada */}
-          <div className="px-6 py-4 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-t border-gray-200 dark:border-gray-700">
-            <div className="text-center">
-              <div className="text-sm font-medium text-purple-800 dark:text-purple-300">Índice de Eficiencia Global</div>
-              <div className="text-2xl font-bold text-purple-700 dark:text-purple-200">
-                {dashboardData.totalSuministros > 0 && dashboardData.proyectosActivos > 0 ? 
-                  Math.round(((dashboardData.totalSuministros / dashboardData.proyectosActivos) / 
-                    Math.max((dashboardData.totalSuministros / dashboardData.totalProveedores), 1)) * 100) : 0}%
-              </div>
-              <div className="text-xs text-purple-600 dark:text-purple-400">
-                Balance entre diversificación y productividad
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Top Proveedores y Métricas de Rendimiento removidos para simplificar el dashboard */}
     </div>
   );
 }

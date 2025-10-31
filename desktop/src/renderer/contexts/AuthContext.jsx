@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import apiService from '../services/api';
 import { useToast } from './ToastContext';
+import { getWelcomeMessage } from '../utils/welcomeMessages';
 
 const AuthContext = createContext();
 
@@ -36,7 +37,9 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [lastVerified, setLastVerified] = useState(null);
   const [authError, setAuthError] = useState(null);
-  const { showSessionExpired } = useToast();
+  const { showSessionExpired, showSuccess } = useToast();
+
+  // Mensajes de bienvenida ahora viven en utils/welcomeMessages
 
   // Efecto para verificar la autenticación al inicio
   useEffect(() => {
@@ -143,6 +146,13 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(true);
       setLastVerified(new Date());
       console.log('[AuthContext] Sesión iniciada exitosamente');
+      // Mensaje de bienvenida dinámico (util extendible)
+      try {
+        const mensaje = getWelcomeMessage(response.usuario);
+        showSuccess('Bienvenido', mensaje);
+      } catch (e) {
+        // no-op si el toast no está disponible temporalmente
+      }
       
       return response;
     } catch (error) {

@@ -12,6 +12,7 @@ import { useAuth } from '../../contexts/AuthContext';
 const UserMenu = ({ user, isCollapsed, sidebarWidth, onNavigate }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { logout } = useAuth();
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const menuRef = useRef(null);
   const buttonRef = useRef(null);
   const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
@@ -90,9 +91,14 @@ const UserMenu = ({ user, isCollapsed, sidebarWidth, onNavigate }) => {
     };
   }, [isMenuOpen]);
 
-  const handleLogout = () => {
+  const handleLogoutRequest = () => {
     setIsMenuOpen(false);
-    logout();
+    setShowLogoutConfirm(true);
+  };
+
+  const confirmLogout = async () => {
+    setShowLogoutConfirm(false);
+    await logout();
   };
 
   const handleProfile = () => {
@@ -195,12 +201,38 @@ const UserMenu = ({ user, isCollapsed, sidebarWidth, onNavigate }) => {
 
           {/* Cerrar sesión */}
           <button
-            onClick={handleLogout}
+            onClick={handleLogoutRequest}
             className="w-full flex items-center gap-3 px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors duration-200"
           >
             <ArrowRightOnRectangleIcon className="w-4 h-4" />
             Cerrar Sesión
           </button>
+        </div>,
+        document.body
+      )}
+
+      {/* Modal de confirmación de logout */}
+      {showLogoutConfirm && createPortal(
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowLogoutConfirm(false)} />
+          <div className="relative bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 w-full max-w-sm mx-4 p-5">
+            <div className="text-lg font-semibold text-gray-900 dark:text-white">Confirmar cierre de sesión</div>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">¿Seguro que deseas cerrar tu sesión actual?</p>
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                onClick={() => setShowLogoutConfirm(false)}
+                className="px-4 py-2 rounded-lg text-sm bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmLogout}
+                className="px-4 py-2 rounded-lg text-sm bg-red-600 hover:bg-red-700 text-white"
+              >
+                Cerrar sesión
+              </button>
+            </div>
+          </div>
         </div>,
         document.body
       )}

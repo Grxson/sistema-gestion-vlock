@@ -147,49 +147,34 @@ export function PermissionsProvider({ children }) {
         
         // Convertir el array de permisos en un objeto para facilitar el acceso
         const permisosMap = {};
-        
-        // Mapeo de nombres descriptivos a códigos de permisos
-        const nombreACodigoMap = {
-          'Ver empleados': 'empleados.ver',
-          'Crear empleado': 'empleados.crear',
-          'Editar empleado': 'empleados.editar',
-          'Eliminar empleado': 'empleados.eliminar',
-          'Ver nómina': 'nomina.ver',
-          'Crear nómina': 'nomina.crear',
-          'Editar nómina': 'nomina.editar',
-          'Eliminar nómina': 'nomina.eliminar',
-          'Ver contratos': 'contratos.ver',
-          'Crear contrato': 'contratos.crear',
-          'Editar contrato': 'contratos.editar',
-          'Eliminar contrato': 'contratos.eliminar',
-          'Ver oficios': 'oficios.ver',
-          'Crear oficio': 'oficios.crear',
-          'Editar oficio': 'oficios.editar',
-          'Eliminar oficio': 'oficios.eliminar',
-          'Ver auditoría': 'auditoria.ver',
-          'Ver reportes': 'reportes.ver',
-          'Generar reportes': 'reportes.generar',
-          'Ver usuarios': 'usuarios.ver',
-          'Crear usuario': 'usuarios.crear',
-          'Editar usuario': 'usuarios.editar',
-          'Eliminar usuario': 'usuarios.eliminar',
-          'Ver roles': 'roles.ver',
-          'Crear rol': 'roles.crear',
-          'Editar rol': 'roles.editar',
-          'Eliminar rol': 'roles.eliminar',
-          'Ver configuración': 'configuracion.ver',
-          'Editar configuración': 'configuracion.editar'
-        };
-        
-        // Convertir nombres descriptivos a códigos y marcar como permitidos
-        response.permisos.forEach(nombrePermiso => {
-          const codigoPermiso = nombreACodigoMap[nombrePermiso];
-          if (codigoPermiso) {
-            permisosMap[codigoPermiso] = true;
-            console.log(`[PermissionsContext] Mapeo: "${nombrePermiso}" -> "${codigoPermiso}"`);
+
+        // 1) Cargar catálogo de acciones desde backend para construir un mapa dinámico nombre->codigo
+        let accionesMap = {};
+        try {
+          const accionesResp = await apiService.getAccionesPermiso();
+          const acciones = accionesResp?.acciones || accionesResp || [];
+          acciones.forEach(a => {
+            if (a?.nombre && a?.codigo) accionesMap[a.nombre] = a.codigo;
+          });
+          console.log('[PermissionsContext] Catálogo de acciones cargado:', Object.keys(accionesMap).length);
+        } catch (e) {
+          console.warn('[PermissionsContext] No se pudo cargar catálogo de acciones. Se intentará usar códigos directos del backend.', e?.message);
+        }
+
+        // 2) Mapear la lista que llega del backend:
+        //    - Si el valor parece ya ser un código (contiene un punto), usarlo tal cual
+        //    - Si es un nombre humano, traducirlo con accionesMap
+        response.permisos.forEach(value => {
+          let code = null;
+          if (typeof value === 'string' && value.includes('.')) {
+            code = value;
+          } else if (accionesMap[value]) {
+            code = accionesMap[value];
+            console.log(`[PermissionsContext] Mapeo dinámico: "${value}" -> "${code}"`);
           } else {
-            console.warn(`[PermissionsContext] Permiso no reconocido: "${nombrePermiso}"`);
+            console.warn(`[PermissionsContext] Permiso no reconocido (sin mapeo): "${value}"`);
           }
+          if (code) permisosMap[code] = true;
         });
         
         console.log(`[PermissionsContext] Permisos mapeados: ${Object.keys(permisosMap).length} códigos generados`);
@@ -317,7 +302,7 @@ export function PermissionsProvider({ children }) {
     // Mapa de conversión del nombre del módulo a su código de permiso
     const modulePermissionMap = {
       'empleados': 'empleados.ver',
-      'nomina': 'nomina.ver',
+      'nomina': 'nomina.ver', 
       'contratos': 'contratos.ver', 
       'oficios': 'oficios.ver',
       'auditoria': 'auditoria.ver',
@@ -327,7 +312,9 @@ export function PermissionsProvider({ children }) {
       'configuracion': 'configuracion.ver',
       'finanzas': 'finanzas.gastos.ver',
       'proyectos': 'proyectos.ver',
-      'herramientas': 'herramientas.ver'
+      'herramientas': 'herramientas.ver',
+      'adeudos': 'adeudos.ver',
+      'ingresos': 'ingresos.ver'
     };
 
     // Obtener el código de permiso correcto para este módulo

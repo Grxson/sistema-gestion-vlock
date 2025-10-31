@@ -297,12 +297,14 @@ const getUserPermissions = async (req, res) => {
             }]
         });
 
-        // Extraer solo los nombres de las acciones
-        const listaPermisos = permisos.map(permiso => permiso.accion.nombre);
+        // Extraer códigos de permiso (preferido) y también nombres para compatibilidad
+        const listaPermisosCodigos = permisos.map(permiso => permiso.accion.codigo);
+        const listaPermisosNombres = permisos.map(permiso => permiso.accion.nombre);
 
         res.status(200).json({
             message: 'Permisos obtenidos exitosamente',
-            permisos: listaPermisos,
+            permisos: listaPermisosCodigos,
+            permisos_nombres: listaPermisosNombres,
             usuario: {
                 id: usuario.id_usuario,
                 nombre: usuario.nombre_usuario,

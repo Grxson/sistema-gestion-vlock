@@ -13,7 +13,7 @@ module.exports = (sequelize) => {
       unique: true
     },
     codigo: {
-      type: DataTypes.STRING(30),
+      type: DataTypes.STRING(64),
       allowNull: false,
       unique: true
     },
