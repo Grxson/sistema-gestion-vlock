@@ -58,6 +58,9 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
     return list;
   };
 
+  // Identificador seguro de nómina
+  const getNominaId = (n) => (n && n.id_nomina != null ? n.id_nomina : n?.id);
+
   const normalizarEstadoValor = (estado) => {
     const e = (estado || '').toLowerCase();
     if (e === 'borrador') return 'Borrador';
@@ -70,17 +73,21 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
   };
 
   const cambiarEstado = async (n, nuevoEstado) => {
-    const id = n.id_nomina || n.id;
+    const id = getNominaId(n);
     const prev = n.estado;
     // Update optimista en tabla
-    setNominas((arr) => arr.map(item => ( (item.id_nomina||item.id) === id ? { ...item, estado: nuevoEstado } : item )));
+    setNominas((arr) => arr.map(item => (
+      getNominaId(item) === id ? { ...item, estado: nuevoEstado } : item
+    )));
     try {
       // limpiar caché para que el siguiente load sea fresco
       if (empleadoId) HIST_CACHE.delete(empleadoId);
       await apiService.cambiarEstadoNomina(id, nuevoEstado);
     } catch (err) {
       // revertir si falla
-      setNominas((arr) => arr.map(item => ( (item.id_nomina||item.id) === id ? { ...item, estado: prev } : item )));
+      setNominas((arr) => arr.map(item => (
+        getNominaId(item) === id ? { ...item, estado: prev } : item
+      )));
       console.error('Error cambiando estado de nómina:', err);
       alert(err.message || 'No se pudo cambiar el estado');
     }
@@ -88,7 +95,7 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
 
   const abrirEditor = async (n) => {
     try {
-      const det = await nominasServices.getById(n.id_nomina || n.id);
+      const det = await nominasServices.getById(getNominaId(n));
       const data = det?.data || det;
       if (data) {
         setEditingNomina(data);

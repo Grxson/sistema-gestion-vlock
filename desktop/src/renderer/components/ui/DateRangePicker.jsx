@@ -5,8 +5,8 @@ import DateInput from './DateInput';
 const DateRangePicker = ({
   startDate,
   endDate,
-  onStartDateChange,
-  onEndDateChange,
+  onStartDateChange = () => {},
+  onEndDateChange = () => {},
   startLabel = "Fecha Inicio",
   endLabel = "Fecha Fin",
   className = "",
@@ -64,51 +64,53 @@ const DateRangePicker = ({
 
   const getQuickRanges = () => {
     const today = new Date();
+    const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    
+    // Semana con inicio en Lunes
+    const day = today.getDay(); // 0..6 (0=Dom)
+    const diffToMonday = (day + 6) % 7; // 0 si lunes
     const thisWeekStart = new Date(today);
-    thisWeekStart.setDate(today.getDate() - today.getDay());
+    thisWeekStart.setDate(today.getDate() - diffToMonday);
     const lastWeekStart = new Date(thisWeekStart);
     lastWeekStart.setDate(thisWeekStart.getDate() - 7);
     const lastWeekEnd = new Date(thisWeekStart);
     lastWeekEnd.setDate(thisWeekStart.getDate() - 1);
-    
+    // Mes actual y anterior (local)
     const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
-    
     const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
     const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
 
     return [
       {
         label: "Hoy",
-        start: today.toISOString().split('T')[0],
-        end: today.toISOString().split('T')[0]
+        start: fmt(today),
+        end: fmt(today)
       },
       {
         label: "Ayer",
-        start: yesterday.toISOString().split('T')[0],
-        end: yesterday.toISOString().split('T')[0]
+        start: fmt(yesterday),
+        end: fmt(yesterday)
       },
       {
         label: "Esta semana",
-        start: thisWeekStart.toISOString().split('T')[0],
-        end: today.toISOString().split('T')[0]
+        start: fmt(thisWeekStart),
+        end: fmt(today)
       },
       {
         label: "Semana pasada",
-        start: lastWeekStart.toISOString().split('T')[0],
-        end: lastWeekEnd.toISOString().split('T')[0]
+        start: fmt(lastWeekStart),
+        end: fmt(lastWeekEnd)
       },
       {
         label: "Este mes",
-        start: thisMonthStart.toISOString().split('T')[0],
-        end: today.toISOString().split('T')[0]
+        start: fmt(thisMonthStart),
+        end: fmt(today)
       },
       {
         label: "Mes pasado",
-        start: lastMonthStart.toISOString().split('T')[0],
-        end: lastMonthEnd.toISOString().split('T')[0]
+        start: fmt(lastMonthStart),
+        end: fmt(lastMonthEnd)
       }
     ];
   };
@@ -117,13 +119,13 @@ const DateRangePicker = ({
     // Si el filtro ya está activo, lo desactivamos (toggle)
     if (activeFilter === range.label) {
       setActiveFilter(null);
-      onStartDateChange('');
-      onEndDateChange('');
+      handleStartDateChange('');
+      handleEndDateChange('');
     } else {
       // Si no está activo, lo activamos
       setActiveFilter(range.label);
-      onStartDateChange(range.start);
-      onEndDateChange(range.end);
+      handleStartDateChange(range.start);
+      handleEndDateChange(range.end);
     }
   };
 

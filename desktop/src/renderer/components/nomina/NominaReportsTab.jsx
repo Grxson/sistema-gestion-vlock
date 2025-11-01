@@ -9,7 +9,7 @@ import NominaWeeklySummary from './NominaWeeklySummary';
 import NominaCharts from './NominaCharts';
 import NominaPaymentsList from './NominaPaymentsList';
 import DateRangePicker from '../ui/DateRangePicker';
-import { calcularSemanaDelMes } from '../../utils/weekCalculator';
+import { calcularSemanaDelMes, semanaDelMesDesdeISO } from '../../utils/weekCalculator';
 import {
   ChartBarIcon,
   CurrencyDollarIcon,
@@ -180,12 +180,27 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     };
   }, [filteredNominas]);
 
+  // Helper: calcular semana del mes usando ISO de la nómina si existe
+  const computeSemanaDelMes = (n) => {
+    const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt || n?.fecha_creacion;
+    if (n?.semana?.anio && n?.semana?.semana_iso) {
+      // Derivar período desde la fecha base (YYYY-MM)
+      if (base) {
+        const d = new Date(base);
+        const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const idx = semanaDelMesDesdeISO(periodo, n.semana.anio, n.semana.semana_iso);
+        if (!Number.isNaN(idx) && idx) return idx;
+      }
+    }
+    // Fallback a cálculo por fecha cuando no hay ISO en la nómina
+    return base ? calcularSemanaDelMes(new Date(base)) : '—';
+  };
+
   // Agrupar por semana del mes y calcular subtotales (Fase B)
   const gruposPorSemana = useMemo(() => {
     const map = new Map();
     filteredNominas.forEach((n) => {
-      const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt || n?.fecha_creacion;
-      const semana = getSemanaDelMes(base) || '—';
+      const semana = computeSemanaDelMes(n);
       if (!map.has(semana)) {
         map.set(semana, { rows: [], pagado: 0, comprometido: 0 });
       }
@@ -241,25 +256,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     return list;
   }
 
-  function getSemanaDelMes(date) {
-    if (!date) return null;
-    const d = new Date(date);
-    const dow = d.getDay();
-    const deltaToThursday = dow === 0 ? -3 : (4 - dow);
-    const th = new Date(d);
-    th.setDate(d.getDate() + deltaToThursday);
-    const isoYear = th.getFullYear();
-    const firstThursday = new Date(isoYear, 0, 4, 12, 0, 0, 0);
-    const firstDow = firstThursday.getDay();
-    const deltaFirst = firstDow === 0 ? -3 : (4 - firstDow);
-    const firstIsoWeekThursday = new Date(firstThursday);
-    firstIsoWeekThursday.setDate(firstThursday.getDate() + deltaFirst);
-    const diffDays = Math.round((th - firstIsoWeekThursday) / (24 * 3600 * 1000));
-    const isoWeek = 1 + Math.floor(diffDays / 7);
-    const weeks = getWeeksTouchingMonth(getPeriodoFromDate(d));
-    const idx = weeks.findIndex(w => w.anio === isoYear && w.semana_iso === isoWeek);
-    return idx >= 0 ? (idx + 1) : null;
-  }
+  // Nota: Para coherencia con todo el sistema, usar util calcularSemanaDelMes(fecha)
 
   // Nota: el filtrado ahora se hace con useMemo (filteredNominas)
 
@@ -272,32 +269,6 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     }
 
     try {
-      // Función para calcular semana del mes
-      const calcularSemanaDelMes = (fecha) => {
-        const año = fecha.getFullYear();
-        const mes = fecha.getMonth();
-        const dia = fecha.getDate();
-        
-        const primerDiaDelMes = new Date(año, mes, 1);
-        const diaPrimerDia = primerDiaDelMes.getDay();
-        const diasEnPrimeraFila = 7 - diaPrimerDia;
-        
-        if (dia <= diasEnPrimeraFila) {
-          return 1;
-        } else {
-          const diasRestantes = dia - diasEnPrimeraFila;
-          const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
-          
-          const ultimoDiaDelMes = new Date(año, mes + 1, 0);
-          const diasEnElMes = ultimoDiaDelMes.getDate();
-          const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
-          const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
-          const totalFilas = 1 + filasAdicionales;
-          
-          return Math.max(1, Math.min(semanaDelMes, totalFilas));
-        }
-      };
-
       // Preparar datos para Excel
       const datosExcel = nominasToExport.map((nomina, index) => {
         const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
@@ -740,31 +711,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const calculateWeeklyReportsData = () => {
     if (!nominas || !empleados) return;
 
-    // Función para calcular semana del mes (mismo algoritmo que el wizard)
-    const calcularSemanaDelMes = (fecha) => {
-      const año = fecha.getFullYear();
-      const mes = fecha.getMonth();
-      const dia = fecha.getDate();
-      
-      const primerDiaDelMes = new Date(año, mes, 1);
-      const diaPrimerDia = primerDiaDelMes.getDay();
-      const diasEnPrimeraFila = 7 - diaPrimerDia;
-      
-      if (dia <= diasEnPrimeraFila) {
-        return 1;
-      } else {
-        const diasRestantes = dia - diasEnPrimeraFila;
-        const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
-        
-        const ultimoDiaDelMes = new Date(año, mes + 1, 0);
-        const diasEnElMes = ultimoDiaDelMes.getDate();
-        const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
-        const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
-        const totalFilas = 1 + filasAdicionales;
-        
-        return Math.max(1, Math.min(semanaDelMes, totalFilas));
-      }
-    };
+    // Usar util compartido calcularSemanaDelMes
 
     // Filtrar nóminas por período, año y estado (solo pagadas/completadas)
     let nominasFiltradas = nominas.filter(nomina => {
@@ -1223,8 +1170,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     <DateRangePicker
                       startDate={drStart}
                       endDate={drEnd}
-                      onChangeStart={setDrStart}
-                      onChangeEnd={setDrEnd}
+                      onStartDateChange={setDrStart}
+                      onEndDateChange={setDrEnd}
                       showQuickRanges
                     />
                   </div>
@@ -1338,8 +1285,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           }
                           
                           // Calcular semana del mes con base correcta e ISO
-                          const fechaBase = nomina?.semana?.fecha_inicio || nomina?.fecha_pago || nomina?.fecha || nomina?.createdAt || nomina?.fecha_creacion;
-                          const semanaDelMes = getSemanaDelMes(fechaBase);
+                          const semanaDelMes = computeSemanaDelMes(nomina);
                           
                           return (
                             <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
