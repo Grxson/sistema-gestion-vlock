@@ -191,39 +191,66 @@ const createNomina = async (req, res) => {
         // Si el frontend envía período y semana, usarlos; si no, usar fecha actual (retrocompatibilidad)
         let infoSemana;
         if (periodo_anio && periodo_mes && semana_del_mes) {
-            // USAR EL MISMO ALGORITMO QUE verificarDuplicados
-            // Calcular todas las semanas ISO que tocan el mes solicitado
-            const primerDiaDelMes = new Date(periodo_anio, periodo_mes - 1, 1);
-            const ultimoDiaDelMes = new Date(periodo_anio, periodo_mes, 0);
-            
-            // Obtener todas las semanas ISO que tocan este mes
+            // LÓGICA UNIFICADA: semanas ISO por lunes, asignadas al mes por mayoría de días
+            const year = parseInt(periodo_anio, 10);
+            const month0 = parseInt(periodo_mes, 10) - 1;
+
+            const first = new Date(year, month0, 1, 12, 0, 0, 0);
+            const last = new Date(year, month0 + 1, 0, 12, 0, 0, 0);
+
+            const day = first.getDay() || 7; // 1..7 (domingo=7)
+            const lunesInicio = new Date(first);
+            lunesInicio.setDate(first.getDate() - day + 1);
+            const end = new Date(last);
+            end.setDate(last.getDate() + 7);
+
             const semanasDelMes = [];
-            let fechaActual = new Date(primerDiaDelMes);
-            
-            while (fechaActual <= ultimoDiaDelMes) {
-                const infoSemanaActual = generarInfoSemana(fechaActual);
-                
-                // Verificar si esta semana ya está en el array (evitar duplicados)
-                const yaExiste = semanasDelMes.some(s => 
-                    s.año === infoSemanaActual.año && 
-                    s.semanaISO === infoSemanaActual.semanaISO
-                );
-                
-                if (!yaExiste) {
-                    semanasDelMes.push(infoSemanaActual);
+            const seen = new Set();
+
+            for (let d = new Date(lunesInicio); d <= end; d.setDate(d.getDate() + 7)) {
+                // Derivar semana ISO por jueves
+                const jueves = new Date(d);
+                const dow = jueves.getDay();
+                const diasHastaJueves = dow === 0 ? 4 : (4 - dow);
+                jueves.setDate(d.getDate() + diasHastaJueves);
+                const anioISO = jueves.getFullYear();
+                const primerEnero = new Date(anioISO, 0, 1);
+                const diaPrimerEnero = primerEnero.getDay();
+                const diasHastaPrimerJueves = (11 - diaPrimerEnero) % 7;
+                const primerJueves = new Date(anioISO, 0, 1 + diasHastaPrimerJueves);
+                const diff = Math.floor((jueves - primerJueves) / (1000 * 60 * 60 * 24));
+                const semanaISO = Math.floor(diff / 7) + 1;
+                const key = `${anioISO}-${semanaISO}`;
+
+                // Mayoría de días de la semana dentro del mes objetivo
+                const counts = new Map();
+                for (let i = 0; i < 7; i++) {
+                    const dd = new Date(d);
+                    dd.setDate(d.getDate() + i);
+                    const k = `${dd.getFullYear()}-${dd.getMonth()}`;
+                    counts.set(k, (counts.get(k) || 0) + 1);
                 }
-                
-                // Avanzar 7 días
-                fechaActual.setDate(fechaActual.getDate() + 7);
+                let bestKey = null, best = -1;
+                counts.forEach((v, k) => { if (v > best) { best = v; bestKey = k; } });
+                const [, mm] = bestKey.split('-').map(Number);
+
+                if (mm === month0 && !seen.has(key)) {
+                    seen.add(key);
+                    // Estructura similar a generarInfoSemana
+                    // Calcular lunes (inicio) y domingo (fin)
+                    const lunes = new Date(d);
+                    const domingo = new Date(d); domingo.setDate(d.getDate() + 6);
+                    const etiqueta = `Semana ${semanaISO} - ${lunes.toLocaleDateString('es-MX', { month: 'long' })}/${domingo.toLocaleDateString('es-MX', { month: 'long' })} ${anioISO}`;
+                    semanasDelMes.push({
+                        año: anioISO,
+                        semanaISO,
+                        etiqueta,
+                        fechaInicio: lunes,
+                        fechaFin: domingo
+                    });
+                }
             }
-            
-            console.log('🔍 [CREATE_NOMINA] Semanas ISO del mes:', {
-                año: periodo_anio,
-                mes: periodo_mes,
-                totalSemanas: semanasDelMes.length,
-                semanas: semanasDelMes.map(s => `ISO ${s.semanaISO} (${s.etiqueta})`)
-            });
-            
+
             // Validar que la semana solicitada existe
             if (semana_del_mes > semanasDelMes.length) {
                 return res.status(400).json({
@@ -231,11 +258,11 @@ const createNomina = async (req, res) => {
                     message: `El mes ${periodo_mes}/${periodo_anio} solo tiene ${semanasDelMes.length} semanas ISO. Solicitaste la semana ${semana_del_mes}.`
                 });
             }
-            
-            // Obtener la semana ISO correspondiente (semana_del_mes - 1 porque el array es 0-indexado)
+
+            // Obtener la semana ISO correspondiente (1-based)
             infoSemana = semanasDelMes[semana_del_mes - 1];
-            
-            console.log('🔍 [CREATE_NOMINA] Usando período y semana del usuario:', {
+
+            console.log('🔍 [CREATE_NOMINA] Usando período y semana del usuario (mayoría de días):', {
                 periodo_anio,
                 periodo_mes,
                 semana_del_mes,

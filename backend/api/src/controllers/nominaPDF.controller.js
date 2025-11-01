@@ -335,6 +335,70 @@ const generarReciboPDF = async (req, res) => {
         
         col2Y += 15;
         
+        // Helpers ISO para periodo/semana del mes
+        function getMondayOfISOWeek(year, week) {
+            const simple = new Date(year, 0, 4 + (week - 1) * 7);
+            const day = simple.getDay() || 7; // 1..7
+            const monday = new Date(simple);
+            monday.setDate(simple.getDate() - day + 1);
+            monday.setHours(12, 0, 0, 0);
+            return monday;
+        }
+        function getMajorityMonthFromMonday(monday) {
+            const counts = new Map(); // key `${y}-${m}`
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(monday);
+                d.setDate(monday.getDate() + i);
+                const key = `${d.getFullYear()}-${d.getMonth()}`;
+                counts.set(key, (counts.get(key) || 0) + 1);
+            }
+            let bestKey = null, best = -1;
+            counts.forEach((v, k) => { if (v > best) { best = v; bestKey = k; } });
+            const [yy, mm] = bestKey.split('-').map(Number);
+            return { year: yy, month0: mm };
+        }
+        function listarSemanasISODePeriodo(periodo) {
+            const [yy, mm] = periodo.split('-');
+            const year = parseInt(yy, 10);
+            const month0 = parseInt(mm, 10) - 1;
+            const first = new Date(year, month0, 1, 12, 0, 0, 0);
+            const last = new Date(year, month0 + 1, 0, 12, 0, 0, 0);
+            // lunes que contiene el día 1
+            const day = first.getDay() || 7;
+            const lunesInicio = new Date(first);
+            lunesInicio.setDate(first.getDate() - day + 1);
+            const end = new Date(last);
+            end.setDate(last.getDate() + 7);
+            const list = [];
+            const seen = new Set();
+            for (let d = new Date(lunesInicio); d <= end; d.setDate(d.getDate() + 7)) {
+                // Derivar semana ISO
+                const jueves = new Date(d);
+                const dow = jueves.getDay();
+                const diasHastaJueves = dow === 0 ? 4 : (4 - dow);
+                jueves.setDate(d.getDate() + diasHastaJueves);
+                const isoYear = jueves.getFullYear();
+                const primerEnero = new Date(isoYear, 0, 1);
+                const diaPrimerEnero = primerEnero.getDay();
+                const diasHastaPrimerJueves = (11 - diaPrimerEnero) % 7;
+                const primerJueves = new Date(isoYear, 0, 1 + diasHastaPrimerJueves);
+                const diff = Math.floor((jueves - primerJueves) / (1000 * 60 * 60 * 24));
+                const isoWeek = Math.floor(diff / 7) + 1;
+                const key = `${isoYear}-${isoWeek}`;
+                const maj = getMajorityMonthFromMonday(d);
+                if (maj.month0 === month0 && !seen.has(key)) {
+                    seen.add(key);
+                    list.push({ anio: isoYear, semana_iso: isoWeek });
+                }
+            }
+            return list;
+        }
+        function semanaDelMesDesdeISO(periodo, anioISO, semanaISO) {
+            const weeks = listarSemanasISODePeriodo(periodo);
+            const idx = weeks.findIndex(w => w.anio === anioISO && w.semana_iso === semanaISO);
+            return idx >= 0 ? (idx + 1) : null;
+        }
+
         // Obtener información de la semana desde la base de datos
         let semanaFinal = 'N/A';
         let periodoInfo = '';
@@ -343,60 +407,20 @@ const generarReciboPDF = async (req, res) => {
         if (nomina.semana) {
             // Usar la información de la semana desde la base de datos
             const semanaData = nomina.semana;
-            const fechaInicio = new Date(semanaData.fecha_inicio);
-            const fechaFin = new Date(semanaData.fecha_fin);
-            const año = fechaInicio.getFullYear();
-            const mes = fechaInicio.getMonth();
-            
-            // Calcular semana del mes basada en la fecha de inicio de la semana
-            function calcularSemanaDelMes(fecha) {
-                const año = fecha.getFullYear();
-                const mes = fecha.getMonth();
-                const dia = fecha.getDate();
-                
-                // Obtener el primer día del mes
-                const primerDiaDelMes = new Date(año, mes, 1);
-                const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
-                
-                // Calcular en qué fila del calendario está la fecha
-                // Primera fila: días del mes anterior + días del mes actual
-                const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
-                
-                if (dia <= diasEnPrimeraFila) {
-                    // La fecha está en la primera fila
-                    return 1;
-                } else {
-                    // La fecha está en una fila posterior
-                    const diasRestantes = dia - diasEnPrimeraFila;
-                    const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
-                    
-                    // Calcular cuántas semanas tiene realmente el mes
-                    const ultimoDiaDelMes = new Date(año, mes + 1, 0);
-                    const diasEnElMes = ultimoDiaDelMes.getDate();
-                    const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
-                    const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
-                    const totalFilas = 1 + filasAdicionales;
-                    
-                    // Limitar al número real de semanas del mes
-                    return Math.max(1, Math.min(semanaDelMes, totalFilas));
-                }
-            }
-            
-            semanaFinal = calcularSemanaDelMes(fechaInicio);
-            
+            // Derivar lunes de la semana a partir de anio/semana_iso
+            const monday = getMondayOfISOWeek(semanaData.anio, semanaData.semana_iso);
+            const saturday = new Date(monday); saturday.setDate(monday.getDate() + 5);
+            const fechaInicio = monday;
+            const fechaFin = new Date(semanaData.fecha_fin || monday); // por si se requiere
+
+            // Calcular 'semana del mes' por índice ISO dentro del período (mayoría de días)
+            const maj = getMajorityMonthFromMonday(monday);
+            const periodo = `${maj.year}-${String(maj.month0 + 1).padStart(2, '0')}`;
+            const idx = semanaDelMesDesdeISO(periodo, semanaData.anio, semanaData.semana_iso);
+            semanaFinal = idx || 'N/A';
+
             // Calcular rango lunes–sábado para mostrar
             const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-            const toMonday = (d) => {
-                const day = d.getDay(); // 0=domingo,1=lunes,...
-                const delta = day === 0 ? -6 : (1 - day); // ir hacia atrás/al mismo día para llegar a lunes
-                const m = new Date(d);
-                m.setDate(d.getDate() + delta);
-                m.setHours(12,0,0,0);
-                return m;
-            };
-            const monday = toMonday(fechaInicio);
-            const saturday = new Date(monday);
-            saturday.setDate(monday.getDate() + 5);
             const d1 = monday.getDate();
             const m1 = meses[monday.getMonth()];
             const d2 = saturday.getDate();
@@ -404,7 +428,8 @@ const generarReciboPDF = async (req, res) => {
             const rango = m1 === m2 ? `del ${d1} al ${d2} de ${m1}` : `del ${d1} de ${m1} al ${d2} de ${m2}`;
             
             periodoInfo = `Semana ${semanaFinal} - ${rango}`;
-            semanaLinea = `Semana ${semanaFinal} (ISO ${semanaData.semana_iso})`;
+            // No mostrar línea adicional de semana ni ISO en el PDF
+            semanaLinea = '';
             
             console.log('🔍 [PDF] Información de semana desde BD:', {
                 semanaISO: semanaData.semana_iso,
@@ -450,7 +475,8 @@ const generarReciboPDF = async (req, res) => {
                           'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
             const nombreMes = meses[mes];
             periodoInfo = `Semana ${semanaFinal} de ${nombreMes}`;
-            semanaLinea = `Semana ${semanaFinal}`;
+            // No mostrar línea adicional de semana
+            semanaLinea = '';
             
             console.log('🔍 [PDF] Calculando semana desde fecha de creación:', {
                 fechaCreacion: fechaCreacion.toLocaleDateString('es-MX'),
@@ -464,10 +490,7 @@ const generarReciboPDF = async (req, res) => {
            .text(`Período: ${periodoInfo}`, empCol2X, col2Y);
         
         col2Y += 10;
-        if (semanaLinea) {
-            doc.text(`Semana: ${semanaLinea}`, empCol2X, col2Y);
-            col2Y += 10;
-        }
+        // Omitido: línea adicional de semana (ya se muestra en 'Período')
         doc.text(`Días de Pago: 6`, empCol2X, col2Y); // Siempre 6 días para pago semanal
         
         col2Y += 10;

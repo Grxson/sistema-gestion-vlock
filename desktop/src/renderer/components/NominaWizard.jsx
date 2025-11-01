@@ -8,31 +8,13 @@ import {
   generarPeriodoActual, 
   obtenerInfoSemanaCompleta,
   calcularSemanaDelMes,
-  validarSemana 
+  validarSemana,
+  listarSemanasISODePeriodo,
+  generarInfoSemana,
+  semanaDelMesDesdeISO
 } from '../utils/weekCalculator';
 
-// Función auxiliar para calcular semanas en el mes (necesaria para la UI)
-function calcularSemanasEnElMes(año, mes) {
-  const primerDiaDelMes = new Date(año, mes, 1);
-  const ultimoDiaDelMes = new Date(año, mes + 1, 0);
-  
-  // Contar las filas del calendario visual
-  // Cada fila representa una semana, incluso si tiene días del mes anterior/siguiente
-  
-  // Calcular cuántas filas necesita el calendario
-  const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
-  const diasEnElMes = ultimoDiaDelMes.getDate();
-  
-  // Calcular el número de filas necesarias
-  // Primera fila: días del mes anterior + días del mes actual
-  const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
-  const diasRestantes = diasEnElMes - diasEnPrimeraFila;
-  const filasAdicionales = Math.ceil(diasRestantes / 7);
-  
-  const totalFilas = 1 + filasAdicionales;
-  
-  return totalFilas;
-}
+// Eliminado: cálculo por filas de calendario. Se usa ISO real para el conteo en UI.
 import {
   PlusIcon,
   CalendarIcon,
@@ -53,11 +35,26 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   const { isDarkMode } = useTheme();
   const { showSuccess, showError, showInfo } = useToast();
   
+  // Helper: detectar semana para un período dado (mapear semana ISO actual al período elegido)
+  const detectarSemanaParaPeriodo = (periodo) => {
+    try {
+      if (!periodo) return 1;
+      const info = generarInfoSemana(new Date());
+      const idx = semanaDelMesDesdeISO(periodo, info.año, info.semanaISO);
+      return Number.isNaN(idx) ? 1 : idx;
+    } catch {
+      return 1;
+    }
+  };
+
   // Estados del wizard
   const [currentStep, setCurrentStep] = useState(1);
   const [processingNomina, setProcessingNomina] = useState(false);
   const [showPagoModal, setShowPagoModal] = useState(false);
   const [pagoInput, setPagoInput] = useState('500.00');
+  // Flags para respetar selección manual del usuario
+  const [touchedPeriodo, setTouchedPeriodo] = useState(false);
+  const [touchedSemana, setTouchedSemana] = useState(false);
   
   // Generar período actual automáticamente
   const generarPeriodoActual = () => {
@@ -72,7 +69,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   // Datos del formulario
   const [formData, setFormData] = useState({
     selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
-    semanaNum: detectarSemanaActual(), // Auto-detectar semana del mes actual
+    semanaNum: detectarSemanaParaPeriodo(generarPeriodoActual()), // Auto-detectar semana según período seleccionado
     selectedEmpleado: null,
     searchTerm: '',
     diasLaborados: 6,
@@ -149,10 +146,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     // Verificar cada minuto si cambió el mes/año
     const interval = setInterval(() => {
       const periodoActual = generarPeriodoActual();
-      const semanaActual = detectarSemanaActual();
+      const semanaActual = detectarSemanaParaPeriodo(periodoActual);
       
       // Si el período cambió (nuevo mes o año), actualizar automáticamente
-      if (formData.selectedPeriodo !== periodoActual) {
+      if (formData.selectedPeriodo !== periodoActual && !touchedPeriodo && !touchedSemana) {
         console.log('🔄 [AUTO-UPDATE] Detectado cambio de período:', {
           anterior: formData.selectedPeriodo,
           nuevo: periodoActual
@@ -162,8 +159,8 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
           semanaNum: semanaActual 
         });
       } 
-      // Si estamos en el período actual pero la semana cambió
-      else if (formData.selectedPeriodo === periodoActual && formData.semanaNum !== semanaActual) {
+      // Si estamos en el período actual pero la semana cambió (y usuario no tocó)
+      else if (formData.selectedPeriodo === periodoActual && formData.semanaNum !== semanaActual && !touchedSemana) {
         console.log('🔄 [AUTO-UPDATE] Detectado cambio de semana:', {
           anterior: formData.semanaNum,
           nuevo: semanaActual
@@ -173,19 +170,19 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     }, 60000); // Verificar cada minuto
     
     return () => clearInterval(interval);
-  }, [formData.selectedPeriodo, formData.semanaNum]);
+  }, [formData.selectedPeriodo, formData.semanaNum, touchedPeriodo, touchedSemana]);
 
   // Auto-actualizar semana cuando el usuario cambie manualmente el período
   useEffect(() => {
     const periodoActual = generarPeriodoActual();
-    if (formData.selectedPeriodo === periodoActual) {
-      // Si se selecciona el período actual, actualizar la semana automáticamente
-      const semanaActual = detectarSemanaActual();
-      if (formData.semanaNum !== semanaActual) {
-        updateFormData({ semanaNum: semanaActual });
+    // Al cambiar el período (sea actual o no), re-calcular semana para ese período
+    if (!touchedSemana) {
+      const semanaParaPeriodo = detectarSemanaParaPeriodo(formData.selectedPeriodo);
+      if (formData.semanaNum !== semanaParaPeriodo) {
+        updateFormData({ semanaNum: semanaParaPeriodo });
       }
     }
-  }, [formData.selectedPeriodo]);
+  }, [formData.selectedPeriodo, touchedSemana]);
 
   // Pre-llenar formulario cuando hay datos de nómina a editar
   useEffect(() => {
@@ -196,25 +193,6 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       const año = fechaCreacion.getFullYear();
       const mes = fechaCreacion.getMonth() + 1;
       const periodo = `${año}-${String(mes).padStart(2, '0')}`;
-      
-      // Calcular semana del mes
-      function calcularSemanaDelMes(fecha) {
-        const primerDiaDelMes = new Date(fecha.getFullYear(), fecha.getMonth(), 1);
-        const primerLunesDelMes = new Date(primerDiaDelMes);
-        
-        const diaDeLaSemana = primerDiaDelMes.getDay();
-        const diasHastaLunes = diaDeLaSemana === 0 ? 1 : 8 - diaDeLaSemana;
-        primerLunesDelMes.setDate(primerDiaDelMes.getDate() + diasHastaLunes);
-        
-        if (primerLunesDelMes.getMonth() !== fecha.getMonth()) {
-          primerLunesDelMes.setTime(primerDiaDelMes.getTime());
-        }
-        
-        const diasTranscurridos = Math.floor((fecha - primerLunesDelMes) / (1000 * 60 * 60 * 24));
-        const semanaDelMes = Math.floor(diasTranscurridos / 7) + 1;
-        
-        return Math.max(1, Math.min(4, semanaDelMes));
-      }
       
       const semanaDelMes = calcularSemanaDelMes(fechaCreacion);
       
@@ -507,7 +485,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         // Enviar período y semana seleccionados por el usuario
         periodo_anio: anio,
         periodo_mes: mes,
-        semana_del_mes: formData.semanaNum,
+        semana_del_mes: Number(formData.semanaNum),
         id_proyecto: idProyecto,
         dias_laborados: formData.diasLaborados || 6, // Usar el valor ingresado por el usuario
         pago_semanal: pagoIngresado, // Contiene el pago semanal
@@ -1001,7 +979,15 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                         <input
                           type="month"
                           value={formData.selectedPeriodo}
-                          onChange={(e) => updateFormData({ selectedPeriodo: e.target.value })}
+                          onChange={(e) => {
+                            setTouchedPeriodo(true);
+                            const nuevoPeriodo = e.target.value;
+                            updateFormData({ selectedPeriodo: nuevoPeriodo });
+                            // Si el usuario no ha tocado la semana, sincronizarla con el período
+                            if (!touchedSemana) {
+                              updateFormData({ semanaNum: detectarSemanaParaPeriodo(nuevoPeriodo) });
+                            }
+                          }}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                         />
                       </div>
@@ -1013,7 +999,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           </label>
                           <button
                             type="button"
-                            onClick={() => updateFormData({ semanaNum: detectarSemanaActual() })}
+                            onClick={() => updateFormData({ semanaNum: detectarSemanaParaPeriodo(formData.selectedPeriodo) })}
                             className="text-xs text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300 font-medium"
                             title="Detectar automáticamente la semana del mes actual"
                           >
@@ -1035,6 +1021,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                               if (!isNaN(num) && num >= 1) {
                                 // Validar contra el período actual
                                 if (validarSemana(num, formData.selectedPeriodo)) {
+                                  setTouchedSemana(true);
                                   updateFormData({ semanaNum: num });
                                 }
                               }
@@ -1043,17 +1030,19 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           onBlur={(e) => {
                             // Solo restaurar valor por defecto cuando pierde el foco y está vacío
                             if (e.target.value === '' || e.target.value === '0') {
-                              updateFormData({ semanaNum: detectarSemanaActual() });
+                              setTouchedSemana(true);
+                              updateFormData({ semanaNum: detectarSemanaParaPeriodo(formData.selectedPeriodo) });
                             }
                           }}
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                         />
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Semana del mes actual detectada: {detectarSemanaActual()} 
+                          Semana del mes para el período detectada: {detectarSemanaParaPeriodo(formData.selectedPeriodo)} 
                           {(() => {
                             try {
                               const [año, mes] = formData.selectedPeriodo.split('-').map(Number);
-                              const semanasEnElMes = calcularSemanasEnElMes(año, mes - 1);
+                              const periodo = `${año}-${String(mes).padStart(2,'0')}`;
+                              const semanasEnElMes = listarSemanasISODePeriodo(periodo).length;
                               return ` (${semanasEnElMes} semanas en ${new Date(año, mes - 1).toLocaleDateString('es-MX', { month: 'long' })})`;
                             } catch {
                               return ' (con mapeo ISO automático)';

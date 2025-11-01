@@ -3,31 +3,18 @@
  */
 
 /**
- * Calcula cuántas semanas tiene un mes basado en el calendario visual
- * @param {number} año - Año
- * @param {number} mes - Mes (0-11)
- * @returns {number} Número de semanas en el mes
+ * (LEGACY) Calcula cuántas "filas de calendario" tiene un mes.
+ * Ya no se usa para lógica de nómina; se mantiene solo por compatibilidad.
  */
 function calcularSemanasEnElMes(año, mes) {
   const primerDiaDelMes = new Date(año, mes, 1);
   const ultimoDiaDelMes = new Date(año, mes + 1, 0);
-  
-  // Contar las filas del calendario visual
-  // Cada fila representa una semana, incluso si tiene días del mes anterior/siguiente
-  
-  // Calcular cuántas filas necesita el calendario
-  const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
+  const diaPrimerDia = primerDiaDelMes.getDay();
   const diasEnElMes = ultimoDiaDelMes.getDate();
-  
-  // Calcular el número de filas necesarias
-  // Primera fila: días del mes anterior + días del mes actual
-  const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
+  const diasEnPrimeraFila = 7 - diaPrimerDia;
   const diasRestantes = diasEnElMes - diasEnPrimeraFila;
   const filasAdicionales = Math.ceil(diasRestantes / 7);
-  
-  const totalFilas = 1 + filasAdicionales;
-  
-  return totalFilas;
+  return 1 + filasAdicionales;
 }
 
 /**
@@ -37,32 +24,13 @@ function calcularSemanasEnElMes(año, mes) {
  */
 export function calcularSemanaDelMes(fecha) {
   const fechaTemp = new Date(fecha.getTime());
-  const año = fechaTemp.getFullYear();
-  const mes = fechaTemp.getMonth();
-  const dia = fechaTemp.getDate();
-  
-  // Obtener el primer día del mes
-  const primerDiaDelMes = new Date(año, mes, 1);
-  const diaPrimerDia = primerDiaDelMes.getDay(); // 0 = domingo, 1 = lunes, etc.
-  
-  // Calcular en qué fila del calendario está la fecha
-  // Primera fila: días del mes anterior + días del mes actual
-  const diasEnPrimeraFila = 7 - diaPrimerDia; // Días del mes en la primera fila
-  
-  if (dia <= diasEnPrimeraFila) {
-    // La fecha está en la primera fila
-    return 1;
-  } else {
-    // La fecha está en una fila posterior
-    const diasRestantes = dia - diasEnPrimeraFila;
-    const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
-    
-    // Obtener el número real de semanas en el mes
-    const semanasEnElMes = calcularSemanasEnElMes(año, mes);
-    
-    // Limitar al número real de semanas del mes
-    return Math.max(1, Math.min(semanaDelMes, semanasEnElMes));
-  }
+  fechaTemp.setHours(12, 0, 0, 0);
+  const info = generarInfoSemana(fechaTemp);
+  // Periodo del MES por mayoría de días (semana cuenta al mes que contiene >=4 días)
+  const majority = getMajorityMonth(info);
+  const periodo = `${majority.year}-${String(majority.month0 + 1).padStart(2, '0')}`;
+  const idx = semanaDelMesDesdeISO(periodo, info.año, info.semanaISO);
+  return idx;
 }
 
 /**
@@ -71,9 +39,9 @@ export function calcularSemanaDelMes(fecha) {
  * @param {Date} fecha - Fecha para calcular la semana ISO
  * @returns {number} Número de semana ISO (1-53)
  */
-export function calcularSemanaISO(fecha) {
+export function calcularSemanaISO(fechaInicio) {
   // Crear una copia de la fecha para no modificar la original
-  const fechaTemp = new Date(fecha.getTime());
+  const fechaTemp = new Date(fechaInicio.getTime());
   
   // Establecer a las 12:00 para evitar problemas con cambios de horario
   fechaTemp.setHours(12, 0, 0, 0);
@@ -174,13 +142,77 @@ export function generarInfoSemana(fecha) {
   };
 }
 
+// Determina el mes (0-11) por mayoría de días dentro de una semana ISO
+function getMajorityMonth(infoSemana) {
+  const start = new Date(infoSemana.fechaInicio);
+  const counts = new Map(); // key `${year}-${month0}` -> count
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  let bestKey = null; let bestCount = -1;
+  counts.forEach((cnt, key) => { if (cnt > bestCount) { bestCount = cnt; bestKey = key; } });
+  if (!bestKey) return { year: start.getFullYear(), month0: start.getMonth() };
+  const [yy, mm] = bestKey.split('-').map(Number);
+  return { year: yy, month0: mm };
+}
+
+/**
+ * Lista las semanas ISO que tocan un período (YYYY-MM), en orden.
+ * @param {string} periodo - Formato YYYY-MM
+ * @returns {Array<{anio:number, semana_iso:number}>}
+ */
+export function listarSemanasISODePeriodo(periodo) {
+  const [yy, mm] = periodo.split('-');
+  const year = parseInt(yy, 10);
+  const month = parseInt(mm, 10) - 1;
+  const first = new Date(year, month, 1, 12, 0, 0, 0);
+  const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+  // Calcular el lunes de la semana que contiene el primer día del mes
+  const day = first.getDay();
+  const diasHastaLunes = day === 0 ? -6 : (1 - day);
+  const cursor = new Date(first);
+  cursor.setDate(first.getDate() + diasHastaLunes);
+  // Iterar de lunes a lunes hasta pasar una semana después del fin de mes
+  const end = new Date(last);
+  end.setDate(last.getDate() + 7);
+  const seen = new Set();
+  const list = [];
+  for (let d = new Date(cursor); d <= end; d.setDate(d.getDate() + 7)) {
+    const info = generarInfoSemana(d); // d es lunes ISO
+    const key = `${info.año}-${info.semanaISO}`;
+    const maj = getMajorityMonth(info);
+    if (maj.month0 === month && !seen.has(key)) {
+      seen.add(key);
+      list.push({ anio: info.año, semana_iso: info.semanaISO });
+    }
+  }
+  return list;
+}
+
+/**
+ * Dado un período (YYYY-MM) y una semana ISO (anioISO, semanaISO),
+ * retorna el índice 1-based de esa semana dentro del mes.
+ * @returns {number} 1..N o NaN si no pertenece
+ */
+export function semanaDelMesDesdeISO(periodo, anioISO, semanaISO) {
+  const weeks = listarSemanasISODePeriodo(periodo);
+  const idx = weeks.findIndex(w => w.anio === anioISO && w.semana_iso === semanaISO);
+  return idx >= 0 ? (idx + 1) : NaN;
+}
+
 /**
  * Detecta automáticamente la semana del mes actual
  * @returns {number} Número de semana del mes (1-6)
  */
 export function detectarSemanaActual() {
   const hoy = new Date();
-  return calcularSemanaDelMes(hoy);
+  const info = generarInfoSemana(hoy);
+  const maj = getMajorityMonth(info);
+  const periodo = `${maj.year}-${String(maj.month0 + 1).padStart(2, '0')}`;
+  return semanaDelMesDesdeISO(periodo, info.año, info.semanaISO);
 }
 
 /**
@@ -251,8 +283,10 @@ export function obtenerInfoSemanaCompleta(fecha) {
  */
 export function generarPeriodoActual() {
   const hoy = new Date();
-  const año = hoy.getFullYear();
-  const mes = hoy.getMonth() + 1;
+  const info = generarInfoSemana(hoy);
+  const maj = getMajorityMonth(info);
+  const año = maj.year;
+  const mes = maj.month0 + 1;
   return `${año}-${String(mes).padStart(2, '0')}`;
 }
 
@@ -266,13 +300,12 @@ export function validarSemana(semanaDelMes, periodo) {
   if (!semanaDelMes) return false;
   if (semanaDelMes < 1) return false;
   
-  // Si se proporciona un período, validar contra el número real de semanas
+  // Si se proporciona un período, validar contra el número real de semanas ISO que tocan el mes
   if (periodo) {
-    const [año, mes] = periodo.split('-').map(Number);
-    const semanasEnElMes = calcularSemanasEnElMes(año, mes - 1); // mes - 1 porque es 0-indexado
-    if (semanaDelMes > semanasEnElMes) return false;
+    const total = listarSemanasISODePeriodo(periodo).length;
+    if (semanaDelMes > total) return false;
   } else {
-    // Sin período, permitir hasta 6 semanas (caso general)
+    // Sin período, permitir hasta 6 como salvaguarda general
     if (semanaDelMes > 6) return false;
   }
   

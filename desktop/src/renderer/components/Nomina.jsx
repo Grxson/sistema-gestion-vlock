@@ -15,7 +15,7 @@ import DateRangePicker from './ui/DateRangePicker';
 import NominaReportsTab from './nomina/NominaReportsTab';
 import ConfirmModal from './ui/ConfirmModal';
 import useDeleteNomina from '../hooks/useDeleteNomina';
-import { generarInfoSemana } from '../utils/weekCalculator';
+import { generarInfoSemana, semanaDelMesDesdeISO } from '../utils/weekCalculator';
 import NominaEmpleadoHistorialDrawer from './nomina/NominaEmpleadoHistorialDrawer';
 import {
   PlusIcon,
@@ -309,30 +309,14 @@ export default function Nomina() {
         const a = document.createElement('a');
         a.href = url;
         const nombreEmpleado = `${emp.nombre || ''}_${emp.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
+        const periodo = latest.periodo || (() => { const b = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt; if (!b) return 'YYYY-MM'; const d = new Date(b); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })();
         const semanaMes = (() => {
           const semana = latest?.semana; if (!semana?.anio || !semana?.semana_iso) return 'X';
           const baseDateStr = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt;
           let per = latest?.periodo; if (!per && baseDateStr) { const d = new Date(baseDateStr); per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
           if (!per) return 'X';
-          const getWeeks = (periodo) => {
-            const [yy, mm] = periodo.split('-');
-            const year = parseInt(yy, 10); const month = parseInt(mm, 10) - 1;
-            const first = new Date(year, month, 1, 12, 0, 0, 0); const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
-            const seen = new Set(); const list = [];
-            for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-              const temp = new Date(d); const dow = temp.getDay(); const delta = dow === 0 ? -3 : (4 - dow);
-              const th = new Date(temp); th.setDate(temp.getDate() + delta);
-              const isoYear = th.getFullYear(); const firstThu = new Date(isoYear, 0, 4, 12, 0, 0, 0);
-              const fdow = firstThu.getDay(); const dfirst = fdow === 0 ? -3 : (4 - fdow);
-              const fth = new Date(firstThu); fth.setDate(firstThu.getDate() + dfirst);
-              const diff = Math.round((th - fth) / (24*3600*1000)); const isoWeek = 1 + Math.floor(diff/7);
-              const key = `${isoYear}-${isoWeek}`; if (!seen.has(key)) { seen.add(key); list.push({ anio: isoYear, semana_iso: isoWeek }); }
-            }
-            return list;
-          };
-          const weeks = getWeeks(per);
-          const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
-          return idx >= 0 ? (idx + 1) : 'X';
+          const idx = semanaDelMesDesdeISO(per, semana.anio, semana.semana_iso);
+          return Number.isNaN(idx) ? 'X' : idx;
         })();
         const now = new Date();
         const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
@@ -369,25 +353,8 @@ export default function Nomina() {
             const baseDateStr = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt;
             let per = latest?.periodo; if (!per && baseDateStr) { const d = new Date(baseDateStr); per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
             if (!per) return 'X';
-            const getWeeks = (periodo) => {
-              const [yy, mm] = periodo.split('-');
-              const year = parseInt(yy, 10); const month = parseInt(mm, 10) - 1;
-              const first = new Date(year, month, 1, 12, 0, 0, 0); const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
-              const seen = new Set(); const list = [];
-              for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-                const temp = new Date(d); const dow = temp.getDay(); const delta = dow === 0 ? -3 : (4 - dow);
-                const th = new Date(temp); th.setDate(temp.getDate() + delta);
-                const isoYear = th.getFullYear(); const firstThu = new Date(isoYear, 0, 4, 12, 0, 0, 0);
-                const fdow = firstThu.getDay(); const dfirst = fdow === 0 ? -3 : (4 - fdow);
-                const fth = new Date(firstThu); fth.setDate(firstThu.getDate() + dfirst);
-                const diff = Math.round((th - fth) / (24*3600*1000)); const isoWeek = 1 + Math.floor(diff/7);
-                const key = `${isoYear}-${isoWeek}`; if (!seen.has(key)) { seen.add(key); list.push({ anio: isoYear, semana_iso: isoWeek }); }
-              }
-              return list;
-            };
-            const weeks = getWeeks(per);
-            const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
-            return idx >= 0 ? (idx + 1) : 'X';
+            const idx = semanaDelMesDesdeISO(per, semana.anio, semana.semana_iso);
+            return Number.isNaN(idx) ? 'X' : idx;
           })();
           const now = new Date();
           const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
@@ -416,25 +383,8 @@ export default function Nomina() {
           const baseDateStr = latest?.semana?.fecha_inicio || latest?.fecha || latest?.createdAt;
           let per = latest?.periodo; if (!per && baseDateStr) { const d = new Date(baseDateStr); per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
           if (!per) return 'X';
-          const getWeeks = (periodo) => {
-            const [yy, mm] = periodo.split('-');
-            const year = parseInt(yy, 10); const month = parseInt(mm, 10) - 1;
-            const first = new Date(year, month, 1, 12, 0, 0, 0); const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
-            const seen = new Set(); const list = [];
-            for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-              const temp = new Date(d); const dow = temp.getDay(); const delta = dow === 0 ? -3 : (4 - dow);
-              const th = new Date(temp); th.setDate(temp.getDate() + delta);
-              const isoYear = th.getFullYear(); const firstThu = new Date(isoYear, 0, 4, 12, 0, 0, 0);
-              const fdow = firstThu.getDay(); const dfirst = fdow === 0 ? -3 : (4 - fdow);
-              const fth = new Date(firstThu); fth.setDate(firstThu.getDate() + dfirst);
-              const diff = Math.round((th - fth) / (24*3600*1000)); const isoWeek = 1 + Math.floor(diff/7);
-              const key = `${isoYear}-${isoWeek}`; if (!seen.has(key)) { seen.add(key); list.push({ anio: isoYear, semana_iso: isoWeek }); }
-            }
-            return list;
-          };
-          const weeks = getWeeks(per);
-          const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
-          return idx >= 0 ? (idx + 1) : 'X';
+          const idx = semanaDelMesDesdeISO(per, semana.anio, semana.semana_iso);
+          return Number.isNaN(idx) ? 'X' : idx;
         })();
         const now = new Date();
         const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
@@ -674,29 +624,11 @@ export default function Nomina() {
         const n = nominaPreviewData;
         const semana = n?.semana;
         if (!semana?.anio || !semana?.semana_iso) return 'X';
-        // Derivar periodo YYYY-MM desde fecha_inicio si existe
         const baseDateStr = semana?.fecha_inicio || n?.fecha || n?.createdAt;
         let per = n?.periodo; if (!per && baseDateStr) { const d = new Date(baseDateStr); per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
         if (!per) return 'X';
-        const getWeeks = (periodo) => {
-          const [yy, mm] = periodo.split('-');
-          const year = parseInt(yy, 10); const month = parseInt(mm, 10) - 1;
-          const first = new Date(year, month, 1, 12, 0, 0, 0); const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
-          const seen = new Set(); const list = [];
-          for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-            const temp = new Date(d); const dow = temp.getDay(); const delta = dow === 0 ? -3 : (4 - dow);
-            const th = new Date(temp); th.setDate(temp.getDate() + delta);
-            const isoYear = th.getFullYear(); const firstThu = new Date(isoYear, 0, 4, 12, 0, 0, 0);
-            const fdow = firstThu.getDay(); const dfirst = fdow === 0 ? -3 : (4 - fdow);
-            const fth = new Date(firstThu); fth.setDate(firstThu.getDate() + dfirst);
-            const diff = Math.round((th - fth) / (24*3600*1000)); const isoWeek = 1 + Math.floor(diff/7);
-            const key = `${isoYear}-${isoWeek}`; if (!seen.has(key)) { seen.add(key); list.push({ anio: isoYear, semana_iso: isoWeek }); }
-          }
-          return list;
-        };
-        const weeks = getWeeks(per);
-        const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
-        return idx >= 0 ? (idx + 1) : 'X';
+        const idx = semanaDelMesDesdeISO(per, semana.anio, semana.semana_iso);
+        return Number.isNaN(idx) ? 'X' : idx;
       })();
       const now = new Date();
       const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
@@ -1404,6 +1336,7 @@ export default function Nomina() {
                   onStartDateChange={setFiltroFechaInicio}
                   onEndDateChange={setFiltroFechaFin}
                 />
+
               </div>
             </div>
           </div>
