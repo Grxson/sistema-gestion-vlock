@@ -240,8 +240,12 @@ export class NominaService {
    */
   static async generarReciboPDF(id) {
     try {
+      if (id == null) {
+        throw new Error('ID de nómina inválido al generar PDF');
+      }
+
       console.log('📄 [NominaService] Generando PDF para nómina ID:', id);
-      
+
       const response = await ApiService.get(`/nomina/${id}/recibo`, {
         responseType: 'blob',
         headers: {
@@ -249,13 +253,25 @@ export class NominaService {
         }
       });
 
-      console.log('📄 [NominaService] Respuesta recibida:', response);
-      console.log('📄 [NominaService] Tipo de respuesta:', typeof response);
-      console.log('📄 [NominaService] Es Blob:', response instanceof Blob);
-      console.log('📄 [NominaService] Constructor:', response?.constructor?.name);
-      console.log('📄 [NominaService] Tamaño:', response?.size || 'N/A');
-      console.log('📄 [NominaService] Tipo MIME:', response?.type || 'N/A');
-      
+      // Validar que sea un Blob PDF
+      if (!(response instanceof Blob)) {
+        throw new Error('La respuesta del servidor no es un archivo descargable');
+      }
+      const mime = response.type || '';
+      if (!mime.includes('pdf')) {
+        // Intentar extraer mensaje de error del blob
+        try {
+          const text = await response.text();
+          let msg = text?.slice(0, 500) || 'Error desconocido al generar PDF';
+          try {
+            const json = JSON.parse(text);
+            msg = json?.message || msg;
+          } catch (_) {}
+          throw new Error(`Error al generar PDF: ${msg}`);
+        } catch (e) {
+          throw new Error(e.message || 'No se pudo generar el PDF');
+        }
+      }
       return response;
     } catch (error) {
       console.error('❌ [NominaService] Error generating PDF:', error);

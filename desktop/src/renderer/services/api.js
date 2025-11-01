@@ -3,6 +3,19 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api';
 class ApiService {
   constructor() {
     this.baseURL = API_URL;
+    // Simple in-memory cache
+    this._cache = new Map(); // key -> { data, expiry }
+  }
+
+  // Invalidate cache entries by key prefix
+  _invalidateCacheByPrefix(prefix) {
+    try {
+      for (const key of this._cache.keys()) {
+        if (key.startsWith(prefix)) {
+          this._cache.delete(key);
+        }
+      }
+    } catch (_) {}
   }
 
   /**
@@ -405,20 +418,38 @@ class ApiService {
   }
 
   // Métodos para nómina
-  async getNominas() {
-    return this.get('/nomina');
+  async getNominas(options = {}) {
+    const { noCache = false, cacheTtlMs = 60000 } = options;
+    const key = `GET:/nomina`;
+    if (!noCache) {
+      const hit = this._cache.get(key);
+      if (hit && hit.expiry > Date.now()) return hit.data;
+    }
+    const data = await this.get('/nomina');
+    if (!noCache) this._cache.set(key, { data, expiry: Date.now() + cacheTtlMs });
+    return data;
   }
 
   async procesarNomina(nominaData) {
-    return this.post('/nomina', nominaData);
+    const res = await this.post('/nomina', nominaData);
+    this._invalidateCacheByPrefix('GET:/nomina');
+    return res;
   }
 
   async getNominaStats() {
     return this.get('/nomina/estadisticas');
   }
 
-  async getNominasPorEmpleado(idEmpleado) {
-    return this.get(`/nomina/empleado/${idEmpleado}`);
+  async getNominasPorEmpleado(idEmpleado, options = {}) {
+    const { noCache = false, cacheTtlMs = 60000 } = options;
+    const key = `GET:/nomina/empleado/${idEmpleado}`;
+    if (!noCache) {
+      const hit = this._cache.get(key);
+      if (hit && hit.expiry > Date.now()) return hit.data;
+    }
+    const data = await this.get(`/nomina/empleado/${idEmpleado}`);
+    if (!noCache) this._cache.set(key, { data, expiry: Date.now() + cacheTtlMs });
+    return data;
   }
 
   async getNominasPorSemana(idSemana) {
@@ -426,22 +457,30 @@ class ApiService {
   }
 
   async updateNomina(id, nominaData) {
-    return this.put(`/nomina/${id}`, nominaData);
+    const res = await this.put(`/nomina/${id}`, nominaData);
+    this._invalidateCacheByPrefix('GET:/nomina');
+    return res;
   }
 
   async cambiarEstadoNomina(idNomina, estado) {
-    return this.put(`/nomina/${idNomina}/estado`, { estado });
+    const res = await this.put(`/nomina/${idNomina}/estado`, { estado });
+    this._invalidateCacheByPrefix('GET:/nomina');
+    return res;
   }
 
   async liquidarAdeudo(idNomina, montoPagado, observaciones = '') {
-    return this.post(`/nomina/${idNomina}/liquidar-adeudo`, {
+    const res = await this.post(`/nomina/${idNomina}/liquidar-adeudo`, {
       monto_pagado: montoPagado,
       observaciones: observaciones
     });
+    this._invalidateCacheByPrefix('GET:/nomina');
+    return res;
   }
 
   async registrarPagoNomina(idNomina, pagoData) {
-    return this.post(`/nomina/${idNomina}/pago`, pagoData);
+    const res = await this.post(`/nomina/${idNomina}/pago`, pagoData);
+    this._invalidateCacheByPrefix('GET:/nomina');
+    return res;
   }
 
   async getHistorialPagos(idEmpleado = null) {
@@ -531,8 +570,16 @@ class ApiService {
     return this.get('/proyectos');
   }
 
-  async getProyectosActivos() {
-    return this.get('/proyectos/activos');
+  async getProyectosActivos(options = {}) {
+    const { noCache = false, cacheTtlMs = 300000 } = options; // 5 min
+    const key = `GET:/proyectos/activos`;
+    if (!noCache) {
+      const hit = this._cache.get(key);
+      if (hit && hit.expiry > Date.now()) return hit.data;
+    }
+    const data = await this.get('/proyectos/activos');
+    if (!noCache) this._cache.set(key, { data, expiry: Date.now() + cacheTtlMs });
+    return data;
   }
 
   async getProyectoById(id) {

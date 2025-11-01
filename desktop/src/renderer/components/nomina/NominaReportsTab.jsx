@@ -36,7 +36,10 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   
   // Estados para reportes por semanas
   const [weeklyReportsData, setWeeklyReportsData] = useState(null);
-  const [selectedPeriod, setSelectedPeriod] = useState('');
+  const [selectedPeriod, setSelectedPeriod] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  });
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [proyectos, setProyectos] = useState([]);
   const [drStart, setDrStart] = useState('');
@@ -117,6 +120,26 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     return false;
   };
 
+  // Helpers de fechas y montos unificados (alineados a BD)
+  const getBaseDate = (n) => {
+    const raw = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt || n?.fecha_creacion;
+    if (!raw) return null;
+    const d = new Date(raw);
+    // Normalizar a mediodía local para evitar problemas TZ
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 12, 0, 0, 0);
+  };
+  const getMonto = (n) => {
+    const v = parseFloat(n?.monto_total ?? n?.monto ?? n?.pago_semanal ?? 0);
+    return Number.isFinite(v) ? v : 0;
+  };
+
+  // Debounce de búsqueda para evitar recomputación constante
+  const [debouncedSearch, setDebouncedSearch] = useState(searchText);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchText), 400);
+    return () => clearTimeout(t);
+  }, [searchText]);
+
   // Nominas filtradas (Fecha base: semana.fecha_inicio -> fecha_pago -> fecha/createdAt)
   const filteredNominas = useMemo(() => {
     const start = drStart ? new Date(drStart) : null;
@@ -143,20 +166,19 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           if (!nid || String(nid) !== pid) return false;
         }
         // Fecha base
-        const base = n.semana?.fecha_inicio || n.fecha_pago || n.fecha || n.createdAt || n.fecha_creacion;
-        const d = base ? new Date(base) : null;
+        const d = getBaseDate(n);
         if (!d) return false;
         if (start && d < new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0,0,0,0)) return false;
         if (end && d > new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23,59,59,999)) return false;
         // Búsqueda
-        if (searchText) {
+        if (debouncedSearch) {
           const emp = `${n.empleado?.nombre || ''} ${n.empleado?.apellido || ''}`.toLowerCase();
           const proj = (n.proyecto?.nombre || '').toLowerCase();
-          if (!emp.includes(searchText.toLowerCase()) && !proj.includes(searchText.toLowerCase())) return false;
+          if (!emp.includes(debouncedSearch.toLowerCase()) && !proj.includes(debouncedSearch.toLowerCase())) return false;
         }
         return true;
       });
-  }, [nominas, drStart, drEnd, filtroProyecto, filtroEstado, searchText]);
+  }, [nominas, drStart, drEnd, filtroProyecto, filtroEstado, debouncedSearch]);
 
   // Totales filtrados (Fase B)
   const totalesFiltrados = useMemo(() => {
@@ -168,7 +190,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       const est = (n.estado || '').toLowerCase();
       return est === 'pendiente' || est === 'borrador' || est === 'en_proceso' || est === 'en proceso' || est === 'parcial';
     };
-    const sum = (arr) => arr.reduce((acc, n) => acc + (parseFloat(n.monto_total || n.monto || 0) || 0), 0);
+    const sum = (arr) => arr.reduce((acc, n) => acc + getMonto(n), 0);
     const pagadas = filteredNominas.filter(isPagada);
     const pendientes = filteredNominas.filter(isPendienteOParcial);
     return {
@@ -427,48 +449,31 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
   const calculateWeeklyData = () => {
     const today = new Date();
+    // Semana actual (L-D) solo para rangos visuales; datos con baseDate
     const startOfWeek = new Date(today);
-    startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Lunes
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1);
     const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6); // Domingo
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-    // Filtrar nóminas de esta semana
-    const weeklyNominas = nominas.filter(nomina => {
-      const nominaDate = new Date(nomina.fecha_creacion || nomina.createdAt);
-      return nominaDate >= startOfWeek && nominaDate <= endOfWeek;
+    const weeklyNominas = nominas.filter(n => {
+      const d = getBaseDate(n);
+      return d && d >= startOfWeek && d <= endOfWeek;
     });
 
-    // Calcular totales
-    const totalAmount = weeklyNominas.reduce((sum, nomina) => {
-      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-      return sum + (isNaN(monto) ? 0 : monto);
-    }, 0);
-
-    const paidNominas = weeklyNominas.filter(nomina => 
-      nomina.estado === 'pagada' || nomina.estado === 'Pagado'
-    );
-
-    const pendingNominas = weeklyNominas.filter(nomina => 
-      nomina.estado === 'pendiente' || nomina.estado === 'Pendiente' || 
-      nomina.estado === 'borrador' || nomina.estado === 'Borrador'
-    );
-
-    const partialPayments = weeklyNominas.filter(nomina => nomina.pago_parcial);
+    const paidNominas = weeklyNominas.filter(n => (n.estado||'').toLowerCase().includes('pagad'));
+    const pendingNominas = weeklyNominas.filter(n => {
+      const est = (n.estado||'').toLowerCase();
+      return est === 'pendiente' || est === 'borrador' || est === 'en_proceso' || est === 'en proceso';
+    });
 
     setWeeklyData({
-      totalAmount,
+      totalAmount: weeklyNominas.reduce((s, n) => s + getMonto(n), 0),
       totalNominas: weeklyNominas.length,
       paidNominas: paidNominas.length,
       pendingNominas: pendingNominas.length,
-      partialPayments: partialPayments.length,
-      paidAmount: paidNominas.reduce((sum, nomina) => {
-        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-        return sum + (isNaN(monto) ? 0 : monto);
-      }, 0),
-      pendingAmount: pendingNominas.reduce((sum, nomina) => {
-        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-        return sum + (isNaN(monto) ? 0 : monto);
-      }, 0),
+      partialPayments: weeklyNominas.filter(n => esPagoParcial(n.pago_parcial)).length,
+      paidAmount: paidNominas.reduce((s, n) => s + getMonto(n), 0),
+      pendingAmount: pendingNominas.reduce((s, n) => s + getMonto(n), 0),
       startOfWeek,
       endOfWeek,
       weeklyNominas
@@ -530,41 +535,21 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       '#6B7280'  // Gris
     ];
 
-    // Datos para gráfica de pagos por semana del mes actual (4 semanas)
+    // Datos para gráfica: pagos por semana del mes actual (1-5) usando ISO->semana del mes
     const weeklyData = {};
     const currentMonth = new Date();
-    const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
-    const lastDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
-    
-    // Generar las 4 semanas del mes
-    const weeksOfMonth = [];
-    for (let week = 0; week < 4; week++) {
-      const weekStart = new Date(firstDayOfMonth);
-      weekStart.setDate(firstDayOfMonth.getDate() + (week * 7));
-      const weekEnd = new Date(weekStart);
-      weekEnd.setDate(weekStart.getDate() + 6);
-      
-      // Asegurar que no exceda el último día del mes
-      if (weekEnd > lastDayOfMonth) {
-        weekEnd.setTime(lastDayOfMonth.getTime());
-      }
-      
-      const weekKey = `Semana ${week + 1}`;
-      weeksOfMonth.push(weekKey);
-      weeklyData[weekKey] = 0;
-    }
+    const periodoActual = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth()+1).padStart(2,'0')}`;
+    const weeksOfMonth = ['Semana 1','Semana 2','Semana 3','Semana 4','Semana 5'];
+    weeksOfMonth.forEach(k => weeklyData[k] = 0);
 
     nominas.forEach(nomina => {
-      const nominaDate = new Date(nomina.fecha_creacion || nomina.createdAt);
-      
-      // Determinar en qué semana del mes cae la nómina
-      const dayOfMonth = nominaDate.getDate();
-      const weekNumber = Math.ceil(dayOfMonth / 7);
-      const weekKey = `Semana ${Math.min(weekNumber, 4)}`;
-      
-      if (weeklyData.hasOwnProperty(weekKey)) {
-        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-        weeklyData[weekKey] += (isNaN(monto) ? 0 : monto);
+      const d = getBaseDate(nomina);
+      if (!d) return;
+      const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      if (periodo !== periodoActual) return;
+      const w = computeSemanaDelMes(nomina);
+      if (w && weeklyData[`Semana ${w}`] !== undefined) {
+        weeklyData[`Semana ${w}`] += getMonto(nomina);
       }
     });
 
@@ -626,8 +611,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
     // Filtrar nóminas de esta semana
     const weeklyNominas = nominas.filter(nomina => {
-      const nominaDate = new Date(nomina.fecha_creacion || nomina.createdAt);
-      return nominaDate >= startOfWeek && nominaDate <= endOfWeek;
+      const d = getBaseDate(nomina);
+      return d && d >= startOfWeek && d <= endOfWeek;
     });
 
     // Agrupar por empleado
@@ -644,8 +629,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           };
         }
         paymentsByEmpleado[empleadoId].nominas.push(nomina);
-        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-        paymentsByEmpleado[empleadoId].totalAmount += (isNaN(monto) ? 0 : monto);
+        paymentsByEmpleado[empleadoId].totalAmount += getMonto(nomina);
         
         // Determinar estado general
         if (nomina.estado === 'pagada' || nomina.estado === 'Pagado') {
@@ -664,47 +648,34 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     const firstDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
     const lastDayOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
 
-    // Filtrar nóminas del mes actual
-    const monthlyNominas = nominas.filter(nomina => {
-      const nominaDate = new Date(nomina.fecha_creacion || nomina.createdAt);
-      return nominaDate >= firstDayOfMonth && nominaDate <= lastDayOfMonth;
+    // Filtrar nóminas del mes actual (usando fecha base unificada)
+    const monthlyNominasAll = nominas.filter(nomina => {
+      const d = getBaseDate(nomina);
+      return d && d >= firstDayOfMonth && d <= lastDayOfMonth;
     });
 
-    // Calcular totales del mes
-    const totalAmount = monthlyNominas.reduce((sum, nomina) => {
-      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-      return sum + (isNaN(monto) ? 0 : monto);
-    }, 0);
+    // Solo considerar pagadas/completadas para el total mensual
+    const isPaid = (n) => {
+      const est = (n.estado || '').toLowerCase();
+      return est === 'pagado' || est === 'pagada' || est === 'completada' || est === 'completado';
+    };
+    const paidNominas = monthlyNominasAll.filter(isPaid);
+    const pendingNominas = monthlyNominasAll.filter(n => !isPaid(n));
 
-    const paidNominas = monthlyNominas.filter(nomina => 
-      nomina.estado === 'pagada' || nomina.estado === 'Pagado'
-    );
-
-    const pendingNominas = monthlyNominas.filter(nomina => 
-      nomina.estado === 'pendiente' || nomina.estado === 'Pendiente' || 
-      nomina.estado === 'borrador' || nomina.estado === 'Borrador'
-    );
-
-    const paidAmount = paidNominas.reduce((sum, nomina) => {
-      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-      return sum + (isNaN(monto) ? 0 : monto);
-    }, 0);
-
-    const pendingAmount = pendingNominas.reduce((sum, nomina) => {
-      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-      return sum + (isNaN(monto) ? 0 : monto);
-    }, 0);
+    const paidAmount = paidNominas.reduce((sum, n) => sum + getMonto(n), 0);
+    const pendingAmount = pendingNominas.reduce((sum, n) => sum + getMonto(n), 0);
 
     setMonthlyData({
-      totalAmount,
-      totalNominas: monthlyNominas.length,
+      // total mensual solicitado: solo pagadas
+      totalAmount: paidAmount,
+      totalNominas: paidNominas.length,
       paidNominas: paidNominas.length,
       pendingNominas: pendingNominas.length,
       paidAmount,
       pendingAmount,
       firstDayOfMonth,
       lastDayOfMonth,
-      monthlyNominas
+      monthlyNominas: monthlyNominasAll
     });
   };
 
@@ -1177,7 +1148,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
-                    <select value={filtroProyecto} onChange={(e)=>setFiltroProyecto(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                    <select value={filtroProyecto} onChange={(e)=>setFiltroProyecto(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-gray-400">
                       <option value="">Todos</option>
                       {proyectos.map(p => (
                         <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
@@ -1187,7 +1158,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
-                      <select value={filtroEstado} onChange={(e)=>setFiltroEstado(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm">
+                      <select value={filtroEstado} onChange={(e)=>setFiltroEstado(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-gray-400">
                         {['Pagado','Pendiente','Aprobada','Cancelada','Todos'].map(s => <option key={s} value={s}>{s}</option>)}
                       </select>
                     </div>
