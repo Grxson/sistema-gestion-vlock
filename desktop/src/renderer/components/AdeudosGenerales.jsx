@@ -364,7 +364,17 @@ const AdeudosGenerales = () => {
   };
 
   const formatearFecha = (fecha) => {
-    return new Date(fecha).toLocaleDateString('es-MX', {
+    if (!fecha) return '';
+    let d;
+    if (fecha instanceof Date) {
+      d = new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate());
+    } else if (typeof fecha === 'string') {
+      const [y, m, dayPart] = fecha.split('T')[0].split('-').map(Number);
+      d = new Date(y, (m || 1) - 1, dayPart || 1);
+    } else {
+      d = new Date(fecha);
+    }
+    return d.toLocaleDateString('es-MX', {
       year: 'numeric',
       month: 'long',
       day: 'numeric'

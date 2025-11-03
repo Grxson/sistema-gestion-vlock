@@ -15,8 +15,17 @@ export const calcularDiasRestantes = (fechaVencimiento) => {
   const hoyLocal = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
 
   // Aceptar string o Date; normalizar vencimiento a fecha local sin hora
-  const d = (fechaVencimiento instanceof Date) ? fechaVencimiento : new Date(fechaVencimiento);
-  const vencLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  let vencLocal;
+  if (fechaVencimiento instanceof Date) {
+    vencLocal = new Date(fechaVencimiento.getFullYear(), fechaVencimiento.getMonth(), fechaVencimiento.getDate());
+  } else if (typeof fechaVencimiento === 'string') {
+    const datePart = fechaVencimiento.split('T')[0];
+    const [y, m, d] = datePart.split('-').map(Number);
+    vencLocal = new Date(y, (m || 1) - 1, d || 1);
+  } else {
+    const d = new Date(fechaVencimiento);
+    vencLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
 
   // Diferencia en días, redondeada para evitar desfaces por zona horaria/DST
   const MS_PER_DAY = 24 * 60 * 60 * 1000;
