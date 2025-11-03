@@ -36,6 +36,13 @@ router.post('/:id_nomina/pago', verifyRole([1]), nominaController.registrarPagoN
 // Generar recibo PDF
 router.get('/:id_nomina/recibo', nominaController.generarReciboPDF);
 
+// Descargar recibo PDF (streaming, sin guardar en servidor)
+router.get('/:id_nomina/recibo/download', (req, res, next) => {
+  req.query.mode = 'stream';
+  req.query.download = '1';
+  return nominaController.generarReciboPDF(req, res, next);
+});
+
 // Obtener historial de pagos
 router.get('/pagos/historial', nominaController.getHistorialPagos);
 

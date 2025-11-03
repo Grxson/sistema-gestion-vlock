@@ -842,21 +842,17 @@ export default function Nomina() {
   const fetchData = async () => {
     try {
       setLoading(true);
-      
       // Inicializar servicios de nóminas
       await nominasServices.inicializar();
-      
       // Refrescar empleados desde el contexto global
-      const empleadosRefrescados = await refreshEmpleados();
-      
-        // Esperar un poco para que el estado se actualice
-        await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Fetch nominas usando el nuevo servicio
-      let nominasData = [];
+      await refreshEmpleados();
+      // Esperar un poco para que el estado se actualice
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Fetch nominas usando el servicio
       try {
         const nominasResponse = await nominasServices.nominas.getAll();
-        nominasData = nominasResponse.data || [];
+        const nominasData = nominasResponse.data || [];
         setNominas(nominasData);
       } catch (error) {
         setNominas([]);
@@ -869,7 +865,6 @@ export default function Nomina() {
       } catch (error) {
         setEstadisticas(null);
       }
-
     } catch (error) {
       showError('Error', 'No se pudieron cargar los datos');
     } finally {
@@ -877,17 +872,20 @@ export default function Nomina() {
     }
   };
 
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96 bg-white dark:bg-dark-100 rounded-lg">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Cargando información de nómina...</p>
-        </div>
-      </div>
-    );
-  }
+  const refreshEventTimer = React.useRef(null);
+  useEffect(() => {
+    const onNominaChanged = () => {
+      if (refreshEventTimer.current) clearTimeout(refreshEventTimer.current);
+      refreshEventTimer.current = setTimeout(() => {
+        fetchData();
+      }, 300);
+    };
+    window.addEventListener('nomina:changed', onNominaChanged);
+    return () => {
+      window.removeEventListener('nomina:changed', onNominaChanged);
+      if (refreshEventTimer.current) clearTimeout(refreshEventTimer.current);
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-white dark:bg-dark-50">

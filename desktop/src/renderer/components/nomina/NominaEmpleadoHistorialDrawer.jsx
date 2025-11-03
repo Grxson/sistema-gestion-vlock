@@ -23,36 +23,65 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
 
   const empleadoId = empleado?.id_empleado || empleado?.id;
 
-  // Utilidad: obtener semanas ISO que tocan el mes del período (ordenadas)
+  // Utilidad: semanas ISO del mes según mayoría de días (regla de jueves/majority)
   const getWeeksTouchingMonth = (periodo) => {
     if (!periodo || !/^[0-9]{4}-[0-9]{2}$/.test(periodo)) return [];
-    const [yearStr, monthStr] = periodo.split('-');
-    const year = parseInt(yearStr, 10);
-    const month = parseInt(monthStr, 10) - 1; // 0-index
-    const first = new Date(year, month, 1, 12, 0, 0, 0);
-    const last = new Date(year, month + 1, 0, 12, 0, 0, 0);
+    const [yy, mm] = periodo.split('-');
+    const year = parseInt(yy, 10);
+    const month0 = parseInt(mm, 10) - 1;
+
+    const first = new Date(year, month0, 1, 12, 0, 0, 0);
+    const last = new Date(year, month0 + 1, 0, 12, 0, 0, 0);
+
+    // lunes que contiene el día 1 del mes
+    const day = first.getDay() || 7; // 1..7 (dom=0 -> 7)
+    const mondayStart = new Date(first);
+    mondayStart.setDate(first.getDate() - day + 1);
+
+    const end = new Date(last);
+    end.setDate(last.getDate() + 7); // abarcar la última semana
+
     const seen = new Set();
     const list = [];
-    for (let d = new Date(first); d <= last; d.setDate(d.getDate() + 1)) {
-      // calcular ISO week-year y week number usando jueves de la semana
-      const temp = new Date(d);
-      const dow = temp.getDay();
-      const deltaToThursday = dow === 0 ? -3 : (4 - dow);
-      const th = new Date(temp);
-      th.setDate(temp.getDate() + deltaToThursday);
-      const isoYear = th.getFullYear();
-      // semana ISO: número de semana del año
-      const firstThursday = new Date(isoYear, 0, 4, 12, 0, 0, 0);
-      const firstDow = firstThursday.getDay();
-      const deltaFirst = firstDow === 0 ? -3 : (4 - firstDow);
-      const firstIsoWeekThursday = new Date(firstThursday);
-      firstIsoWeekThursday.setDate(firstThursday.getDate() + deltaFirst);
-      const diffDays = Math.round((th - firstIsoWeekThursday) / (24 * 3600 * 1000));
-      const isoWeek = 1 + Math.floor(diffDays / 7);
-      const key = `${isoYear}-${isoWeek}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        list.push({ anio: isoYear, semana_iso: isoWeek });
+
+    const getMajorityMonthFromMonday = (monday) => {
+      const counts = new Map(); // key = month index 0..11
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const key = d.getMonth();
+        counts.set(key, (counts.get(key) || 0) + 1);
+      }
+      let bestMonth = month0;
+      let best = -1;
+      counts.forEach((v, k) => { if (v > best) { best = v; bestMonth = k; } });
+      return bestMonth;
+    };
+
+    for (let d = new Date(mondayStart); d <= end; d.setDate(d.getDate() + 7)) {
+      // Calcular jueves de esa semana para ISO year/week
+      const jueves = new Date(d);
+      const dow = jueves.getDay();
+      const diasHastaJueves = dow === 0 ? 4 : (4 - dow);
+      jueves.setDate(d.getDate() + diasHastaJueves);
+      const isoYear = jueves.getFullYear();
+
+      // Primer jueves del año ISO
+      const primerEnero = new Date(isoYear, 0, 1);
+      const diaPrimerEnero = primerEnero.getDay();
+      const diasHastaPrimerJueves = (11 - diaPrimerEnero) % 7; // 0..6
+      const primerJueves = new Date(isoYear, 0, 1 + diasHastaPrimerJueves);
+      const diff = Math.floor((jueves - primerJueves) / (1000 * 60 * 60 * 24));
+      const isoWeek = Math.floor(diff / 7) + 1;
+
+      // Incluir solo si la mayoría de días de esa semana pertenece al mes
+      const majMonth = getMajorityMonthFromMonday(d);
+      if (majMonth === month0) {
+        const key = `${isoYear}-${isoWeek}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          list.push({ anio: isoYear, semana_iso: isoWeek });
+        }
       }
     }
     return list;

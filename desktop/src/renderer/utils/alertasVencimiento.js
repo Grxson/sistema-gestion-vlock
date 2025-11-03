@@ -10,20 +10,17 @@
 export const calcularDiasRestantes = (fechaVencimiento) => {
   if (!fechaVencimiento) return null;
 
-  // Crear fecha de hoy sin hora
+  // Normalizar 'hoy' a fecha local sin hora
   const hoy = new Date();
-  hoy.setHours(0, 0, 0, 0);
+  const hoyLocal = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
 
-  // Parsear fecha de vencimiento correctamente (formato YYYY-MM-DD)
-  const fechaStr = fechaVencimiento.split('T')[0]; // Tomar solo la parte de fecha
-  const [year, month, day] = fechaStr.split('-').map(Number);
-  const vencimiento = new Date(year, month - 1, day); // Mes es 0-indexed
-  vencimiento.setHours(0, 0, 0, 0);
+  // Aceptar string o Date; normalizar vencimiento a fecha local sin hora
+  const d = (fechaVencimiento instanceof Date) ? fechaVencimiento : new Date(fechaVencimiento);
+  const vencLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
-  // Calcular diferencia en milisegundos y convertir a días
-  const diferencia = vencimiento - hoy;
-  const dias = Math.floor(diferencia / (1000 * 60 * 60 * 24));
-  
+  // Diferencia en días, redondeada para evitar desfaces por zona horaria/DST
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const dias = Math.round((vencLocal - hoyLocal) / MS_PER_DAY);
   return dias;
 };
 

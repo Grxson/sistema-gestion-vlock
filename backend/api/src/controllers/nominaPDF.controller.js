@@ -149,11 +149,13 @@ const generarReciboPDF = async (req, res) => {
         const fs = require('fs-extra');
         const path = require('path');
         
-        // Crear directorio para guardar los recibos si no existe
+        const streamMode = req.query?.mode === 'stream' || req.query?.download === '1';
         const uploadsDir = path.join(__dirname, '..', 'uploads', 'recibos');
-        await fs.ensureDir(uploadsDir);
+        if (!streamMode) {
+            await fs.ensureDir(uploadsDir);
+        }
 
-        // Generar nombre del archivo con formato: nomina_semana-<n>_<Nombre_Empleado>_<YYYYMMDD_HHMMSS>.pdf
+        // Generar nombre del archivo con formato: nomina_semana-<n>_<Nombre_Empleado>_<YYYYMMDD_HHMMSS>.pdf (usado también en streaming)
         const empleadoData = nomina.empleado;
         const nombreEmpleado = `${empleadoData.nombre}_${empleadoData.apellido}`.replace(/\s+/g, '_');
         
@@ -184,9 +186,16 @@ const generarReciboPDF = async (req, res) => {
         // Crear el documento PDF con márgenes más pequeños
         const doc = new PDFDocument({ margin: 20, size: 'letter' });
         
-        // Stream para escribir en archivo
-        const stream = fs.createWriteStream(filePath);
-        doc.pipe(stream);
+        // En modo streaming: enviar directo al cliente; en modo archivo: escribir a disco
+        let stream = null;
+        if (streamMode) {
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+            doc.pipe(res);
+        } else {
+            stream = fs.createWriteStream(filePath);
+            doc.pipe(stream);
+        }
 
         // Configuraciones del documento
         const pageWidth = doc.page.width;
@@ -306,10 +315,13 @@ const generarReciboPDF = async (req, res) => {
             currentY += 10;
         }
         
-        // Fecha de inicio de relación laboral
-        const fechaInicio = empleado.createdAt ? empleado.createdAt.toLocaleDateString('es-MX') : 'N/A';
+        // Fecha de inicio de relación laboral (fecha de alta/creación del usuario) con formato legible
+        const fechaInicioDate = empleado?.fecha_alta ? new Date(empleado.fecha_alta) : null;
+        const fechaInicio = (fechaInicioDate && !isNaN(fechaInicioDate))
+          ? fechaInicioDate.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
+          : 'N/A';
         doc.fontSize(8)
-           .text(`Fecha Inicio: ${fechaInicio}`, empCol1X, currentY);
+           .text(`Fecha de Inicio: ${fechaInicio}`, empCol1X, currentY);
         
         currentY += 10;
         
@@ -589,93 +601,95 @@ const generarReciboPDF = async (req, res) => {
 
         currentY += 15; // Reducir espacio antes de deducciones
 
-        // ===== DEDUCCIONES =====
-        doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('DEDUCCIONES:', margin, currentY);
-        
-        currentY += 15; // Reducir espacio después del título
-        
-        // Encabezados de deducciones
-        doc.fontSize(8)
-           .font('Helvetica-Bold')
-           .text('Agrup SAT', col1X, currentY)
-           .text('No.', col2X, currentY)
-           .text('Concepto', col3X, currentY)
-           .text('Total', col4X, currentY);
-        
-        currentY += 15;
-        
-        // Línea bajo encabezados
-        doc.moveTo(col1X, currentY)
-           .lineTo(col4X + 80, currentY)
-           .lineWidth(0.5)
-           .strokeColor('#000000')
-           .stroke();
-        
-        currentY += 10;
-        
-        // Deducciones - mostrar todas las deducciones aplicadas
-        let contadorDeduccion = 1;
-        let hayDeducciones = false;
-        
-        // Mostrar ISR si está aplicado (monto > 0)
-        if (nomina.deducciones_isr && nomina.deducciones_isr > 0) {
-            doc.fontSize(8)
-               .font('Helvetica')
-               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-               .text('045', col2X, currentY)
-               .text('ISR', col3X, currentY)
-               .text(`$${parseFloat(nomina.deducciones_isr).toFixed(2)}`, col4X, currentY);
-            currentY += 15;
-            contadorDeduccion++;
-            hayDeducciones = true;
-        }
-        
-        // Mostrar IMSS si está aplicado (monto > 0)
-        if (nomina.deducciones_imss && nomina.deducciones_imss > 0) {
-            doc.fontSize(8)
-               .font('Helvetica')
-               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-               .text('052', col2X, currentY)
-               .text('IMSS', col3X, currentY)
-               .text(`$${parseFloat(nomina.deducciones_imss).toFixed(2)}`, col4X, currentY);
-            currentY += 15;
-            contadorDeduccion++;
-            hayDeducciones = true;
-        }
-        
-        // Mostrar Infonavit si está aplicado (monto > 0)
-        if (nomina.deducciones_infonavit && nomina.deducciones_infonavit > 0) {
-            doc.fontSize(8)
-               .font('Helvetica')
-               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-               .text('053', col2X, currentY)
-               .text('Infonavit', col3X, currentY)
-               .text(`$${parseFloat(nomina.deducciones_infonavit).toFixed(2)}`, col4X, currentY);
-            currentY += 15;
-            contadorDeduccion++;
-            hayDeducciones = true;
-        }
-        
-        // Mostrar deducciones adicionales si existen
-        if (nomina.deducciones_adicionales && nomina.deducciones_adicionales > 0) {
-            doc.fontSize(8)
-               .font('Helvetica')
-               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-               .text('999', col2X, currentY)
-               .text('Adicionales', col3X, currentY)
-               .text(`$${parseFloat(nomina.deducciones_adicionales).toFixed(2)}`, col4X, currentY);
-            currentY += 15;
-            contadorDeduccion++;
-            hayDeducciones = true;
-        }
-        
-        // Calcular y mostrar descuento por días no trabajados
+        // Determinar si hay algo que mostrar (faltas o adelantos)
         const diasBase = 6; // Semana laboral de 6 días
         const diasLaborados = parseInt(nomina.dias_laborados) || 6;
         const diasNoTrabajados = diasBase - diasLaborados;
+        const hasFaltas = diasNoTrabajados > 0;
+        const hasAdelantos = parseFloat(nomina.descuentos || 0) > 0;
+
+        if (hasFaltas || hasAdelantos) {
+          // ===== DEDUCCIONES =====
+          doc.fontSize(10)
+             .font('Helvetica-Bold')
+             .text('DEDUCCIONES:', margin, currentY);
+          
+          currentY += 15; // Reducir espacio después del título
+          
+          // Encabezados de deducciones
+          doc.fontSize(8)
+             .font('Helvetica-Bold')
+             .text('Agrup SAT', col1X, currentY)
+             .text('No.', col2X, currentY)
+             .text('Concepto', col3X, currentY)
+             .text('Total', col4X, currentY);
+          
+          currentY += 15;
+          
+          // Línea bajo encabezados
+          doc.moveTo(col1X, currentY)
+             .lineTo(col4X + 80, currentY)
+             .lineWidth(0.5)
+             .strokeColor('#000000')
+             .stroke();
+          
+          currentY += 10;
+          
+          // Deducciones - mostrar todas las deducciones aplicadas
+          let contadorDeduccion = 1;
+          let hayDeducciones = false;
         
+        // Líneas de deducciones fiscales (mantenidas en código pero NO visibles)
+        // if (nomina.deducciones_isr && nomina.deducciones_isr > 0) {
+        //     doc.fontSize(8)
+        //        .font('Helvetica')
+        //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+        //        .text('045', col2X, currentY)
+        //        .text('ISR', col3X, currentY)
+        //        .text(`$${parseFloat(nomina.deducciones_isr).toFixed(2)}`, col4X, currentY);
+        //     currentY += 15;
+        //     contadorDeduccion++;
+        //     hayDeducciones = true;
+        // }
+        
+        // if (nomina.deducciones_imss && nomina.deducciones_imss > 0) {
+        //     doc.fontSize(8)
+        //        .font('Helvetica')
+        //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+        //        .text('052', col2X, currentY)
+        //        .text('IMSS', col3X, currentY)
+        //        .text(`$${parseFloat(nomina.deducciones_imss).toFixed(2)}`, col4X, currentY);
+        //     currentY += 15;
+        //     contadorDeduccion++;
+        //     hayDeducciones = true;
+        // }
+        
+        // if (nomina.deducciones_infonavit && nomina.deducciones_infonavit > 0) {
+        //     doc.fontSize(8)
+        //        .font('Helvetica')
+        //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+        //        .text('053', col2X, currentY)
+        //        .text('INFONAVIT', col3X, currentY)
+        //        .text(`$${parseFloat(nomina.deducciones_infonavit).toFixed(2)}`, col4X, currentY);
+        //     currentY += 15;
+        //     contadorDeduccion++;
+        //     hayDeducciones = true;
+        // }
+        
+        // Mostrar deducciones adicionales si existen (OCULTO: Requerimiento actual es no mostrarlas)
+        // if (nomina.deducciones_adicionales && nomina.deducciones_adicionales > 0) {
+        //     doc.fontSize(8)
+        //        .font('Helvetica')
+        //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+        //        .text('999', col2X, currentY)
+        //        .text('Adicionales', col3X, currentY)
+        //        .text(`$${parseFloat(nomina.deducciones_adicionales).toFixed(2)}`, col4X, currentY);
+        //     currentY += 15;
+        //     contadorDeduccion++;
+        //     hayDeducciones = true;
+        // }
+        
+        // Calcular y mostrar descuento por días no trabajados
         if (diasNoTrabajados > 0) {
             // Calcular descuento por día no trabajado
             const pagoDiario = pagoSemanal / diasBase;
@@ -692,24 +706,25 @@ const generarReciboPDF = async (req, res) => {
             hayDeducciones = true;
         }
         
-        // Mostrar otros descuentos (adelantos, préstamos, etc.) si existen
+        // Mostrar adelantos si existen (antes: 'Otros descuentos')
         if (nomina.descuentos && nomina.descuentos > 0) {
             doc.fontSize(8)
                .font('Helvetica')
                .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
                .text('998', col2X, currentY)
-               .text('Otros descuentos', col3X, currentY)
+               .text('Adelantos', col3X, currentY)
                .text(`$${parseFloat(nomina.descuentos).toFixed(2)}`, col4X, currentY);
             currentY += 15;
             hayDeducciones = true;
         }
         
-        // Si no hay deducciones, mostrar mensaje
-        if (!hayDeducciones) {
-            doc.fontSize(8)
-               .font('Helvetica-Oblique')
-               .text('Sin deducciones aplicadas', col1X, currentY);
-            currentY += 15;
+        // Si no hay deducciones, NO mostrar ningún mensaje (PDF debe verse como completo)
+        // if (!hayDeducciones) {
+        //   doc.fontSize(8)
+        //      .font('Helvetica-Oblique')
+        //      .text('Sin deducciones aplicadas', col1X, currentY);
+        //   currentY += 15;
+        // }
         }
 
         currentY += 15; // Reducir espacio antes del resumen
@@ -728,22 +743,18 @@ const generarReciboPDF = async (req, res) => {
         const pagoDiarioEmpleado = pagoSemanal / diasBaseSemana;
         const descuentoPorDiasNoTrabajados = diasNoTrabajadosEmpleado > 0 ? (pagoDiarioEmpleado * diasNoTrabajadosEmpleado) : 0;
         
-        // Calcular deducciones totales correctamente
+        // Total de deducciones SOLO por faltas y adelantos (lo que sí se resta)
         const totalDeducciones = (
-            parseFloat(nomina.deducciones_isr || 0) +
-            parseFloat(nomina.deducciones_imss || 0) +
-            parseFloat(nomina.deducciones_infonavit || 0) +
-            parseFloat(nomina.deducciones_adicionales || 0) +
-            descuentoPorDiasNoTrabajados +
-            parseFloat(nomina.descuentos || 0)
+          (diasNoTrabajadosEmpleado > 0 ? (pagoDiarioEmpleado * diasNoTrabajadosEmpleado) : 0) +
+          parseFloat(nomina.descuentos || 0)
         );
         
-        // Calcular monto total correcto (percepciones - deducciones)
+        // Total a pagar = Percepciones - (faltas + adelantos)
         const totalNeto = totalPercepciones - totalDeducciones;
         
-        // Verificar si es un pago parcial
-        const montoPagado = parseFloat(nomina.monto_pagado) || 0;
-        const esPagoParcial = montoPagado > 0 && montoPagado < totalNeto;
+        // No mostrar pago parcial ni notas de movimientos en el PDF
+        const montoPagado = 0;
+        const esPagoParcial = false;
         
         // Usar columnas para el resumen también
         const resumenCol1X = margin + 300;
@@ -767,28 +778,29 @@ const generarReciboPDF = async (req, res) => {
         currentY += 5;
         
         // Mostrar el total a pagar (destacado)
-        doc.fontSize(11)
-           .font('Helvetica-Bold')
-           .fillColor('#000000')
-           .text(`TOTAL A PAGAR:`, resumenCol1X, currentY)
-           .text(`$${(esPagoParcial ? montoPagado : totalNeto).toFixed(2)}`, resumenCol2X, currentY);
-        
-        // Si es pago parcial, agregar nota informativa
-        if (esPagoParcial) {
-            currentY += 20;
-            doc.fontSize(8)
-               .font('Helvetica-Oblique')
-               .fillColor('#666666')
-               .text(`Nota: Este es un pago parcial de $${totalNeto.toFixed(2)}. Restante: $${(totalNeto - montoPagado).toFixed(2)}`, 
-                     margin, currentY, { align: 'center', width: pageWidth - 2 * margin });
-            doc.fillColor('#000000');
-        }
+        // Caja de fondo para destacar
+        const totalBoxY = currentY - 4;
+        const totalBoxHeight = 20;
+        const totalBoxX = resumenCol1X - 10;
+        const totalBoxWidth = (pageWidth - margin) - totalBoxX;
+        doc.save();
+        doc.rect(totalBoxX, totalBoxY, totalBoxWidth, totalBoxHeight)
+           .fill('#f2f6ff');
+        doc.restore();
 
+        doc.fontSize(13)
+           .font('Helvetica-Bold')
+           .fillColor('#0a7')
+           .text(`TOTAL A PAGAR:`, resumenCol1X, currentY)
+           .fillColor('#0a7')
+           .text(`$${totalNeto.toFixed(2)}`, resumenCol2X, currentY);
+        doc.fillColor('#000000');
+        
         currentY += 20; // Reducir espacio antes del importe en letra
 
         // ===== IMPORTE CON LETRA =====
-        // Usar el monto que realmente se está pagando (puede ser parcial)
-        const montoParaLetra = esPagoParcial ? montoPagado : parseFloat(nomina.monto_total);
+        // Usar el Total a Pagar mostrado (igual a Total Percepciones según política actual)
+        const montoParaLetra = totalNeto;
         const montoEnLetra = convertirNumeroALetra(montoParaLetra);
         doc.fontSize(9)
            .font('Helvetica-Bold')
@@ -843,38 +855,35 @@ const generarReciboPDF = async (req, res) => {
 
         // Completar el documento PDF
         doc.end();
-        
-        // Esperar a que termine de escribir
+
+        // Si es streaming, terminamos aquí (pdfkit cerrará la respuesta)
+        if (streamMode) return;
+
+        // Esperar a que termine de escribir a disco
         await new Promise((resolve, reject) => {
             stream.on('finish', resolve);
             stream.on('error', reject);
         });
-        
+
         // Actualizar la ruta del recibo en la base de datos
         const relativePath = `/uploads/recibos/${fileName}`;
         await nomina.update({ recibo_pdf: relativePath });
-        
+
         try {
             // Verificar que el archivo exista y sea accesible
             const exists = await fs.pathExists(filePath);
-            
             if (!exists) {
                 return res.status(404).json({ message: 'El archivo PDF no pudo generarse correctamente' });
             }
-            
             // Obtener información del archivo
             const stats = await fs.stat(filePath);
-            
             if (stats.size === 0) {
                 return res.status(500).json({ message: 'El archivo PDF generado está vacío' });
             }
-            
-            // Configurar encabezados de respuesta
+            // Configurar encabezados de respuesta y enviar
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
             res.setHeader('Content-Length', stats.size);
-            
-            // Leer el archivo completo y enviarlo como respuesta
             const fileBuffer = await fs.readFile(filePath);
             res.status(200).send(fileBuffer);
         } catch (err) {

@@ -7,6 +7,13 @@ import ApiService from '../api.js';
 export class NominaService {
   static cache = new Map();
   static cacheTimeout = 5 * 60 * 1000; // 5 minutos
+  static notifyChange() {
+    try {
+      if (typeof window !== 'undefined' && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent('nomina:changed', { detail: { at: Date.now() } }));
+      }
+    } catch (_) {}
+  }
 
   /**
    * Obtiene todas las nóminas con filtros avanzados
@@ -120,6 +127,7 @@ export class NominaService {
       
       // Limpiar caché
       this.clearCache();
+      this.notifyChange();
       
       const result = {
         success: true,
@@ -354,6 +362,7 @@ export class NominaService {
    */
   static clearCache() {
     this.cache.clear();
+    this.notifyChange();
   }
 
   /**
