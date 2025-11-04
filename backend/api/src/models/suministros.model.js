@@ -30,7 +30,7 @@ module.exports = (sequelize) => {
       comment: 'Folio del suministro que aparece en el recibo'
     },
     metodo_pago: {
-      type: DataTypes.ENUM('Efectivo', 'Transferencia', 'Cheque', 'Tarjeta'),
+      type: DataTypes.ENUM('Efectivo', 'Transferencia', 'Cheque', 'Tarjeta', 'Cuenta Fiscal'),
       defaultValue: 'Efectivo',
       comment: 'Método de pago utilizado'
     },

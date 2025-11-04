@@ -38,7 +38,7 @@ const navigationItems = [
   { name: 'Dashboard', href: '/', icon: HomeIcon, current: true, permissionModule: 'dashboard' },
   { name: 'Nómina', href: '/nomina', icon: CurrencyDollarIcon, current: false, permissionModule: 'nomina' },
   { 
-    name: 'Suministros', 
+    name: 'Gastos', 
     href: '/suministros', 
     icon: TruckIcon, 
     current: false, 

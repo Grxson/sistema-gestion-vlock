@@ -75,15 +75,6 @@ const FiltroTipoCategoria = ({
             Filtrar por Tipo de Gasto
           </h3>
         </div>
-        {filtroActivo && (
-          <button
-            onClick={() => onFiltroChange(null)}
-            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 flex items-center space-x-1"
-          >
-            <FaTimes className="h-3 w-3" />
-            <span>Limpiar</span>
-          </button>
-        )}
       </div>
 
       {/* Botones de filtro ultra-compactos */}
