@@ -108,14 +108,14 @@ export default function FormularioSuministros({
     // Si hay initialData con suministros, usar el include_iva del primer suministro
     if (initialData?.suministros && initialData.suministros.length > 0) {
       const primerSuministro = initialData.suministros[0];
-      return primerSuministro.include_iva !== undefined ? primerSuministro.include_iva : true;
+      return primerSuministro.include_iva !== undefined ? primerSuministro.include_iva : false;
     }
     // Si hay include_iva en el nivel superior de initialData, usarlo
     if (initialData?.include_iva !== undefined) {
       return initialData.include_iva;
     }
-    // Por defecto, incluir IVA
-    return true;
+    // Por defecto, NO incluir IVA (cambio solicitado)
+    return false;
   }, [initialData]);
 
   // Función para obtener fecha local correcta (sin problemas de zona horaria)
@@ -127,9 +127,16 @@ export default function FormularioSuministros({
     return `${year}-${month}-${day}`;
   }, []);
 
+  // Función para generar folio auto-incrementable
+  const generateAutoFolio = useCallback(() => {
+    const timestamp = Date.now();
+    const random = Math.floor(Math.random() * 1000);
+    return `F-${timestamp}-${random}`;
+  }, []);
+
   // Estado del recibo/folio principal
   const [reciboInfo, setReciboInfo] = useState({
-    folio: '',
+    folio: initialData?.folio || generateAutoFolio(),
     id_proyecto: '',
     proveedor_info: null,
     fecha: getLocalDateString(),
@@ -521,8 +528,15 @@ export default function FormularioSuministros({
 
   // ⚡ OPTIMIZACIÓN CRÍTICA: Cargar datos iniciales de forma asíncrona
   useEffect(() => {
-    // ⚡ Early return si no hay datos iniciales
-    if (!initialData) return;
+    // ⚡ Early return si no hay datos iniciales - pero generar folio si es necesario
+    if (!initialData) {
+      // Si no hay initialData y el folio está vacío, generar uno nuevo
+      setReciboInfo(prev => ({
+        ...prev,
+        folio: prev.folio || generateAutoFolio()
+      }));
+      return;
+    }
     
     // ⚡ Usar requestAnimationFrame para diferir el procesamiento pesado
     const processInitialData = () => {
@@ -619,7 +633,7 @@ export default function FormularioSuministros({
     return () => {
       cancelAnimationFrame(frameId);
     };
-  }, [initialData, normalizeUnidadMedida, normalizeCategoria, normalizeFecha, resolveUnidadId]);
+  }, [initialData, normalizeUnidadMedida, normalizeCategoria, normalizeFecha, resolveUnidadId, generateAutoFolio]);
 
   // =================== FUNCIONES DE VALIDACIÓN Y AUTOCOMPLETADO OPTIMIZADAS ===================
   
@@ -1513,6 +1527,7 @@ export default function FormularioSuministros({
               <option value="Transferencia">Transferencia</option>
               <option value="Cheque">Cheque</option>
               <option value="Tarjeta">Tarjeta</option>
+              <option value="Cuenta Fiscal">Cuenta Fiscal</option>
             </select>
           </div>
         </div>

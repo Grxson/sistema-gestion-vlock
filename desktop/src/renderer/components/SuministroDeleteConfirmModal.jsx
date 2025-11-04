@@ -9,7 +9,6 @@ const SuministroDeleteConfirmModal = ({
   type = 'suministro' // 'suministro' o 'recibo'
 }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [confirmText, setConfirmText] = useState('');
 
   if (!isOpen) return null;
 
@@ -18,16 +17,8 @@ const SuministroDeleteConfirmModal = ({
   const itemTitle = isRecibo ? 
     `${suministro?.numero_recibo || 'Recibo sin número'}` : 
     `${suministro?.nombre || 'Suministro sin descripción'}`;
-  
-  const requiredText = isRecibo ? 
-    'ELIMINAR RECIBO COMPLETO' : 
-    'ESTOY DE ACUERDO';
-
-  const isConfirmValid = confirmText === requiredText;
 
   const handleConfirm = async () => {
-    if (!isConfirmValid) return;
-    
     setIsLoading(true);
     try {
       await onConfirm(suministro);
@@ -40,7 +31,6 @@ const SuministroDeleteConfirmModal = ({
   };
 
   const handleClose = () => {
-    setConfirmText('');
     onClose();
   };
 
@@ -95,12 +85,12 @@ const SuministroDeleteConfirmModal = ({
           </div>
 
           {/* Danger Warning */}
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-6">
             <div className="flex items-start space-x-2">
               <FaExclamationTriangle className="w-5 h-5 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-1">
-                 Esta acción es IRREVERSIBLE
+                  ⚠️ Esta acción es IRREVERSIBLE
                 </p>
                 <p className="text-sm text-red-700 dark:text-red-400">
                   {isRecibo 
@@ -110,33 +100,6 @@ const SuministroDeleteConfirmModal = ({
                 </p>
               </div>
             </div>
-          </div>
-
-          {/* Confirmation Input */}
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Para confirmar la eliminación, escribe: 
-              <span className="font-bold text-red-600 dark:text-red-400"> {requiredText}</span>
-            </label>
-            <input
-              type="text"
-              value={confirmText}
-              onChange={(e) => setConfirmText(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 ${
-                confirmText && !isConfirmValid
-                  ? 'border-red-300 dark:border-red-600 focus:ring-red-500 focus:border-red-500'
-                  : isConfirmValid
-                  ? 'border-green-300 dark:border-green-600 focus:ring-green-500 focus:border-green-500'
-                  : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500 focus:border-blue-500'
-              }`}
-              placeholder={`Escribe "${requiredText}" para confirmar`}
-              disabled={isLoading}
-            />
-            {confirmText && !isConfirmValid && (
-              <p className="mt-1 text-sm text-red-600 dark:text-red-400">
-                El texto debe coincidir exactamente
-              </p>
-            )}
           </div>
 
           {/* Actions */}
@@ -150,12 +113,8 @@ const SuministroDeleteConfirmModal = ({
             </button>
             <button
               onClick={handleConfirm}
-              disabled={!isConfirmValid || isLoading}
-              className={`px-4 py-2 text-sm font-medium text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 transition-all ${
-                isConfirmValid && !isLoading
-                  ? 'bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700'
-                  : 'bg-gray-400 dark:bg-gray-500 cursor-not-allowed'
-              }`}
+              disabled={isLoading}
+              className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 dark:bg-red-600 dark:hover:bg-red-700 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 dark:focus:ring-offset-gray-800 transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {isLoading ? (
                 <div className="flex items-center space-x-2">
@@ -163,7 +122,10 @@ const SuministroDeleteConfirmModal = ({
                   <span>Eliminando...</span>
                 </div>
               ) : (
-                `Eliminar ${itemName.charAt(0).toUpperCase() + itemName.slice(1)}`
+                <>
+                  <FaTrash className="inline mr-2" />
+                  Confirmar Eliminación
+                </>
               )}
             </button>
           </div>

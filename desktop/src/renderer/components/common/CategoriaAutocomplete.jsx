@@ -183,6 +183,9 @@ const CategoriaAutocomplete = ({
         onCategoriesUpdated();
       }
 
+      // ✅ Mostrar mensaje de confirmación
+      alert(`✅ Categoría "${newCategoria.nombre}" creada exitosamente`);
+
       setShowModal(false);
     } catch (error) {
       console.error('🆕 Error al crear categoría:', error);

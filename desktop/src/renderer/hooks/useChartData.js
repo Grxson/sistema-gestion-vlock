@@ -267,22 +267,29 @@ export const useChartData = (showError) => {
         const fechaSuministro = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
         const fechaInicio = new Date(chartFilters.fechaInicio);
         const fechaFin = new Date(chartFilters.fechaFin);
+        fechaFin.setHours(23, 59, 59, 999); // Incluir todo el día final
         const matchesFecha = fechaSuministro >= fechaInicio && fechaSuministro <= fechaFin;
         
         // Filtro por proyecto
         const matchesProyecto = !chartFilters.proyectoId || 
-                               suministro.id_proyecto?.toString() === chartFilters.proyectoId;
+                               suministro.id_proyecto?.toString() === chartFilters.proyectoId.toString();
         
         // Filtro por proveedor
+        const proveedorNombre = suministro.proveedor?.nombre || suministro.proveedor_nombre || '';
         const matchesProveedor = !chartFilters.proveedorNombre || 
-                                suministro.proveedor?.nombre === chartFilters.proveedorNombre;
+                                proveedorNombre === chartFilters.proveedorNombre;
         
-        // Filtro por tipo de suministro
-        const categoriaNombre = typeof suministro.categoria === 'object' && suministro.categoria 
-          ? suministro.categoria.nombre 
-          : suministro.categoria;
-        const matchesTipo = !chartFilters.tipoSuministro || 
-                           (suministro.tipo_suministro || categoriaNombre) === chartFilters.tipoSuministro;
+        // Filtro por tipo de suministro (desde categoría)
+        let tipoSuministro = '';
+        if (suministro.categoria && typeof suministro.categoria === 'object') {
+          tipoSuministro = suministro.categoria.tipo || '';
+        } else if (suministro.id_categoria_suministro && categoriasDinamicas) {
+          const categoria = categoriasDinamicas.find(cat => 
+            cat.id_categoria === suministro.id_categoria_suministro
+          );
+          tipoSuministro = categoria?.tipo || '';
+        }
+        const matchesTipo = !chartFilters.tipoSuministro || tipoSuministro === chartFilters.tipoSuministro;
         
         // Filtro por estado
         const matchesEstado = !chartFilters.estado || suministro.estado === chartFilters.estado;
@@ -290,7 +297,17 @@ export const useChartData = (showError) => {
         return matchesFecha && matchesProyecto && matchesProveedor && matchesTipo && matchesEstado;
       });
 
-      console.log('📊 Datos filtrados:', filteredData.length, 'registros');
+      console.log('📊 Datos filtrados:', {
+        original: suministros.length,
+        filtrados: filteredData.length,
+        filtrosActivos: {
+          fechas: `${chartFilters.fechaInicio} - ${chartFilters.fechaFin}`,
+          proyecto: chartFilters.proyectoId || 'Todos',
+          proveedor: chartFilters.proveedorNombre || 'Todos',
+          tipo: chartFilters.tipoSuministro || 'Todos',
+          estado: chartFilters.estado || 'Todos'
+        }
+      });
 
       // Procesar datos para todas las gráficas con manejo de errores individual
       const chartDataProcessed = {};

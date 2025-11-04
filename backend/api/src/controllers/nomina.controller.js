@@ -24,7 +24,8 @@ const getAllNominas = async (req, res) => {
         const nominas = await NominaEmpleado.findAll({
             include: [
                 { model: Empleado, as: 'empleado' },
-                { model: SemanaNomina, as: 'semana' }
+                { model: SemanaNomina, as: 'semana' },
+                { model: Proyecto, as: 'proyecto' }
             ]
         });
 

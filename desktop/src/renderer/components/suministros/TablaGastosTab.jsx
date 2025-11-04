@@ -54,6 +54,7 @@ const TablaGastosTab = ({
   toggleReciboExpansion,
   calculateTotal,
   handleEditRecibo,
+  handleDeleteRecibo,
   handleViewRecibo,
   formatPriceDisplay
 }) => {
@@ -312,6 +313,85 @@ const TablaGastosTab = ({
                   const rows = [];
                   
                   recibosAgrupados.forEach((recibo) => {
+                    // Verificar si es una fila de nómina
+                    const isNominaRow = recibo.suministros?.[0]?.isNominaRow || false;
+                    
+                    if (isNominaRow) {
+                      // Renderizar fila de nómina
+                      const nominaData = recibo.suministros[0];
+                      rows.push(
+                        <tr key={nominaData.id_suministro} className="bg-green-50 dark:bg-green-900/10 hover:bg-green-100 dark:hover:bg-green-900/20 transition-colors duration-150">
+                          {/* Suministro (Nombre de nómina) */}
+                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                            <div className="flex items-center gap-2">
+                              <FaReceipt className="text-green-600 dark:text-green-400 w-4 h-4" />
+                              <div>
+                                <div className="font-semibold">{nominaData.nombre}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  Proyecto: {nominaData.nombre_proyecto}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  {nominaData.cantidad_empleados} empleado{nominaData.cantidad_empleados !== 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          {/* Folio */}
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">
+                            {nominaData.folio}
+                          </td>
+                          {/* Fecha */}
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">
+                            {formatDate(nominaData.fecha_inicio)} - {formatDate(nominaData.fecha_fin)}
+                          </td>
+                          {/* Categoría */}
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">
+                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                              {nominaData.categoria}
+                            </span>
+                          </td>
+                          {/* Proveedor */}
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">
+                            {nominaData.proveedor}
+                          </td>
+                          {/* Cantidad */}
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">
+                            {nominaData.cantidad} {nominaData.unidad_medida}
+                          </td>
+                          {/* Costo total */}
+                          <td className="px-6 py-4 text-sm font-semibold text-gray-900 dark:text-white">
+                            <div>
+                              <div className="text-sm text-gray-900 dark:text-white">
+                                {formatPriceDisplay(nominaData.costo_total)}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                Total semana: {formatPriceDisplay(nominaData.total_con_iva)}
+                              </div>
+                            </div>
+                          </td>
+                          {/* Estado - OMITIDO para nóminas */}
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
+                              Nómina
+                            </span>
+                          </td>
+                          {/* Acciones */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleViewDetails(nominaData)}
+                                className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300 p-1 transition-colors duration-200"
+                                title="Ver detalles de nómina"
+                              >
+                                <FaEye className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                      return; // Salir temprano, no procesar como suministro normal
+                    }
+                    
                     if (recibo.isHierarchical && filters.proveedor === '') {
                       // Grupo jerárquico - mostrar encabezado con opción de expandir
                       rows.push(

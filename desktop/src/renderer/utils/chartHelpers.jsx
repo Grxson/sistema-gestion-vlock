@@ -238,12 +238,24 @@ export const getBarChartOptions = (title, metrics = {}) => ({
  * Componente de métricas para mostrar datos clave
  */
 export const MetricsDisplay = ({ title, metrics, icon: Icon, color = "indigo" }) => {
+  const isDarkMode = document.documentElement.classList.contains('dark');
+  
   const colorClasses = {
-    blue: "bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-200",
-    green: "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200",
-    amber: "bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-200",
-    red: "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-800 dark:text-red-200",
-    purple: "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-200"
+    blue: isDarkMode 
+      ? "bg-indigo-900/20 border-indigo-800 text-indigo-200"
+      : "bg-indigo-50 border-indigo-200 text-indigo-800",
+    green: isDarkMode
+      ? "bg-green-900/20 border-green-800 text-green-200"
+      : "bg-green-50 border-green-200 text-green-800",
+    amber: isDarkMode
+      ? "bg-amber-900/20 border-amber-800 text-amber-200"
+      : "bg-amber-50 border-amber-200 text-amber-800",
+    red: isDarkMode
+      ? "bg-red-900/20 border-red-800 text-red-200"
+      : "bg-red-50 border-red-200 text-red-800",
+    purple: isDarkMode
+      ? "bg-purple-900/20 border-purple-800 text-purple-200"
+      : "bg-purple-50 border-purple-200 text-purple-800"
   };
 
   if (!metrics || Object.keys(metrics).length === 0) return null;
@@ -372,8 +384,10 @@ export const MetricsDisplay = ({ title, metrics, icon: Icon, color = "indigo" })
 
           return (
             <div key={key} className="flex flex-col">
-              <span className="font-medium">{label}</span>
-              <span className="text-xs opacity-80 truncate" title={displayValue}>
+              <span className={`font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                {label}
+              </span>
+              <span className={`text-xs opacity-80 truncate ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`} title={displayValue}>
                 {displayValue}
               </span>
             </div>

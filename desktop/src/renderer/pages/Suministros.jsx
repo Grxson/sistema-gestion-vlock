@@ -77,6 +77,7 @@ import FiltroTipoCategoria from '../components/common/FiltroTipoCategoria';
 import UnidadesMedidaManager from '../components/UnidadesMedidaManager';
 import { useToast } from '../contexts/ToastContext';
 import { NominaService } from '../services/nominas/nominaService';
+import useCombinedTableData from '../hooks/useCombinedTableData';
 
 // Componentes de Pestañas
 import GastosTab from '../components/suministros/GastosTab';
@@ -170,6 +171,9 @@ const Suministros = () => {
     fechaInicio: '',
     fechaFin: ''
   });
+
+  // Hook para combinar suministros con nóminas
+  const { combinedData, nominaRows, loading: loadingNominas } = useCombinedTableData(suministros, filters);
 
   // Estados para estadísticas por tipo
   const [estadisticasTipo, setEstadisticasTipo] = useState(null);
@@ -2165,7 +2169,7 @@ const Suministros = () => {
     return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 0, 0, 0, 0);
   };
 
-  const filteredSuministros = suministros.filter(suministro => {
+  const filteredSuministros = combinedData.filter(suministro => {
     const matchesSearch = suministro.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          suministro.descripcion_detallada?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -2194,14 +2198,14 @@ const Suministros = () => {
     // Filtro por tipo de categoría
     const categoriaTipo = typeof suministro.categoria === 'object' && suministro.categoria 
       ? suministro.categoria.tipo 
-      : null;
+      : suministro.tipo_categoria; // Para filas de nómina
     const matchesTipoCategoria = !filters.tipo_categoria || categoriaTipo === filters.tipo_categoria;
 
     // Filtro por rango de fechas
     let matchesFecha = true;
     if (filters.fechaInicio || filters.fechaFin) {
       // Obtener la fecha del suministro
-      const fechaStr = suministro.fecha_necesaria || suministro.fecha || suministro.createdAt;
+      const fechaStr = suministro.fecha_necesaria || suministro.fecha || suministro.createdAt || suministro.fecha_registro;
       const fechaSuministro = normalizarFecha(fechaStr);
       
       if (!fechaSuministro) {
