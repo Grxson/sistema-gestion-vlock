@@ -157,7 +157,7 @@ const SuministrosChartSelector = ({ selectedCharts, setSelectedCharts }) => {
       </div>
 
       {/* Estilos inline para el componente compacto */}
-      <style jsx>{`
+      <style>{`
         .chart-selector-compact {
           display: flex;
           flex-direction: column;

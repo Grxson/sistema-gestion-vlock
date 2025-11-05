@@ -167,7 +167,7 @@ const SuministrosChartFilters = ({
       )}
 
       {/* Estilos inline para el componente compacto */}
-      <style jsx>{`
+      <style>{`
         .filters-compact {
           display: flex;
           flex-direction: column;
