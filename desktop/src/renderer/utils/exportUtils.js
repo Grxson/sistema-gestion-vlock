@@ -436,16 +436,42 @@ export const validateImportData = (data, proyectos = [], proveedores = []) => {
   return { validData, errors };
 };
 
+// Helper para resolver nombre de categoría según diferentes estructuras
+const resolveCategoriaNombre = (item, categorias = []) => {
+  // Nómina
+  if (item.isNominaRow) return item.categoria || 'Nómina';
+
+  // Si viene como objeto
+  if (item.categoria && typeof item.categoria === 'object') {
+    if (item.categoria.nombre) return item.categoria.nombre;
+  }
+  // Si viene como strings auxiliares
+  if (item.categoria_info && item.categoria_info.nombre) return item.categoria_info.nombre;
+  if (item.categoria_nombre) return item.categoria_nombre;
+  if (typeof item.categoria === 'string' && item.categoria.trim() !== '') return item.categoria;
+
+  // Buscar por id en posibles campos de id
+  const catId = item.id_categoria_suministro || item.id_categoria || item.id_categoria_gasto;
+  if (catId && Array.isArray(categorias) && categorias.length > 0) {
+    const found = categorias.find(c => c.id === catId || c.id_categoria === catId || String(c.id) === String(catId) || String(c.id_categoria) === String(catId));
+    if (found && found.nombre) return found.nombre;
+  }
+
+  // Fallback a tipo_suministro o vacío
+  return item.tipo_suministro || '';
+};
+
 // Función para exportar a Excel
-export const exportToExcel = async (data) => {
+export const exportToExcel = async (data, options = {}) => {
   try {
+    const categorias = options.categorias || [];
     // Mapear datos solo con las columnas necesarias
     const exportData = data.map(item => ({
       'Folio': item.folio || item.id_suministro,
       'Nombre del Suministro': item.nombre,
       'Código': item.codigo_producto || '',
       'Descripción': item.descripcion_detallada || '',
-      'Categoría': item.tipo_suministro,
+      'Categoría': resolveCategoriaNombre(item, categorias),
       'Cantidad': item.cantidad,
       'Unidad': item.unidad_medida,
       'Precio Unitario': item.precio_unitario,
@@ -484,9 +510,29 @@ export const exportToExcel = async (data) => {
     XLSX.utils.book_append_sheet(wb, ws, 'Suministros');
 
     const fileName = `suministros_export_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.xlsx`;
-    XLSX.writeFile(wb, fileName);
 
-    return { success: true, fileName };
+    // Generar el archivo en memoria
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+
+    // Usar IPC para guardar el archivo con diálogo de Electron
+    if (window.electron && window.electron.ipcRenderer) {
+      const result = await window.electron.ipcRenderer.invoke('save-excel-file', {
+        buffer: wbout,
+        defaultFileName: fileName
+      });
+
+      if (result.success) {
+        return { success: true, fileName: result.filePath };
+      } else if (result.canceled) {
+        return { success: false, canceled: true };
+      } else {
+        throw new Error(result.error || 'Error desconocido al guardar el archivo');
+      }
+    } else {
+      // Fallback para entorno de desarrollo web (no Electron)
+      XLSX.writeFile(wb, fileName);
+      return { success: true, fileName };
+    }
   } catch (error) {
     console.error('Error exportando a Excel:', error);
     throw new Error('Error al exportar a Excel');
@@ -494,8 +540,9 @@ export const exportToExcel = async (data) => {
 };
 
 // Función para exportar a PDF
-export const exportToPDF = async (data, filtrosInfo = null) => {
+export const exportToPDF = async (data, filtrosInfo = null, options = {}) => {
   try {
+    const categorias = options.categorias || [];
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
@@ -530,14 +577,13 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
 
-    // Crear tabla de estadísticas
+    // Crear tabla de estadísticas (sin precio promedio)
     const statsData = [
       ['Total de Suministros:', totalSupplies.toLocaleString()],
       ['Monto Total Gastado:', `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
       ['Cantidad Total:', totalQuantity.toLocaleString()],
       ['Proveedores Únicos:', uniqueSuppliers.toString()],
-      ['Proyectos Activos:', uniqueProjects.toString()],
-      ['Precio Promedio por Unidad:', `$${avgUnitPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`]
+      ['Proyectos Activos:', uniqueProjects.toString()]
     ];
 
     autoTable(doc, {
@@ -573,7 +619,7 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
       startY += 8;
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text(`Mostrando ${filtrosInfo.registrosFiltrados} de ${filtrosInfo.totalRegistros} registros totales`, 10, startY);
+      doc.text(`Mostrando ${filtrosInfo.registrosFiltrados} registros`, 10, startY);
       
       const filtrosActivos = [];
       if (filtrosInfo.filtros.busqueda) filtrosActivos.push(`Búsqueda: "${filtrosInfo.filtros.busqueda}"`);
@@ -608,7 +654,7 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
       item.folio || '',
       (item.nombre || '').substring(0, 30) + ((item.nombre || '').length > 30 ? '...' : ''),
       item.codigo_producto || '',
-      item.tipo_suministro || '',
+      resolveCategoriaNombre(item, categorias),
       Number(item.cantidad || 0).toLocaleString(),
       item.unidad_medida || '',
       `$${Number(item.precio_unitario || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
@@ -659,8 +705,79 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
       }
     });
 
-    // Agregar pie de página con totales mejorados
+    // Agregar pie de página con totales mejorados y desglose por tipo
     const finalY = doc.lastAutoTable.finalY + 15;
+    
+    // Calcular totales por tipo de categoría
+    let totalAdministrativo = 0;
+    let totalProyecto = 0;
+    let totalNomina = 0;
+    let sinCategoria = 0;
+    
+    console.log('🔍 Analizando datos para totales PDF:', {
+      totalItems: data.length,
+      categoriasDisponibles: categorias?.length || 0
+    });
+    
+    data.forEach((item, index) => {
+      const subtotal = Number(item.subtotal || 0);
+      
+      // Detectar si es nómina
+      if (item.isNominaRow === true || item.categoria === 'Nómina' || item.tipo_suministro === 'Nómina') {
+        totalNomina += subtotal;
+        if (index < 5) console.log(`Item ${index}: Nómina - $${subtotal}`);
+        return;
+      }
+      
+      // Intentar obtener el tipo de categoría de múltiples formas
+      let tipoCategoria = null;
+      
+      // 1. Verificar si el item ya tiene categoria.tipo
+      if (item.categoria && typeof item.categoria === 'object' && item.categoria.tipo) {
+        tipoCategoria = item.categoria.tipo;
+      }
+      // 2. Buscar en categorias por id_categoria_suministro
+      else if (item.id_categoria_suministro && Array.isArray(categorias)) {
+        const cat = categorias.find(c => 
+          String(c.id) === String(item.id_categoria_suministro) || 
+          String(c.id_categoria) === String(item.id_categoria_suministro)
+        );
+        if (cat) tipoCategoria = cat.tipo;
+      }
+      // 3. Buscar por nombre de categoría
+      if (!tipoCategoria && Array.isArray(categorias)) {
+        const nombreCat = resolveCategoriaNombre(item, categorias);
+        if (nombreCat) {
+          const cat = categorias.find(c => c.nombre === nombreCat);
+          if (cat) tipoCategoria = cat.tipo;
+        }
+      }
+      
+      // Clasificar según el tipo encontrado
+      if (tipoCategoria === 'Administrativo') {
+        totalAdministrativo += subtotal;
+        if (index < 5) console.log(`Item ${index}: Administrativo - $${subtotal}`);
+      } else if (tipoCategoria === 'Proyecto') {
+        totalProyecto += subtotal;
+        if (index < 5) console.log(`Item ${index}: Proyecto - $${subtotal}`);
+      } else {
+        sinCategoria += subtotal;
+        if (index < 5) console.log(`Item ${index}: Sin categoría - $${subtotal}`, item);
+      }
+    });
+    
+    // Calcular total real sumando las tres categorías
+    const totalCalculado = totalAdministrativo + totalProyecto + totalNomina;
+    
+    console.log('📊 Totales calculados:', {
+      administrativo: totalAdministrativo,
+      proyecto: totalProyecto,
+      nomina: totalNomina,
+      sinCategoria,
+      totalCalculado,
+      totalSpent,
+      diferencia: totalSpent - totalCalculado
+    });
     
     // Verificar si necesitamos nueva página
     if (finalY > 180) {
@@ -676,14 +793,17 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
 
     const resumenY = finalY > 180 ? 35 : finalY + 10;
     
-    // Crear tabla de totales final más completa
+    // Usar el total calculado (suma de las tres categorías) en lugar de totalSpent
+    const totalGeneral = totalAdministrativo + totalProyecto + totalNomina;
+    
+    // Crear tabla de totales con desglose por tipo
     const resumenData = [
       ['CONCEPTO', 'VALOR'],
-      ['Total de Registros Mostrados:', data.length.toLocaleString()],
-      ['Monto Total Invertido:', `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
-      ['Precio Promedio por Unidad:', `$${avgUnitPrice.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
-      ['Proveedores Involucrados:', uniqueSuppliers.toString()],
-      ['Proyectos con Suministros:', uniqueProjects.toString()]
+      ['Total de Registros:', data.length.toLocaleString()],
+      ['Gastos Administrativos:', `$${totalAdministrativo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+      ['Gastos de Proyectos:', `$${totalProyecto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+      ['Nóminas:', `$${totalNomina.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+      ['TOTAL GENERAL:', `$${totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`]
     ];
 
     autoTable(doc, {
@@ -711,6 +831,15 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
           fillColor: [248, 250, 252]
         }
       },
+      didParseCell: function(data) {
+        // Resaltar la fila del TOTAL GENERAL (última fila)
+        if (data.row.index === resumenData.length - 1) {
+          data.cell.styles.fillColor = [16, 185, 129]; // Verde emerald
+          data.cell.styles.textColor = [255, 255, 255]; // Texto blanco
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fontSize = 11;
+        }
+      },
       margin: { left: 75, right: 75 },
       theme: 'grid'
     });
@@ -722,9 +851,28 @@ export const exportToPDF = async (data, filtrosInfo = null) => {
     doc.text('Reporte generado automáticamente por Sistema de Gestión Vlock', 148, pageHeight - 10, { align: 'center' });
 
     const fileName = `suministros_report_${format(new Date(), 'yyyy-MM-dd_HH-mm')}.pdf`;
-    doc.save(fileName);
 
-    return { success: true, fileName };
+    // Usar IPC para guardar el archivo con diálogo de Electron
+    if (window.electron && window.electron.ipcRenderer) {
+      const pdfBuffer = doc.output('arraybuffer');
+
+      const result = await window.electron.ipcRenderer.invoke('save-pdf-file', {
+        buffer: Array.from(new Uint8Array(pdfBuffer)),
+        defaultFileName: fileName
+      });
+
+      if (result.success) {
+        return { success: true, fileName: result.filePath };
+      } else if (result.canceled) {
+        return { success: false, canceled: true };
+      } else {
+        throw new Error(result.error || 'Error desconocido al guardar el archivo');
+      }
+    } else {
+      // Fallback para entorno de desarrollo web (no Electron)
+      doc.save(fileName);
+      return { success: true, fileName };
+    }
   } catch (error) {
     console.error('Error exportando a PDF:', error);
     throw new Error('Error al exportar a PDF');

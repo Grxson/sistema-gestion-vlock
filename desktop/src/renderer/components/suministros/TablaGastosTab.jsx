@@ -3,7 +3,7 @@ import {
   FaTimes, FaSearch, FaFilter, FaChevronUp, FaChevronDown, 
   FaBuilding, FaBox, FaClock, FaTruck, FaRuler, FaEdit, 
   FaTrash, FaEye, FaFileExcel, FaFilePdf, FaFileImport,
-  FaChevronLeft, FaChevronRight, FaReceipt, FaCalendarAlt
+  FaChevronLeft, FaChevronRight, FaReceipt, FaCalendarAlt, FaFileDownload
 } from 'react-icons/fa';
 import { formatCurrency } from '../../utils/formatters';
 import { STANDARD_ICONS } from '../../constants/icons';
@@ -36,14 +36,12 @@ const TablaGastosTab = ({
   handleDelete,
   handleViewDetails,
   setCurrentPage,
-  handleExportToExcel,
-  handleExportToPDF,
   handleImportClick,
+  handleDownloadTemplate,
+    handleOpenExportModal,
   onFiltroTipoChange,
   
   // Estados adicionales
-  showExportDropdown,
-  setShowExportDropdown,
   formatDate,
   formatUnidadMedida,
   getEstadoBadge,
@@ -818,41 +816,25 @@ const TablaGastosTab = ({
 
       {/* Botones de Exportación e Importación */}
       <div className="mt-4 flex justify-end gap-2">
-        <div className="relative">
+        {/* Botón Descargar Plantilla */}
+        <button
+          onClick={handleDownloadTemplate}
+          className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+          title="Descargar plantilla de Excel para importar datos"
+        >
+          <FaFileDownload className="w-4 h-4" />
+          Descargar Plantilla
+        </button>
+
+          {/* Botón Exportar (abre modal) */}
           <button
-            onClick={() => setShowExportDropdown(!showExportDropdown)}
+            onClick={handleOpenExportModal}
             className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors duration-200"
+            title="Configurar y exportar datos"
           >
             <FaFileExcel className="w-4 h-4" />
             Exportar
-            <FaChevronDown className="w-3 h-3" />
           </button>
-          
-          {showExportDropdown && (
-            <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-dark-100 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-10">
-              <button
-                onClick={() => {
-                  handleExportToExcel();
-                  setShowExportDropdown(false);
-                }}
-                className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300 rounded-t-lg"
-              >
-                <FaFileExcel className="w-4 h-4 text-green-600" />
-                Exportar a Excel
-              </button>
-              <button
-                onClick={() => {
-                  handleExportToPDF();
-                  setShowExportDropdown(false);
-                }}
-                className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-dark-200 flex items-center gap-2 text-gray-700 dark:text-gray-300"
-              >
-                <FaFilePdf className="w-4 h-4 text-red-600" />
-                Exportar a PDF
-              </button>
-            </div>
-          )}
-        </div>
         
         <button
           onClick={handleImportClick}

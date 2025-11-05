@@ -49,6 +49,7 @@ import {
 import { exportReporteTipoPDF, exportReporteTipoExcel } from '../utils/reporteTipoExport';
 import ReportePersonalizadoModal from '../components/ReportePersonalizado/ReportePersonalizadoModal';
 import useReportePersonalizadoCompleto from '../hooks/useReportePersonalizadoCompleto';
+import ExportModal from '../components/suministros/ExportModal';
 import ChartModal from '../components/ui/ChartModal';
 import ProgressModal from '../components/ui/ProgressModal';
 import { ArrowsPointingOutIcon } from '@heroicons/react/24/outline';
@@ -202,8 +203,8 @@ const Suministros = () => {
   const [importFile, setImportFile] = useState(null);
   const [importErrors, setImportErrors] = useState([]);
   const [validImportData, setValidImportData] = useState([]);
-  const [showExportDropdown, setShowExportDropdown] = useState(false);
   const [isProcessingImport, setIsProcessingImport] = useState(false);
+    const [showExportModal, setShowExportModal] = useState(false);
 
   // Hook para reporte personalizado eliminado
 
@@ -344,19 +345,8 @@ const Suministros = () => {
     return () => clearTimeout(timer);
   }, [searchTerm]);
 
-  // Efecto para cerrar dropdown al hacer click fuera
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (showExportDropdown && !event.target.closest('.export-dropdown')) {
-        setShowExportDropdown(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [showExportDropdown]);
+  // Efecto para cerrar modales/dropdowns al hacer click fuera (si aplica)
+  // Nota: El dropdown de exportación fue reemplazado por un modal configurado.
 
   // Efecto para detectar cambios de tema
   useEffect(() => {
@@ -1557,12 +1547,12 @@ const Suministros = () => {
 
   // Función para manejar el click en el botón de importar
   const handleImportClick = () => {
-    // TODO: Implementar funcionalidad de importación desde Excel
-    setNotificationModal({
-      open: true,
-      message: '⚠️ La funcionalidad de importación estará disponible próximamente.',
-      type: 'warning'
-    });
+    // Resetear estados de importación
+    setImportFile(null);
+    setValidImportData([]);
+    setImportErrors([]);
+    // Abrir modal de importación
+    setShowImportModal(true);
   };
 
   // Función para confirmar eliminación de suministro individual
@@ -1926,83 +1916,7 @@ const Suministros = () => {
     }
   };
 
-  const handleExportToExcel = async () => {
-    try {
-      // Agrupar suministros por folio para mantener consistencia
-      const folioGroups = {};
-      
-      filteredSuministros.forEach(suministro => {
-        const folio = suministro.folio || suministro.id_suministro;
-        if (!folioGroups[folio]) {
-          folioGroups[folio] = [];
-        }
-        folioGroups[folio].push(suministro);
-      });
-
-      // Asignar el mismo folio a todos los suministros del grupo
-      const dataToExport = filteredSuministros.map(suministro => {
-        const folio = suministro.folio || suministro.id_suministro;
-        return {
-          ...suministro,
-          folio: folio, // Asegurar que el folio esté presente
-          proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || '',
-          proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || ''
-        };
-      });
-      
-      await exportToExcel(dataToExport);
-      showSuccess('Exportación exitosa', 'Los suministros han sido exportados a Excel');
-    } catch (error) {
-      console.error('Error exportando a Excel:', error);
-      showError('Error', 'No se pudo exportar a Excel');
-    }
-  };
-
-  const handleExportToPDF = async () => {
-    try {
-      // Agrupar suministros por folio para mantener consistencia
-      const folioGroups = {};
-      
-      filteredSuministros.forEach(suministro => {
-        const folio = suministro.folio || suministro.id_suministro;
-        if (!folioGroups[folio]) {
-          folioGroups[folio] = [];
-        }
-        folioGroups[folio].push(suministro);
-      });
-
-      // Asignar el mismo folio a todos los suministros del grupo
-      const dataToExport = filteredSuministros.map(suministro => {
-        const folio = suministro.folio || suministro.id_suministro;
-        return {
-          ...suministro,
-          folio: folio, // Asegurar que el folio esté presente
-          proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || '',
-          proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || ''
-        };
-      });
-      
-      // Información de filtros aplicados
-      const filtrosInfo = {
-        totalRegistros: suministros.length,
-        registrosFiltrados: filteredSuministros.length,
-        filtros: {
-          busqueda: searchTerm,
-          proyecto: filters.proyecto,
-          proveedor: filters.proveedor,
-          estado: filters.estado,
-          fechaInicio: filters.fechaInicio,
-          fechaFin: filters.fechaFin
-        }
-      };
-      
-      await exportToPDF(dataToExport, filtrosInfo);
-      showSuccess('Exportación exitosa', 'Los suministros han sido exportados a PDF');
-    } catch (error) {
-      console.error('Error exportando a PDF:', error);
-      showError('Error', 'No se pudo exportar a PDF');
-    }
-  };
+  // === LAS FUNCIONES DE EXPORTACIÓN SE MOVIERON DESPUÉS DE filteredSuministros ===
 
   const handleFileImport = async (event) => {
     const file = event.target.files[0];
@@ -2299,6 +2213,74 @@ const Suministros = () => {
   const startIndex = (validCurrentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const paginatedSuministros = filteredSuministros.slice(startIndex, endIndex);
+
+  // ============================================================================
+  // FUNCIONES DE EXPORTACIÓN (Movidas aquí para tener acceso a filteredSuministros)
+  // ============================================================================
+  
+    const handleExportWithConfig = useCallback(async (exportConfig) => {
+    try {
+        // Determinar qué datos exportar según configuración
+        // Si incluye todos, usar combinedData (suministros + nóminas)
+        // Si no, usar los filtros actuales que pueden o no incluir nóminas según configuración
+        const dataSource = exportConfig.incluirTodos ? combinedData : filteredSuministros;
+      
+      // Preparar datos para exportación
+      const dataToExport = dataSource.map(suministro => {
+        const folio = suministro.folio || suministro.codigo || suministro.id_suministro;
+        return {
+          ...suministro,
+          folio: folio,
+          // Preservar información de categoría completa
+          categoria: suministro.categoria,
+          id_categoria_suministro: suministro.id_categoria_suministro,
+          proyecto: proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre || 
+                   proyectos.find(p => p.id_proyecto === suministro.id_proyecto)?.nombre_proyecto || '',
+          proveedor: proveedores.find(p => p.id_proveedor === suministro.id_proveedor)?.nombre || 
+                    suministro.proveedor?.nombre || 
+                    suministro.proveedor || ''
+        };
+      });      // Información de filtros aplicados
+      const filtrosInfo = {
+        totalRegistros: suministros.length,
+        registrosFiltrados: filteredSuministros.length,
+        incluirEstadisticas: exportConfig.incluirEstadisticas,
+        incluirDetalles: exportConfig.incluirDetalles,
+        incluirGraficos: exportConfig.incluirGraficos,
+        orientacion: exportConfig.orientacion,
+        filtros: {
+          busqueda: debouncedSearchTerm,
+          proyecto: filters.proyecto ? (proyectos.find(p => p.id_proyecto === filters.proyecto)?.nombre || proyectos.find(p => p.id_proyecto === filters.proyecto)?.nombre_proyecto || filters.proyecto) : '',
+          proveedor: filters.proveedor,
+          estado: filters.estado,
+          categoria: filters.categoria,
+          tipo_categoria: filters.tipo_categoria,
+          fechaInicio: filters.fechaInicio,
+          fechaFin: filters.fechaFin
+        }
+      };        // Ejecutar exportación según formato
+        let result;
+        if (exportConfig.formato === 'excel') {
+          console.log('📊 Exportando', dataToExport.length, 'registros a Excel');
+          result = await exportToExcel(dataToExport, { categorias: categoriasDinamicas });
+        } else {
+          console.log('📄 Exportando', dataToExport.length, 'registros a PDF');
+          result = await exportToPDF(dataToExport, filtrosInfo, { categorias: categoriasDinamicas });
+        }
+      
+      if (result.success) {
+          const formato = exportConfig.formato.toUpperCase();
+          showSuccess('Exportación exitosa', `${dataToExport.length} registros exportados a ${formato}`);
+      } else if (result.canceled) {
+        console.log('⚠️ Exportación cancelada por el usuario');
+      }
+    } catch (error) {
+        console.error('❌ Error exportando:', error);
+        showError('Error', `No se pudo exportar: ${error.message}`);
+    }
+    }, [suministros, filteredSuministros, proyectos, proveedores, debouncedSearchTerm, filters, showSuccess, showError]);
+
+  // ============================================================================
 
   const calculateTotal = (suministro) => {
     // Primero intentar usar el costo_total si está disponible
@@ -2708,12 +2690,10 @@ const Suministros = () => {
           handleDeleteRecibo={handleDeleteRecibo}
           handleViewDetails={handleView}
           setCurrentPage={setCurrentPage}
-          handleExportToExcel={handleExportToExcel}
-          handleExportToPDF={handleExportToPDF}
           handleImportClick={handleImportClick}
+          handleDownloadTemplate={handleDownloadTemplate}
+            handleOpenExportModal={() => setShowExportModal(true)}
           onFiltroTipoChange={handleFiltroTipoChange}
-          showExportDropdown={showExportDropdown}
-          setShowExportDropdown={setShowExportDropdown}
           formatDate={formatDate}
           formatUnidadMedida={formatUnidadMedida}
           getEstadoBadge={getEstadoBadge}
@@ -3524,6 +3504,24 @@ const Suministros = () => {
           </div>
         </div>
       )}
+
+        {/* Modal de Exportación */}
+        <ExportModal
+          isOpen={showExportModal}
+          onClose={() => setShowExportModal(false)}
+          onExport={handleExportWithConfig}
+          totalRegistros={combinedData.length}
+          registrosFiltrados={filteredSuministros.length}
+          filtrosActivos={[
+            debouncedSearchTerm && `Búsqueda: "${debouncedSearchTerm}"`,
+            filters.proyecto && `Proyecto: ${proyectos.find(p => p.id_proyecto === filters.proyecto)?.nombre || filters.proyecto}`,
+            filters.proveedor && `Proveedor: ${filters.proveedor}`,
+            filters.estado && `Estado: ${filters.estado}`,
+            filters.categoria && `Categoría: ${categoriasDinamicas.find(c => c.id === filters.categoria || c.id_categoria === filters.categoria)?.nombre || filters.categoria}`,
+            filters.tipo_categoria && `Tipo: ${filters.tipo_categoria}`,
+            (filters.fechaInicio || filters.fechaFin) && `Rango de fechas: ${filters.fechaInicio || '...'} - ${filters.fechaFin || '...'}`
+          ].filter(Boolean)}
+        />
 
     </div>
   );

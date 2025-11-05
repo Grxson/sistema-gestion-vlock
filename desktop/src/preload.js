@@ -10,7 +10,9 @@ contextBridge.exposeInMainWorld('electron', {
       const validChannels = [
         'get-system-info',
         'restart-app',
-        'open-logs'
+        'open-logs',
+        'save-excel-file',
+        'save-pdf-file'
       ];
       
       if (validChannels.includes(channel)) {

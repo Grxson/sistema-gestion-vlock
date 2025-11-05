@@ -140,4 +140,58 @@ ipcMain.handle('open-logs', async () => {
     console.error('Error al abrir los logs:', err);
     dialog.showErrorBox('Error', 'No se pudo abrir el directorio de logs.');
   }
+});
+
+// Manejador para guardar archivo Excel
+ipcMain.handle('save-excel-file', async (event, { buffer, defaultFileName }) => {
+  try {
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Guardar archivo Excel',
+      defaultPath: path.join(app.getPath('downloads'), defaultFileName),
+      filters: [
+        { name: 'Excel Files', extensions: ['xlsx'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (canceled || !filePath) {
+      return { success: false, canceled: true };
+    }
+
+    // Convertir el array de buffer a Buffer de Node.js
+    const nodeBuffer = Buffer.from(buffer);
+    fs.writeFileSync(filePath, nodeBuffer);
+
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Error al guardar archivo Excel:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Manejador para guardar archivo PDF
+ipcMain.handle('save-pdf-file', async (event, { buffer, defaultFileName }) => {
+  try {
+    const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
+      title: 'Guardar archivo PDF',
+      defaultPath: path.join(app.getPath('downloads'), defaultFileName),
+      filters: [
+        { name: 'PDF Files', extensions: ['pdf'] },
+        { name: 'All Files', extensions: ['*'] }
+      ]
+    });
+
+    if (canceled || !filePath) {
+      return { success: false, canceled: true };
+    }
+
+    // Convertir el array de buffer a Buffer de Node.js
+    const nodeBuffer = Buffer.from(buffer);
+    fs.writeFileSync(filePath, nodeBuffer);
+
+    return { success: true, filePath };
+  } catch (error) {
+    console.error('Error al guardar archivo PDF:', error);
+    return { success: false, error: error.message };
+  }
 }); 
