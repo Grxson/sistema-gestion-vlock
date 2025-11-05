@@ -2,7 +2,8 @@ import React from 'react';
 import { FaDollarSign, FaBriefcase, FaBuilding, FaMoneyCheckAlt } from 'react-icons/fa';
 import { formatCurrency } from '../../utils/currency';
 
-const SuministrosCards = ({ stats }) => {
+// Memoizar componente para evitar re-renders innecesarios
+const SuministrosCards = React.memo(({ stats }) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
       {/* Total General */}
@@ -66,6 +67,9 @@ const SuministrosCards = ({ stats }) => {
       </div>
     </div>
   );
-};
+});
+
+// Nombre para debugging
+SuministrosCards.displayName = 'SuministrosCards';
 
 export default SuministrosCards;

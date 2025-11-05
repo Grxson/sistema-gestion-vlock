@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { STANDARD_ICONS } from '../constants/icons';
 import { 
   FaSearch, 
@@ -162,6 +162,7 @@ const Suministros = () => {
   const [editingRecibo, setEditingRecibo] = useState(null);
   const [expandedRecibos, setExpandedRecibos] = useState(new Set());
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState(''); // Búsqueda optimizada con debounce
   const [filters, setFilters] = useState({
     categoria: '',
     estado: '',
@@ -333,6 +334,15 @@ const Suministros = () => {
     loadCategorias();
     loadUnidades();
   }, []);
+
+  // Efecto para implementar debouncing en la búsqueda (optimización de rendimiento)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+    }, 300); // Esperar 300ms después de que el usuario deje de escribir
+
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Efecto para cerrar dropdown al hacer click fuera
   useEffect(() => {
@@ -2201,12 +2211,15 @@ const Suministros = () => {
     return new Date(fecha.getFullYear(), fecha.getMonth(), fecha.getDate(), 0, 0, 0, 0);
   };
 
-  const filteredSuministros = combinedData.filter(suministro => {
-    const matchesSearch = suministro.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         suministro.descripcion?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         suministro.descripcion_detallada?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         suministro.codigo_producto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         suministro.folio?.toLowerCase().includes(searchTerm.toLowerCase());
+  // Filtrar suministros - Usa debouncedSearchTerm para optimizar rendimiento
+  const filteredSuministros = useMemo(() => {
+    console.log('🔍 Aplicando filtros a suministros...');
+    return combinedData.filter(suministro => {
+      const matchesSearch = suministro.nombre?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                           suministro.descripcion?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                           suministro.descripcion_detallada?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                           suministro.codigo_producto?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+                           suministro.folio?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
     
     // Manejar categoría como objeto o string
     const categoriaId = typeof suministro.categoria === 'object' && suministro.categoria 
@@ -2264,7 +2277,8 @@ const Suministros = () => {
 
     return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto && 
            matchesProveedor && matchesTipoCategoria && matchesFecha;
-  });
+    });
+  }, [combinedData, debouncedSearchTerm, filters]); // Dependencias del useMemo
 
   // Calcular paginación
   const totalFilteredItems = filteredSuministros.length;
@@ -2415,8 +2429,8 @@ const Suministros = () => {
         if (item.isNominaRow !== true) return false;
         
         // Aplicar filtros de búsqueda de texto
-        if (searchTerm) {
-          const searchLower = searchTerm.toLowerCase();
+        if (debouncedSearchTerm) {
+          const searchLower = debouncedSearchTerm.toLowerCase();
           const matchesSearch = 
             item.nombre?.toLowerCase().includes(searchLower) ||
             item.codigo?.toLowerCase().includes(searchLower) ||
@@ -2499,9 +2513,16 @@ const Suministros = () => {
     };
   };
 
-  // Calcular estadísticas generales y filtradas
-  const stats = calculateGeneralStats();
-  const filteredStats = calculateFilteredStats();
+  // Calcular estadísticas generales y filtradas - MEMOIZADAS para mejor rendimiento
+  const stats = useMemo(() => {
+    console.log('🔄 Recalculando stats generales...');
+    return calculateGeneralStats();
+  }, [suministros, combinedData, categoriasDinamicas]);
+
+  const filteredStats = useMemo(() => {
+    console.log('🔄 Recalculando stats filtradas...');
+    return calculateFilteredStats();
+  }, [filteredSuministros, combinedData, filters, debouncedSearchTerm, categoriasDinamicas]);
 
   // Función para validar y formatear precios en tiempo real
   const handlePriceChange = (value) => {
@@ -2631,16 +2652,16 @@ const Suministros = () => {
       {/* Usar estadísticas filtradas si hay filtros activos, de lo contrario usar stats generales */}
       <SuministrosCards 
         stats={{
-          totalGastado: (searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
+          totalGastado: (debouncedSearchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
             ? filteredStats.totalGastadoFiltrado 
             : stats.totalGastado,
-          gastosAdministrativos: (searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
+          gastosAdministrativos: (debouncedSearchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
             ? filteredStats.gastosAdministrativosFiltrado 
             : stats.gastosAdministrativos,
-          gastosProyectos: (searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
+          gastosProyectos: (debouncedSearchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
             ? filteredStats.gastosProyectosFiltrado 
             : stats.gastosProyectos,
-          totalNominas: (searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
+          totalNominas: (debouncedSearchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
             ? filteredStats.totalNominasFiltrado 
             : stats.totalNominas
         }} 
