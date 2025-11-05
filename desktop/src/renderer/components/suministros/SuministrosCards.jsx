@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaDollarSign, FaBriefcase, FaBuilding, FaTruck } from 'react-icons/fa';
+import { FaDollarSign, FaBriefcase, FaBuilding, FaMoneyCheckAlt } from 'react-icons/fa';
 import { formatCurrency } from '../../utils/currency';
 
 const SuministrosCards = ({ stats }) => {
@@ -50,17 +50,17 @@ const SuministrosCards = ({ stats }) => {
         </div>
       </div>
 
-      {/* Proveedores */}
+      {/* Nóminas */}
       <div className="bg-gradient-to-br from-orange-500 to-orange-600 rounded-lg shadow-md p-4 text-white">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-orange-100 text-xs font-medium mb-1">Proveedores</p>
+            <p className="text-orange-100 text-xs font-medium mb-1">Nóminas</p>
             <p className="text-xl font-bold">
-              {stats.proveedoresUnicos}
+              {formatCurrency(stats.totalNominas || 0)}
             </p>
           </div>
           <div className="bg-white bg-opacity-20 rounded-lg p-2">
-            <FaTruck className="h-5 w-5" />
+            <FaMoneyCheckAlt className="h-5 w-5" />
           </div>
         </div>
       </div>

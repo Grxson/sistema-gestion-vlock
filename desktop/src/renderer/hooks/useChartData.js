@@ -368,9 +368,9 @@ export const useChartData = (showError) => {
         chartDataProcessed.analisisPorTipoGasto = null;
       }
 
-        // Nueva gráfica de pastel por tipo de gasto
+        // Nueva gráfica de pastel por tipo de gasto (con filtros aplicados)
         try {
-          chartDataProcessed.gastosPorTipoDoughnut = await processGastosPorTipoDoughnut(filteredData);
+          chartDataProcessed.gastosPorTipoDoughnut = await processGastosPorTipoDoughnut(filteredData, chartFilters);
         } catch (error) {
           console.error('❌ Error en gastosPorTipoDoughnut:', error);
           chartDataProcessed.gastosPorTipoDoughnut = null;

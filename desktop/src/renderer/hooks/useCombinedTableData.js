@@ -30,7 +30,7 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
       nominas_en_array: nominaData.nominas?.length,
       semana_id: semana.id_semana,
       proyecto_id: proyecto?.id_proyecto,
-      proyecto_nombre: proyecto?.nombre_proyecto
+      proyecto_nombre: proyecto?.nombre // Corregido: usar .nombre
     });
     
     const meses = [
@@ -50,15 +50,21 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
     // Generar folio específico para nómina: NOM-AAAA-MM-SX (ej: NOM-2025-11-S3)
     const folio = `NOM-${anio}-${String(fechaInicio.getMonth() + 1).padStart(2, '0')}-S${numeroSemana}`;
 
-    return {
+    console.log('🔄 formatNominaAsRow - Entrada:', {
+      nominaData_total: nominaData.total,
+      cantidad_empleados: nominaData.cantidad_empleados,
+      nominas_en_grupo: nominaData.nominas?.length
+    });
+
+    const resultado = {
       // Identificadores únicos
       id_suministro: `nomina-${semana.id_semana}-${proyecto?.id_proyecto || 'sin-proyecto'}`,
       isNominaRow: true, // Flag para identificar que es una fila de nómina
       
-      // Información de la nómina
-      nombre: `Nómina Semana ${numeroSemana} del mes ${mes} del año ${anio}`,
+      // Información de la nómina - Formato más conciso
+      nombre: `Nómina Semana ${numeroSemana} de ${mes} del ${anio}`,
       codigo: folio,
-      descripcion: `Pago de nómina correspondiente a la semana ${numeroSemana} del mes ${mes} del ${anio}`,
+      descripcion: `Pago de nómina correspondiente a la semana ${numeroSemana} de ${mes} del ${anio}`,
       
       // Datos financieros
       precio_unitario: nominaData.total,
@@ -71,12 +77,13 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
       categoria: 'Nómina',
       tipo_categoria: 'Mano de Obra',
       
-      // Información del proyecto
+      // Información del proyecto - Corregido: usar proyecto.nombre en lugar de nombre_proyecto
       id_proyecto: proyecto?.id_proyecto || null,
-      nombre_proyecto: proyecto?.nombre_proyecto || 'Sin proyecto asignado',
+      nombre_proyecto: proyecto?.nombre || 'Sin proyecto asignado',
       
       // Información de la semana
       id_semana: semana.id_semana,
+      fecha: semana.fecha_inicio,
       fecha_registro: semana.fecha_inicio,
       fecha_inicio: semana.fecha_inicio,
       fecha_fin: semana.fecha_fin,
@@ -99,6 +106,14 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
       cantidad_empleados: nominaData.cantidad_empleados || 0,
       nominas_detalle: nominaData.nominas || []
     };
+
+    console.log('🔄 formatNominaAsRow - Salida:', {
+      costo_total: resultado.costo_total,
+      precio_unitario: resultado.precio_unitario,
+      cantidad_empleados: resultado.cantidad_empleados
+    });
+
+    return resultado;
   };
 
   /**
@@ -214,7 +229,13 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
         
         // Usar la misma lógica que en Nomina.jsx para calcular el monto
         const monto = parseFloat(nomina.monto_total || nomina.monto || 0);
-        console.log(`💰 Nómina ID ${nomina.id_nomina}: monto_total=${nomina.monto_total}, monto=${nomina.monto}, monto calculado=${monto}`);
+        console.log(`💰 Nómina ID ${nomina.id_nomina} (Empleado ${nomina.id_empleado}):`, {
+          monto_total: nomina.monto_total,
+          monto: nomina.monto,
+          monto_calculado: monto,
+          acumulado_antes: acc[key].total,
+          acumulado_despues: acc[key].total + (isNaN(monto) ? 0 : monto)
+        });
         acc[key].total += isNaN(monto) ? 0 : monto;
         acc[key].cantidad_empleados += 1;
 
@@ -229,16 +250,21 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
         console.log(`📊 Grupo ${key}:`, {
           total: group.total,
           cantidad_empleados: group.cantidad_empleados,
-          nominas: group.nominas.length,
+          nominas_count: group.nominas.length,
           semana: group.semana?.id_semana,
-          proyecto: group.proyecto?.nombre_proyecto || 'Sin proyecto'
+          proyecto: group.proyecto?.nombre || 'Sin proyecto',
+          nominas_detalle: group.nominas.map(n => ({
+            id: n.id_nomina,
+            empleado: n.id_empleado,
+            monto_individual: n.monto_total || n.monto
+          }))
         });
       });
 
       // Convertir las nóminas agrupadas en filas de tabla
       const rows = Object.values(nominasAgrupadas).map(group => {
         console.log('🔄 Formateando grupo:', {
-          total: group.total,
+          total_a_pasar: group.total,
           cantidad_empleados: group.cantidad_empleados,
           nominas_en_grupo: group.nominas.length
         });
@@ -268,12 +294,41 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
    */
   const combinedData = [...suministros, ...nominaRows];
 
-  // Ordenar por fecha descendente
-  combinedData.sort((a, b) => {
-    const dateA = new Date(a.fecha_registro || a.fecha_inicio);
-    const dateB = new Date(b.fecha_registro || b.fecha_inicio);
-    return dateB - dateA;
-  });
+  // Helper para normalizar fechas confiables
+  const normalizeDate = (value) => {
+    if (!value) return null;
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      const [y, m, d] = value.split('-');
+      return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 0, 0, 0, 0);
+    }
+    if (typeof value === 'string' && value.includes('T')) {
+      const [datePart] = value.split('T');
+      const [y, m, d] = datePart.split('-');
+      return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 0, 0, 0, 0);
+    }
+    const d = new Date(value);
+    return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  };
+
+  const getItemDate = (item) => {
+    const keys = [
+      'fecha_entrega',
+      'fecha_necesaria',
+      'fecha',
+      'fecha_registro',
+      'fecha_inicio',
+      'createdAt',
+      'updatedAt'
+    ];
+    for (const k of keys) {
+      const d = normalizeDate(item[k]);
+      if (d) return d;
+    }
+    return new Date(0); // fallback a época
+  };
+
+  // Ordenar por fecha descendente (más reciente primero)
+  combinedData.sort((a, b) => getItemDate(b) - getItemDate(a));
 
   return {
     combinedData,

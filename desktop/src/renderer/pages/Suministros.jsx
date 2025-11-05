@@ -1111,13 +1111,38 @@ const Suministros = () => {
   // Función para agrupar suministros por recibo (jerarquía)
   const agruparSuministrosPorRecibo = useCallback((suministrosList) => {
     const grupos = {};
+
+    const normalizeDate = (value) => {
+      if (!value) return null;
+      if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        const [y, m, d] = value.split('-');
+        return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 0, 0, 0, 0);
+      }
+      if (typeof value === 'string' && value.includes('T')) {
+        const [datePart] = value.split('T');
+        const [y, m, d] = datePart.split('-');
+        return new Date(parseInt(y), parseInt(m) - 1, parseInt(d), 0, 0, 0, 0);
+      }
+      const d = new Date(value);
+      return isNaN(d.getTime()) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+    };
+
+    const getFechaOrden = (s) => {
+      const keys = ['fecha_entrega','fecha_necesaria','fecha','fecha_registro','fecha_inicio','createdAt','updatedAt'];
+      for (const k of keys) {
+        const val = normalizeDate(s[k]);
+        if (val) return val;
+      }
+      return new Date(0);
+    };
     
     suministrosList.forEach(suministro => {
-      // Crear clave única para el recibo basada en proveedor, fecha y folio
-      const proveedor = suministro.proveedor?.nombre || 'Sin proveedor';
-      const fecha = suministro.fecha || 'Sin fecha';
+      // Datos base con fallbacks amplios
+      const proveedor = suministro.proveedor?.nombre || suministro.proveedor || 'Sin proveedor';
+      const fechaOrden = getFechaOrden(suministro);
+      const fecha = fechaOrden.toISOString().slice(0,10); // clave estable YYYY-MM-DD
       const folio = suministro.folio || '';
-      const proyecto = suministro.proyecto?.nombre || 'Sin proyecto';
+      const proyecto = suministro.proyecto?.nombre || suministro.proyecto_info?.nombre_proyecto || suministro.proyecto_nombre || suministro.nombre_proyecto || 'Sin proyecto';
       
       const claveRecibo = `${proveedor}_${fecha}_${folio}_${proyecto}`;
       
@@ -1125,7 +1150,8 @@ const Suministros = () => {
         grupos[claveRecibo] = {
           id: claveRecibo,
           proveedor,
-          fecha,
+          fecha, // para mostrar
+          fechaOrden, // para ordenar
           folio: folio,
           proyecto,
           suministros: [],
@@ -1138,6 +1164,12 @@ const Suministros = () => {
       grupos[claveRecibo].suministros.push(suministro);
       grupos[claveRecibo].total += calculateTotal(suministro);
       grupos[claveRecibo].cantidad_items += 1;
+
+      // Mantener la fecha del grupo como la más reciente de sus items
+      if (fechaOrden > (grupos[claveRecibo].fechaOrden || new Date(0))) {
+        grupos[claveRecibo].fechaOrden = fechaOrden;
+        grupos[claveRecibo].fecha = fechaOrden.toISOString().slice(0,10);
+      }
     });
     
     // Marcar grupos con más de 1 suministro como jerárquicos
@@ -1147,7 +1179,7 @@ const Suministros = () => {
       }
     });
     
-    return Object.values(grupos).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    return Object.values(grupos).sort((a, b) => (b.fechaOrden || new Date(0)) - (a.fechaOrden || new Date(0)));
   }, []);
 
   const handleSubmit = async (e) => {
@@ -2275,6 +2307,7 @@ const Suministros = () => {
     let totalGastado = 0;
     let gastosAdministrativos = 0;
     let gastosProyectos = 0;
+    let totalNominas = 0; // Nueva métrica para nóminas
     
     suministros.forEach((suministro) => {
       const costo = calculateTotal(suministro);
@@ -2303,19 +2336,39 @@ const Suministros = () => {
       }
     });
 
+    // Calcular total de nóminas pagadas (sin filtros)
+    // El hook useCombinedTableData ya filtra solo nóminas en estado "Pagado"
+    if (combinedData && combinedData.length > 0) {
+      combinedData.forEach(item => {
+        // Verificar que sea una fila de nómina usando el flag isNominaRow
+        if (item.isNominaRow === true) {
+          const monto = parseFloat(item.costo_total || item.precio_unitario || 0);
+          if (!isNaN(monto) && monto > 0) {
+            totalNominas += monto;
+          }
+        }
+      });
+    }
+
+    console.log('📊 Stats generales calculadas:', {
+      totalGastado,
+      gastosAdministrativos,
+      gastosProyectos,
+      totalNominas,
+      nominasEnCombinedData: combinedData?.filter(i => i.isNominaRow).length || 0
+    });
+
     const totalSuministros = suministros.length;
     
     const proyectosUnicos = new Set(suministros.map(s => s.id_proyecto).filter(id => id)).size;
-    
-    const proveedoresUnicos = new Set(suministros.map(s => s.id_proveedor).filter(id => id)).size;
 
     return {
       totalGastado: Math.round(totalGastado * 100) / 100,
       gastosAdministrativos: Math.round(gastosAdministrativos * 100) / 100,
       gastosProyectos: Math.round(gastosProyectos * 100) / 100,
+      totalNominas: Math.round(totalNominas * 100) / 100,
       totalSuministros,
-      proyectosUnicos,
-      proveedoresUnicos
+      proyectosUnicos
     };
   };
 
@@ -2324,6 +2377,7 @@ const Suministros = () => {
     let totalGastadoFiltrado = 0;
     let gastosAdministrativosFiltrado = 0;
     let gastosProyectosFiltrado = 0;
+    let totalNominasFiltrado = 0; // Nueva métrica para nóminas filtradas
     
     filteredSuministros.forEach((suministro) => {
       const costo = calculateTotal(suministro);
@@ -2352,16 +2406,74 @@ const Suministros = () => {
       }
     });
 
-    const proveedoresUnicosFiltrado = new Set(
-      filteredSuministros.map(s => s.id_proveedor).filter(id => id)
-    ).size;
+    // Calcular total de nóminas filtradas
+    // El hook useCombinedTableData ya filtra solo nóminas en estado "Pagado"
+    // Aquí aplicamos los mismos filtros que a los suministros
+    if (combinedData && combinedData.length > 0) {
+      const filteredNominas = combinedData.filter(item => {
+        // Verificar que sea una fila de nómina
+        if (item.isNominaRow !== true) return false;
+        
+        // Aplicar filtros de búsqueda de texto
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          const matchesSearch = 
+            item.nombre?.toLowerCase().includes(searchLower) ||
+            item.codigo?.toLowerCase().includes(searchLower) ||
+            item.descripcion?.toLowerCase().includes(searchLower) ||
+            item.nombre_proyecto?.toLowerCase().includes(searchLower);
+          if (!matchesSearch) return false;
+        }
+        
+        // Aplicar filtros de proyecto
+        if (filters.proyecto && item.id_proyecto?.toString() !== filters.proyecto.toString()) {
+          return false;
+        }
+        
+        // Aplicar filtros de fecha
+        if (filters.fechaInicio || filters.fechaFin) {
+          const itemFecha = new Date(item.fecha || item.fecha_registro || item.fecha_inicio || item.createdAt);
+          if (filters.fechaInicio) {
+            const fechaInicio = new Date(filters.fechaInicio);
+            if (itemFecha < fechaInicio) {
+              return false;
+            }
+          }
+          if (filters.fechaFin) {
+            const fechaFin = new Date(filters.fechaFin);
+            fechaFin.setHours(23, 59, 59, 999);
+            if (itemFecha > fechaFin) {
+              return false;
+            }
+          }
+        }
+        
+        return true;
+      });
+      
+      filteredNominas.forEach(nomina => {
+        const monto = parseFloat(nomina.costo_total || nomina.precio_unitario || 0);
+        if (!isNaN(monto) && monto > 0) {
+          totalNominasFiltrado += monto;
+        }
+      });
+      
+      console.log('📊 Stats filtradas calculadas:', {
+        totalGastadoFiltrado,
+        gastosAdministrativosFiltrado,
+        gastosProyectosFiltrado,
+        totalNominasFiltrado,
+        nominasFiltradasCount: filteredNominas.length,
+        nominasEnCombinedData: combinedData.filter(i => i.isNominaRow).length
+      });
+    }
 
     return {
       totalGastadoFiltrado: Math.round(totalGastadoFiltrado * 100) / 100,
       gastosAdministrativosFiltrado: Math.round(gastosAdministrativosFiltrado * 100) / 100,
       gastosProyectosFiltrado: Math.round(gastosProyectosFiltrado * 100) / 100,
-      totalSuministrosFiltrados: filteredSuministros.length,
-      proveedoresUnicosFiltrado
+      totalNominasFiltrado: Math.round(totalNominasFiltrado * 100) / 100,
+      totalSuministrosFiltrados: filteredSuministros.length
     };
   };
 
@@ -2387,6 +2499,7 @@ const Suministros = () => {
     };
   };
 
+  // Calcular estadísticas generales y filtradas
   const stats = calculateGeneralStats();
   const filteredStats = calculateFilteredStats();
 
@@ -2527,9 +2640,9 @@ const Suministros = () => {
           gastosProyectos: (searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
             ? filteredStats.gastosProyectosFiltrado 
             : stats.gastosProyectos,
-          proveedoresUnicos: (searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
-            ? filteredStats.proveedoresUnicosFiltrado 
-            : stats.proveedoresUnicos
+          totalNominas: (searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) 
+            ? filteredStats.totalNominasFiltrado 
+            : stats.totalNominas
         }} 
       />
 

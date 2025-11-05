@@ -352,7 +352,7 @@ const TablaGastosTab = ({
                           </td>
                           {/* Proveedor */}
                           <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">
-                            {nominaData.proveedor}
+                            VLOCK
                           </td>
                           {/* Cantidad */}
                           <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-300">

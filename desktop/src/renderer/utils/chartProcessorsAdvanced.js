@@ -1,7 +1,8 @@
 /**
  * Procesa los gastos por tipo para gráfica de pastel (Administrativo, Proyecto, Nómina)
+ * Ahora respeta los filtros aplicados (fechas, proyectos, etc.)
  */
-export const processGastosPorTipoDoughnut = async (data) => {
+export const processGastosPorTipoDoughnut = async (data, chartFilters = {}) => {
   let administrativo = 0;
   let proyecto = 0;
   let nominaTotal = 0;
@@ -23,33 +24,45 @@ export const processGastosPorTipoDoughnut = async (data) => {
     }
   });
 
-  // Nómina del mes actual - usando la misma lógica que Nomina.jsx
+  // Nóminas - aplicar los mismos filtros que los suministros
   try {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    
     const nominasResponse = await NominaService.getAll();
     if (nominasResponse.success && nominasResponse.data) {
       const nominas = Array.isArray(nominasResponse.data) ? nominasResponse.data : nominasResponse.data.nominas || [];
       
-      // Función helper para obtener fecha base de nómina (igual que en Nomina.jsx)
+      // Función helper para obtener fecha base de nómina
       const getFechaBaseNomina = (n) => {
         const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
         const d = base ? new Date(base) : null;
         return d && !isNaN(d) ? d : null;
       };
       
-      // Sumar solo nóminas PAGADAS del mes actual
+      // Aplicar filtros a las nóminas (igual que a los suministros)
       nominas.forEach(nominaItem => {
         try {
-          const estado = (nominaItem?.estado || '').toLowerCase();
-          // Solo contar nóminas pagadas
-          if (estado !== 'pagado' && estado !== 'pagada') return;
-          
-          // Verificar si la nómina es del mes y año actual
+          // Filtro por fecha
           const d = getFechaBaseNomina(nominaItem);
-          if (!d || d.getFullYear() !== y || d.getMonth() !== m) return;
+          if (d && chartFilters.fechaInicio && chartFilters.fechaFin) {
+            const fechaInicio = new Date(chartFilters.fechaInicio);
+            const fechaFin = new Date(chartFilters.fechaFin);
+            fechaFin.setHours(23, 59, 59, 999);
+            
+            if (d < fechaInicio || d > fechaFin) {
+              return; // No está en el rango de fechas
+            }
+          }
+          
+          // Filtro por proyecto
+          if (chartFilters.proyectoId) {
+            const proyectoNomina = nominaItem.id_proyecto?.toString() || nominaItem.proyecto?.id_proyecto?.toString();
+            if (proyectoNomina !== chartFilters.proyectoId.toString()) {
+              return; // No es del proyecto filtrado
+            }
+          }
+          
+          // Solo contar nóminas pagadas
+          const estado = (nominaItem?.estado || '').toLowerCase();
+          if (estado !== 'pagado' && estado !== 'pagada') return;
           
           // Sumar el monto (usar monto_total o monto)
           const monto = parseFloat(nominaItem.monto_total || nominaItem.monto || 0);
@@ -59,6 +72,13 @@ export const processGastosPorTipoDoughnut = async (data) => {
         } catch (error) {
           console.error('Error procesando nómina individual:', error);
         }
+      });
+      
+      console.log('📊 Nóminas procesadas para gráfica:', {
+        totalNominas: nominas.length,
+        filtradas: nominaTotal > 0,
+        montTotal: nominaTotal,
+        filtros: chartFilters
       });
     }
   } catch (error) {
