@@ -4,6 +4,7 @@
  */
 
 import { formatUnidadMedida, formatCurrency, formatNumber } from './formatters';
+import { computeGastoFromItem } from './calc';
 
 /**
  * Gastos detallados por categoría
@@ -29,9 +30,8 @@ export const processGastosPorCategoriaDetallado = (data, categoriasDinamicas) =>
           categoriaActual = suministro.categoria;
         }
 
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const gasto = cantidad * precio;
+  const cantidad = parseFloat(suministro.cantidad) || 0;
+  const gasto = computeGastoFromItem(suministro);
         
         if (!gastosPorCategoria[categoriaActual]) {
           gastosPorCategoria[categoriaActual] = 0;
@@ -129,9 +129,8 @@ export const processAnalisisFrecuenciaSuministros = (data) => {
         const descripcion = suministro.descripcion || suministro.descripcion_producto || 'Sin descripción';
         const producto = descripcion.substring(0, 50);
         
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+  const cantidad = parseFloat(suministro.cantidad) || 0;
+  const valor = computeGastoFromItem(suministro);
         
         if (!frecuenciaPorProducto[producto]) {
           frecuenciaPorProducto[producto] = 0;
@@ -401,9 +400,7 @@ export const processAnalisisCostosPorProyecto = (data, proyectos) => {
         const proyectoId = suministro.id_proyecto;
         const proyectoNombre = proyectos?.find(p => p.id_proyecto === proyectoId)?.nombre || `Proyecto ${proyectoId}`;
         
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const costo = cantidad * precio;
+  const costo = computeGastoFromItem(suministro);
         
         if (!costosPorProyecto[proyectoNombre]) {
           costosPorProyecto[proyectoNombre] = 0;

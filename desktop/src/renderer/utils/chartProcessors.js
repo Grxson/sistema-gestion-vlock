@@ -4,6 +4,7 @@
  */
 
 import { formatUnidadMedida, formatCurrency } from './formatters';
+import { computeGastoFromItem } from './calc';
 import { NominaService } from '../services/nominas/nominaService';
 
 /**
@@ -16,9 +17,7 @@ export const processGastosPorProyecto = (data, proyectos) => {
     const proyectoId = suministro.id_proyecto;
     const proyectoNombre = proyectos?.find(p => p.id_proyecto === proyectoId)?.nombre || `Proyecto ${proyectoId}`;
     
-    const cantidad = parseFloat(suministro.cantidad) || 0;
-    const precio = parseFloat(suministro.precio_unitario) || 0;
-    const gasto = cantidad * precio;
+    const gasto = computeGastoFromItem(suministro);
     
     if (!gastosPorProyecto[proyectoNombre]) {
       gastosPorProyecto[proyectoNombre] = 0;
@@ -62,8 +61,7 @@ export const processGastosPorProveedor = (data) => {
         const proveedorNombre = suministro.proveedor?.nombre || 'Sin proveedor';
         
         const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const gasto = cantidad * precio;
+        const gasto = computeGastoFromItem(suministro);
         
         if (!gastosPorProveedor[proveedorNombre]) {
           gastosPorProveedor[proveedorNombre] = 0;
@@ -256,8 +254,7 @@ export const processDistribucionTipos = (data, categoriasDinamicas) => {
         }
 
         const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+        const valor = computeGastoFromItem(suministro);
         
         if (!distribucionTipos[tipo]) {
           distribucionTipos[tipo] = 0;

@@ -4,6 +4,7 @@
  */
 
 import { formatUnidadMedida, formatCurrency, formatNumber } from './formatters';
+import { computeGastoFromItem } from './calc';
 
 /**
  * Horas trabajadas por mes
@@ -119,9 +120,7 @@ export const processHorasPorEquipo = (data) => {
                             suministro.nombre_profesional || 
                             'Sin especificar';
           
-          const cantidad = parseFloat(suministro.cantidad) || 0;
-          const precio = parseFloat(suministro.precio_unitario) || 0;
-          const costo = cantidad * precio;
+          const costo = computeGastoFromItem(suministro);
           
           if (!horasPorProfesional[profesional]) {
             horasPorProfesional[profesional] = 0;
@@ -199,9 +198,7 @@ export const processComparativoHorasVsCosto = (data) => {
                           suministro.nombre_proyecto || 
                           `Proyecto ${suministro.id_proyecto || 'Sin ID'}`;
           
-          const cantidad = parseFloat(suministro.cantidad) || 0;
-          const precio = parseFloat(suministro.precio_unitario) || 0;
-          const costo = cantidad * precio;
+          const costo = computeGastoFromItem(suministro);
           
           if (!datosPorProyecto[proyecto]) {
             datosPorProyecto[proyecto] = { horas: 0, costo: 0 };
@@ -298,9 +295,8 @@ export const processDistribucionUnidades = (data) => {
       try {
         const unidad = formatUnidadMedida(suministro.unidad_medida) || 'Sin unidad';
         
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+  const cantidad = parseFloat(suministro.cantidad) || 0;
+  const valor = computeGastoFromItem(suministro);
         
         if (!cantidadPorUnidad[unidad]) {
           cantidadPorUnidad[unidad] = 0;
@@ -452,9 +448,8 @@ export const processValorPorUnidad = (data) => {
       try {
         const unidad = formatUnidadMedida(suministro.unidad_medida) || 'Sin unidad';
         
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+  const cantidad = parseFloat(suministro.cantidad) || 0;
+  const valor = computeGastoFromItem(suministro);
         
         if (!valorPorUnidad[unidad]) {
           valorPorUnidad[unidad] = 0;
@@ -525,9 +520,8 @@ export const processComparativoUnidades = (data) => {
       try {
         const unidad = formatUnidadMedida(suministro.unidad_medida) || 'Sin unidad';
         
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+  const cantidad = parseFloat(suministro.cantidad) || 0;
+  const valor = computeGastoFromItem(suministro);
         
         if (!datosPorUnidad[unidad]) {
           datosPorUnidad[unidad] = { cantidad: 0, valor: 0 };
@@ -704,9 +698,9 @@ export const processAnalisisUnidadesMedida = (data) => {
       try {
         const unidad = formatUnidadMedida(suministro.unidad_medida) || 'Sin unidad';
         
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+  const cantidad = parseFloat(suministro.cantidad) || 0;
+  const precio = parseFloat(suministro.precio_unitario) || 0;
+  const valor = computeGastoFromItem(suministro);
         
         if (!analisisPorUnidad[unidad]) {
           analisisPorUnidad[unidad] = {

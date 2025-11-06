@@ -10,6 +10,7 @@ import { FiTrendingUp, FiDollarSign, FiPackage, FiClock, FiActivity, FiBarChart2
 import SuministrosChartFilters from './SuministrosChartFilters';
 import SuministrosChartSelector from './SuministrosChartSelector';
 import { useChartData } from '../../hooks/useChartData';
+import { computeGastoFromItem } from '../../utils/calc';
 import { 
   getLineChartOptions, 
   getDoughnutChartOptions, 
@@ -41,11 +42,7 @@ const SuministrosChartsDisplay = ({
 
   // Función para calcular total (helper)
   const calculateTotal = useMemo(() => (data) => {
-    return data.reduce((sum, item) => {
-      const cantidad = parseFloat(item.cantidad) || 0;
-      const precio = parseFloat(item.precio_unitario) || 0;
-      return sum + (cantidad * precio);
-    }, 0);
+    return data.reduce((sum, item) => sum + computeGastoFromItem(item), 0);
   }, []);
 
   // Detectar cambios de tema y forzar re-render de gráficas

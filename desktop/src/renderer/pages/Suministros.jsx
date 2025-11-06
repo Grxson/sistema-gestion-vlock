@@ -2305,7 +2305,15 @@ const Suministros = () => {
     let gastosProyectos = 0;
     let totalNominas = 0; // Nueva métrica para nóminas
     
-    suministros.forEach((suministro) => {
+    // Arrays para debugging
+    const registrosProyecto = [];
+    const registrosAdmin = [];
+    const registrosSinTipo = [];
+    
+    console.log('🔍 DEBUG calculateGeneralStats - Iniciando...');
+    console.log(`📊 Total suministros a procesar: ${suministros.length}`);
+    
+    suministros.forEach((suministro, index) => {
       const costo = calculateTotal(suministro);
       totalGastado += costo;
       
@@ -2324,11 +2332,24 @@ const Suministros = () => {
         }
       }
       
+      // Guardar info de debug
+      const debugInfo = {
+        id: suministro.id_suministro,
+        folio: suministro.folio,
+        nombre: suministro.nombre?.substring(0, 30),
+        costo: costo,
+        tipo: tipoCategoria
+      };
+      
       // Sumar al tipo correspondiente
       if (tipoCategoria === 'Administrativo') {
         gastosAdministrativos += costo;
+        registrosAdmin.push(debugInfo);
       } else if (tipoCategoria === 'Proyecto') {
         gastosProyectos += costo;
+        registrosProyecto.push(debugInfo);
+      } else {
+        registrosSinTipo.push(debugInfo);
       }
     });
 
@@ -2346,13 +2367,45 @@ const Suministros = () => {
       });
     }
 
-    console.log('📊 Stats generales calculadas:', {
-      totalGastado,
-      gastosAdministrativos,
-      gastosProyectos,
-      totalNominas,
-      nominasEnCombinedData: combinedData?.filter(i => i.isNominaRow).length || 0
-    });
+      // Logs de debugging detallados
+      console.log('📊 ═══════════════════════════════════════════════════════');
+      console.log('📊 RESUMEN DE CÁLCULO - STATS GENERALES');
+      console.log('📊 ═══════════════════════════════════════════════════════');
+      console.log(`📦 Registros Proyecto: ${registrosProyecto.length} | Total: $${gastosProyectos.toFixed(2)}`);
+      console.log(`🏢 Registros Admin: ${registrosAdmin.length} | Total: $${gastosAdministrativos.toFixed(2)}`);
+      console.log(`💼 Nóminas: ${combinedData?.filter(i => i.isNominaRow).length || 0} | Total: $${totalNominas.toFixed(2)}`);
+      console.log(`⚠️  Sin tipo: ${registrosSinTipo.length}`);
+      console.log('📊 ═══════════════════════════════════════════════════════');
+    
+      // Mostrar primeros 5 de cada tipo para verificar
+      if (registrosProyecto.length > 0) {
+        console.log('📦 Primeros 5 gastos de Proyecto:');
+        registrosProyecto.slice(0, 5).forEach(r => {
+          console.log(`   ID:${r.id} | Folio:${r.folio} | $${r.costo.toFixed(2)} | ${r.nombre}`);
+        });
+      }
+    
+      if (registrosAdmin.length > 0) {
+        console.log('🏢 Primeros 5 gastos Administrativos:');
+        registrosAdmin.slice(0, 5).forEach(r => {
+          console.log(`   ID:${r.id} | Folio:${r.folio} | $${r.costo.toFixed(2)} | ${r.nombre}`);
+        });
+      }
+    
+      if (registrosSinTipo.length > 0) {
+        console.log('⚠️  Registros sin tipo (primeros 5):');
+        registrosSinTipo.slice(0, 5).forEach(r => {
+          console.log(`   ID:${r.id} | Folio:${r.folio} | $${r.costo.toFixed(2)} | ${r.nombre}`);
+        });
+      }
+    
+      console.log('📊 ═══════════════════════════════════════════════════════');
+      console.log(`🔍 COMPARACIÓN CON BD:`);
+      console.log(`   BD Proyectos: $3,016,070.19 vs Frontend: $${gastosProyectos.toFixed(2)}`);
+      console.log(`   Diferencia: $${Math.abs(3016070.19 - gastosProyectos).toFixed(2)}`);
+      console.log(`   BD Admin: $101,873.00 vs Frontend: $${gastosAdministrativos.toFixed(2)}`);
+      console.log(`   Diferencia: $${Math.abs(101873.00 - gastosAdministrativos).toFixed(2)}`);
+      console.log('📊 ═══════════════════════════════════════════════════════\n');
 
     const totalSuministros = suministros.length;
     

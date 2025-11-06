@@ -2,6 +2,8 @@
  * Procesa los gastos por tipo para gráfica de pastel (Administrativo, Proyecto, Nómina)
  * Ahora respeta los filtros aplicados (fechas, proyectos, etc.)
  */
+import { computeGastoFromItem } from './calc';
+
 export const processGastosPorTipoDoughnut = async (data, chartFilters = {}) => {
   let administrativo = 0;
   let proyecto = 0;
@@ -10,9 +12,7 @@ export const processGastosPorTipoDoughnut = async (data, chartFilters = {}) => {
   // Suministros - clasificar por tipo
   data.forEach(suministro => {
     const tipo = (suministro.tipo_suministro || suministro.categoria?.tipo || '').toLowerCase();
-    const cantidad = parseFloat(suministro.cantidad) || 0;
-    const precio = parseFloat(suministro.precio_unitario) || 0;
-    const gasto = cantidad * precio;
+    const gasto = computeGastoFromItem(suministro);
     
     if (tipo.includes('admin')) {
       administrativo += gasto;
@@ -128,10 +128,7 @@ export const processAnalisisPorTipoGasto = async (data) => {
     data.forEach(suministro => {
       try {
         const tipo = suministro.tipo_suministro || suministro.categoria?.tipo || 'Otro';
-        
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const gasto = cantidad * precio;
+        const gasto = computeGastoFromItem(suministro);
         
         if (!gastosMateriales[tipo]) {
           gastosMateriales[tipo] = 0;
@@ -322,8 +319,7 @@ export const processCodigosProducto = (data) => {
         const label = codigo !== 'Sin código' ? `${codigo} - ${descripcion.substring(0, 30)}` : 'Sin código';
         
         const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+        const valor = computeGastoFromItem(suministro);
         
         if (!productosPorCodigo[label]) {
           productosPorCodigo[label] = 0;
@@ -461,8 +457,7 @@ export const processAnalisisTecnicoInteligente = (data, categoriasDinamicas) => 
         }
 
         const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+        const valor = computeGastoFromItem(suministro);
         const unidad = suministro.unidad_medida || '';
         
         if (!cantidadPorCategoria[categoriaActual]) {
@@ -565,8 +560,8 @@ export const processConcretoDetallado = (data, categoriasDinamicas) => {
       return esConcreto;
     });
 
-    const m3PorResistencia = {};
-    const valorPorResistencia = {};
+  const m3PorResistencia = {};
+  const valorPorResistencia = {};
     
     concretoData.forEach(suministro => {
       try {
@@ -579,8 +574,7 @@ export const processConcretoDetallado = (data, categoriasDinamicas) => {
         }
 
         const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const valor = cantidad * precio;
+        const valor = computeGastoFromItem(suministro);
         
         if (!m3PorResistencia[resistencia]) {
           m3PorResistencia[resistencia] = 0;

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { NominaService } from '../services/nominas/nominaService';
+import { computeGastoFromItem } from '../utils/calc';
 import { formatUnidadMedida, formatCurrency, formatNumber } from '../utils/formatters';
 
 // Importar funciones de procesamiento de datos
@@ -92,9 +93,7 @@ export const useChartData = (showError) => {
         const fecha = new Date(suministro.fecha_necesaria || suministro.fecha || suministro.createdAt);
         const mesAnio = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}`;
       
-        const cantidad = parseFloat(suministro.cantidad) || 0;
-        const precio = parseFloat(suministro.precio_unitario) || 0;
-        const gasto = cantidad * precio;
+        const gasto = computeGastoFromItem(suministro);
       
         if (!gastosPorMes[mesAnio]) {
           gastosPorMes[mesAnio] = 0;
@@ -169,16 +168,15 @@ export const useChartData = (showError) => {
               categoria = suministro.tipo_suministro;
             }
 
-            const cantidad = parseFloat(suministro.cantidad) || 0;
-            const precio = parseFloat(suministro.precio_unitario) || 0;
-            const valor = cantidad * precio;
+            const valor = computeGastoFromItem(suministro);
           
             if (!valorPorCategoria[categoria]) {
               valorPorCategoria[categoria] = 0;
               cantidadPorCategoria[categoria] = 0;
             }
             valorPorCategoria[categoria] += valor;
-            cantidadPorCategoria[categoria] += cantidad;
+            const cant = parseFloat(suministro.cantidad) || 0;
+            cantidadPorCategoria[categoria] += cant;
           } catch (itemError) {
             console.error('Error procesando suministro en valorPorCategoria:', itemError, suministro);
           }
@@ -308,6 +306,60 @@ export const useChartData = (showError) => {
           estado: chartFilters.estado || 'Todos'
         }
       });
+
+      // Calcular totales globales (suministros + nóminas) con los mismos filtros
+      const totalSuministros = filteredData.reduce((sum, it) => sum + computeGastoFromItem(it), 0);
+
+      // Helper: obtener total de nóminas respetando filtros
+      const getNominasTotal = async () => {
+        let nominaTotal = 0;
+        try {
+          const nominasResponse = await NominaService.getAll();
+          if (nominasResponse.success && nominasResponse.data) {
+            const nominas = Array.isArray(nominasResponse.data)
+              ? nominasResponse.data
+              : nominasResponse.data.nominas || [];
+
+            const getFechaBaseNomina = (n) => {
+              const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
+              const d = base ? new Date(base) : null;
+              return d && !isNaN(d) ? d : null;
+            };
+
+            nominas.forEach((nominaItem) => {
+              // Filtro por fecha
+              const d = getFechaBaseNomina(nominaItem);
+              if (d && chartFilters.fechaInicio && chartFilters.fechaFin) {
+                const fechaInicio = new Date(chartFilters.fechaInicio);
+                const fechaFin = new Date(chartFilters.fechaFin);
+                fechaFin.setHours(23, 59, 59, 999);
+                if (d < fechaInicio || d > fechaFin) return;
+              }
+
+              // Filtro por proyecto
+              if (chartFilters.proyectoId) {
+                const proyectoNomina = nominaItem.id_proyecto?.toString() || nominaItem.proyecto?.id_proyecto?.toString();
+                if (proyectoNomina !== chartFilters.proyectoId.toString()) return;
+              }
+
+              // Solo nóminas pagadas
+              const estado = (nominaItem?.estado || '').toLowerCase();
+              if (estado !== 'pagado' && estado !== 'pagada') return;
+
+              const monto = parseFloat(nominaItem.monto_total || nominaItem.monto || nominaItem.total_pagar || 0);
+              if (!isNaN(monto) && monto > 0) {
+                nominaTotal += monto;
+              }
+            });
+          }
+        } catch (e) {
+          console.error('Error obteniendo total de nóminas para métricas:', e);
+        }
+        return nominaTotal;
+      };
+
+      const totalNominas = await getNominasTotal();
+      const totalGeneral = totalSuministros + totalNominas;
 
       // Procesar datos para todas las gráficas con manejo de errores individual
       const chartDataProcessed = {};
@@ -481,7 +533,29 @@ export const useChartData = (showError) => {
         chartDataProcessed.analisisUnidadesMedida = null;
       }
 
-      setChartData(chartDataProcessed);
+      // Adjuntar totales globales a las métricas de cada gráfica para mostrarlas de forma consistente
+      const withGlobalMetrics = Object.fromEntries(
+        Object.entries(chartDataProcessed).map(([key, value]) => {
+          if (value && typeof value === 'object') {
+            const metrics = value.metrics || {};
+            const hasOwnTotal = typeof metrics.total === 'number';
+            const hasTotalSuministros = typeof metrics.totalSuministros === 'number';
+            const augmented = {
+              ...metrics,
+              totalGeneral,
+              totalNominas
+            };
+            // Evitar duplicar Total Suministros si la gráfica ya tiene 'total'
+            if (!hasOwnTotal && !hasTotalSuministros) {
+              augmented.totalSuministros = totalSuministros;
+            }
+            return [key, { ...value, metrics: augmented }];
+          }
+          return [key, value];
+        })
+      );
+
+      setChartData(withGlobalMetrics);
       console.log('✅ Datos de gráficas cargados exitosamente');
       
     } catch (error) {

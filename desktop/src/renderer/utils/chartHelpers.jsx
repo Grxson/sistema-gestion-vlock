@@ -282,7 +282,19 @@ export const MetricsDisplay = ({ title, metrics, icon: Icon, color = "indigo" })
           // Formatear etiquetas y valores
           switch (key) {
             case 'total':
-              label = 'Total Gasto';
+              label = 'Total Suministros';
+              displayValue = formatCurrency(value);
+              break;
+            case 'totalGeneral':
+              label = 'Total General';
+              displayValue = formatCurrency(value);
+              break;
+            case 'totalSuministros':
+              label = 'Total Suministros';
+              displayValue = formatCurrency(value);
+              break;
+            case 'totalNominas':
+              label = 'Total Nóminas';
               displayValue = formatCurrency(value);
               break;
             case 'promedio':
