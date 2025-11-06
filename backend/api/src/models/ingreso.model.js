@@ -28,6 +28,12 @@ module.exports = (sequelize) => {
 
   Ingreso.associate = models => {
     Ingreso.belongsTo(models.Proyectos, { foreignKey: 'id_proyecto', as: 'proyecto' });
+    
+    // Relación con movimientos
+    Ingreso.hasMany(models.ingresos_movimientos, { 
+      foreignKey: 'id_ingreso', 
+      as: 'movimientos' 
+    });
   };
 
   return Ingreso;

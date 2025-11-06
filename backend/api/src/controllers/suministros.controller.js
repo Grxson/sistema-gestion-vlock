@@ -313,6 +313,63 @@ const createSuministro = async (req, res) => {
             ]
         });
 
+        // 🆕 Registrar movimiento en ingresos (si el suministro tiene costo y proyecto)
+        if (id_proyecto && costo_total && parseFloat(costo_total) > 0) {
+            try {
+                console.log(`🔍 Intentando registrar movimiento para proyecto ${id_proyecto}, costo: ${costo_total}`);
+                
+                // Buscar el último ingreso del proyecto como referencia
+                // Intentar con diferentes nombres de modelo
+                const IngresoModel = models.Ingresos || models.ingresos || models.Ingreso;
+                
+                if (!IngresoModel) {
+                    console.error('⚠️ Modelo de Ingreso no encontrado en models');
+                    throw new Error('Modelo Ingreso no disponible');
+                }
+                
+                const ingresoProyecto = await IngresoModel.findOne({
+                    where: { id_proyecto: id_proyecto },
+                    order: [['fecha', 'DESC']]
+                });
+                
+                if (!ingresoProyecto) {
+                    console.warn(`⚠️ No se encontró ingreso para el proyecto ${id_proyecto}. El movimiento no se registrará.`);
+                    console.warn('💡 Crea un ingreso para este proyecto primero para que se registren los movimientos.');
+                } else {
+                    console.log(`✅ Ingreso encontrado: ID ${ingresoProyecto.id_ingreso}`);
+                    
+                    // Obtener información del proveedor para la descripción
+                    const proveedor = await models.Proveedores.findByPk(id_proveedor);
+                    
+                    const movimiento = await models.ingresos_movimientos.create({
+                        id_ingreso: ingresoProyecto.id_ingreso,
+                        id_proyecto: id_proyecto,
+                        tipo: 'gasto',
+                        fuente: 'suministro',
+                        ref_tipo: 'suministro',
+                        ref_id: nuevoSuministro.id_suministro,
+                        fecha: fecha || new Date(),
+                        monto: Math.abs(parseFloat(costo_total)),
+                        descripcion: `Suministro - ${nombre || 'Material'} - ${proveedor?.nombre || 'Proveedor'}`
+                    });
+                    
+                    console.log(`✅ Movimiento de suministro registrado exitosamente:`, {
+                        id_movimiento: movimiento.id_movimiento,
+                        proyecto: id_proyecto,
+                        monto: costo_total,
+                        descripcion: movimiento.descripcion
+                    });
+                }
+            } catch (errorMovimiento) {
+                console.error('⚠️ Error registrando movimiento de suministro:', errorMovimiento);
+                console.error('Stack:', errorMovimiento.stack);
+                // No fallar la creación del suministro si falla el registro del movimiento
+            }
+        } else {
+            if (!id_proyecto) console.log('ℹ️  Suministro sin proyecto - no se registrará movimiento');
+            if (!costo_total || parseFloat(costo_total) <= 0) console.log('ℹ️  Suministro sin costo - no se registrará movimiento');
+        }
+
         res.status(201).json({
             success: true,
             message: 'Suministro creado exitosamente',

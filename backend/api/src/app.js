@@ -134,4 +134,8 @@ app.use('/api/uploads', express.static(path.join(__dirname, 'public/uploads')));
 // Rutas
 app.use('/api', routes);
 
+// Rutas específicas de movimientos de ingresos
+const movimientosRoutes = require('./routes/ingresosMovimientos.routes');
+app.use('/api/movimientos-ingresos', movimientosRoutes);
+
 module.exports = app;
