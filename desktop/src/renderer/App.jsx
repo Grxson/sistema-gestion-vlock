@@ -39,12 +39,16 @@ import AlertasVencimiento from './components/adeudos/AlertasVencimiento';
 // Importar panel de notificaciones para el header
 import NotificacionesPanel from './components/NotificacionesPanel';
 
+// Importar navegador rápido (Ctrl+B)
+import QuickNavigator from './components/QuickNavigator';
+
 function MainApp() {
   const [currentPath, setCurrentPath] = useState(() => {
     // Recuperar la ruta guardada o usar la predeterminada
     return localStorage.getItem('currentPath') || '/';
   });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [quickNavOpen, setQuickNavOpen] = useState(false);
   const { hasModuleAccess, loading: permissionsLoading } = usePermissions();
 
   // Mapeo de rutas a títulos
@@ -104,6 +108,20 @@ function MainApp() {
       if (window.navigateApp === handleNavigate) window.navigateApp = undefined;
     };
   }, [currentPath]);
+
+  // Listener global para Ctrl+B
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Ctrl+B o Cmd+B (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        setQuickNavOpen(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const renderContent = () => {
     // Mostrar un indicador de carga mientras se cargan los permisos
@@ -248,6 +266,13 @@ function MainApp() {
 
       {/* Alertas de vencimiento - Se muestran en toda la aplicación */}
       <AlertasVencimiento />
+      
+      {/* Navegador rápido - Se activa con Ctrl+B */}
+      <QuickNavigator 
+        isOpen={quickNavOpen}
+        onClose={() => setQuickNavOpen(false)}
+        onNavigate={handleNavigate}
+      />
     </div>
   );
 }
