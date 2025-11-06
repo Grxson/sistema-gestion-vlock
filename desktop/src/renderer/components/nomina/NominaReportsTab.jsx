@@ -20,6 +20,7 @@ import {
   ExclamationTriangleIcon,
   CheckCircleIcon,
   TableCellsIcon,
+  RectangleGroupIcon,
 } from '@heroicons/react/24/outline';
 
 export default function NominaReportsTab({ nominas, estadisticas, loading }) {
@@ -44,6 +45,14 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [proyectos, setProyectos] = useState([]);
   // Filtros específicos del tab "Reportes por Semanas"
   const [filtroProyectoSem, setFiltroProyectoSem] = useState('');
+  
+  // Filtros para el tab de Gráficas y Desglose por Proyectos
+  const [chartsPeriodo, setChartsPeriodo] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  });
+  const [chartsYear, setChartsYear] = useState(new Date().getFullYear());
+  const [chartsProyecto, setChartsProyecto] = useState('');
 
   // Número de semanas del período seleccionado (ISO que tocan el mes)
   const weeksInSelectedPeriod = useMemo(() => {
@@ -52,10 +61,10 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     return Array.isArray(list) ? list.length : 0;
   }, [selectedPeriod]);
 
-  // Filas para la tabla única por mes: Semana 1..N y total mensual
+  // Filas para la tabla única por mes: Semana 1..N y total mensual (exactamente las semanas del mes)
   const weekRowsData = useMemo(() => {
     if (!selectedPeriod || !weeklyReportsData?.reportes) return { rows: [], total: 0 };
-    const n = Math.max(weeksInSelectedPeriod || 0, 4); // asegurar mínimo 4
+    const n = weeksInSelectedPeriod || 4; // número exacto de semanas del mes
     const rows = [];
     let total = 0;
     for (let i = 1; i <= n; i++) {
@@ -469,7 +478,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       calculateMonthlyData();
       calculateWeeklyReportsData();
     }
-  }, [nominas, empleados, proyectos, selectedPeriod, selectedYear, filtroProyectoSem]);
+  }, [nominas, empleados, proyectos, selectedPeriod, selectedYear, filtroProyectoSem, chartsPeriodo, chartsYear, chartsProyecto]);
 
   const calculateWeeklyData = () => {
     const today = new Date();
@@ -505,9 +514,38 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   };
 
   const calculateChartsData = () => {
+    // Determinar período a usar: chartsPeriodo si está seleccionado, sino el mes actual
+    const periodoParaCalculo = chartsPeriodo || (() => {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    })();
+
+    // Filtrar nóminas del período seleccionado (o año si solo año está seleccionado) y por proyecto
+    const nominasFiltradas = nominas.filter(n => {
+      const d = getBaseDate(n);
+      if (!d) return false;
+      
+      // Filtro por período/año
+      if (chartsPeriodo) {
+        const [a, m] = chartsPeriodo.split('-').map(Number);
+        if (!(d.getFullYear() === a && d.getMonth() === (m - 1))) return false;
+      } else if (chartsYear) {
+        if (d.getFullYear() !== chartsYear) return false;
+      }
+      
+      // Filtro por proyecto
+      if (chartsProyecto) {
+        const pid = String(chartsProyecto);
+        const nid = n.id_proyecto || n.proyecto?.id_proyecto || n.proyecto?.id;
+        if (!nid || String(nid) !== pid) return false;
+      }
+      
+      return true;
+    });
+
     // Datos para gráfica de nómina por proyecto
     const proyectosData = {};
-    nominas.forEach(nomina => {
+    nominasFiltradas.forEach(nomina => {
       const proyectoId = nomina.id_proyecto || (nomina.proyecto && nomina.proyecto.id_proyecto);
       
       // Buscar nombre del proyecto en el array de proyectos
@@ -559,27 +597,26 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       '#6B7280'  // Gris
     ];
 
-    // Datos para gráfica: pagos por semana del mes actual (1-5) usando ISO->semana del mes
+    // Calcular semanas dinámicamente según el período seleccionado (exactamente las que toca el mes)
+    const numWeeks = chartsPeriodo ? (getWeeksTouchingMonth(chartsPeriodo).length || 4) : 4;
+    const weeksOfMonth = Array.from({ length: numWeeks }, (_, i) => `Semana ${i + 1}`);
     const weeklyData = {};
-    const currentMonth = new Date();
-    const periodoActual = `${currentMonth.getFullYear()}-${String(currentMonth.getMonth()+1).padStart(2,'0')}`;
-    const weeksOfMonth = ['Semana 1','Semana 2','Semana 3','Semana 4','Semana 5'];
     weeksOfMonth.forEach(k => weeklyData[k] = 0);
 
-    nominas.forEach(nomina => {
+    nominasFiltradas.forEach(nomina => {
       const d = getBaseDate(nomina);
       if (!d) return;
       const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      if (periodo !== periodoActual) return;
+      if (chartsPeriodo && periodo !== chartsPeriodo) return;
       const w = computeSemanaDelMes(nomina);
       if (w && weeklyData[`Semana ${w}`] !== undefined) {
         weeklyData[`Semana ${w}`] += getMonto(nomina);
       }
     });
 
-    // Datos para gráfica de top empleados por monto
+    // Datos para gráfica de top empleados por monto (del período/año seleccionado)
     const empleadosData = {};
-    nominas.forEach(nomina => {
+    nominasFiltradas.forEach(nomina => {
       const empleadoId = nomina.id_empleado || nomina.empleado?.id_empleado;
       if (empleadoId) {
         if (!empleadosData[empleadoId]) {
@@ -732,13 +769,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       });
     }
 
-    // 4) Inicializar semanas del período seleccionado (1..N) para evitar huecos
+    // 4) Inicializar semanas del período seleccionado (1..N exactas del mes) para evitar huecos
     const reportesPorSemana = {};
     let semanasMes = 0;
     if (selectedPeriod) {
       const weeks = getWeeksTouchingMonth(selectedPeriod);
       semanasMes = weeks.length || 0;
-      for (let i = 1; i <= Math.max(semanasMes, 5); i++) {
+      for (let i = 1; i <= semanasMes; i++) {
         const [a, m] = selectedPeriod.split('-');
         const periodo = `${a}-${m}`;
         const clave = `${periodo}-Semana${i}`;
@@ -837,6 +874,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     { id: 'summary', name: 'Resumen Semanal', icon: CalendarIcon },
     { id: 'charts', name: 'Gráficas', icon: ChartBarIcon },
     { id: 'payments', name: 'Lista de Pagos', icon: UserGroupIcon },
+    { id: 'projects', name: 'Desglose por Proyectos', icon: RectangleGroupIcon },
     { id: 'weekly-reports', name: 'Reportes por Semanas', icon: TableCellsIcon },
     { id: 'detailed', name: 'Tabla Detallada', icon: DocumentTextIcon }
   ];
@@ -961,10 +999,70 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           )}
           
           {activeTab === 'charts' && (
-            <NominaCharts 
-              chartsData={chartsData}
-              loading={loading}
-            />
+            <div className="space-y-6">
+              {/* Filtros compactos para las tablas de Empleados y Este Mes */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Año
+                    </label>
+                    <select
+                      value={chartsYear}
+                      onChange={(e) => {
+                        setChartsYear(parseInt(e.target.value));
+                        setChartsPeriodo('');
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white text-sm"
+                    >
+                      <option value="">Todos los años</option>
+                      {weeklyReportsData?.añosDisponibles?.map(año => (
+                        <option key={año} value={año}>{año}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Período (Mes)
+                    </label>
+                    <select
+                      value={chartsPeriodo}
+                      onChange={(e) => {
+                        setChartsPeriodo(e.target.value);
+                        if (e.target.value) {
+                          const [año] = e.target.value.split('-');
+                          setChartsYear(parseInt(año));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white text-sm"
+                    >
+                      <option value="">Todos los períodos</option>
+                      {weeklyReportsData?.periodosDisponibles?.map(periodo => (
+                        <option key={periodo} value={periodo}>{periodo}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => {
+                        const now = new Date();
+                        setChartsPeriodo(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
+                        setChartsYear(now.getFullYear());
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    >
+                      Restablecer (Mes Actual)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <NominaCharts 
+                chartsData={chartsData}
+                loading={loading}
+                selectedPeriodo={chartsPeriodo}
+              />
+            </div>
           )}
           
           {activeTab === 'payments' && (
@@ -972,6 +1070,239 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
               paymentsData={paymentsData}
               loading={loading}
             />
+          )}
+          
+          {activeTab === 'projects' && (
+            <div className="space-y-6">
+              {/* Filtros compactos para desglose por proyectos */}
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Período (Año-Mes)
+                    </label>
+                    <select
+                      value={chartsPeriodo}
+                      onChange={(e) => {
+                        setChartsPeriodo(e.target.value);
+                        if (e.target.value) {
+                          const [año] = e.target.value.split('-');
+                          setChartsYear(parseInt(año));
+                        }
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white text-sm"
+                    >
+                      <option value="">Todos los períodos</option>
+                      {weeklyReportsData?.periodosDisponibles?.map(periodo => (
+                        <option key={periodo} value={periodo}>{periodo}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Proyecto
+                    </label>
+                    <select
+                      value={chartsProyecto}
+                      onChange={(e) => setChartsProyecto(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white text-sm"
+                    >
+                      <option value="">Todos los proyectos</option>
+                      {proyectos.map(p => (
+                        <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-end">
+                    <button
+                      onClick={() => {
+                        const now = new Date();
+                        setChartsPeriodo(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
+                        setChartsYear(now.getFullYear());
+                        setChartsProyecto('');
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                    >
+                      Restablecer (Mes Actual)
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Tabla Desglosada de Nómina por Proyecto */}
+              {chartsData && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h4 className="text-lg font-medium text-gray-900 dark:text-white">
+                      Desglose Detallado por Proyecto
+                    </h4>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      {(() => {
+                        let texto = '';
+                        if (chartsPeriodo) {
+                          const [year, month] = chartsPeriodo.split('-');
+                          const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                          texto = `Período: ${date.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' })}`;
+                        } else {
+                          texto = 'Todos los períodos';
+                        }
+                        if (chartsProyecto) {
+                          const proyecto = proyectos.find(p => p.id_proyecto === parseInt(chartsProyecto));
+                          texto += ` - Proyecto: ${proyecto?.nombre || 'Desconocido'}`;
+                        }
+                        return texto;
+                      })()}
+                    </p>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                      <thead className="bg-gray-50 dark:bg-gray-900">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Proyecto
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Monto Total
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Nóminas
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Empleados
+                          </th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            %
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        {chartsData.proyectosDistribution.detalles.map((detalle, index) => {
+                          const total = chartsData.proyectosDistribution.data.reduce((a, b) => a + b, 0);
+                          const percentage = total > 0 ? ((detalle.monto / total) * 100).toFixed(1) : '0.0';
+                          return (
+                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center space-x-2">
+                                  <div 
+                                    className="w-3 h-3 rounded-full flex-shrink-0"
+                                    style={{ backgroundColor: chartsData.proyectosDistribution.colors[index] }}
+                                  ></div>
+                                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {detalle.proyecto}
+                                  </span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900 dark:text-white">
+                                {formatCurrency(detalle.monto)}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400">
+                                {detalle.cantidad}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400">
+                                {detalle.empleados}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300">
+                                  {percentage}%
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {/* Fila de totales */}
+                        <tr className="bg-gray-50 dark:bg-gray-900 font-semibold">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                            TOTAL
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                            {formatCurrency(chartsData.proyectosDistribution.data.reduce((a, b) => a + b, 0))}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                            {chartsData.proyectosDistribution.cantidad.reduce((a, b) => a + b, 0)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                            {chartsData.proyectosDistribution.empleados.reduce((a, b) => a + b, 0)}
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                            100%
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Tablas de Empleados y Este Mes */}
+              {chartsData && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Top Empleados */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                      Empleados
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                      {chartsPeriodo ? (() => {
+                        const [year, month] = chartsPeriodo.split('-');
+                        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                        return date.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+                      })() : 'Todos los períodos'}
+                    </p>
+                    <div className="space-y-3">
+                      {chartsData.topEmpleados.labels.slice(0, 10).map((label, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                            {label}
+                          </span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            {formatCurrency(chartsData.topEmpleados.data[index])}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Estadísticas Mensuales */}
+                  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                      {chartsPeriodo ? 'Este Mes' : 'Período Seleccionado'}
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                      {chartsPeriodo ? (() => {
+                        const [year, month] = chartsPeriodo.split('-');
+                        const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                        return date.toLocaleDateString('es-MX', { year: 'numeric', month: 'long' });
+                      })() : 'Todos los períodos'}
+                    </p>
+                    <div className="space-y-3">
+                      {chartsData.monthlyPayments.labels.map((label, index) => (
+                        <div key={index} className="flex items-center justify-between">
+                          <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+                          <span className="text-sm font-medium text-gray-900 dark:text-white">
+                            {formatCurrency(chartsData.monthlyPayments.data[index])}
+                          </span>
+                        </div>
+                      ))}
+                      
+                      {/* Total del Mes */}
+                      <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-600">
+                        <div className="flex items-center justify-between">
+                          <span className="text-base font-semibold text-gray-900 dark:text-white">
+                            Total del Mes
+                          </span>
+                          <span className="text-lg font-bold text-primary-600 dark:text-primary-400">
+                            {formatCurrency(chartsData.monthlyPayments.data.reduce((sum, amount) => sum + amount, 0))}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          Suma de las {chartsData.monthlyPayments.labels.length} semanas
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
           
           {activeTab === 'weekly-reports' && (
@@ -1076,7 +1407,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     </h3>
                     {selectedPeriod && (
                       <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
-                        {`Este período tiene ${Math.max(weeksInSelectedPeriod || 0, 4)} semanas`}
+                        {`Este período tiene ${weeksInSelectedPeriod || 4} semanas`}
                       </p>
                     )}
                   </div>
