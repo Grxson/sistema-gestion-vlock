@@ -42,6 +42,30 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   });
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [proyectos, setProyectos] = useState([]);
+  // Filtros específicos del tab "Reportes por Semanas"
+  const [filtroProyectoSem, setFiltroProyectoSem] = useState('');
+
+  // Número de semanas del período seleccionado (ISO que tocan el mes)
+  const weeksInSelectedPeriod = useMemo(() => {
+    if (!selectedPeriod) return 0;
+    const list = getWeeksTouchingMonth(selectedPeriod);
+    return Array.isArray(list) ? list.length : 0;
+  }, [selectedPeriod]);
+
+  // Filas para la tabla única por mes: Semana 1..N y total mensual
+  const weekRowsData = useMemo(() => {
+    if (!selectedPeriod || !weeklyReportsData?.reportes) return { rows: [], total: 0 };
+    const n = Math.max(weeksInSelectedPeriod || 0, 4); // asegurar mínimo 4
+    const rows = [];
+    let total = 0;
+    for (let i = 1; i <= n; i++) {
+      const reporte = weeklyReportsData.reportes.find(r => r.periodo === selectedPeriod && r.semana === i);
+      const amount = reporte ? reporte.totalPagado : 0;
+      rows.push({ semana: i, monto: amount });
+      total += amount;
+    }
+    return { rows, total };
+  }, [selectedPeriod, weeklyReportsData, weeksInSelectedPeriod]);
   const [drStart, setDrStart] = useState('');
   const [drEnd, setDrEnd] = useState('');
   const [filtroProyecto, setFiltroProyecto] = useState('');
@@ -445,7 +469,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       calculateMonthlyData();
       calculateWeeklyReportsData();
     }
-  }, [nominas, empleados, proyectos, selectedPeriod, selectedYear]);
+  }, [nominas, empleados, proyectos, selectedPeriod, selectedYear, filtroProyectoSem]);
 
   const calculateWeeklyData = () => {
     const today = new Date();
@@ -682,47 +706,48 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const calculateWeeklyReportsData = () => {
     if (!nominas || !empleados) return;
 
-    // Usar util compartido calcularSemanaDelMes
-
-    // Filtrar nóminas por período, año y estado (solo pagadas/completadas)
-    let nominasFiltradas = nominas.filter(nomina => {
-      // Solo incluir nóminas que están pagadas o completadas
-      const estado = nomina.estado?.toLowerCase() || '';
-      return estado === 'pagada' || estado === 'pagado' || estado === 'completada' || estado === 'completado';
+    // 1) Filtrado base por periodo/año, considerando SOLO pagadas/completadas
+    let nominasFiltradas = nominas.filter((n) => {
+      const d = getBaseDate(n);
+      if (!d) return false;
+      const est = (n.estado || '').toLowerCase();
+      const isPaid = est === 'pagado' || est === 'pagada' || est === 'completada' || est === 'completado';
+      if (!isPaid) return false;
+      if (selectedPeriod) {
+        const [a, m] = selectedPeriod.split('-').map(Number);
+        return d.getFullYear() === a && d.getMonth() === (m - 1);
+      }
+      if (selectedYear) {
+        return d.getFullYear() === selectedYear;
+      }
+      return true;
     });
-    
-    if (selectedPeriod) {
-      const [año, mes] = selectedPeriod.split('-').map(Number);
-      nominasFiltradas = nominasFiltradas.filter(nomina => {
-        const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
-        return fechaNomina.getFullYear() === año && fechaNomina.getMonth() === (mes - 1);
-      });
-    } else if (selectedYear) {
-      nominasFiltradas = nominasFiltradas.filter(nomina => {
-        const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
-        return fechaNomina.getFullYear() === selectedYear;
+
+    // 2) Filtro por proyecto (opcional)
+    if (filtroProyectoSem) {
+      const pid = String(filtroProyectoSem);
+      nominasFiltradas = nominasFiltradas.filter((n) => {
+        const nid = n.id_proyecto || n.proyecto?.id_proyecto || n.proyecto?.id;
+        return nid && String(nid) === pid;
       });
     }
 
-    // Agrupar por período y semana
+    // 4) Inicializar semanas del período seleccionado (1..N) para evitar huecos
     const reportesPorSemana = {};
-    
-    nominasFiltradas.forEach(nomina => {
-      const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
-      const año = fechaNomina.getFullYear();
-      const mes = fechaNomina.getMonth() + 1;
-      const semanaDelMes = calcularSemanaDelMes(fechaNomina);
-      
-      const periodo = `${año}-${mes.toString().padStart(2, '0')}`;
-      const clave = `${periodo}-Semana${semanaDelMes}`;
-      
-      if (!reportesPorSemana[clave]) {
+    let semanasMes = 0;
+    if (selectedPeriod) {
+      const weeks = getWeeksTouchingMonth(selectedPeriod);
+      semanasMes = weeks.length || 0;
+      for (let i = 1; i <= Math.max(semanasMes, 5); i++) {
+        const [a, m] = selectedPeriod.split('-');
+        const periodo = `${a}-${m}`;
+        const clave = `${periodo}-Semana${i}`;
         reportesPorSemana[clave] = {
           periodo,
-          semana: semanaDelMes,
-          año,
-          mes,
-          nombreMes: fechaNomina.toLocaleDateString('es-MX', { month: 'long' }),
+          semana: i,
+          año: parseInt(a, 10),
+          mes: parseInt(m, 10),
+          nombreMes: new Date(parseInt(a,10), parseInt(m,10)-1, 1).toLocaleDateString('es-MX', { month: 'long' }),
           nominas: [],
           totalNominas: 0,
           totalMonto: 0,
@@ -731,62 +756,80 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           empleados: new Set()
         };
       }
-      
-      const montoTotal = parseFloat(nomina.monto_total || nomina.monto || 0);
-      
-      // Si la nómina está pagada/completada, el monto pagado es igual al monto total
-      const montoPagado = montoTotal; // Nóminas pagadas/completadas se pagaron en su totalidad
-      
-      reportesPorSemana[clave].nominas.push(nomina);
-      reportesPorSemana[clave].totalNominas++;
-      reportesPorSemana[clave].totalMonto += montoTotal;
-      reportesPorSemana[clave].totalPagado += montoPagado;
-      reportesPorSemana[clave].totalPendiente += 0; // No hay pendiente si está pagada
-      reportesPorSemana[clave].empleados.add(nomina.id_empleado);
+    }
+
+    // 5) Agrupar por semana del mes (consistente con ISO si existe en la nómina)
+    nominasFiltradas.forEach((n) => {
+      const d = getBaseDate(n);
+      if (!d) return;
+      const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const semanaDelMes = computeSemanaDelMes(n) || calcularSemanaDelMes(d);
+      const clave = `${periodo}-Semana${semanaDelMes}`;
+      if (!reportesPorSemana[clave]) {
+        // Crear bucket si no se inicializó (p.e. cuando no hay selectedPeriod)
+        reportesPorSemana[clave] = {
+          periodo,
+          semana: semanaDelMes,
+          año: d.getFullYear(),
+          mes: d.getMonth()+1,
+          nombreMes: d.toLocaleDateString('es-MX', { month: 'long' }),
+          nominas: [],
+          totalNominas: 0,
+          totalMonto: 0,
+          totalPagado: 0,
+          totalPendiente: 0,
+          empleados: new Set()
+        };
+      }
+
+      const monto = parseFloat(n.monto_total || n.monto || 0) || 0;
+  const est = (n.estado || '').toLowerCase();
+
+      reportesPorSemana[clave].nominas.push(n);
+      reportesPorSemana[clave].totalNominas += 1;
+      reportesPorSemana[clave].totalMonto += monto;
+      // En este reporte solo se consideran pagadas/completadas
+      reportesPorSemana[clave].totalPagado += monto;
+      reportesPorSemana[clave].empleados.add(n.id_empleado);
     });
 
-    // Convertir a array y ordenar
-    const reportesArray = Object.values(reportesPorSemana).map(reporte => ({
+    // 6) Convertir a array, calcular empleados únicos globales correctamente
+    const reportesArray = Object.values(reportesPorSemana).map((reporte) => ({
       ...reporte,
       totalEmpleados: reporte.empleados.size,
       empleados: Array.from(reporte.empleados)
     }));
 
-    // Ordenar por año, mes y semana
+    // Orden por año, mes, semana
     reportesArray.sort((a, b) => {
-      if (a.año !== b.año) return b.año - a.año; // Más recientes primero
+      if (a.año !== b.año) return b.año - a.año;
       if (a.mes !== b.mes) return b.mes - a.mes;
-      return b.semana - a.semana;
+      return a.semana - b.semana; // de 1..N
     });
 
-    // Calcular totales generales
-    const totalesGenerales = reportesArray.reduce((totales, reporte) => {
-      return {
-        totalNominas: totales.totalNominas + reporte.totalNominas,
-        totalMonto: totales.totalMonto + reporte.totalMonto,
-        totalPagado: totales.totalPagado + reporte.totalPagado,
-        totalPendiente: totales.totalPendiente + reporte.totalPendiente,
-        totalEmpleados: Math.max(totales.totalEmpleados, reporte.totalEmpleados)
-      };
-    }, {
-      totalNominas: 0,
-      totalMonto: 0,
-      totalPagado: 0,
-      totalPendiente: 0,
-      totalEmpleados: 0
-    });
+    // 7) Totales generales y empleados únicos globales
+    const globalEmps = new Set();
+    reportesArray.forEach(r => r.empleados.forEach(e => globalEmps.add(e)));
+    const totalesGenerales = reportesArray.reduce((acc, r) => ({
+      totalNominas: acc.totalNominas + r.totalNominas,
+      totalMonto: acc.totalMonto + r.totalMonto,
+      totalPagado: acc.totalPagado + r.totalPagado,
+      totalPendiente: acc.totalPendiente + r.totalPendiente,
+      totalEmpleados: globalEmps.size
+    }), { totalNominas: 0, totalMonto: 0, totalPagado: 0, totalPendiente: 0, totalEmpleados: 0 });
 
     setWeeklyReportsData({
       reportes: reportesArray,
       totales: totalesGenerales,
       periodosDisponibles: [...new Set(nominas.map(n => {
-        const fecha = new Date(n.fecha_creacion || n.createdAt || n.fecha);
-        return `${fecha.getFullYear()}-${(fecha.getMonth() + 1).toString().padStart(2, '0')}`;
-      }))].sort().reverse(),
+        const d = getBaseDate(n);
+        if (!d) return null;
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      }).filter(Boolean))].sort().reverse(),
       añosDisponibles: [...new Set(nominas.map(n => {
-        const fecha = new Date(n.fecha_creacion || n.createdAt || n.fecha);
-        return fecha.getFullYear();
-      }))].sort((a, b) => b - a)
+        const d = getBaseDate(n);
+        return d ? d.getFullYear() : null;
+      }).filter(Boolean))].sort((a,b)=>b-a)
     });
   };
 
@@ -935,7 +978,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
             <div className="space-y-6">
               {/* Filtros */}
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       Año
@@ -975,11 +1018,26 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                       ))}
                     </select>
                   </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
+                    <select
+                      value={filtroProyectoSem}
+                      onChange={(e)=>setFiltroProyectoSem(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
+                    >
+                      <option value="">Todos</option>
+                      {proyectos.map(p => (
+                        <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {/* Estado y Empleado removidos por requerimiento: solo Año, Período y Proyecto */}
                   <div className="flex items-end">
                     <button
                       onClick={() => {
                         setSelectedPeriod('');
                         setSelectedYear(new Date().getFullYear());
+                        setFiltroProyectoSem('');
                       }}
                       className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                     >
@@ -999,9 +1057,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                       </div>
                       <div className="ml-4">
                         <p className="text-lg font-medium text-gray-500 dark:text-gray-400">Total General Pagado</p>
-                        <p className="text-4xl font-bold text-green-600 dark:text-green-400">
-                          {formatCurrency(weeklyReportsData.totales.totalPagado)}
-                        </p>
+                        <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(weeklyReportsData.totales.totalPagado)}</p>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                           {weeklyReportsData.totales.totalNominas} nóminas en {weeklyReportsData.reportes.length} semanas
                         </p>
@@ -1011,53 +1067,63 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                 </div>
               )}
 
-              {/* Tabla Simple de Totales por Semana */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Total de Nómina Pagada por Semana
-                  </h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Solo nóminas con estado "Pagada" o "Completada"
-                  </p>
-                </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Semana
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
-                          Total Pagado
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                      {weeklyReportsData?.reportes?.map((reporte, index) => (
-                        <tr key={`${reporte.periodo}-${reporte.semana}`} className={index % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                            {reporte.periodo} - Semana {reporte.semana}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-green-600 dark:text-green-400">
-                            {formatCurrency(reporte.totalPagado)}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                
-                {(!weeklyReportsData?.reportes || weeklyReportsData.reportes.length === 0) && (
-                  <div className="text-center py-12">
-                    <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">No hay reportes</h3>
-                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                      No se encontraron nóminas para los filtros seleccionados.
-                    </p>
+              {/* Tabla Única: Semanas del Mes (1..N) + Total del Mes */}
+              <div className="flex justify-center">
+                <div className="w-full max-w-xl bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white text-center">
+                      {selectedPeriod ? `Semanas del Mes ${selectedPeriod}` : 'Selecciona un período (YYYY-MM)'}
+                    </h3>
+                    {selectedPeriod && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
+                        {`Este período tiene ${Math.max(weeksInSelectedPeriod || 0, 4)} semanas`}
+                      </p>
+                    )}
                   </div>
-                )}
+                  {selectedPeriod ? (
+                    <div className="overflow-x-auto">
+                      <table className="w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                        <thead className="bg-gray-50 dark:bg-gray-700">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
+                              Semana
+                            </th>
+                            <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total Pagado</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {weekRowsData.rows.map((row, idx) => (
+                            <tr key={`row-semana-${row.semana}`} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                                {`Semana ${row.semana}`}
+                              </td>
+                              <td className="px-4 py-2 whitespace-nowrap text-sm font-bold text-green-600 dark:text-green-400">
+                                {formatCurrency(row.monto)}
+                              </td>
+                            </tr>
+                          ))}
+                          {/* Total del Mes */}
+                          <tr className="bg-gray-100 dark:bg-gray-700">
+                            <td className="px-4 py-2 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
+                              Total del Mes
+                            </td>
+                            <td className="px-4 py-2 whitespace-nowrap text-sm font-extrabold text-primary-600 dark:text-primary-400">
+                              {formatCurrency(weekRowsData.total)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-10">
+                      <DocumentTextIcon className="mx-auto h-10 w-10 text-gray-400" />
+                      <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Selecciona un período</h3>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Elige un mes (YYYY-MM) para ver el desglose por semana.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
