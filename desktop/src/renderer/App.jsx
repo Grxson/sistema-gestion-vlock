@@ -23,7 +23,7 @@ import Auditoria from './pages/Auditoria';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 import ProfilePage from './pages/ProfilePage';
 import ConfigurationPage from './pages/ConfigurationPage';
-import AdeudosGenerales from './components/AdeudosGenerales';
+import AdeudosGenerales from './components/AdeudosGenerales'; 
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 import Ingresos from './pages/Ingresos';
 

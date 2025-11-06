@@ -104,7 +104,14 @@ module.exports = (sequelize) => {
     }
   }, {
     tableName: 'nomina_empleados',
-    timestamps: true
+    timestamps: true,
+    indexes: [
+      {
+        unique: true,
+        fields: ['id_empleado', 'id_semana'],
+        name: 'idx_nomina_unica_empleado_semana'
+      }
+    ]
   });
 
   NominaEmpleado.associate = models => {
