@@ -266,64 +266,54 @@ const createNomina = async (req, res) => {
         // Si el frontend envía período y semana, usarlos; si no, usar fecha actual (retrocompatibilidad)
         let infoSemana;
         if (periodo_anio && periodo_mes && semana_del_mes) {
-            // LÓGICA UNIFICADA: semanas ISO por lunes, asignadas al mes por mayoría de días
+            // LÓGICA UNIFICADA: Usar semanas ISO, asignadas al mes solo si ≥4 días caen en él
             const year = parseInt(periodo_anio, 10);
             const month0 = parseInt(periodo_mes, 10) - 1;
 
-            const first = new Date(year, month0, 1, 12, 0, 0, 0);
-            const last = new Date(year, month0 + 1, 0, 12, 0, 0, 0);
+            const primerDia = new Date(year, month0, 1);
+            const ultimoDia = new Date(year, month0 + 1, 0);
 
-            const day = first.getDay() || 7; // 1..7 (domingo=7)
-            const lunesInicio = new Date(first);
-            lunesInicio.setDate(first.getDate() - day + 1);
-            const end = new Date(last);
-            end.setDate(last.getDate() + 7);
+            // Retroceder hasta el lunes anterior al primer día del mes
+            const diaInicio = primerDia.getDay();
+            const diasHastaLunes = diaInicio === 0 ? -6 : (1 - diaInicio);
+            let fechaActual = new Date(primerDia);
+            fechaActual.setDate(fechaActual.getDate() + diasHastaLunes);
 
             const semanasDelMes = [];
             const seen = new Set();
 
-            for (let d = new Date(lunesInicio); d <= end; d.setDate(d.getDate() + 7)) {
-                // Derivar semana ISO por jueves
-                const jueves = new Date(d);
-                const dow = jueves.getDay();
-                const diasHastaJueves = dow === 0 ? 4 : (4 - dow);
-                jueves.setDate(d.getDate() + diasHastaJueves);
-                const anioISO = jueves.getFullYear();
-                const primerEnero = new Date(anioISO, 0, 1);
-                const diaPrimerEnero = primerEnero.getDay();
-                const diasHastaPrimerJueves = (11 - diaPrimerEnero) % 7;
-                const primerJueves = new Date(anioISO, 0, 1 + diasHastaPrimerJueves);
-                const diff = Math.floor((jueves - primerJueves) / (1000 * 60 * 60 * 24));
-                const semanaISO = Math.floor(diff / 7) + 1;
-                const key = `${anioISO}-${semanaISO}`;
-
-                // Mayoría de días de la semana dentro del mes objetivo
-                const counts = new Map();
-                for (let i = 0; i < 7; i++) {
-                    const dd = new Date(d);
-                    dd.setDate(d.getDate() + i);
-                    const k = `${dd.getFullYear()}-${dd.getMonth()}`;
-                    counts.set(k, (counts.get(k) || 0) + 1);
+            // Iterar por todas las semanas que tocan el mes
+            while (fechaActual <= ultimoDia) {
+                // Generar info de la semana ISO
+                const infoSem = generarInfoSemana(fechaActual);
+                const key = `${infoSem.año}-${infoSem.semanaISO}`;
+                
+                // Contar cuántos días de esta semana caen dentro del mes
+                const lunesSemana = new Date(infoSem.fechaInicio);
+                const domingoSemana = new Date(infoSem.fechaFin);
+                
+                let diasEnMes = 0;
+                for (let d = new Date(lunesSemana); d <= domingoSemana; d.setDate(d.getDate() + 1)) {
+                    if (d.getMonth() === month0 && d.getFullYear() === year) {
+                        diasEnMes++;
+                    }
                 }
-                let bestKey = null, best = -1;
-                counts.forEach((v, k) => { if (v > best) { best = v; bestKey = k; } });
-                const [, mm] = bestKey.split('-').map(Number);
-
-                if (mm === month0 && !seen.has(key)) {
+                
+                // Solo incluir la semana si ≥4 días caen en este mes
+                if (!seen.has(key) && diasEnMes >= 4) {
                     seen.add(key);
-                    // Estructura similar a generarInfoSemana
-                    // Calcular lunes (inicio) y domingo (fin)
-                    const lunes = new Date(d);
-                    const domingo = new Date(d); domingo.setDate(d.getDate() + 6);
-                    const etiqueta = `Semana ${semanaISO} - ${lunes.toLocaleDateString('es-MX', { month: 'long' })}/${domingo.toLocaleDateString('es-MX', { month: 'long' })} ${anioISO}`;
                     semanasDelMes.push({
-                        año: anioISO,
-                        semanaISO,
-                        etiqueta,
-                        fechaInicio: lunes,
-                        fechaFin: domingo
+                        año: infoSem.año,
+                        semanaISO: infoSem.semanaISO,
+                        etiqueta: infoSem.etiqueta,
+                        fechaInicio: infoSem.fechaInicio,
+                        fechaFin: infoSem.fechaFin,
+                        diasEnMes
                     });
                 }
+                
+                // Avanzar 7 días
+                fechaActual.setDate(fechaActual.getDate() + 7);
             }
 
             // Validar que la semana solicitada existe
@@ -1869,26 +1859,46 @@ const verificarDuplicados = async (req, res) => {
         // Extraer año y mes del período
         const [año, mes] = periodo.split('-').map(Number);
         
-        // NUEVO ALGORITMO: Usar semanas ISO 8601 en lugar de filas del calendario
-        // Calcular todas las semanas ISO que tocan el mes solicitado
+        // ALGORITMO CORREGIDO: Solo contar semanas ISO cuya MAYORÍA de días (≥4) 
+        // caen dentro del mes solicitado (estándar ISO 8601)
         const primerDiaDelMes = new Date(año, mes - 1, 1);
         const ultimoDiaDelMes = new Date(año, mes, 0);
         
-        // Obtener todas las semanas ISO que tocan este mes
+        // Obtener todas las semanas ISO que pertenecen mayoritariamente a este mes
         const semanasDelMes = [];
         let fechaActual = new Date(primerDiaDelMes);
         
+        // Retroceder hasta el lunes anterior al primer día del mes
+        const diaInicio = fechaActual.getDay();
+        const diasHastaLunes = diaInicio === 0 ? -6 : (1 - diaInicio);
+        fechaActual.setDate(fechaActual.getDate() + diasHastaLunes);
+        
+        // Iterar por todas las semanas que tocan el mes
         while (fechaActual <= ultimoDiaDelMes) {
             const infoSemanaActual = generarInfoSemana(fechaActual);
             
-            // Verificar si esta semana ya está en el array (evitar duplicados)
+            // Contar cuántos días de esta semana ISO caen dentro del mes
+            const lunesSemana = new Date(infoSemanaActual.fechaInicio);
+            const domingoSemana = new Date(infoSemanaActual.fechaFin);
+            
+            let diasEnElMes = 0;
+            for (let d = new Date(lunesSemana); d <= domingoSemana; d.setDate(d.getDate() + 1)) {
+                if (d.getMonth() === mes - 1 && d.getFullYear() === año) {
+                    diasEnElMes++;
+                }
+            }
+            
+            // Solo incluir la semana si la MAYORÍA de sus días (4 o más) caen en este mes
             const yaExiste = semanasDelMes.some(s => 
                 s.año === infoSemanaActual.año && 
                 s.semanaISO === infoSemanaActual.semanaISO
             );
             
-            if (!yaExiste) {
-                semanasDelMes.push(infoSemanaActual);
+            if (!yaExiste && diasEnElMes >= 4) {
+                semanasDelMes.push({
+                    ...infoSemanaActual,
+                    diasEnMes: diasEnElMes
+                });
             }
             
             // Avanzar 7 días

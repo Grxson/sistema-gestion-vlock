@@ -164,20 +164,20 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
     return idx >= 0 ? (idx + 1) : null;
   };
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     if (!empleadoId) return;
     setLoading(true);
     setError(null);
     try {
       // Intentar cache
       const cached = HIST_CACHE.get(empleadoId);
-      if (cached && (Date.now() - cached.timestamp) < HIST_TTL) {
+      if (!force && cached && (Date.now() - cached.timestamp) < HIST_TTL) {
         setNominas(cached.data);
         setLoading(false);
         return;
       }
-      // Obtener nóminas SOLO del empleado seleccionado desde el backend
-      const res = await apiService.getNominasPorEmpleado(empleadoId);
+  // Obtener nóminas SOLO del empleado seleccionado desde el backend (bypass cache ApiService si force)
+  const res = await apiService.getNominasPorEmpleado(empleadoId, { noCache: force });
       const lista = res?.data || res?.nominas || res || [];
       const base = Array.isArray(lista) ? lista : [];
       // Enriquecer con proyecto real si falta
@@ -205,7 +205,8 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
 
   useEffect(() => {
     if (open && empleadoId) {
-      loadData();
+      // Al abrir siempre forzar para incluir nóminas recién creadas
+      loadData(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, empleadoId]);
@@ -263,7 +264,7 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      await loadData();
+      await loadData(true); // forzar bypass de caché
     } finally {
       setRefreshing(false);
     }
@@ -301,9 +302,24 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
       // limpiar caché para que no muestre registros obsoletos
       if (empleadoId) HIST_CACHE.delete(empleadoId);
       // El backend debe realizar eliminación completa en cascada (nómina + historial + pagos relacionados)
-      await nominasServices.delete(n.id_nomina || n.id);
+      const deletedId = n.id_nomina || n.id;
+  await nominasServices.delete(deletedId);
+  // Invalidar caché ApiService explícito
+  try { apiService._cache?.delete?.(`GET:/nomina/empleado/${empleadoId}`); } catch(_) {}
       setDeleteModal({ isOpen: false, nomina: null });
-      await loadData();
+      // Refrescar lista del drawer (bypass caché para ver el cambio al instante)
+      await loadData(true);
+      // Notificar globalmente para que otras vistas (tabla principal) se refresquen sin recargar ventana
+      try {
+        const detail = { action: 'deleted', entity: 'nomina', id: deletedId, empleadoId };
+        window.dispatchEvent(new CustomEvent('nomina:changed', { detail }));
+      } catch (e) {
+        // en entornos sin window/customEvent, ignorar
+      }
+      // Cerrar el drawer si ya no quedan nóminas o si el usuario estaba viendo solo una
+      if (!filteredNominas || filteredNominas.length <= 1) {
+        onClose?.();
+      }
     } catch (err) {
       console.error('Error eliminando nómina:', err);
       alert(err.message || 'No se pudo eliminar la nómina');
@@ -449,7 +465,7 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
         onSuccess={async () => {
           setEditingOpen(false);
           setEditingNomina(null);
-          await loadData();
+          await loadData(true);
         }}
       />
 

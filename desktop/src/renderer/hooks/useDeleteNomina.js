@@ -42,6 +42,14 @@ const useDeleteNomina = (onSuccess, onError) => {
           if (response.success) {
             console.log('✅ [ELIMINAR] Nómina eliminada exitosamente');
             onSuccess?.('Nómina eliminada correctamente');
+            // Notificar a otras vistas para refrescar sin recargar la ventana
+            try {
+              const deletedId = nomina.id_nomina || nomina.id;
+              const detail = { action: 'deleted', entity: 'nomina', id: deletedId, empleadoId: empleado?.id_empleado || empleado?.id };
+              window.dispatchEvent(new CustomEvent('nomina:changed', { detail }));
+            } catch (e) {
+              // ignorar en entornos sin window
+            }
           } else {
             console.error('❌ [ELIMINAR] Error en respuesta del servicio:', response);
             onError?.(response.message || 'No se pudo eliminar la nómina');
