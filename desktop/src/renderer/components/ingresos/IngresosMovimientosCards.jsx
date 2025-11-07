@@ -93,7 +93,7 @@ export default function IngresosMovimientosCards({ resumen, globalResumen }) {
         <div className="rounded-lg p-4 shadow bg-white dark:bg-dark-100 border border-blue-300 dark:border-blue-500">
           <div className="flex items-center gap-2 mb-1">
             <span>💰</span>
-            <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Ingresos</div>
+            <div className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400"> </div>
           </div>
           <div className="text-2xl font-semibold text-blue-700 dark:text-blue-400">{formatCurrency(totalIngresos)}</div>
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Total registrado</div>

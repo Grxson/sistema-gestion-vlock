@@ -506,6 +506,8 @@ const createNomina = async (req, res) => {
             id_empleado,
             id_semana: idSemanaCorrecto, // Usar el ID correcto de la semana
             id_proyecto, // Agregamos el ID del proyecto
+            periodo: periodo_anio && periodo_mes ? `${periodo_anio}-${String(periodo_mes).padStart(2, '0')}` : null,
+            semana: semana_del_mes || null,
             dias_laborados: diasLaboradosNum,
             pago_semanal: pagoSemanalNum,
             es_pago_semanal: es_pago_semanal, // Nuevo campo para identificar pago semanal

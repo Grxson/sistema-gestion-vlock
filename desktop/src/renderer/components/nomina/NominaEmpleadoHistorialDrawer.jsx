@@ -146,6 +146,17 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
 
   // Calcula semana del mes (1-5) para una nómina específica usando su periodo y su (anio, semana_iso)
   const getSemanaDelMes = (n) => {
+    // PRIORIDAD 1: Si la nómina tiene el campo 'semana' (número directo 1-5), usarlo
+    if (n?.semana && typeof n.semana === 'number') {
+      return n.semana;
+    }
+    
+    // PRIORIDAD 2: Si viene en el objeto semana como semana_mes o similar
+    if (n?.semana?.semana_mes && typeof n.semana.semana_mes === 'number') {
+      return n.semana.semana_mes;
+    }
+    
+    // PRIORIDAD 3: Recalcular usando semana ISO (último recurso)
     // Derivar periodo si no viene: usar semana.fecha_inicio o createdAt
     let periodo = n?.periodo;
     if (!periodo) {

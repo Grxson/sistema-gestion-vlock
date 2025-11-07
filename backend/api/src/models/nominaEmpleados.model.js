@@ -81,7 +81,18 @@ module.exports = (sequelize) => {
     monto_pagado: {
       type: DataTypes.DECIMAL(10,2),
       allowNull: true,
-      comment: 'Monto realmente pagado al empleado (puede ser menor al monto_total en caso de pago parcial)'
+      defaultValue: 0,
+      comment: 'Monto ya pagado (para pagos parciales)'
+    },
+    periodo: {
+      type: DataTypes.STRING(7),
+      allowNull: true,
+      comment: 'Periodo en formato YYYY-MM'
+    },
+    semana: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      comment: 'Número de semana del mes (1-5)'
     },
     pago_parcial: {
       type: DataTypes.BOOLEAN,

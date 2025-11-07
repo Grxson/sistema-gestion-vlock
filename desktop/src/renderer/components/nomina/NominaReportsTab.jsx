@@ -100,6 +100,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     return {
       empleado: true,
       oficio: true,
+      proyecto: true,
       dias: true,
       sueldo: true,
       horasExtra: true,
@@ -116,6 +117,16 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   });
   const [showColsPicker, setShowColsPicker] = useState(false);
   const [showColsPopover, setShowColsPopover] = useState(false);
+  
+  // Estado para mostrar/ocultar filtros en tabla detallada
+  const [showFiltersDetailed, setShowFiltersDetailed] = useState(() => {
+    try {
+      const saved = localStorage.getItem('nominaTablaDetallada_showFilters');
+      return saved ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
 
   // Restaurar filtros del tab Weekly Reports
   useEffect(() => {
@@ -149,6 +160,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       localStorage.setItem('nominaTablaDetallada_visibleCols', JSON.stringify(visibleCols));
     } catch {}
   }, [visibleCols]);
+  
+  // Guardar estado de visibilidad de filtros
+  useEffect(() => {
+    try {
+      localStorage.setItem('nominaTablaDetallada_showFilters', JSON.stringify(showFiltersDetailed));
+    } catch {}
+  }, [showFiltersDetailed]);
 
   const toggleCol = (key) => setVisibleCols((v) => ({ ...v, [key]: !v[key] }));
 
@@ -183,6 +201,12 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   };
   const getMonto = (n) => {
     const v = parseFloat(n?.monto_total ?? n?.monto ?? n?.pago_semanal ?? 0);
+    return Number.isFinite(v) ? v : 0;
+  };
+  
+  // Helper para obtener sueldo base
+  const getSueldoBase = (n) => {
+    const v = parseFloat(n?.pago_semanal ?? 0);
     return Number.isFinite(v) ? v : 0;
   };
 
@@ -244,11 +268,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       return est === 'pendiente' || est === 'borrador' || est === 'en_proceso' || est === 'en proceso' || est === 'parcial';
     };
     const sum = (arr) => arr.reduce((acc, n) => acc + getMonto(n), 0);
+    const sumSueldoBase = (arr) => arr.reduce((acc, n) => acc + getSueldoBase(n), 0);
     const pagadas = filteredNominas.filter(isPagada);
     const pendientes = filteredNominas.filter(isPendienteOParcial);
     return {
       totalPagado: sum(pagadas),
       totalPendiente: sum(pendientes),
+      totalPendienteSueldoBase: sumSueldoBase(pendientes), // Nueva suma de sueldos base
       countPagadas: pagadas.length,
       countPendientes: pendientes.length,
       countTotal: filteredNominas.length,
@@ -257,6 +283,17 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
   // Helper: calcular semana del mes usando ISO de la nómina si existe
   const computeSemanaDelMes = (n) => {
+    // PRIORIDAD 1: Si la nómina tiene el campo 'semana' (número directo 1-5), usarlo
+    if (n?.semana && typeof n.semana === 'number') {
+      return n.semana;
+    }
+    
+    // PRIORIDAD 2: Si viene en el objeto semana como semana_mes o similar
+    if (n?.semana?.semana_mes && typeof n.semana.semana_mes === 'number') {
+      return n.semana.semana_mes;
+    }
+    
+    // PRIORIDAD 3: Recalcular usando semana ISO
     const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt || n?.fecha_creacion;
     if (n?.semana?.anio && n?.semana?.semana_iso) {
       // Derivar período desde la fecha base (YYYY-MM)
@@ -373,6 +410,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         return {
           'Empleado': empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado',
           'Oficio': empleado?.oficio?.nombre || 'Sin oficio',
+          'Proyecto': nomina.proyecto?.nombre || 'Sin proyecto',
           'Días Laborados': diasLaborados,
           'Sueldo Base': sueldoBase,
           'Horas Extra': horasExtra,
@@ -405,6 +443,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       datosExcel.push({
         'Empleado': 'TOTALES',
         'Oficio': `${nominasToExport.length} empleados`,
+        'Proyecto': '-',
         'Días Laborados': '-',
         'Sueldo Base': totalSueldoBase,
         'Horas Extra': totalHorasExtra,
@@ -428,6 +467,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       const colWidths = [
         { wch: 25 }, // Empleado
         { wch: 20 }, // Oficio
+        { wch: 20 }, // Proyecto
         { wch: 10 }, // Días Laborados
         { wch: 12 }, // Sueldo Base
         { wch: 12 }, // Horas Extra
@@ -447,8 +487,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       // Aplicar formato de número a las columnas numéricas
       const range = XLSX.utils.decode_range(ws['!ref']);
       for (let row = range.s.r + 1; row <= range.e.r; row++) {
-        // Columnas: D=Sueldo Base, E=Horas Extra, F=Bonos, G=ISR, H=IMSS, I=Infonavit, J=Descuentos, L=Total a Pagar
-        ['D', 'E', 'F', 'G', 'H', 'I', 'J', 'L'].forEach(col => {
+        // Columnas: E=Sueldo Base, F=Horas Extra, G=Bonos, H=ISR, I=IMSS, J=Infonavit, K=Descuentos, M=Total a Pagar
+        ['E', 'F', 'G', 'H', 'I', 'J', 'K', 'M'].forEach(col => {
           const cellAddress = col + (row + 1);
           if (ws[cellAddress] && typeof ws[cellAddress].v === 'number') {
             ws[cellAddress].t = 'n'; // Tipo número
@@ -1060,9 +1100,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   <div className="text-xs text-gray-500">{totalesFiltrados.countPagadas} nóminas</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
-                  <div className="text-xs text-gray-500">Comprometido (Pendiente/Parcial)</div>
-                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalesFiltrados.totalPendiente)}</div>
-                  <div className="text-xs text-gray-500">{totalesFiltrados.countPendientes} nóminas</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">Comprometido (Pendiente/Parcial)</div>
+                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalesFiltrados.totalPendienteSueldoBase)}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">{totalesFiltrados.countPendientes} nóminas</div>
                 </div>
                 <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
                   <div className="text-xs text-gray-500">Registros filtrados</div>
@@ -1657,6 +1697,17 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   <div className="text-sm text-gray-500 dark:text-gray-400">
                     {filteredNominas?.length || 0} de {nominas?.length || 0} nóminas
                   </div>
+                  {/* Botón para mostrar/ocultar filtros */}
+                  <button
+                    onClick={() => setShowFiltersDetailed(!showFiltersDetailed)}
+                    className="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 text-sm font-medium rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    title={showFiltersDetailed ? 'Ocultar filtros' : 'Mostrar filtros'}
+                  >
+                    <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    {showFiltersDetailed ? 'Ocultar' : 'Mostrar'} Filtros
+                  </button>
                   <button
                     onClick={() => {
                       let suf = '';
@@ -1713,7 +1764,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                               type="button" 
                               className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600" 
                               onClick={()=>{
-                                setVisibleCols({empleado:true,oficio:true,dias:true,sueldo:true,horasExtra:true,bonos:true,isr:true,imss:true,infonavit:true,descuentos:true,semana:true,total:true,tipoPago:true,fecha:true});
+                                setVisibleCols({empleado:true,oficio:true,proyecto:true,dias:true,sueldo:true,horasExtra:true,bonos:true,isr:true,imss:true,infonavit:true,descuentos:true,semana:true,total:true,tipoPago:true,fecha:true});
                               }}
                             >
                               Restablecer
@@ -1726,10 +1777,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           {/* Información básica */}
                           <div>
                             <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Información</div>
-                            <div className="grid grid-cols-2 gap-2">
+                            <div className="grid grid-cols-3 gap-2">
                               {[
                                 ['empleado','Empleado'],
-                                ['oficio','Oficio']
+                                ['oficio','Oficio'],
+                                ['proyecto','Proyecto']
                               ].map(([k,label])=> (
                                 <label key={k} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
                                   <input 
@@ -1833,42 +1885,44 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                 </div>
               </div>
               
-              {/* Filtros alineados (DateRangePicker, Proyecto, Estado, Búsqueda) */}
-              <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rango de fechas</label>
-                    <DateRangePicker
-                      startDate={drStart}
-                      endDate={drEnd}
-                      onStartDateChange={setDrStart}
-                      onEndDateChange={setDrEnd}
-                      showQuickRanges
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
-                    <select value={filtroProyecto} onChange={(e)=>setFiltroProyecto(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-gray-400">
-                      <option value="">Todos</option>
-                      {proyectos.map(p => (
-                        <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
+              {/* Filtros alineados (DateRangePicker, Proyecto, Estado, Búsqueda) - Mostrar/Ocultar */}
+              {showFiltersDetailed && (
+                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
-                      <select value={filtroEstado} onChange={(e)=>setFiltroEstado(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-gray-400">
-                        {['Pagado','Pendiente','Aprobada','Cancelada','Todos'].map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rango de fechas</label>
+                      <DateRangePicker
+                        startDate={drStart}
+                        endDate={drEnd}
+                        onStartDateChange={setDrStart}
+                        onEndDateChange={setDrEnd}
+                        showQuickRanges
+                      />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
-                      <input value={searchText} onChange={(e)=>setSearchText(e.target.value)} placeholder="Empleado o Proyecto" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
+                      <select value={filtroProyecto} onChange={(e)=>setFiltroProyecto(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-gray-400">
+                        <option value="">Todos</option>
+                        {proyectos.map(p => (
+                          <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
+                        <select value={filtroEstado} onChange={(e)=>setFiltroEstado(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-gray-400">
+                          {['Pagado','Pendiente','Aprobada','Cancelada','Todos'].map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
+                        <input value={searchText} onChange={(e)=>setSearchText(e.target.value)} placeholder="Empleado o Proyecto" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
+              )}
               
               {filteredNominas && filteredNominas.length > 0 ? (
                 <div className="overflow-x-auto">
@@ -1880,6 +1934,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         </th>
                         <th className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.oficio ? 'hidden' : ''}`}>
                           Oficio
+                        </th>
+                        <th className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.proyecto ? 'hidden' : ''}`}>
+                          Proyecto
                         </th>
                         <th className={`px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.dias ? 'hidden' : ''}`}>
                           Días Lab.
@@ -1968,6 +2025,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                   {empleado?.oficio?.nombre || 'Sin oficio'}
                                 </div>
                               </td>
+                              <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.proyecto ? 'hidden' : ''}`}>
+                                <div className="text-sm text-gray-900 dark:text-white">
+                                  {nomina.proyecto?.nombre || 'Sin proyecto'}
+                                </div>
+                              </td>
                               <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.dias ? 'hidden' : ''}`}>
                                 <div className="text-sm text-center font-medium text-gray-900 dark:text-white">
                                   {diasLaborados}
@@ -2046,6 +2108,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         {visibleCols.oficio && (
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm text-gray-500 dark:text-gray-400">{filteredNominas.length} empleados</div>
+                          </td>
+                        )}
+                        {visibleCols.proyecto && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-500 dark:text-gray-400">-</div>
                           </td>
                         )}
                         {visibleCols.dias && (

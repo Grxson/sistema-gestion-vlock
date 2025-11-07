@@ -1366,9 +1366,20 @@ export default function Nomina() {
                         const d = new Date(b);
                         return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
                       })();
-                      // Calcular Semana (1-5) del mes a partir de la semana ISO que toca el mes
+                      // Calcular Semana (1-5) del mes - PRIORIDAD: usar valor guardado directamente
                       const semanaMes = (() => {
                         try {
+                          // PRIORIDAD 1: Usar valor directo si existe (nuevo campo guardado)
+                          if (n?.semana && typeof n.semana === 'number') {
+                            return n.semana;
+                          }
+                          
+                          // PRIORIDAD 2: Si viene del join con semanas_nomina
+                          if (n?.semana?.semana_mes && typeof n.semana.semana_mes === 'number') {
+                            return n.semana.semana_mes;
+                          }
+                          
+                          // PRIORIDAD 3: Recalcular desde semana ISO (fallback para nóminas antiguas)
                           const periodo = periodoLabel;
                           if (!periodo || !n?.semana?.anio || !n?.semana?.semana_iso) return '—';
                           const [yStr, mStr] = periodo.split('-');
