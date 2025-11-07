@@ -11,8 +11,10 @@ export default function IngresosMovimientosFilters({ filters, onChange, proyecto
       <div className="md:col-span-2">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rango de Fechas</label>
         <DateRangePicker
-          startDate={drStart||''}
-          endDate={drEnd||''}
+          startDate={drStart || ''}
+          endDate={drEnd || ''}
+          onStartDateChange={(startDate) => set({ drStart: startDate })}
+          onEndDateChange={(endDate) => set({ drEnd: endDate })}
           onChange={({ startDate, endDate }) => set({ drStart: startDate, drEnd: endDate })}
         />
       </div>

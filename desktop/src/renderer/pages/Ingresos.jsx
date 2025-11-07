@@ -11,7 +11,6 @@ import useIngresosMovimientosData from '../hooks/ingresos/useIngresosMovimientos
 import IngresosMovimientosFilters from '../components/ingresos/IngresosMovimientosFilters';
 import IngresosMovimientosCards from '../components/ingresos/IngresosMovimientosCards';
 import IngresosMovimientosTable from '../components/ingresos/IngresosMovimientosTable';
-import IngresosMovimientosProyectos from '../components/ingresos/IngresosMovimientosProyectos';
 
 export default function Ingresos() {
   const { ingresos, loading, error, proyectos, filters, setFilters, reload, createIngreso, updateIngreso, deleteIngreso, page, setPage, limit, setLimit, total, stats } = useIngresosData();
@@ -107,17 +106,6 @@ export default function Ingresos() {
               Filtra por rango de fechas, proyecto, tipo y fuente para analizar los movimientos.
             </div>
           </div>
-
-          {/* Resumen por proyecto - TERCERO */}
-          <div className="bg-white dark:bg-dark-100 shadow sm:rounded-md p-4">
-            <IngresosMovimientosProyectos
-              filteredData={movimientos.capitalPorProyecto}
-              globalData={movimientos.globalResumen?.porProyecto || []}
-              view={resumenProyectoView}
-              onViewChange={setResumenProyectoView}
-            />
-          </div>
-
           {/* Tabla movimientos - CUARTO */}
           <div className="bg-white dark:bg-dark-100 shadow sm:rounded-md">
             <IngresosMovimientosTable

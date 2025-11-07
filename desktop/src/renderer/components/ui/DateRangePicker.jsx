@@ -7,6 +7,8 @@ const DateRangePicker = ({
   endDate,
   onStartDateChange = () => {},
   onEndDateChange = () => {},
+  // Nuevo: callback combinado opcional
+  onChange, // ( { startDate, endDate } )
   startLabel = "Fecha Inicio",
   endLabel = "Fecha Fin",
   className = "",
@@ -48,6 +50,9 @@ const DateRangePicker = ({
     }
     
     onStartDateChange(date);
+    if (onChange) {
+      onChange({ startDate: date, endDate });
+    }
   };
 
   const handleEndDateChange = (date) => {
@@ -60,6 +65,9 @@ const DateRangePicker = ({
     }
     
     onEndDateChange(date);
+    if (onChange) {
+      onChange({ startDate, endDate: date });
+    }
   };
 
   const getQuickRanges = () => {
@@ -126,6 +134,10 @@ const DateRangePicker = ({
       setActiveFilter(range.label);
       handleStartDateChange(range.start);
       handleEndDateChange(range.end);
+      // Asegurarnos de disparar una sola vez el cambio combinado tras seleccionar ambos
+      if (onChange) {
+        onChange({ startDate: range.start, endDate: range.end });
+      }
     }
   };
 

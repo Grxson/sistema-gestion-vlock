@@ -122,7 +122,23 @@ class ApiService {
    * @returns {Promise<object>} - La respuesta del servidor
    */
   async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
+    // Construir URL con query params si vienen en options.params
+    let url = `${this.baseURL}${endpoint}`;
+    if (options && options.params) {
+      try {
+        const qs = options.params instanceof URLSearchParams
+          ? options.params.toString()
+          : new URLSearchParams(options.params).toString();
+        if (qs) {
+          url += (url.includes('?') ? '&' : '?') + qs;
+        }
+      } catch (e) {
+        console.warn('[API] No se pudo serializar params:', e?.message);
+      }
+      // Evitar pasar "params" a fetch
+      delete options.params;
+    }
+
     const config = {
       ...options,
       headers: this.getHeaders(options.auth !== false, options),

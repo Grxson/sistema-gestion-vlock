@@ -331,10 +331,18 @@ const Suministros = () => {
   });
 
   useEffect(() => {
+    // Cargar datos principales inmediatamente
     loadData();
-    loadCategorias();
-    loadUnidades();
-  }, []);
+    
+    // Lazy load: cargar categorías y unidades después de un breve delay
+    // para no bloquear el render inicial
+    const timer = setTimeout(() => {
+      loadCategorias();
+      loadUnidades();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [loadData, loadCategorias, loadUnidades]);
 
   // Efecto para implementar debouncing en la búsqueda (optimización de rendimiento)
   useEffect(() => {
@@ -385,6 +393,7 @@ const Suministros = () => {
         params.tipo_categoria = filters.tipo_categoria;
       }
 
+      // Cargar datos en paralelo para optimizar velocidad
       const [suministrosResponse, proyectosResponse, proveedoresResponse] = await Promise.all([
         api.getSuministros(params),
         api.getProyectos(),
@@ -403,7 +412,6 @@ const Suministros = () => {
         setProveedores(proveedoresResponse.data || []);
       }
     } catch (error) {
-      console.error('Error cargando datos:', error);
       showError(
         'Error de conexión',
         'No se pudieron cargar los datos. Verifica tu conexión e intenta nuevamente.'
@@ -411,7 +419,7 @@ const Suministros = () => {
     } finally {
       setLoading(false);
     }
-  }, [filters.tipo_categoria]);
+  }, [filters.tipo_categoria, showError]);
 
   // Función para cargar categorías dinámicas desde la API
   const loadCategorias = useCallback(async () => {
@@ -420,12 +428,11 @@ const Suministros = () => {
       if (response.success) {
         const categoriasAPI = response.data || [];
         setCategoriasDinamicas(categoriasAPI);
-        setCategorias(categoriasAPI); // También actualizar el estado categorias
-        setCategoriasCargadas(true); // Marcar que las categorías se cargaron
-        console.log('✅ Categorías cargadas dinámicamente:', categoriasAPI.length);
+        setCategorias(categoriasAPI);
+        setCategoriasCargadas(true);
       }
     } catch (error) {
-      console.error('❌ Error cargando categorías:', error);
+      // Error silencioso para no sobrecargar la consola
       setCategoriasDinamicas([]);
       setCategorias([]);
       setCategoriasCargadas(false);
@@ -447,10 +454,9 @@ const Suministros = () => {
         });
         setUnidadesMedida(unidadesFormato);
         setUnidadesCargadas(true);
-        console.log('✅ Unidades cargadas dinámicamente:', unidadesAPI.length);
       }
     } catch (error) {
-      console.error('❌ Error cargando unidades:', error);
+      // Error silencioso
       setUnidadesDinamicas([]);
       setUnidadesCargadas(false);
     }
@@ -463,13 +469,12 @@ const Suministros = () => {
 
   // Función para manejar actualización de categorías
   const handleCategoriasUpdated = useCallback(() => {
-    loadCategorias(); // Recargar categorías cuando se actualicen
+    loadCategorias();
     // Si las gráficas están abiertas, recargarlas también
     if (activeTab === 'reportes') {
-      console.log('🔄 Categorías actualizadas desde modal, recargando gráficas...');
       setTimeout(() => {
         loadChartData();
-      }, 500); // Pequeño delay para asegurar que las categorías se cargaron
+      }, 500);
     }
   }, [loadCategorias, activeTab]);
 
@@ -481,8 +486,6 @@ const Suministros = () => {
       if (response.success) {
         setEstadisticasTipo(response.data);
       }
-    } catch (error) {
-      console.error('Error cargando estadísticas:', error);
     } finally {
       setLoadingEstadisticas(false);
     }
@@ -865,13 +868,11 @@ const Suministros = () => {
   const openChartModal = (chartConfig) => {
     // Validar que los datos existan y tengan la estructura correcta
     if (!chartConfig || !chartConfig.data) {
-      console.warn('ChartModal: No se proporcionaron datos válidos para la gráfica');
       return;
     }
 
     // Validar que los datasets existan
     if (!chartConfig.data.datasets || !Array.isArray(chartConfig.data.datasets)) {
-      console.warn('ChartModal: Los datasets no están definidos o no son un array');
       return;
     }
 
@@ -924,7 +925,6 @@ const Suministros = () => {
 
       return validation.duplicateItems;
     } catch (error) {
-      console.error('Error en verificación de duplicados:', error);
       // En caso de error, devolver array vacío para evitar crashes
       return [];
     }
@@ -962,7 +962,6 @@ const Suministros = () => {
         setShowDuplicatesWarning(false);
       }
     } catch (error) {
-      console.error('Error en búsqueda de duplicados:', error);
       setDuplicatesSuggestions([]);
       setShowDuplicatesWarning(false);
     }
@@ -1287,7 +1286,6 @@ const Suministros = () => {
         handleCloseModal();
       }
     } catch (error) {
-      console.error('Error guardando suministro:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
       showError(
         'Error al guardar',
@@ -1409,7 +1407,6 @@ const Suministros = () => {
       setShowMultipleModal(false);
       setEditingRecibo(null);
     } catch (error) {
-      console.error('Error guardando múltiples suministros:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
       const action = editingRecibo ? 'actualizar' : 'crear';
       showError(
@@ -1443,7 +1440,6 @@ const Suministros = () => {
       
       await loadData();
     } catch (error) {
-      console.error('Error eliminando grupo:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
       setNotificationModal({
         open: true,
@@ -1568,7 +1564,6 @@ const Suministros = () => {
         await loadData();
       }
     } catch (error) {
-      console.error('Error eliminando suministro:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Error desconocido';
       setNotificationModal({
         open: true,
@@ -1593,7 +1588,6 @@ const Suministros = () => {
       await generateImportTemplate(proyectos, proveedores);
       showSuccess('Plantilla descargada', 'La plantilla Excel ha sido descargada correctamente');
     } catch (error) {
-      console.error('Error descargando plantilla:', error);
       showError('Error', 'No se pudo descargar la plantilla');
     }
   };
@@ -1645,7 +1639,6 @@ const Suministros = () => {
       
       showSuccess('Exportación exitosa', 'El análisis se ha exportado como PNG correctamente');
     } catch (error) {
-      console.error('Error al exportar PNG:', error);
       showError('Error', 'No se pudo exportar la imagen PNG');
     }
   };
@@ -1911,7 +1904,6 @@ const Suministros = () => {
       
       showSuccess('Exportación exitosa', 'El análisis se ha exportado como PDF profesional correctamente');
     } catch (error) {
-      console.error('Error al exportar PDF:', error);
       showError('Error', 'No se pudo exportar el archivo PDF');
     }
   };
@@ -1943,7 +1935,6 @@ const Suministros = () => {
         );
       }
     } catch (error) {
-      console.error('Error procesando archivo:', error);
       showError('Error', 'No se pudo procesar el archivo');
       setImportErrors([{ row: 0, message: 'Error al leer el archivo' }]);
     } finally {
@@ -2550,12 +2541,10 @@ const Suministros = () => {
 
   // Calcular estadísticas generales y filtradas - MEMOIZADAS para mejor rendimiento
   const stats = useMemo(() => {
-    console.log('🔄 Recalculando stats generales...');
     return calculateGeneralStats();
   }, [suministros, combinedData, categoriasDinamicas]);
 
   const filteredStats = useMemo(() => {
-    console.log('🔄 Recalculando stats filtradas...');
     return calculateFilteredStats();
   }, [filteredSuministros, combinedData, filters, debouncedSearchTerm, categoriasDinamicas]);
 
