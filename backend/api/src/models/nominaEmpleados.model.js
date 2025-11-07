@@ -129,7 +129,18 @@ module.exports = (sequelize) => {
     NominaEmpleado.belongsTo(models.Empleados, { foreignKey: 'id_empleado', as: 'empleado' });
     NominaEmpleado.belongsTo(models.Semanas_nomina, { foreignKey: 'id_semana', as: 'semana' });
     NominaEmpleado.hasMany(models.Pagos_nomina, { foreignKey: 'id_nomina', as: 'pagos_nominas' });
+    // Asociación principal al proyecto (alias canónico)
     NominaEmpleado.belongsTo(models.Proyectos, { foreignKey: 'id_proyecto', as: 'proyecto' });
+    // Alias alternativo para compatibilidad con includes que usan 'proyectos'
+    // Evita errores del tipo: "proyectos is not associated to nomina_empleado"
+    // cuando algún include omite el 'as' o usa el plural por convención.
+    if (!NominaEmpleado.associations?.proyectos) {
+      try {
+        NominaEmpleado.belongsTo(models.Proyectos, { foreignKey: 'id_proyecto', as: 'proyectos' });
+      } catch (_) {
+        // Ignorar si ya existe o si Sequelize impide redefinir; es solo compatibilidad.
+      }
+    }
   };
 
   return NominaEmpleado;

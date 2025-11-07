@@ -95,17 +95,41 @@ async function registrarMovimientoNomina(nominaInstance, options = {}) {
  */
 const getAllNominas = async (req, res) => {
     try {
-        const nominas = await NominaEmpleado.findAll({
-            include: [
-                { model: Empleado, as: 'empleado' },
-                { model: SemanaNomina, as: 'semana' },
-                { model: Proyecto, as: 'proyecto' }
-            ]
-        });
+        // Compatibilidad: si en alguna versión antigua el frontend pedía alias 'proyectos',
+        // evitamos el 500 construyendo el include solo con los alias realmente registrados.
+        const asociaciones = NominaEmpleado.associations || {};
+        const incluyeProyecto = asociaciones.proyecto ? { model: Proyecto, as: 'proyecto' } : null;
+        const incluyeProyectoPlural = asociaciones.proyectos ? { model: Proyecto, as: 'proyectos' } : null;
+
+        const includeList = [
+            { model: Empleado, as: 'empleado' },
+            { model: SemanaNomina, as: 'semana' }
+        ];
+
+        if (incluyeProyecto) includeList.push(incluyeProyecto);
+        // Solo añadimos el plural si existe realmente la asociación para evitar el error:
+        // "proyectos is not associated to nomina_empleado!"
+        if (incluyeProyectoPlural) includeList.push(incluyeProyectoPlural);
+
+        if (!incluyeProyecto && !incluyeProyectoPlural) {
+            console.warn('⚠️ [GET_NOMINAS] Sin asociación de proyecto en nomina_empleado. Revisar modelo.');
+        } else if (incluyeProyecto && incluyeProyectoPlural) {
+            console.log('ℹ️ [GET_NOMINAS] Asociaciones disponibles: proyecto y proyectos (modo compatibilidad).');
+        } else if (incluyeProyecto) {
+            console.log('ℹ️ [GET_NOMINAS] Usando alias de proyecto: proyecto');
+        } else if (incluyeProyectoPlural) {
+            console.log('ℹ️ [GET_NOMINAS] Usando alias de proyecto (plural): proyectos');
+        }
+
+        const nominas = await NominaEmpleado.findAll({ include: includeList });
 
         res.status(200).json({
             message: 'Nóminas obtenidas exitosamente',
-            nominas
+            nominas,
+            compatibilidad_proyecto: {
+                proyecto: Boolean(incluyeProyecto),
+                proyectos: Boolean(incluyeProyectoPlural)
+            }
         });
     } catch (error) {
         console.error('Error al obtener nóminas:', error);
