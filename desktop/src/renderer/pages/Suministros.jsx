@@ -330,19 +330,8 @@ const Suministros = () => {
     hora_fin_descarga: ''
   });
 
-  useEffect(() => {
-    // Cargar datos principales inmediatamente
-    loadData();
-    
-    // Lazy load: cargar categorías y unidades después de un breve delay
-    // para no bloquear el render inicial
-    const timer = setTimeout(() => {
-      loadCategorias();
-      loadUnidades();
-    }, 100);
-
-    return () => clearTimeout(timer);
-  }, [loadData, loadCategorias, loadUnidades]);
+  // Nota: El efecto de carga inicial se declara más abajo, después de definir
+  // loadData, loadCategorias y loadUnidades para evitar referencias antes de inicialización.
 
   // Efecto para implementar debouncing en la búsqueda (optimización de rendimiento)
   useEffect(() => {
@@ -495,6 +484,21 @@ const Suministros = () => {
   useEffect(() => {
     loadEstadisticasTipo();
   }, [loadEstadisticasTipo]);
+
+  // Efecto de carga inicial (después de definir loadData, loadCategorias y loadUnidades)
+  useEffect(() => {
+    // Cargar datos principales inmediatamente
+    loadData();
+
+    // Lazy load: cargar categorías y unidades después de un breve delay
+    // para no bloquear el render inicial
+    const timer = setTimeout(() => {
+      loadCategorias();
+      loadUnidades();
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [loadData, loadCategorias, loadUnidades]);
 
 
   // Función para obtener colores según el tema - Mejorada

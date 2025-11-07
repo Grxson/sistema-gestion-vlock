@@ -8,16 +8,21 @@ const { Op } = require('sequelize');
 exports.listarMovimientos = async (req, res) => {
   try {
     const { drStart, drEnd, proyectoId, tipo, fuente } = req.query;
-    
+
     const where = {};
-    
-    // Filtro por rango de fechas
+
+    // Nuevo: filtrar por createdAt (timestamp completo) en lugar de campo fecha (DATEONLY)
+    // Normalizamos el rango para incluir todo el día (00:00:00 a 23:59:59.999)
     if (drStart && drEnd) {
-      where.fecha = { [Op.between]: [drStart, drEnd] };
+      const start = new Date(drStart + 'T00:00:00.000Z');
+      const end = new Date(drEnd + 'T23:59:59.999Z');
+      where.createdAt = { [Op.between]: [start, end] };
     } else if (drStart) {
-      where.fecha = { [Op.gte]: drStart };
+      const start = new Date(drStart + 'T00:00:00.000Z');
+      where.createdAt = { [Op.gte]: start };
     } else if (drEnd) {
-      where.fecha = { [Op.lte]: drEnd };
+      const end = new Date(drEnd + 'T23:59:59.999Z');
+      where.createdAt = { [Op.lte]: end };
     }
     
     // Filtro por proyecto
@@ -38,7 +43,7 @@ exports.listarMovimientos = async (req, res) => {
     // Obtener movimientos sin includes (más simple y seguro)
     const movimientos = await models.ingresos_movimientos.findAll({
       where,
-      order: [['fecha', 'DESC'], ['id_movimiento', 'DESC']],
+      order: [['createdAt', 'DESC'], ['id_movimiento', 'DESC']],
       raw: true
     });
 
@@ -65,6 +70,8 @@ exports.listarMovimientos = async (req, res) => {
 
     // Calcular resumen extendido y capital por proyecto
     const filtrosResumen = {
+      // Mantener compatibilidad interna: pasar las fechas originales para métodos que aún usan campo 'fecha'
+      // (Se puede adaptar luego si se desea usar createdAt también allí)
       fechaInicio: drStart || undefined,
       fechaFin: drEnd || undefined,
       id_proyecto: proyectoId || undefined,
@@ -78,7 +85,9 @@ exports.listarMovimientos = async (req, res) => {
     // Formatear movimientos para el frontend
     const movimientosFormateados = movimientos.map(mov => ({
       id_mov: mov.id_movimiento,
-      fecha: mov.fecha,
+      // Exponer 'fecha' como la fecha original del movimiento y 'createdAt' explícitamente
+      fecha: mov.fecha, // campo lógico original
+      createdAt: mov.createdAt,
       proyecto_id: mov.id_proyecto,
       proyecto_nombre: proyectosMap[mov.id_proyecto] || null,
       tipo: mov.tipo,

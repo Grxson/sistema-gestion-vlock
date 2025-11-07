@@ -24,7 +24,15 @@ export default function Ingresos() {
 
   return (
     <div className="space-y-6">
-      <IngresosHeader onNew={() => { setEditing(null); setShowModal(true); }} onRefresh={reload} />
+      <IngresosHeader 
+        onNew={() => { setEditing(null); setShowModal(true); }} 
+        onRefresh={() => { 
+          // Refrescar ingresos (tabla y cards)
+          reload(); 
+          // También refrescar movimientos si está la pestaña activa o por coherencia
+          if (movimientos?.reload) movimientos.reload(); 
+        }} 
+      />
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-700">

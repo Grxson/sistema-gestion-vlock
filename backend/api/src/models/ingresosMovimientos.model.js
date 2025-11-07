@@ -307,12 +307,17 @@ module.exports = (sequelize) => {
     if (filtros.tipo) where.tipo = filtros.tipo;
     if (filtros.fuente) where.fuente = filtros.fuente;
 
+    // Usar createdAt por defecto para filtros de rango de fechas (incluye tiempo)
     if (filtros.fechaInicio && filtros.fechaFin) {
-      where.fecha = { [Op.between]: [filtros.fechaInicio, filtros.fechaFin] };
+      const start = new Date(filtros.fechaInicio + 'T00:00:00.000Z');
+      const end = new Date(filtros.fechaFin + 'T23:59:59.999Z');
+      where.createdAt = { [Op.between]: [start, end] };
     } else if (filtros.fechaInicio) {
-      where.fecha = { [Op.gte]: filtros.fechaInicio };
+      const start = new Date(filtros.fechaInicio + 'T00:00:00.000Z');
+      where.createdAt = { [Op.gte]: start };
     } else if (filtros.fechaFin) {
-      where.fecha = { [Op.lte]: filtros.fechaFin };
+      const end = new Date(filtros.fechaFin + 'T23:59:59.999Z');
+      where.createdAt = { [Op.lte]: end };
     }
 
     const [resultado] = await this.findAll({
@@ -333,7 +338,7 @@ module.exports = (sequelize) => {
     // Primer ingreso como monto inicial (si aplica filtros que lo contemplen)
     const primerIngreso = await this.findOne({
       where: { ...where, tipo: 'ingreso' },
-      order: [['fecha', 'ASC'], ['id_movimiento', 'ASC']]
+      order: [['createdAt', 'ASC'], ['id_movimiento', 'ASC']]
     });
 
     const montoInicial = primerIngreso ? parseFloat(primerIngreso.monto) || 0 : 0;
@@ -358,11 +363,15 @@ module.exports = (sequelize) => {
     if (filtros.fuente) where.fuente = filtros.fuente;
     if (filtros.tipo) where.tipo = filtros.tipo;
     if (filtros.fechaInicio && filtros.fechaFin) {
-      where.fecha = { [Op.between]: [filtros.fechaInicio, filtros.fechaFin] };
+      const start = new Date(filtros.fechaInicio + 'T00:00:00.000Z');
+      const end = new Date(filtros.fechaFin + 'T23:59:59.999Z');
+      where.createdAt = { [Op.between]: [start, end] };
     } else if (filtros.fechaInicio) {
-      where.fecha = { [Op.gte]: filtros.fechaInicio };
+      const start = new Date(filtros.fechaInicio + 'T00:00:00.000Z');
+      where.createdAt = { [Op.gte]: start };
     } else if (filtros.fechaFin) {
-      where.fecha = { [Op.lte]: filtros.fechaFin };
+      const end = new Date(filtros.fechaFin + 'T23:59:59.999Z');
+      where.createdAt = { [Op.lte]: end };
     }
 
     if (filtros.id_ingreso) where.id_ingreso = filtros.id_ingreso;

@@ -40,33 +40,40 @@ const DateRangePicker = ({
     }
   }, [startDate, endDate]);
 
+  // Mejorado: Cambios de fecha y rangos rápidos se aplican con un solo clic
   const handleStartDateChange = (date) => {
     setStartError(null);
     setEndError(null);
-    
     if (date && endDate && new Date(date) > new Date(endDate)) {
       setStartError("La fecha de inicio no puede ser posterior a la fecha fin");
       return;
     }
-    
     onStartDateChange(date);
     if (onChange) {
-      onChange({ startDate: date, endDate });
+      // Si se borra la fecha, limpiar ambos
+      if (!date) {
+        onChange({ startDate: '', endDate: '' });
+      } else {
+        onChange({ startDate: date, endDate });
+      }
     }
   };
 
   const handleEndDateChange = (date) => {
     setStartError(null);
     setEndError(null);
-    
     if (date && startDate && new Date(date) < new Date(startDate)) {
       setEndError("La fecha fin no puede ser anterior a la fecha de inicio");
       return;
     }
-    
     onEndDateChange(date);
     if (onChange) {
-      onChange({ startDate, endDate: date });
+      // Si se borra la fecha, limpiar ambos
+      if (!date) {
+        onChange({ startDate: '', endDate: '' });
+      } else {
+        onChange({ startDate, endDate: date });
+      }
     }
   };
 
@@ -127,14 +134,15 @@ const DateRangePicker = ({
     // Si el filtro ya está activo, lo desactivamos (toggle)
     if (activeFilter === range.label) {
       setActiveFilter(null);
-      handleStartDateChange('');
-      handleEndDateChange('');
+      onStartDateChange('');
+      onEndDateChange('');
+      if (onChange) {
+        onChange({ startDate: '', endDate: '' });
+      }
     } else {
-      // Si no está activo, lo activamos
       setActiveFilter(range.label);
-      handleStartDateChange(range.start);
-      handleEndDateChange(range.end);
-      // Asegurarnos de disparar una sola vez el cambio combinado tras seleccionar ambos
+      onStartDateChange(range.start);
+      onEndDateChange(range.end);
       if (onChange) {
         onChange({ startDate: range.start, endDate: range.end });
       }
