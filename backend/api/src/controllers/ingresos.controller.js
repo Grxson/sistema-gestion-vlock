@@ -156,6 +156,29 @@ const createIngreso = async (req, res) => {
       descripcion: descripcion || null,
     });
 
+    // 🆕 Crear movimiento inicial automáticamente
+    try {
+      console.log('📝 Creando movimiento inicial para ingreso:', nuevo.id_ingreso);
+      
+      const MovimientosModel = models.ingresos_movimientos;
+      if (MovimientosModel && MovimientosModel.crearMovimientoInicial) {
+        await MovimientosModel.crearMovimientoInicial({
+          id_ingreso: nuevo.id_ingreso,
+          id_proyecto: nuevo.id_proyecto,
+          fecha: nuevo.fecha,
+          monto: Number(nuevo.monto),
+          descripcion: descripcion || `Ingreso inicial - ${fuente || 'Manual'}`
+        });
+        
+        console.log('✅ Movimiento inicial creado exitosamente');
+      } else {
+        console.warn('⚠️ Modelo de movimientos no disponible o método no existe');
+      }
+    } catch (movError) {
+      // No fallar la creación del ingreso si falla el movimiento
+      console.error('❌ Error al crear movimiento inicial (no crítico):', movError);
+    }
+
     const created = await models.Ingresos.findByPk(nuevo.id_ingreso, {
       include: [{ model: models.Proyectos, as: 'proyecto', attributes: ['id_proyecto', 'nombre'] }],
     });
@@ -197,10 +220,67 @@ const deleteIngreso = async (req, res) => {
     const { id } = req.params;
     const ingreso = await models.Ingresos.findByPk(id);
     if (!ingreso) return res.status(404).json({ success: false, message: 'Ingreso no encontrado' });
+    
+    // 🗑️ Eliminar todos los movimientos asociados a este ingreso
+    try {
+      const MovimientosModel = models.ingresos_movimientos;
+      if (MovimientosModel) {
+        const movimientosEliminados = await MovimientosModel.destroy({
+          where: { id_ingreso: id }
+        });
+        
+        if (movimientosEliminados > 0) {
+          console.log(`✅ Eliminados ${movimientosEliminados} movimiento(s) asociado(s) al ingreso ${id}`);
+        }
+      }
+    } catch (movError) {
+      console.error('⚠️ Error al eliminar movimientos asociados (no crítico):', movError);
+      // No fallar la eliminación del ingreso si falla la eliminación de movimientos
+    }
+    
     await ingreso.destroy();
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleteIngreso:', err);
+    res.status(500).json({ success: false, message: 'Error interno del servidor' });
+  }
+};
+
+/**
+ * Obtener saldo/capital disponible de un ingreso
+ * GET /api/ingresos/:id/saldo
+ */
+const getSaldoIngreso = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Verificar que existe el ingreso
+    const ingreso = await models.Ingresos.findByPk(id);
+    if (!ingreso) {
+      return res.status(404).json({ success: false, message: 'Ingreso no encontrado' });
+    }
+
+    // Obtener resumen de movimientos
+    const MovimientosModel = models.ingresos_movimientos;
+    if (!MovimientosModel || !MovimientosModel.obtenerResumen) {
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Modelo de movimientos no disponible' 
+      });
+    }
+
+    const resumen = await MovimientosModel.obtenerResumen(parseInt(id));
+    
+    res.json({
+      success: true,
+      data: {
+        id_ingreso: parseInt(id),
+        monto_inicial: ingreso.monto,
+        ...resumen
+      }
+    });
+  } catch (err) {
+    console.error('Error getSaldoIngreso:', err);
     res.status(500).json({ success: false, message: 'Error interno del servidor' });
   }
 };
@@ -212,4 +292,5 @@ module.exports = {
   updateIngreso,
   deleteIngreso,
   getEstadisticasIngresos,
+  getSaldoIngreso,
 };

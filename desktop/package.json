@@ -128,7 +128,8 @@
       "category": "Office",
       "maintainer": "Vlock",
       "vendor": "Vlock",
-      "synopsis": "Sistema de Gestión Empresarial"
+"synopsis": "Sistema de Gestión Empresarial",
+      "asar": true
     },
     "nsis": {
       "oneClick": false,

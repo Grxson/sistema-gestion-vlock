@@ -39,6 +39,15 @@ export default function useIngresosData() {
     setLoading(true);
     setError(null);
     try {
+      console.log('🔍 [useIngresosData] Cargando ingresos con filtros:', {
+        id_proyecto: debouncedFilters.id_proyecto,
+        q: debouncedFilters.q,
+        fecha_inicio: debouncedFilters.fecha_inicio,
+        fecha_fin: debouncedFilters.fecha_fin,
+        page,
+        limit
+      });
+      
       const resp = await ingresosService.list({
         id_proyecto: debouncedFilters.id_proyecto || undefined,
         q: debouncedFilters.q || undefined,
@@ -47,12 +56,19 @@ export default function useIngresosData() {
         page,
         limit,
       });
+      
+      console.log('📡 [useIngresosData] Respuesta recibida:', resp);
+      
       // backend puede devolver {success, data, total} o un arreglo directo; soportar ambos
       const data = Array.isArray(resp) ? resp : (resp.data || []);
+      
+      console.log('✅ [useIngresosData] Ingresos procesados:', data.length);
+      
       setIngresos(data);
       if (resp && typeof resp.total === 'number') setTotal(resp.total);
       else setTotal(Array.isArray(data) ? data.length : 0);
     } catch (e) {
+      console.error('❌ [useIngresosData] Error:', e);
       setError(e);
     } finally {
       setLoading(false);

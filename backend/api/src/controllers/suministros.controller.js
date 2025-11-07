@@ -341,24 +341,29 @@ const createSuministro = async (req, res) => {
                     // Obtener información del proveedor para la descripción
                     const proveedor = await models.Proveedores.findByPk(id_proveedor);
                     
-                    const movimiento = await models.ingresos_movimientos.create({
+                    const montoMovimiento = parseFloat(costo_total) || 0;
+
+                    if (montoMovimiento > 0) {
+                        const movimiento = await models.ingresos_movimientos.registrarGasto({
                         id_ingreso: ingresoProyecto.id_ingreso,
-                        id_proyecto: id_proyecto,
-                        tipo: 'gasto',
-                        fuente: 'suministro',
+                        id_proyecto,
+                            monto: montoMovimiento,
+                        fecha: fecha || new Date(),
+                        descripcion: `Suministro - ${nombre || 'Material'} - ${proveedor?.nombre || 'Proveedor'}`,
                         ref_tipo: 'suministro',
                         ref_id: nuevoSuministro.id_suministro,
-                        fecha: fecha || new Date(),
-                        monto: Math.abs(parseFloat(costo_total)),
-                        descripcion: `Suministro - ${nombre || 'Material'} - ${proveedor?.nombre || 'Proveedor'}`
-                    });
-                    
-                    console.log(`✅ Movimiento de suministro registrado exitosamente:`, {
-                        id_movimiento: movimiento.id_movimiento,
-                        proyecto: id_proyecto,
-                        monto: costo_total,
-                        descripcion: movimiento.descripcion
-                    });
+                            fuente: 'suministro'
+                        });
+                        
+                        console.log(`✅ Movimiento de suministro registrado exitosamente:`, {
+                            id_movimiento: movimiento.id_movimiento,
+                            proyecto: id_proyecto,
+                            monto: montoMovimiento,
+                            descripcion: movimiento.descripcion
+                        });
+                    } else {
+                        console.log('ℹ️  Costo total inválido o cero - no se registró movimiento');
+                    }
                 }
             } catch (errorMovimiento) {
                 console.error('⚠️ Error registrando movimiento de suministro:', errorMovimiento);
@@ -479,6 +484,7 @@ const createMultipleSuministros = async (req, res) => {
         try {
             const results = [];
             const createdIds = [];
+            let totalCostoMovimiento = 0;
 
             for (const suministroData of suministros) {
                 // Si se proporciona id_suministro, intentamos actualizar; si no, creamos
@@ -579,6 +585,7 @@ const createMultipleSuministros = async (req, res) => {
 
                         createdIds.push(creado.id_suministro);
                         results.push({ id_suministro: creado.id_suministro, action: 'created', ok: true });
+                        totalCostoMovimiento += parseFloat(creado.costo_total || 0);
                     }
                 } else {
                     // Crear nuevo suministro
@@ -633,6 +640,7 @@ const createMultipleSuministros = async (req, res) => {
 
                     createdIds.push(creado.id_suministro);
                     results.push({ id_suministro: creado.id_suministro, action: 'created', ok: true });
+                    totalCostoMovimiento += parseFloat(creado.costo_total || 0);
                 }
             }
 
@@ -662,6 +670,39 @@ const createMultipleSuministros = async (req, res) => {
                     }
                 ]
             });
+
+            // 🧾 Registrar movimiento agregado del recibo
+            if (id_proyecto && totalCostoMovimiento > 0) {
+                try {
+                    const IngresoModel = models.Ingresos || models.ingresos || models.Ingreso;
+                    if (!IngresoModel) {
+                        throw new Error('Modelo Ingreso no disponible');
+                    }
+
+                    const ingresoProyecto = await IngresoModel.findOne({
+                        where: { id_proyecto },
+                        order: [['fecha', 'DESC']]
+                    });
+
+                    if (ingresoProyecto) {
+                        const proveedor = await models.Proveedores.findByPk(id_proveedor);
+                        await models.ingresos_movimientos.registrarGasto({
+                            id_ingreso: ingresoProyecto.id_ingreso,
+                            id_proyecto,
+                            monto: totalCostoMovimiento,
+                            fecha: fecha || new Date(),
+                            descripcion: `Recibo suministros${folio ? ` ${folio}` : ''} - ${proveedor?.nombre || 'Proveedor'}`,
+                            ref_tipo: 'suministro-multiple',
+                            ref_id: null,
+                            fuente: 'suministro'
+                        });
+                    } else {
+                        console.warn(`⚠️ No se encontró ingreso para registrar movimiento de recibo de suministros del proyecto ${id_proyecto}`);
+                    }
+                } catch (errorMovimiento) {
+                    console.error('⚠️ Error registrando movimiento agregado de suministros:', errorMovimiento);
+                }
+            }
 
             res.status(200).json({
                 success: true,
@@ -852,6 +893,47 @@ const deleteSuministro = async (req, res) => {
                 success: false,
                 message: 'Suministro no encontrado'
             });
+        }
+
+        // 🗑️ Eliminar movimiento asociado si existe
+        try {
+            const MovimientosModel = models.ingresos_movimientos;
+            if (MovimientosModel) {
+                console.log(`🔍 Buscando movimientos para suministro ID: ${id} (folio: ${suministro.folio})`);
+                
+                // Estrategia 1: Buscar por ref_id (suministros individuales)
+                let movimientosEliminados = await MovimientosModel.destroy({
+                    where: {
+                        ref_tipo: {
+                            [models.sequelize.Sequelize.Op.in]: ['suministro', 'suministro-multiple']
+                        },
+                        ref_id: id
+                    }
+                });
+                
+                // Estrategia 2: Si no encontró por ref_id, buscar por descripción que contenga el folio
+                if (movimientosEliminados === 0 && suministro.folio) {
+                    console.log(`🔍 Buscando por folio en descripción: ${suministro.folio}`);
+                    
+                    movimientosEliminados = await MovimientosModel.destroy({
+                        where: {
+                            fuente: 'suministro',
+                            descripcion: {
+                                [models.sequelize.Sequelize.Op.like]: `%${suministro.folio}%`
+                            }
+                        }
+                    });
+                }
+                
+                if (movimientosEliminados > 0) {
+                    console.log(`✅ Eliminados ${movimientosEliminados} movimiento(s) asociado(s) al suministro ${id}`);
+                } else {
+                    console.log(`ℹ️ No se encontraron movimientos asociados al suministro ${id} (folio: ${suministro.folio})`);
+                }
+            }
+        } catch (movError) {
+            console.error('⚠️ Error al eliminar movimientos asociados:', movError);
+            // No fallar la eliminación del suministro si falla la eliminación del movimiento
         }
 
         await suministro.destroy();

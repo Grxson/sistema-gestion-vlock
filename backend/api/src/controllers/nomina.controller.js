@@ -15,6 +15,80 @@ const { generarReciboPDF } = require('./nominaPDF.controller');
 const sequelize = require('../config/db');
 
 /**
+ * Registra un movimiento en el libro de ingresos asociado a una nómina
+ * @param {Object} nominaInstance - Instancia de nómina (Sequelize)
+ * @param {Object} [options]
+ * @param {Date|string} [options.fecha]
+ * @param {string} [options.descripcion]
+ * @param {number} [options.monto]
+ * @param {boolean} [options.forzar]
+ * @param {Object} [options.empleado]
+ * @param {Object} [options.semana]
+ * @returns {Promise<{registrado: boolean, motivo?: string, movimiento?: Object}>}
+ */
+async function registrarMovimientoNomina(nominaInstance, options = {}) {
+    if (!nominaInstance) {
+        return { registrado: false, motivo: 'SIN_NOMINA' };
+    }
+
+    if (!nominaInstance.id_proyecto) {
+        return { registrado: false, motivo: 'SIN_PROYECTO' };
+    }
+
+    const montoMovimiento = parseFloat(options.monto ?? nominaInstance.monto_total) || 0;
+    if (montoMovimiento <= 0) {
+        return { registrado: false, motivo: 'MONTO_NO_POSITIVO' };
+    }
+
+    const movimientosModel = models.ingresos_movimientos;
+
+    if (!options.forzar) {
+        const existente = await movimientosModel.findOne({
+            where: {
+                ref_tipo: 'nomina',
+                ref_id: nominaInstance.id_nomina
+            }
+        });
+
+        if (existente) {
+            return { registrado: false, motivo: 'YA_REGISTRADO', movimiento: existente };
+        }
+    }
+
+    const IngresoModel = models.Ingresos || models.ingresos || models.Ingreso;
+    if (!IngresoModel) {
+        throw new Error('Modelo Ingreso no disponible');
+    }
+
+    const ingresoProyecto = await IngresoModel.findOne({
+        where: { id_proyecto: nominaInstance.id_proyecto },
+        order: [['fecha', 'DESC']]
+    });
+
+    if (!ingresoProyecto) {
+        return { registrado: false, motivo: 'SIN_INGRESO' };
+    }
+
+    const empleado = options.empleado || await Empleado.findByPk(nominaInstance.id_empleado);
+    const semana = options.semana || await SemanaNomina.findByPk(nominaInstance.id_semana);
+
+    const descripcion = options.descripcion || `Pago nómina - ${empleado?.nombre || 'Empleado'}${empleado?.apellido ? ` ${empleado.apellido}` : ''} - Semana ${semana?.semana_iso || nominaInstance.id_semana}`;
+
+    const movimiento = await movimientosModel.registrarGasto({
+        id_ingreso: ingresoProyecto.id_ingreso,
+        id_proyecto: nominaInstance.id_proyecto,
+        monto: montoMovimiento,
+        fecha: options.fecha || new Date(),
+        descripcion,
+        ref_tipo: 'nomina',
+        ref_id: nominaInstance.id_nomina,
+        fuente: 'nomina'
+    });
+
+    return { registrado: true, movimiento };
+}
+
+/**
  * Obtener todas las nóminas
  * @param {Object} req - Objeto de solicitud
  * @param {Object} res - Objeto de respuesta
@@ -725,6 +799,30 @@ const deleteNomina = async (req, res) => {
                 transaction: t
             });
 
+            // 🗑️ Eliminar movimiento asociado en ingresos_movimientos si existe
+            console.log('🔍 [DELETE_NOMINA] Verificando movimientos asociados...');
+            try {
+                const MovimientosModel = models.ingresos_movimientos;
+                if (MovimientosModel) {
+                    const movimientosEliminados = await MovimientosModel.destroy({
+                        where: {
+                            ref_tipo: 'nomina',
+                            ref_id: id
+                        },
+                        transaction: t
+                    });
+                    
+                    if (movimientosEliminados > 0) {
+                        console.log(`✅ [DELETE_NOMINA] Eliminados ${movimientosEliminados} movimiento(s) de capital asociado(s)`);
+                    } else {
+                        console.log(`ℹ️ [DELETE_NOMINA] No se encontraron movimientos de capital asociados`);
+                    }
+                }
+            } catch (movError) {
+                console.error('⚠️ [DELETE_NOMINA] Error al eliminar movimientos (no crítico):', movError);
+                // No fallar la transacción completa si falla esto
+            }
+
             console.log('🔍 [DELETE_NOMINA] Eliminando nómina principal...');
             
             // Eliminar la nómina principal
@@ -789,55 +887,29 @@ const registrarPagoNomina = async (req, res) => {
         // 🆕 Registrar movimiento en ingresos (si la nómina tiene proyecto asociado)
         if (nomina.id_proyecto) {
             try {
-                console.log(`🔍 Intentando registrar movimiento de nómina para proyecto ${nomina.id_proyecto}, monto: ${nomina.monto_total}`);
-                
-                // Buscar el último ingreso del proyecto como referencia
-                // Intentar con diferentes nombres de modelo
-                const IngresoModel = models.Ingresos || models.ingresos || models.Ingreso;
-                
-                if (!IngresoModel) {
-                    console.error('⚠️ Modelo de Ingreso no encontrado en models');
-                    throw new Error('Modelo Ingreso no disponible');
-                }
-                
-                const ingresoProyecto = await IngresoModel.findOne({
-                    where: { id_proyecto: nomina.id_proyecto },
-                    order: [['fecha', 'DESC']]
+                const empleado = await Empleado.findByPk(nomina.id_empleado);
+                const semana = await SemanaNomina.findByPk(nomina.id_semana);
+                const montoMovimiento = parseFloat(monto) || parseFloat(nomina.monto_total) || 0;
+
+                const resultadoMovimiento = await registrarMovimientoNomina(nomina, {
+                    fecha: new Date(),
+                    descripcion: `Pago nómina - ${empleado?.nombre || 'Empleado'}${empleado?.apellido ? ` ${empleado.apellido}` : ''} - Semana ${semana?.semana_iso || nomina.id_semana}`,
+                    monto: montoMovimiento,
+                    empleado,
+                    semana
                 });
-                
-                if (!ingresoProyecto) {
-                    console.warn(`⚠️ No se encontró ingreso para el proyecto ${nomina.id_proyecto}. El movimiento no se registrará.`);
-                    console.warn('💡 Crea un ingreso para este proyecto primero para que se registren los movimientos.');
-                } else {
-                    console.log(`✅ Ingreso encontrado: ID ${ingresoProyecto.id_ingreso}`);
-                    
-                    // Obtener información del empleado para la descripción
-                    const empleado = await models.Empleados.findByPk(nomina.id_empleado);
-                    const semana = await models.Semanas_nomina.findByPk(nomina.id_semana);
-                    
-                    const movimiento = await models.ingresos_movimientos.create({
-                        id_ingreso: ingresoProyecto.id_ingreso,
-                        id_proyecto: nomina.id_proyecto,
-                        tipo: 'gasto',
-                        fuente: 'nomina',
-                        ref_tipo: 'nomina',
-                        ref_id: nomina.id_nomina,
-                        fecha: new Date(),
-                        monto: Math.abs(parseFloat(nomina.monto_total) || 0),
-                        descripcion: `Pago nómina - ${empleado?.nombre || 'Empleado'} - Semana ${semana?.numero_semana || nomina.id_semana}`
-                    });
-                    
-                    console.log(`✅ Movimiento de nómina registrado exitosamente:`, {
-                        id_movimiento: movimiento.id_movimiento,
+
+                if (resultadoMovimiento.registrado) {
+                    console.log('✅ Movimiento de nómina registrado exitosamente:', {
+                        id_movimiento: resultadoMovimiento.movimiento.id_movimiento,
                         proyecto: nomina.id_proyecto,
-                        monto: nomina.monto_total,
-                        descripcion: movimiento.descripcion
+                        monto: montoMovimiento
                     });
+                } else {
+                    console.log(`ℹ️  Movimiento de nómina no registrado (${resultadoMovimiento.motivo})`);
                 }
             } catch (errorMovimiento) {
                 console.error('⚠️ Error registrando movimiento de nómina:', errorMovimiento);
-                console.error('Stack:', errorMovimiento.stack);
-                // No fallar el pago si falla el registro del movimiento
             }
         } else {
             console.log('ℹ️  Nómina sin proyecto - no se registrará movimiento');
@@ -1569,6 +1641,25 @@ const cambiarEstadoNomina = async (req, res) => {
         
         // Actualizar estado
         await nomina.update({ estado });
+
+        // 🆕 Registrar movimiento automático cuando se marca como pagado
+        if (estado === 'Pagado' && estadoActual !== 'Pagado') {
+            try {
+                const resultadoMovimiento = await registrarMovimientoNomina(nomina, {
+                    fecha: new Date()
+                });
+                if (resultadoMovimiento.registrado) {
+                    console.log('✅ Movimiento de nómina registrado (cambio de estado):', {
+                        id_movimiento: resultadoMovimiento.movimiento.id_movimiento,
+                        proyecto: nomina.id_proyecto
+                    });
+                } else {
+                    console.log(`ℹ️  No se registró movimiento en cambio de estado (${resultadoMovimiento.motivo})`);
+                }
+            } catch (errorMovimiento) {
+                console.error('⚠️ Error registrando movimiento durante cambio de estado:', errorMovimiento);
+            }
+        }
 
         // Registrar en historial de nómina
         if (req.usuario) {

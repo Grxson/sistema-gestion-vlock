@@ -6,6 +6,8 @@ async function fetchMovimientos(params) {
   const { drStart, drEnd, proyectoId, tipo, fuente } = params || {};
   
   try {
+    console.log('🌐 [fetchMovimientos] Llamando API con params:', { drStart, drEnd, proyectoId, tipo, fuente });
+    
     // Construir query params
     const queryParams = {};
     if (drStart) queryParams.drStart = drStart;
@@ -17,21 +19,34 @@ async function fetchMovimientos(params) {
     // Llamar al endpoint de movimientos
     const response = await api.get('/movimientos-ingresos', { params: queryParams });
     
-    const movimientos = response.data?.data || [];
-    const resumenData = response.data?.resumen || {
+    console.log('📡 [fetchMovimientos] Respuesta recibida:', response);
+    
+    // La respuesta del backend es { success: true, data: [...], resumen: {...}, capitalPorProyecto: [...] }
+    // El api.get ya devuelve el objeto parseado, no necesitamos .data adicional
+    const movimientos = response.data || [];
+    const resumenData = response.resumen || {
       montoInicial: 0,
       totalIngresos: 0,
       totalGastos: 0,
-      totalAjustes: 0
+      totalAjustes: 0,
+      saldoActual: 0
     };
+    const capitalPorProyecto = response.capitalPorProyecto || [];
 
-    return { rows: movimientos, resumen: resumenData };
+    console.log('✨ [fetchMovimientos] Datos extraídos:', {
+      movimientos: movimientos.length,
+      resumen: resumenData,
+      capitalPorProyecto: capitalPorProyecto.length
+    });
+
+    return { rows: movimientos, resumen: resumenData, capitalPorProyecto };
   } catch (error) {
-    console.error('Error fetching movimientos:', error);
+    console.error('❌ [fetchMovimientos] Error:', error);
     // Retornar datos vacíos en caso de error
     return { 
-      rows: [], 
-      resumen: { montoInicial: 0, totalIngresos: 0, totalGastos: 0, totalAjustes: 0 } 
+      rows: [],
+      resumen: { montoInicial: 0, totalIngresos: 0, totalGastos: 0, totalAjustes: 0, saldoActual: 0 },
+      capitalPorProyecto: []
     };
   }
 }
@@ -39,24 +54,45 @@ async function fetchMovimientos(params) {
 export default function useIngresosMovimientosData(initialFilters) {
   const [filters, setFilters] = useState(initialFilters || {});
   const [data, setData] = useState([]);
-  const [resumen, setResumen] = useState({});
+  const [resumen, setResumen] = useState({ montoInicial: 0, totalIngresos: 0, totalGastos: 0, totalAjustes: 0, saldoActual: 0 });
+  const [capitalPorProyecto, setCapitalPorProyecto] = useState([]);
+  const [globalResumen, setGlobalResumen] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const loadGlobalResumen = useCallback(async () => {
+    try {
+      const response = await api.get('/movimientos-ingresos/resumen/global');
+      setGlobalResumen(response.data?.data || null);
+    } catch (err) {
+      console.error('Error fetching resumen global:', err);
+      setGlobalResumen(null);
+    }
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true); setError(null);
     try {
-      const { rows, resumen } = await fetchMovimientos(filters);
+      console.log('🔍 [useIngresosMovimientosData] Cargando movimientos con filtros:', filters);
+      const { rows, resumen, capitalPorProyecto } = await fetchMovimientos(filters);
+      console.log('✅ [useIngresosMovimientosData] Movimientos recibidos:', {
+        cantidad: rows?.length,
+        resumen,
+        capitalPorProyecto: capitalPorProyecto?.length
+      });
       setData(rows);
       setResumen(resumen);
+      setCapitalPorProyecto(capitalPorProyecto);
+      await loadGlobalResumen();
     } catch (e) {
+      console.error('❌ [useIngresosMovimientosData] Error:', e);
       setError(e.message || 'Error cargando movimientos');
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, [filters, loadGlobalResumen]);
 
   useEffect(() => { load(); }, [load]);
 
-  return { filters, setFilters, data, resumen, loading, error, reload: load };
+  return { filters, setFilters, data, resumen, capitalPorProyecto, globalResumen, loading, error, reload: load };
 }

@@ -11,6 +11,7 @@ import useIngresosMovimientosData from '../hooks/ingresos/useIngresosMovimientos
 import IngresosMovimientosFilters from '../components/ingresos/IngresosMovimientosFilters';
 import IngresosMovimientosCards from '../components/ingresos/IngresosMovimientosCards';
 import IngresosMovimientosTable from '../components/ingresos/IngresosMovimientosTable';
+import IngresosMovimientosProyectos from '../components/ingresos/IngresosMovimientosProyectos';
 
 export default function Ingresos() {
   const { ingresos, loading, error, proyectos, filters, setFilters, reload, createIngreso, updateIngreso, deleteIngreso, page, setPage, limit, setLimit, total, stats } = useIngresosData();
@@ -20,6 +21,7 @@ export default function Ingresos() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [rowToDelete, setRowToDelete] = useState(null);
   const [tab, setTab] = useState('ingresos');
+  const [resumenProyectoView, setResumenProyectoView] = useState('filtrado');
 
   return (
     <div className="space-y-6">
@@ -77,20 +79,46 @@ export default function Ingresos() {
 
       {tab === 'movimientos' && (
         <>
-          {/* Filtros Movimientos */}
+          {/* Cards resumen - PRIMERO */}
+          <div className="bg-white dark:bg-dark-100 shadow sm:rounded-md p-4">
+            <IngresosMovimientosCards
+              resumen={movimientos.resumen}
+              globalResumen={movimientos.globalResumen?.resumen}
+            />
+          </div>
+
+          {/* Filtros Movimientos - SEGUNDO (debajo de las cards) */}
           <div className="bg-white dark:bg-dark-100 shadow sm:rounded-md p-4 space-y-4">
+            <div className="flex items-center gap-2 mb-3">
+              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Filtros de búsqueda</h3>
+            </div>
             <IngresosMovimientosFilters
               filters={movimientos.filters}
               onChange={movimientos.setFilters}
               proyectos={proyectos}
             />
-            <div className="text-xs text-gray-500 dark:text-gray-400">Filtra por rango de fechas, proyecto, tipo y fuente. Datos simulados hasta integrar API real.</div>
-          </div>
-          {/* Cards resumen */}
-            <div className="bg-white dark:bg-dark-100 shadow sm:rounded-md p-4">
-              <IngresosMovimientosCards resumen={movimientos.resumen} />
+            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Filtra por rango de fechas, proyecto, tipo y fuente para analizar los movimientos.
             </div>
-          {/* Tabla movimientos */}
+          </div>
+
+          {/* Resumen por proyecto - TERCERO */}
+          <div className="bg-white dark:bg-dark-100 shadow sm:rounded-md p-4">
+            <IngresosMovimientosProyectos
+              filteredData={movimientos.capitalPorProyecto}
+              globalData={movimientos.globalResumen?.porProyecto || []}
+              view={resumenProyectoView}
+              onViewChange={setResumenProyectoView}
+            />
+          </div>
+
+          {/* Tabla movimientos - CUARTO */}
           <div className="bg-white dark:bg-dark-100 shadow sm:rounded-md">
             <IngresosMovimientosTable
               data={movimientos.data}

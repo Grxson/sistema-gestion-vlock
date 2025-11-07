@@ -12,6 +12,9 @@ router.get('/', ingresosController.getIngresos);
 // Estadísticas
 router.get('/estadisticas', ingresosController.getEstadisticasIngresos);
 
+// Obtener saldo/capital disponible de un ingreso
+router.get('/:id/saldo', ingresosController.getSaldoIngreso);
+
 // Obtener por ID
 router.get('/:id', ingresosController.getIngresoById);
 

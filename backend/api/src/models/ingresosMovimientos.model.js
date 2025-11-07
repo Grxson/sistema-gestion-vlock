@@ -1,4 +1,4 @@
-const { DataTypes } = require('sequelize');
+const { DataTypes, Op } = require('sequelize');
 
 /**
  * Modelo: Movimientos de Ingresos
@@ -268,7 +268,7 @@ module.exports = (sequelize) => {
    * @returns {Promise<IngresosMovimientos>}
    */
   IngresosMovimientos.registrarGasto = async function(data) {
-    const { id_ingreso, monto, fecha, descripcion, ref_tipo, ref_id, id_proyecto } = data;
+    const { id_ingreso, monto, fecha, descripcion, ref_tipo, ref_id, id_proyecto, fuente } = data;
     
     // Obtener saldo actual
     const resumen = await this.obtenerResumen(id_ingreso);
@@ -278,7 +278,7 @@ module.exports = (sequelize) => {
       id_ingreso,
       id_proyecto,
       tipo: 'gasto',
-      fuente: ref_tipo || 'manual',
+      fuente: fuente || ref_tipo || 'manual',
       ref_tipo,
       ref_id,
       fecha,
@@ -286,6 +286,127 @@ module.exports = (sequelize) => {
       descripcion,
       saldo_after: nuevoSaldo
     });
+  };
+
+  /**
+   * Calcula resumen de movimientos considerando filtros opcionales
+   * @param {Object} filtros
+   * @param {number} [filtros.id_ingreso]
+   * @param {number} [filtros.id_proyecto]
+   * @param {string} [filtros.tipo]
+   * @param {string} [filtros.fuente]
+   * @param {string} [filtros.fechaInicio]
+   * @param {string} [filtros.fechaFin]
+   * @returns {Promise<Object>}
+   */
+  IngresosMovimientos.calcularResumen = async function(filtros = {}) {
+    const where = {};
+
+    if (filtros.id_ingreso) where.id_ingreso = filtros.id_ingreso;
+    if (filtros.id_proyecto) where.id_proyecto = filtros.id_proyecto;
+    if (filtros.tipo) where.tipo = filtros.tipo;
+    if (filtros.fuente) where.fuente = filtros.fuente;
+
+    if (filtros.fechaInicio && filtros.fechaFin) {
+      where.fecha = { [Op.between]: [filtros.fechaInicio, filtros.fechaFin] };
+    } else if (filtros.fechaInicio) {
+      where.fecha = { [Op.gte]: filtros.fechaInicio };
+    } else if (filtros.fechaFin) {
+      where.fecha = { [Op.lte]: filtros.fechaFin };
+    }
+
+    const [resultado] = await this.findAll({
+      attributes: [
+        [this.sequelize.literal("COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE 0 END), 0)"), 'totalIngresos'],
+        [this.sequelize.literal("COALESCE(SUM(CASE WHEN tipo = 'gasto' THEN monto ELSE 0 END), 0)"), 'totalGastos'],
+        [this.sequelize.literal("COALESCE(SUM(CASE WHEN tipo = 'ajuste' THEN monto ELSE 0 END), 0)"), 'totalAjustes']
+      ],
+      where,
+      raw: true
+    });
+
+    const totalIngresos = parseFloat(resultado?.totalIngresos || 0);
+    const totalGastos = parseFloat(resultado?.totalGastos || 0);
+    const totalAjustes = parseFloat(resultado?.totalAjustes || 0);
+    const saldoActual = totalIngresos - totalGastos + totalAjustes;
+
+    // Primer ingreso como monto inicial (si aplica filtros que lo contemplen)
+    const primerIngreso = await this.findOne({
+      where: { ...where, tipo: 'ingreso' },
+      order: [['fecha', 'ASC'], ['id_movimiento', 'ASC']]
+    });
+
+    const montoInicial = primerIngreso ? parseFloat(primerIngreso.monto) || 0 : 0;
+
+    return {
+      montoInicial,
+      totalIngresos,
+      totalGastos,
+      totalAjustes,
+      saldoActual
+    };
+  };
+
+  /**
+   * Calcula resumen agrupado por proyecto
+   * @param {Object} filtros
+   * @returns {Promise<Array>}
+   */
+  IngresosMovimientos.obtenerCapitalPorProyecto = async function(filtros = {}) {
+    const where = {};
+
+    if (filtros.fuente) where.fuente = filtros.fuente;
+    if (filtros.tipo) where.tipo = filtros.tipo;
+    if (filtros.fechaInicio && filtros.fechaFin) {
+      where.fecha = { [Op.between]: [filtros.fechaInicio, filtros.fechaFin] };
+    } else if (filtros.fechaInicio) {
+      where.fecha = { [Op.gte]: filtros.fechaInicio };
+    } else if (filtros.fechaFin) {
+      where.fecha = { [Op.lte]: filtros.fechaFin };
+    }
+
+    if (filtros.id_ingreso) where.id_ingreso = filtros.id_ingreso;
+    if (filtros.id_proyecto) where.id_proyecto = filtros.id_proyecto;
+
+    const rows = await this.findAll({
+      attributes: [
+        'id_proyecto',
+        [this.sequelize.literal("COALESCE(SUM(CASE WHEN tipo = 'ingreso' THEN monto ELSE 0 END), 0)"), 'totalIngresos'],
+        [this.sequelize.literal("COALESCE(SUM(CASE WHEN tipo = 'gasto' THEN monto ELSE 0 END), 0)"), 'totalGastos'],
+        [this.sequelize.literal("COALESCE(SUM(CASE WHEN tipo = 'ajuste' THEN monto ELSE 0 END), 0)"), 'totalAjustes']
+      ],
+      where,
+      group: ['id_proyecto'],
+      raw: true
+    });
+
+    return rows.map(row => {
+      const totalIngresos = parseFloat(row.totalIngresos || 0);
+      const totalGastos = parseFloat(row.totalGastos || 0);
+      const totalAjustes = parseFloat(row.totalAjustes || 0);
+      return {
+        id_proyecto: row.id_proyecto,
+        totalIngresos,
+        totalGastos,
+        totalAjustes,
+        saldoActual: totalIngresos - totalGastos + totalAjustes
+      };
+    });
+  };
+
+  /**
+   * Obtiene resumen global de capital incluyendo agrupaciones opcionales
+   * @param {Object} filtros
+   * @returns {Promise<{resumen: Object, porProyecto: Array}>}
+   */
+  IngresosMovimientos.obtenerResumenGlobal = async function(filtros = {}) {
+    const resumen = await this.calcularResumen(filtros);
+    const porProyecto = await this.obtenerCapitalPorProyecto(filtros);
+
+    return {
+      resumen,
+      porProyecto
+    };
   };
 
   return IngresosMovimientos;

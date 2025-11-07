@@ -63,31 +63,17 @@ exports.listarMovimientos = async (req, res) => {
       }
     }
 
-    // Calcular resumen
-    const resumen = movimientos.reduce((acc, mov) => {
-      const monto = parseFloat(mov.monto) || 0;
-      
-      if (mov.tipo === 'ingreso') {
-        acc.totalIngresos += monto;
-      } else if (mov.tipo === 'gasto') {
-        acc.totalGastos += monto;
-      } else if (mov.tipo === 'ajuste') {
-        acc.totalAjustes += monto;
-      }
-      
-      return acc;
-    }, { 
-      montoInicial: 0, 
-      totalIngresos: 0, 
-      totalGastos: 0, 
-      totalAjustes: 0 
-    });
+    // Calcular resumen extendido y capital por proyecto
+    const filtrosResumen = {
+      fechaInicio: drStart || undefined,
+      fechaFin: drEnd || undefined,
+      id_proyecto: proyectoId || undefined,
+      tipo: tipo || undefined,
+      fuente: fuente || undefined
+    };
 
-    // El primer ingreso es el monto inicial
-    const primerIngreso = movimientos.find(m => m.tipo === 'ingreso');
-    if (primerIngreso) {
-      resumen.montoInicial = parseFloat(primerIngreso.monto) || 0;
-    }
+    const resumen = await models.ingresos_movimientos.calcularResumen(filtrosResumen);
+    const capitalPorProyecto = await models.ingresos_movimientos.obtenerCapitalPorProyecto(filtrosResumen);
 
     // Formatear movimientos para el frontend
     const movimientosFormateados = movimientos.map(mov => ({
@@ -98,6 +84,7 @@ exports.listarMovimientos = async (req, res) => {
       tipo: mov.tipo,
       fuente: mov.fuente,
       monto: parseFloat(mov.monto),
+      saldo_after: mov.saldo_after != null ? parseFloat(mov.saldo_after) : null,
       descripcion: mov.descripcion,
       ref_tipo: mov.ref_tipo,
       ref_id: mov.ref_id
@@ -106,13 +93,76 @@ exports.listarMovimientos = async (req, res) => {
     res.json({ 
       success: true, 
       data: movimientosFormateados,
-      resumen 
+      resumen,
+      capitalPorProyecto
     });
   } catch (error) {
     console.error('Error listando movimientos:', error);
     res.status(500).json({ 
       success: false, 
       error: error.message 
+    });
+  }
+};
+
+/**
+ * Obtener resumen global de capital
+ * GET /api/movimientos-ingresos/resumen/global
+ */
+exports.obtenerResumenGlobal = async (req, res) => {
+  try {
+    const { drStart, drEnd, proyectoId, tipo, fuente } = req.query;
+
+    const filtros = {
+      fechaInicio: drStart || undefined,
+      fechaFin: drEnd || undefined,
+      id_proyecto: proyectoId || undefined,
+      tipo: tipo || undefined,
+      fuente: fuente || undefined
+    };
+
+    const { resumen, porProyecto } = await models.ingresos_movimientos.obtenerResumenGlobal(filtros);
+
+    // Obtener nombres de proyectos para el resumen agrupado
+    const ids = Array.from(new Set(
+      porProyecto
+        .map(item => item.id_proyecto)
+        .filter(id => id != null)
+    ));
+
+    let proyectosMap = {};
+    if (ids.length > 0) {
+      const ProyectoModel = models.Proyectos || models.proyectos || models.Proyecto;
+      if (ProyectoModel) {
+        const proyectos = await ProyectoModel.findAll({
+          where: { id_proyecto: ids },
+          attributes: ['id_proyecto', 'nombre'],
+          raw: true
+        });
+
+        proyectos.forEach(p => {
+          proyectosMap[p.id_proyecto] = p.nombre;
+        });
+      }
+    }
+
+    const detalle = porProyecto.map(item => ({
+      ...item,
+      proyecto_nombre: proyectosMap[item.id_proyecto] || null
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        resumen,
+        porProyecto: detalle
+      }
+    });
+  } catch (error) {
+    console.error('Error obteniendo resumen global:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
     });
   }
 };
@@ -186,18 +236,44 @@ exports.crearMovimiento = async (req, res) => {
       });
     }
     
-    // Crear el movimiento
-    const movimiento = await models.ingresos_movimientos.create({
-      id_ingreso,
-      id_proyecto,
-      tipo,
-      fuente,
-      ref_tipo,
-      ref_id,
-      fecha: fecha || new Date(),
-      monto: Math.abs(parseFloat(monto)),
-      descripcion
-    });
+    let movimiento;
+
+    if (tipo === 'gasto') {
+      movimiento = await models.ingresos_movimientos.registrarGasto({
+        id_ingreso,
+        id_proyecto,
+        monto: parseFloat(monto),
+        fecha: fecha || new Date(),
+        descripcion,
+        ref_tipo,
+        ref_id,
+        fuente
+      });
+    } else {
+      const payload = {
+        id_ingreso,
+        id_proyecto,
+        tipo,
+        fuente,
+        ref_tipo,
+        ref_id,
+        fecha: fecha || new Date(),
+        monto: Math.abs(parseFloat(monto)),
+        descripcion
+      };
+
+      if (tipo === 'ingreso') {
+        const resumen = await models.ingresos_movimientos.obtenerResumen(id_ingreso);
+        payload.saldo_after = resumen.saldoActual + Math.abs(parseFloat(monto));
+      }
+
+      if (tipo === 'ajuste') {
+        const resumen = await models.ingresos_movimientos.obtenerResumen(id_ingreso);
+        payload.saldo_after = resumen.saldoActual + parseFloat(monto);
+      }
+
+      movimiento = await models.ingresos_movimientos.create(payload);
+    }
     
     res.json({ 
       success: true, 
