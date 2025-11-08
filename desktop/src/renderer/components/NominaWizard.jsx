@@ -4,9 +4,9 @@ import apiService from '../services/api';
 import { formatCurrency } from '../utils/currency';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
-import { 
-  detectarSemanaActual, 
-  generarPeriodoActual, 
+import {
+  detectarSemanaActual,
+  generarPeriodoActual,
   obtenerInfoSemanaCompleta,
   calcularSemanaDelMes,
   validarSemana,
@@ -35,7 +35,7 @@ import {
 const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], selectedEmpleado, nominaToEdit }) => {
   const { isDarkMode } = useTheme();
   const { showSuccess, showError, showInfo } = useToast();
-  
+
   // Helper: detectar semana para un período dado (mapear semana ISO actual al período elegido)
   const detectarSemanaParaPeriodo = (periodo) => {
     try {
@@ -56,7 +56,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   // Flags para respetar selección manual del usuario
   const [touchedPeriodo, setTouchedPeriodo] = useState(false);
   const [touchedSemana, setTouchedSemana] = useState(false);
-  
+
   // Generar período actual automáticamente
   const generarPeriodoActual = () => {
     const ahora = new Date();
@@ -111,16 +111,16 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   }, [isOpen]);
 
   // Filtrar empleados por búsqueda y solo mostrar activos
-  const empleadosFiltrados = Array.isArray(empleados) 
-    ? empleados.filter(emp => 
-        // Solo empleados activos
-        (emp.activo === true || emp.activo === 1) &&
-        // Y que coincidan con la búsqueda
-        (emp.nombre?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
-         emp.apellido?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
-         emp.nss?.includes(formData.searchTerm) ||
-         emp.rfc?.toLowerCase().includes(formData.searchTerm.toLowerCase()))
-      )
+  const empleadosFiltrados = Array.isArray(empleados)
+    ? empleados.filter(emp =>
+      // Solo empleados activos
+      (emp.activo === true || emp.activo === 1) &&
+      // Y que coincidan con la búsqueda
+      (emp.nombre?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
+        emp.apellido?.toLowerCase().includes(formData.searchTerm.toLowerCase()) ||
+        emp.nss?.includes(formData.searchTerm) ||
+        emp.rfc?.toLowerCase().includes(formData.searchTerm.toLowerCase()))
+    )
     : [];
 
   // Calcular nómina cuando cambian los datos relevantes
@@ -129,11 +129,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       calcularNomina();
     }
   }, [
-    formData.selectedEmpleado, 
+    formData.selectedEmpleado,
     formData.proyectoTemporal,
-    formData.diasLaborados, 
-    formData.horasExtra, 
-    formData.bonos, 
+    formData.diasLaborados,
+    formData.horasExtra,
+    formData.bonos,
     formData.deduccionesAdicionales,
     formData.montoISR,
     formData.montoIMSS,
@@ -164,18 +164,18 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     const interval = setInterval(() => {
       const periodoActual = generarPeriodoActual();
       const semanaActual = detectarSemanaParaPeriodo(periodoActual);
-      
+
       // Si el período cambió (nuevo mes o año), actualizar automáticamente
       if (formData.selectedPeriodo !== periodoActual && !touchedPeriodo && !touchedSemana) {
         console.log('🔄 [AUTO-UPDATE] Detectado cambio de período:', {
           anterior: formData.selectedPeriodo,
           nuevo: periodoActual
         });
-        updateFormData({ 
+        updateFormData({
           selectedPeriodo: periodoActual,
-          semanaNum: semanaActual 
+          semanaNum: semanaActual
         });
-      } 
+      }
       // Si estamos en el período actual pero la semana cambió (y usuario no tocó)
       else if (formData.selectedPeriodo === periodoActual && formData.semanaNum !== semanaActual && !touchedSemana) {
         console.log('🔄 [AUTO-UPDATE] Detectado cambio de semana:', {
@@ -185,7 +185,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         updateFormData({ semanaNum: semanaActual });
       }
     }, 60000); // Verificar cada minuto
-    
+
     return () => clearInterval(interval);
   }, [formData.selectedPeriodo, formData.semanaNum, touchedPeriodo, touchedSemana]);
 
@@ -204,15 +204,15 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   // Pre-llenar formulario cuando hay datos de nómina a editar
   useEffect(() => {
     if (nominaToEdit && isOpen) {
-      
+
       // Calcular período y semana desde la fecha de creación
       const fechaCreacion = new Date(nominaToEdit.createdAt || nominaToEdit.fecha_creacion);
       const año = fechaCreacion.getFullYear();
       const mes = fechaCreacion.getMonth() + 1;
       const periodo = `${año}-${String(mes).padStart(2, '0')}`;
-      
+
       const semanaDelMes = calcularSemanaDelMes(fechaCreacion);
-      
+
       // Pre-llenar formulario con datos de la nómina
       setFormData({
         selectedPeriodo: periodo,
@@ -231,7 +231,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         montoAPagar: nominaToEdit.monto_a_pagar || null,
         liquidarAdeudos: nominaToEdit.liquidar_adeudos || false
       });
-      
+
       // Forzar recálculo después de pre-llenar
       setTimeout(() => {
         calcularNomina();
@@ -242,7 +242,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   // Cargar adeudos del empleado seleccionado
   const cargarAdeudosEmpleado = async () => {
     if (!formData.selectedEmpleado) return;
-    
+
     try {
       const { adeudos } = nominasServices;
       const totalAdeudos = await adeudos.getTotalAdeudosPendientes(formData.selectedEmpleado.id_empleado);
@@ -278,8 +278,8 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   };
 
   const calcularNomina = async () => {
-    
-    
+
+
     if (!formData.selectedEmpleado) {
       return;
     }
@@ -292,17 +292,17 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     try {
       // Para pago semanal: usar directamente el pago semanal
       const pagoSemanal = formData.selectedEmpleado.pago_semanal || 0;
-      
+
       // Verificar que el empleado tenga pago_semanal definido
       if (!pagoSemanal || pagoSemanal <= 0) {
         showError('Error', 'El empleado seleccionado no tiene un pago semanal válido definido');
         return;
       }
-      
+
       const diasLaborados = formData.diasLaborados || 6;
       const pagoPorDia = pagoSemanal / 6; // Equivalente diario fijo (semana de 6 días)
       const salarioBase = pagoPorDia * diasLaborados; // Salario proporcional a los días laborados
-      
+
       const datosNomina = {
         diasLaborados: diasLaborados, // Usar el valor ingresado por el usuario
         pagoPorDia: pagoPorDia, // Pago por día fijo (semana de 6 días)
@@ -343,7 +343,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     setFormData(prev => ({ ...prev, ...updates }));
   };
 
-  const resetForm = () => {    
+  const resetForm = () => {
     setFormData({
       selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
       semanaNum: detectarSemanaActual(), // Auto-detectar semana del mes actual
@@ -381,20 +381,20 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     try {
       setProcessingNomina(true);
       showInfo('Generando PDF', 'Creando recibo de nómina...');
-      
+
       const pdfBlob = await nominasServices.nominas.generarReciboPDF(nominaGenerada.id_nomina);
-      
+
       if (!pdfBlob || !(pdfBlob instanceof Blob)) {
         throw new Error('No se recibió un PDF válido');
       }
-      
+
       // Crear nombre de archivo (formato unificado)
       const nombreEmpleado = `${formData.selectedEmpleado.nombre || ''}_${formData.selectedEmpleado.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
       const semanaMes = formData.semanaNum || 'X';
       const now = new Date();
-      const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+      const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
       const nombreArchivo = `nomina_semana-${semanaMes}_${nombreEmpleado}_${ts}.pdf`;
-      
+
       // Crear URL del blob y descargar
       const url = window.URL.createObjectURL(pdfBlob);
       const a = document.createElement('a');
@@ -403,7 +403,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       a.download = nombreArchivo;
       document.body.appendChild(a);
       a.click();
-      
+
       // Limpiar recursos
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
@@ -413,11 +413,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       }, 2000);
 
       showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
-      
+
       // Cerrar wizard y llamar callback de éxito
       handleClose();
       if (onSuccess) onSuccess();
-      
+
     } catch (error) {
       console.error('Error generando PDF:', error);
       showError('Error al generar PDF', error.message || 'No se pudo generar el PDF');
@@ -434,7 +434,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
 
   const handlePagoModalConfirm = async () => {
     const pagoValue = parseFloat(pagoInput);
-    
+
     if (!pagoInput || isNaN(pagoValue) || pagoValue <= 0) {
       showError('Pago inválido', 'Por favor ingresa un pago diario válido mayor a 0');
       return;
@@ -468,16 +468,16 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         // Validar que todos los campos estén completos Y que no haya duplicados
         const camposCompletos = formData.selectedPeriodo && formData.selectedEmpleado && formData.diasLaborados > 0;
         const sinDuplicados = !verificacionDuplicados || !verificacionDuplicados.existe;
-        
+
         return camposCompletos && sinDuplicados;
       case 2:
         // Permitir procesar si hay cálculo, no hay errores críticos y no hay duplicados
-        const isValid = calculoNomina && 
-                       validacion && 
-                       validacion.esValido && 
-                       validacion.errores.length === 0 &&
-                       verificacionDuplicados &&
-                       !verificacionDuplicados.existe;
+        const isValid = calculoNomina &&
+          validacion &&
+          validacion.esValido &&
+          validacion.errores.length === 0 &&
+          verificacionDuplicados &&
+          !verificacionDuplicados.existe;
         return isValid;
       default:
         return true;
@@ -485,14 +485,14 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   };
 
   const procesarNominaConPago = async (pagoIngresado, generarPDF = false) => {
-    try {      
+    try {
       setProcessingNomina(true);
       showInfo('Procesando', `Generando nómina para ${formData.selectedEmpleado.nombre} ${formData.selectedEmpleado.apellido}...`);
-      
+
       // Validar y preparar datos para la nómina
-  // Proyecto temporal override: si el usuario seleccionó uno diferente usarlo, sin modificar empleado
-  const idProyecto = formData.proyectoTemporal?.id_proyecto ||
-        formData.selectedEmpleado.id_proyecto || 
+      // Proyecto temporal override: si el usuario seleccionó uno diferente usarlo, sin modificar empleado
+      const idProyecto = formData.proyectoTemporal?.id_proyecto ||
+        formData.selectedEmpleado.id_proyecto ||
         formData.selectedEmpleado.proyecto?.id_proyecto || 1;
 
       // Usar el período y semana seleccionados por el usuario
@@ -532,7 +532,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   };
 
   const procesarNomina = async () => {
-    
+
     // Validar que tenemos los datos básicos necesarios
     if (!formData.selectedEmpleado || !formData.diasLaborados || !formData.selectedPeriodo) {
       console.error('❌ [WIZARD] Datos incompletos:', {
@@ -543,7 +543,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       showError('Datos incompletos', 'Por favor completa todos los campos requeridos');
       return;
     }
-    
+
     // Para pago semanal: usar directamente el pago semanal
     const pagoSemanal = formData.selectedEmpleado.pago_semanal || 0;
 
@@ -557,7 +557,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   };
 
   const procesarNominaConPDF = async () => {
-    
+
     // Validar que tenemos los datos básicos necesarios
     if (!formData.selectedEmpleado || !formData.diasLaborados || !formData.selectedPeriodo) {
       console.error('❌ [WIZARD] Datos incompletos:', {
@@ -568,7 +568,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       showError('Datos incompletos', 'Por favor completa todos los campos requeridos');
       return;
     }
-    
+
     // Para pago semanal: usar directamente el pago semanal
     const pagoSemanal = formData.selectedEmpleado.pago_semanal || 0;
 
@@ -583,11 +583,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
 
   const procesarNominaFinal = async (nominaData, generarPDF = false) => {
     try {
-      
-      
+
+
       // Validar datos antes de procesar
       const validacionDatos = await nominasServices.validaciones.validarDatosNomina(nominaData);
-      
+
       if (!validacionDatos.esValida) {
         console.error('❌ [WIZARD] Validación falló:', validacionDatos.errores);
         showError('Datos inválidos', validacionDatos.errores.join(', '));
@@ -595,9 +595,9 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         return;
       }
 
-      
+
       let response;
-      
+
       if (nominaToEdit && nominaToEdit.id_nomina) {
         // Modo edición: actualizar nómina existente        
         // Preparar datos para actualización (sin campos que no se pueden modificar)
@@ -615,19 +615,19 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
           monto_a_pagar: nominaData.monto_a_pagar,
           liquidar_adeudos: nominaData.liquidar_adeudos
         };
-        
+
         response = await nominasServices.nominas.update(nominaToEdit.id_nomina, updateData);
       } else {
         // Modo creación: crear nueva nómina
-        
+
         // Si no se va a generar PDF inmediatamente, marcar como borrador
-        const nominaDataConEstado = generarPDF 
-          ? nominaData 
+        const nominaDataConEstado = generarPDF
+          ? nominaData
           : { ...nominaData, estado: 'borrador' };
-        
+
         response = await nominasServices.nominas.procesarNomina(nominaDataConEstado);
       }
-      
+
       // Obtener el ID de la nómina de la estructura correcta
       let idNomina;
       if (nominaToEdit && nominaToEdit.id_nomina) {
@@ -635,30 +635,30 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
         idNomina = nominaToEdit.id_nomina;
       } else {
         // En modo creación, extraer el ID de la respuesta
-        idNomina = response?.data?.nomina?.id_nomina || 
-                   response?.data?.id_nomina || 
-                   response?.data?.data?.nomina?.id_nomina;
+        idNomina = response?.data?.nomina?.id_nomina ||
+          response?.data?.id_nomina ||
+          response?.data?.data?.nomina?.id_nomina;
       }
-      
+
       if (idNomina) {
         if (generarPDF) {
           // Modo: Generar PDF inmediatamente
           try {
             showInfo('Generando PDF', 'Creando recibo de nómina...');
-            
+
             const pdfBlob = await nominasServices.nominas.generarReciboPDF(idNomina);
-            
+
             if (!pdfBlob || !(pdfBlob instanceof Blob)) {
               throw new Error('No se recibió un PDF válido');
             }
-            
+
             // Crear nombre de archivo (formato unificado)
             const nombreEmpleado = `${formData.selectedEmpleado.nombre || ''}_${formData.selectedEmpleado.apellido || ''}`.trim().replace(/\s+/g, '_') || 'empleado';
             const semanaMes = formData.semanaNum || 'X';
             const now = new Date();
-            const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+            const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
             const nombreArchivo = `nomina_semana-${semanaMes}_${nombreEmpleado}_${ts}.pdf`;
-            
+
             // Crear URL del blob y descargar
             const url = window.URL.createObjectURL(pdfBlob);
             const a = document.createElement('a');
@@ -667,7 +667,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
             a.download = nombreArchivo;
             document.body.appendChild(a);
             a.click();
-            
+
             // Limpiar recursos
             setTimeout(() => {
               window.URL.revokeObjectURL(url);
@@ -677,11 +677,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
             }, 2000);
 
             showSuccess('PDF Generado', `Recibo de nómina descargado: ${nombreArchivo}`);
-            
+
             // Cerrar wizard y llamar callback de éxito
             handleClose();
             if (onSuccess) onSuccess();
-            
+
           } catch (pdfError) {
             console.error('❌ Error generando PDF:', pdfError);
             showError('Error al generar PDF', `No se pudo generar el PDF: ${pdfError.message}`);
@@ -690,16 +690,16 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
           // Modo: Solo generar nómina y mostrar preview
           try {
             // Obtener los datos completos de la nómina generada
-            const nominaCompleta = await nominasServices.nominas.getById(idNomina, true);            
-            
+            const nominaCompleta = await nominasServices.nominas.getById(idNomina, true);
+
             // Guardar la nómina generada (sin mostrar preview automático)
             setNominaGenerada(nominaCompleta.data);
-            
-            const mensaje = nominaToEdit && nominaToEdit.id_nomina 
+
+            const mensaje = nominaToEdit && nominaToEdit.id_nomina
               ? 'Nómina actualizada exitosamente.'
               : 'Nómina creada exitosamente.';
             showSuccess('¡Nómina Generada!', mensaje);
-            
+
             // Cerrar wizard y llamar callback de éxito
             handleClose();
             if (onSuccess) onSuccess();
@@ -930,35 +930,32 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                 const Icon = step.icon;
                 const isActive = currentStep === step.id;
                 const isCompleted = currentStep > step.id;
-                
+
                 return (
                   <div key={step.id} className="flex items-center">
-                    <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
-                      isActive 
-                        ? 'border-primary-500 bg-primary-500 text-white' 
-                        : isCompleted 
+                    <div className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${isActive
+                        ? 'border-primary-500 bg-primary-500 text-white'
+                        : isCompleted
                           ? 'border-green-500 bg-green-500 text-white'
                           : 'border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500'
-                    }`}>
+                      }`}>
                       {isCompleted ? (
                         <CheckCircleIcon className="w-5 h-5" />
                       ) : (
                         <Icon className="w-5 h-5" />
                       )}
                     </div>
-                    <span className={`ml-2 text-sm font-medium ${
-                      isActive 
-                        ? 'text-primary-600 dark:text-primary-400' 
-                        : isCompleted 
+                    <span className={`ml-2 text-sm font-medium ${isActive
+                        ? 'text-primary-600 dark:text-primary-400'
+                        : isCompleted
                           ? 'text-green-600 dark:text-green-400'
                           : 'text-gray-500 dark:text-gray-400'
-                    }`}>
+                      }`}>
                       {step.name}
                     </span>
                     {index < steps.length - 1 && (
-                      <div className={`w-12 h-0.5 mx-4 ${
-                        isCompleted ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
-                      }`} />
+                      <div className={`w-12 h-0.5 mx-4 ${isCompleted ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                        }`} />
                     )}
                   </div>
                 );
@@ -990,7 +987,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                       <CalendarIcon className="h-4 w-4 mr-2 text-primary-600" />
                       Período y Semana
                     </h5>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1057,11 +1054,11 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
                         />
                         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                          Semana del mes para el período detectada: {detectarSemanaParaPeriodo(formData.selectedPeriodo)} 
+                          Semana del mes para el período detectada: {detectarSemanaParaPeriodo(formData.selectedPeriodo)}
                           {(() => {
                             try {
                               const [año, mes] = formData.selectedPeriodo.split('-').map(Number);
-                              const periodo = `${año}-${String(mes).padStart(2,'0')}`;
+                              const periodo = `${año}-${String(mes).padStart(2, '0')}`;
                               const semanasEnElMes = listarSemanasISODePeriodo(periodo).length;
                               return ` (${semanasEnElMes} semanas en ${new Date(año, mes - 1).toLocaleDateString('es-MX', { month: 'long' })})`;
                             } catch {
@@ -1109,7 +1106,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                       <UserGroupIcon className="h-4 w-4 mr-2 text-primary-600" />
                       Seleccionar Empleado
                     </h5>
-                    
+
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1132,17 +1129,16 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                               <div
                                 key={empleado.id_empleado || `filtered-empleado-${index}`}
                                 onClick={() => {
-                                  updateFormData({ 
+                                  updateFormData({
                                     selectedEmpleado: empleado,
                                     searchTerm: '',
                                     pago_semanal: empleado.pago_semanal || empleado.contrato?.salario_diario * 7 || 0
                                   });
                                 }}
-                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0 ${
-                                  formData.selectedEmpleado?.id_empleado === empleado.id_empleado 
-                                    ? 'bg-primary-50 dark:bg-primary-900/20' 
+                                className={`flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-600 cursor-pointer border-b border-gray-200 dark:border-gray-600 last:border-b-0 ${formData.selectedEmpleado?.id_empleado === empleado.id_empleado
+                                    ? 'bg-primary-50 dark:bg-primary-900/20'
                                     : ''
-                                }`}
+                                  }`}
                               >
                                 <div className="h-10 w-10 bg-primary-500 rounded-full flex items-center justify-center">
                                   <span className="text-white font-medium text-sm">
@@ -1156,11 +1152,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                                   <p className="text-sm text-gray-500 dark:text-gray-400">
                                     NSS: {empleado.nss} • RFC: {empleado.rfc}
                                   </p>
-                                  <p className={`text-xs font-medium ${
-                                    (empleado.pago_semanal || empleado.contrato?.salario_diario)
+                                  <p className={`text-xs font-medium ${(empleado.pago_semanal || empleado.contrato?.salario_diario)
                                       ? 'text-green-600 dark:text-green-400'
                                       : 'text-red-600 dark:text-red-400'
-                                  }`}>
+                                    }`}>
                                     {(empleado.pago_semanal || empleado.contrato?.salario_diario)
                                       ? `${formatCurrency(empleado.pago_semanal || empleado.contrato?.salario_diario * 7)} por semana`
                                       : '⚠️ Sin pago configurado'
@@ -1181,26 +1176,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
 
                   {/* Verificación de duplicados - Ahora aparece justo debajo de "Seleccionar Empleado" */}
                   {verificacionDuplicados && (
-                    <div className={`p-4 rounded-lg border ${
-                      verificacionDuplicados.existe 
+                    <div className={`p-4 rounded-lg border ${verificacionDuplicados.existe
                         ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
                         : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-                    }`}>
+                      }`}>
                       <div className="flex items-center mb-2">
                         {verificacionDuplicados.existe ? (
                           <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
                         ) : (
                           <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
                         )}
-                        <h5 className={`text-sm font-semibold ${
-                          verificacionDuplicados.existe 
+                        <h5 className={`text-sm font-semibold ${verificacionDuplicados.existe
                             ? 'text-red-900 dark:text-red-200'
                             : 'text-green-900 dark:text-green-200'
-                        }`}>
+                          }`}>
                           {verificacionDuplicados.existe ? '⚠️ Nómina Duplicada Detectada' : '✅ Nómina Disponible'}
                         </h5>
                       </div>
-                      
+
                       {verificacionDuplicados.existe ? (
                         <div className="text-sm text-red-800 dark:text-red-300">
                           <p className="mb-2">
@@ -1241,7 +1234,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                       <CalculatorIcon className="h-4 w-4 mr-2 text-primary-600" />
                       Configuración Adicional (Opcional)
                     </h5>
-                    
+
                     <div className="space-y-4">
                       {/* Proyecto temporal para esta nómina */}
                       <div>
@@ -1365,7 +1358,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                         <h5 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">
                           Deducciones Fiscales (ingresar monto solo si aplica)
                         </h5>
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                           {/* ISR */}
                           <div>
@@ -1474,7 +1467,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                         <BanknotesIcon className="h-4 w-4 mr-2" />
                         Opciones de Pago
                       </h5>
-                      
+
                       <div className="space-y-4">
                         {/* Mostrar adeudos pendientes */}
                         {adeudosEmpleado > 0 && (
@@ -1497,7 +1490,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             id="pagoParcial"
                             checked={formData.pagoParcial}
                             onChange={(e) => {
-                              updateFormData({ 
+                              updateFormData({
                                 pagoParcial: e.target.checked,
                                 montoAPagar: e.target.checked ? Math.round(calculoNomina.montoTotal * 100) / 100 : 0
                               });
@@ -1610,7 +1603,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           </span>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2 text-sm">
                         <div className="flex justify-between">
                           <span className="text-green-700 dark:text-green-300">
@@ -1620,7 +1613,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             {formatCurrency(calculoNomina.salarioBase)}
                           </span>
                         </div>
-                        
+
                         {calculoNomina.montoHorasExtra > 0 && (
                           <div className="flex justify-between">
                             <span className="text-green-700 dark:text-green-300">Horas Extra:</span>
@@ -1629,7 +1622,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             </span>
                           </div>
                         )}
-                        
+
                         {calculoNomina.bonos > 0 && (
                           <div className="flex justify-between">
                             <span className="text-green-700 dark:text-green-300">Bonos:</span>
@@ -1638,21 +1631,21 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             </span>
                           </div>
                         )}
-                        
+
                         <div className="flex justify-between border-t border-green-200 dark:border-green-700 pt-2">
                           <span className="font-medium text-green-900 dark:text-green-200">Subtotal:</span>
                           <span className="font-medium text-green-900 dark:text-green-200">
                             {formatCurrency(calculoNomina.subtotal)}
                           </span>
                         </div>
-                        
+
                         <div className="flex justify-between">
                           <span className="text-red-600 dark:text-red-400">Deducciones:</span>
                           <span className="font-medium text-red-600 dark:text-red-400">
                             -{formatCurrency(calculoNomina.deducciones.total)}
                           </span>
                         </div>
-                        
+
                         {/* Desglose de deducciones */}
                         <div className="ml-4 space-y-1 text-xs text-gray-600 dark:text-gray-400">
                           {calculoNomina.deducciones.isr > 0 && (
@@ -1686,7 +1679,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             </div>
                           )}
                         </div>
-                        
+
                         <div className="flex justify-between border-t-2 border-green-300 dark:border-green-600 pt-2">
                           <span className="font-bold text-lg text-green-900 dark:text-green-200">
                             {formData.pagoParcial ? 'Total a Pagar (Parcial):' : 'Total a Pagar:'}
@@ -1698,7 +1691,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                             })()}
                           </span>
                         </div>
-                        
+
                         {/* Mostrar información adicional si es pago parcial */}
                         {formData.pagoParcial && (
                           <div className="mt-2 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
@@ -1811,7 +1804,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           {formatCurrency(calculoNomina.salarioBase)}
                         </span>
                       </div>
-                      
+
                       {calculoNomina.montoHorasExtra > 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-600 dark:text-gray-400">Horas Extra:</span>
@@ -1820,7 +1813,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           </span>
                         </div>
                       )}
-                      
+
                       {calculoNomina.bonos > 0 && (
                         <div className="flex justify-between">
                           <span className="text-gray-600 dark:text-gray-400">Bonos:</span>
@@ -1829,38 +1822,38 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           </span>
                         </div>
                       )}
-                      
+
                       <div className="flex justify-between border-t border-gray-200 dark:border-gray-600 pt-3">
                         <span className="font-medium text-gray-900 dark:text-white">Subtotal:</span>
                         <span className="font-medium text-gray-900 dark:text-white">
                           {formatCurrency(calculoNomina.subtotal)}
                         </span>
                       </div>
-                      
-                      {(calculoNomina.deducciones.isr > 0 || calculoNomina.deducciones.imss > 0 || 
+
+                      {(calculoNomina.deducciones.isr > 0 || calculoNomina.deducciones.imss > 0 ||
                         calculoNomina.deducciones.infonavit > 0 || calculoNomina.deducciones.adicionales > 0 ||
                         calculoNomina.deducciones.descuentos > 0) && (
-                        <div className="flex justify-between">
-                          <span className="text-red-600 dark:text-red-400">
-                            Deducciones:
-                            <span className="text-xs text-gray-400 ml-1">
-                              ({calculoNomina.deducciones.isr > 0 && `ISR: ${formatCurrency(calculoNomina.deducciones.isr)}`}
-                              {calculoNomina.deducciones.isr > 0 && (calculoNomina.deducciones.imss > 0 || calculoNomina.deducciones.infonavit > 0 || calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
-                              {calculoNomina.deducciones.imss > 0 && `IMSS: ${formatCurrency(calculoNomina.deducciones.imss)}`}
-                              {calculoNomina.deducciones.imss > 0 && (calculoNomina.deducciones.infonavit > 0 || calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
-                              {calculoNomina.deducciones.infonavit > 0 && `Infonavit: ${formatCurrency(calculoNomina.deducciones.infonavit)}`}
-                              {calculoNomina.deducciones.infonavit > 0 && (calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
-                              {calculoNomina.deducciones.adicionales > 0 && `Adicionales: ${formatCurrency(calculoNomina.deducciones.adicionales)}`}
-                              {calculoNomina.deducciones.adicionales > 0 && calculoNomina.deducciones.descuentos > 0 && ', '}
-                              {calculoNomina.deducciones.descuentos > 0 && `Descuentos: ${formatCurrency(calculoNomina.deducciones.descuentos)}`})
+                          <div className="flex justify-between">
+                            <span className="text-red-600 dark:text-red-400">
+                              Deducciones:
+                              <span className="text-xs text-gray-400 ml-1">
+                                ({calculoNomina.deducciones.isr > 0 && `ISR: ${formatCurrency(calculoNomina.deducciones.isr)}`}
+                                {calculoNomina.deducciones.isr > 0 && (calculoNomina.deducciones.imss > 0 || calculoNomina.deducciones.infonavit > 0 || calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
+                                {calculoNomina.deducciones.imss > 0 && `IMSS: ${formatCurrency(calculoNomina.deducciones.imss)}`}
+                                {calculoNomina.deducciones.imss > 0 && (calculoNomina.deducciones.infonavit > 0 || calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
+                                {calculoNomina.deducciones.infonavit > 0 && `Infonavit: ${formatCurrency(calculoNomina.deducciones.infonavit)}`}
+                                {calculoNomina.deducciones.infonavit > 0 && (calculoNomina.deducciones.adicionales > 0 || calculoNomina.deducciones.descuentos > 0) && ', '}
+                                {calculoNomina.deducciones.adicionales > 0 && `Adicionales: ${formatCurrency(calculoNomina.deducciones.adicionales)}`}
+                                {calculoNomina.deducciones.adicionales > 0 && calculoNomina.deducciones.descuentos > 0 && ', '}
+                                {calculoNomina.deducciones.descuentos > 0 && `Descuentos: ${formatCurrency(calculoNomina.deducciones.descuentos)}`})
+                              </span>
                             </span>
-                          </span>
-                          <span className="font-medium text-red-600 dark:text-red-400">
-                            -{formatCurrency(calculoNomina.deducciones.total)}
-                          </span>
-                        </div>
-                      )}
-                      
+                            <span className="font-medium text-red-600 dark:text-red-400">
+                              -{formatCurrency(calculoNomina.deducciones.total)}
+                            </span>
+                          </div>
+                        )}
+
                       <div className="flex justify-between border-t-2 border-gray-300 dark:border-gray-600 pt-3">
                         <span className="font-bold text-xl text-gray-900 dark:text-white">
                           {formData.pagoParcial ? 'Total a Pagar (Parcial):' : 'Total a Pagar:'}
@@ -1869,7 +1862,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                           {formatCurrency(formData.pagoParcial ? formData.montoAPagar : calculoNomina.montoTotal)}
                         </span>
                       </div>
-                      
+
                       {/* Mostrar información adicional si es pago parcial en el resumen */}
                       {formData.pagoParcial && (
                         <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
@@ -1897,26 +1890,24 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
 
                 {/* Validaciones */}
                 {validacion && (
-                  <div className={`p-4 rounded-lg border ${
-                    validacion.esValida 
+                  <div className={`p-4 rounded-lg border ${validacion.esValida
                       ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
                       : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-                  }`}>
+                    }`}>
                     <div className="flex items-center mb-2">
                       {validacion.esValida ? (
                         <CheckCircleIcon className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
                       ) : (
                         <ExclamationTriangleIcon className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
                       )}
-                      <h6 className={`font-medium ${
-                        validacion.esValida 
+                      <h6 className={`font-medium ${validacion.esValida
                           ? 'text-green-900 dark:text-green-200'
                           : 'text-red-900 dark:text-red-200'
-                      }`}>
+                        }`}>
                         {validacion.esValida ? 'Validación Exitosa' : 'Problemas de Validación'}
                       </h6>
                     </div>
-                    
+
                     {validacion.errores.length > 0 && (
                       <div className="mb-2">
                         <p className="text-sm font-medium text-red-800 dark:text-red-300 mb-1">Errores:</p>
@@ -1927,7 +1918,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                         </ul>
                       </div>
                     )}
-                    
+
                     {validacion.advertencias.length > 0 && (
                       <div>
                         <p className="text-sm font-medium text-yellow-800 dark:text-yellow-300 mb-1">Advertencias:</p>
@@ -1978,7 +1969,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
             >
               Cancelar
             </button>
-            
+
             {currentStep < 2 ? (
               <div className="flex flex-col items-end">
                 <button
@@ -1989,8 +1980,8 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                     !isStepValid(currentStep) && verificacionDuplicados?.existe
                       ? 'No se puede continuar: Ya existe una nómina para este empleado en esta semana del período'
                       : !isStepValid(currentStep)
-                      ? 'Complete todos los campos requeridos para continuar'
-                      : ''
+                        ? 'Complete todos los campos requeridos para continuar'
+                        : ''
                   }
                 >
                   Siguiente
@@ -2008,8 +1999,8 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                       !isStepValid(currentStep) && verificacionDuplicados?.existe
                         ? 'No se puede procesar: Ya existe una nómina para este empleado en esta semana del período'
                         : !isStepValid(currentStep)
-                        ? 'Complete todos los campos y cálculos requeridos para procesar'
-                        : 'Generar nómina y mostrar preview'
+                          ? 'Complete todos los campos y cálculos requeridos para procesar'
+                          : 'Generar nómina y mostrar preview'
                     }
                   >
                     {processingNomina && (
@@ -2025,8 +2016,8 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                       !isStepValid(currentStep) && verificacionDuplicados?.existe
                         ? 'No se puede procesar: Ya existe una nómina para este empleado en esta semana del período'
                         : !isStepValid(currentStep)
-                        ? 'Complete todos los campos y cálculos requeridos para procesar'
-                        : 'Generar nómina y PDF directamente'
+                          ? 'Complete todos los campos y cálculos requeridos para procesar'
+                          : 'Generar nómina y PDF directamente'
                     }
                   >
                     {processingNomina && (
@@ -2063,7 +2054,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                 </div>
               </div>
             </div>
-            
+
             {/* Content */}
             <div className="p-6">
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
@@ -2072,7 +2063,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
               <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
                 Por favor ingresa el pago semanal para calcular la nómina:
               </p>
-              
+
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Pago Semanal (MXN)
@@ -2096,7 +2087,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                   Ingresa el monto que se pagará por día trabajado
                 </p>
               </div>
-              
+
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
                 <div className="flex">
                   <div className="flex-shrink-0">
@@ -2112,7 +2103,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                 </div>
               </div>
             </div>
-            
+
             {/* Footer */}
             <div className="flex justify-end space-x-3 px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg">
               <button
