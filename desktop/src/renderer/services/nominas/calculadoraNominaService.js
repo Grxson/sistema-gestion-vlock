@@ -5,7 +5,7 @@ import ApiService from '../api.js';
  * Maneja todos los cálculos fiscales y de prestaciones
  */
 export class CalculadoraNominaService {
-  
+
   /**
    * Tablas fiscales actualizadas (deben mantenerse actualizadas)
    */
@@ -82,19 +82,19 @@ export class CalculadoraNominaService {
       }
 
       // Para pago semanal: usar el salario base calculado o calcularlo
-  // Si pagoPorDia es 0 pero salarioBase > 0, usar salarioBase; si ambos >0, priorizar salarioBase explícito.
-  const salarioBaseCalculado = (salarioBase && salarioBase > 0) ? salarioBase : pagoPorDia; // Fallback seguro
-      
+      // Si pagoPorDia es 0 pero salarioBase > 0, usar salarioBase; si ambos >0, priorizar salarioBase explícito.
+      const salarioBaseCalculado = (salarioBase && salarioBase > 0) ? salarioBase : pagoPorDia; // Fallback seguro
+
       // Cálculo de horas extra
       // Si pagoPorDia representa el pago semanal, convertirlo a diario; si no existe, derivar del salarioBase/días.
       const pagoDiarioBase = (pagoPorDia && pagoPorDia > 0)
         ? (pagoPorDia / 6)
         : ((salarioBase && salarioBase > 0 && diasLaborados && diasLaborados > 0) ? (salarioBase / diasLaborados) : 0);
       const montoHorasExtra = this.calcularHorasExtra(horasExtra, pagoDiarioBase);
-      
+
       // Subtotal antes de deducciones
       const subtotal = salarioBaseCalculado + montoHorasExtra + bonos;
-      
+
       // Cálculo de deducciones
       // Solo calcular automáticamente si el monto es exactamente 0 Y el usuario lo dejó en 0 intencionalmente
       // Si está vacío o es 0, NO aplicar (el usuario debe ingresar un valor > 0 para aplicar)
@@ -105,12 +105,12 @@ export class CalculadoraNominaService {
         adicionales: parseFloat(deduccionesAdicionales) || 0,
         descuentos: parseFloat(descuentos) || 0
       };
-      
+
       deducciones.total = deducciones.isr + deducciones.imss + deducciones.infonavit + deducciones.adicionales + deducciones.descuentos;
-      
+
       // Monto final
       const montoTotal = subtotal - deducciones.total;
-      
+
       console.log('🔍 [SERVICIO] Cálculo de nómina:', {
         salarioBase: salarioBaseCalculado,
         montoHorasExtra,
@@ -152,7 +152,7 @@ export class CalculadoraNominaService {
     if (montoBase <= 0) return 0;
 
     const tabla = this.TABLAS_FISCALES.ISR.mensual;
-    
+
     for (const tramo of tabla) {
       if (montoBase >= tramo.desde && montoBase <= tramo.hasta) {
         const excedente = montoBase - tramo.desde;
@@ -160,7 +160,7 @@ export class CalculadoraNominaService {
         return tramo.cuotaFija + impuestoMarginal;
       }
     }
-    
+
     // Si no encuentra tramo, aplicar el último (mayor)
     const ultimoTramo = tabla[tabla.length - 1];
     const excedente = montoBase - ultimoTramo.desde;
@@ -179,16 +179,16 @@ export class CalculadoraNominaService {
     const cuotas = this.TABLAS_FISCALES.IMSS.empleado;
     const umaDiaria = this.TABLAS_FISCALES.SUA.umaDiaria;
     const maxSalarioBase = umaDiaria * 25; // 25 UMA
-    
+
     // Limitar salario base a 25 UMA
     const salarioCotizable = Math.min(salarioBase, maxSalarioBase);
-    
-    const imssEmpleado = 
+
+    const imssEmpleado =
       salarioCotizable * cuotas.enfermedadYMaternidad +
       salarioCotizable * cuotas.invalidezYVida +
       salarioCotizable * cuotas.guarderias +
       salarioCotizable * cuotas.retiro;
-    
+
     return imssEmpleado;
   }
 
@@ -203,7 +203,7 @@ export class CalculadoraNominaService {
     const umaDiaria = this.TABLAS_FISCALES.SUA.umaDiaria;
     const maxSalarioBase = umaDiaria * 25; // 25 UMA
     const salarioCotizable = Math.min(salarioBase, maxSalarioBase);
-    
+
     return salarioCotizable * 0.05; // 5% del salario cotizable
   }
 
@@ -230,7 +230,7 @@ export class CalculadoraNominaService {
   static calcularPrestaciones(datosEmpleado, salarioBase) {
     const diasTrabajados = datosEmpleado.diasTrabajados || 365;
     const antiguedadAnios = datosEmpleado.antiguedadAnios || 1;
-    
+
     return {
       vacaciones: this.calcularVacaciones(salarioBase, antiguedadAnios),
       aguinaldo: this.calcularAguinaldo(salarioBase, diasTrabajados),
@@ -298,14 +298,14 @@ export class CalculadoraNominaService {
       // Obtener empleados activos desde la API
       const response = await ApiService.get('/empleados?activo=true');
       const empleados = response.empleados || response.data || [];
-      
+
       // Calcular total mensual (asumiendo 6 días por semana, 4 semanas por mes = 24 días)
       const diasPorMes = 24;
       const totalMensual = empleados.reduce((total, empleado) => {
         const salarioDiario = empleado.pago_semanal ? empleado.pago_semanal / 6 : empleado.contrato?.salario_diario || 0;
         return total + (salarioDiario * diasPorMes);
       }, 0);
-      
+
       console.log('💰 [CALCULADORA] Total salarios mensuales calculado:', totalMensual);
       return totalMensual;
     } catch (error) {
@@ -347,19 +347,19 @@ export class CalculadoraNominaService {
    */
   static validarCalculo(calculo) {
     const errores = [];
-    
+
     if (calculo.montoTotal < 0) {
       errores.push('El monto total no puede ser negativo');
     }
-    
+
     if (calculo.deducciones.total > calculo.subtotal) {
       errores.push('Las deducciones no pueden ser mayores al subtotal');
     }
-    
+
     if (calculo.deducciones.isr < 0 || calculo.deducciones.imss < 0) {
       errores.push('Las deducciones fiscales no pueden ser negativas');
     }
-    
+
     return {
       esValida: errores.length === 0,
       errores

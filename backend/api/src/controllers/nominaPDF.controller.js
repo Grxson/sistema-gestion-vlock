@@ -11,16 +11,16 @@ function convertirNumeroALetra(numero) {
     const decenas = ['', '', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
     const especiales = ['', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'];
     const centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
-    
+
     if (numero === 0) return 'cero pesos M.N.';
     if (numero < 0) return 'menos ' + convertirNumeroALetra(-numero);
-    
+
     // Separar parte entera y centavos
     let parteEntera = Math.floor(numero);
     const centavos = Math.round((numero - parteEntera) * 100);
-    
+
     let resultado = '';
-    
+
     // Miles
     if (parteEntera >= 1000) {
         const miles = Math.floor(parteEntera / 1000);
@@ -31,7 +31,7 @@ function convertirNumeroALetra(numero) {
         }
         parteEntera %= 1000;
     }
-    
+
     // Centenas
     if (parteEntera >= 100) {
         const centena = Math.floor(parteEntera / 100);
@@ -42,7 +42,7 @@ function convertirNumeroALetra(numero) {
         }
         parteEntera %= 100;
     }
-    
+
     // Decenas y unidades
     if (parteEntera >= 20) {
         const decena = Math.floor(parteEntera / 10);
@@ -57,15 +57,15 @@ function convertirNumeroALetra(numero) {
     } else if (parteEntera >= 1) {
         resultado += unidades[parteEntera] + ' ';
     }
-    
+
     // Agregar "pesos"
     resultado += 'pesos';
-    
+
     // Agregar centavos si existen
     if (centavos > 0) {
         resultado += ' ' + centavos + '/100';
     }
-    
+
     return resultado.trim() + ' M.N.';
 }
 
@@ -75,10 +75,10 @@ function convertirParteEntera(numero) {
     const decenas = ['', '', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'sesenta', 'setenta', 'ochenta', 'noventa'];
     const especiales = ['', 'once', 'doce', 'trece', 'catorce', 'quince', 'dieciséis', 'diecisiete', 'dieciocho', 'diecinueve'];
     const centenas = ['', 'ciento', 'doscientos', 'trescientos', 'cuatrocientos', 'quinientos', 'seiscientos', 'setecientos', 'ochocientos', 'novecientos'];
-    
+
     let resultado = '';
     let num = numero; // Crear variable local para modificar
-    
+
     // Centenas
     if (num >= 100) {
         const centena = Math.floor(num / 100);
@@ -89,7 +89,7 @@ function convertirParteEntera(numero) {
         }
         num %= 100;
     }
-    
+
     // Decenas y unidades
     if (num >= 20) {
         const decena = Math.floor(num / 10);
@@ -104,7 +104,7 @@ function convertirParteEntera(numero) {
     } else if (num >= 1) {
         resultado += unidades[num] + ' ';
     }
-    
+
     return resultado.trim();
 }
 
@@ -135,7 +135,7 @@ const generarReciboPDF = async (req, res) => {
             const empleadoRaw = await Empleado.findByPk(nomina.id_empleado);
             if (empleadoRaw) {
                 const empleado = empleadoRaw.toJSON();
-                
+
                 // Cargar oficio del empleado si existe
                 if (empleado.id_oficio) {
                     const oficioRaw = await models.Oficios.findByPk(empleado.id_oficio);
@@ -143,7 +143,7 @@ const generarReciboPDF = async (req, res) => {
                         empleado.oficio = oficioRaw.toJSON();
                     }
                 }
-                
+
                 // Cargar proyecto del empleado si existe
                 if (empleado.id_proyecto) {
                     const proyectoEmpleadoRaw = await models.Proyectos.findByPk(empleado.id_proyecto);
@@ -151,7 +151,7 @@ const generarReciboPDF = async (req, res) => {
                         empleado.proyecto = proyectoEmpleadoRaw.toJSON();
                     }
                 }
-                
+
                 nomina.empleado = empleado;
             }
         }
@@ -176,7 +176,7 @@ const generarReciboPDF = async (req, res) => {
         const PDFDocument = require('pdfkit');
         const fs = require('fs-extra');
         const path = require('path');
-        
+
         const streamMode = req.query?.mode === 'stream' || req.query?.download === '1';
         const uploadsDir = path.join(__dirname, '..', 'uploads', 'recibos');
         if (!streamMode) {
@@ -186,18 +186,18 @@ const generarReciboPDF = async (req, res) => {
         // Generar nombre del archivo con formato: nomina_semana-<n>_<Nombre_Empleado>_<YYYYMMDD_HHMMSS>.pdf (usado también en streaming)
         const empleadoData = nomina.empleado;
         const nombreEmpleado = `${empleadoData.nombre}_${empleadoData.apellido}`.replace(/\s+/g, '_');
-        
+
         // Calcular número de semana del mes
         let numeroSemana = 'N/A';
         if (nomina.semana) {
             const fechaInicio = new Date(nomina.semana.fecha_inicio);
             const mes = fechaInicio.getMonth();
             const dia = fechaInicio.getDate();
-            
+
             const primerDiaDelMes = new Date(fechaInicio.getFullYear(), mes, 1);
             const diaPrimerDia = primerDiaDelMes.getDay();
             const diasEnPrimeraFila = 7 - diaPrimerDia;
-            
+
             if (dia <= diasEnPrimeraFila) {
                 numeroSemana = 1;
             } else {
@@ -205,15 +205,15 @@ const generarReciboPDF = async (req, res) => {
                 numeroSemana = 1 + Math.ceil(diasRestantes / 7);
             }
         }
-        
+
         const now = new Date();
-        const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+        const ts = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}_${String(now.getHours()).padStart(2, '0')}${String(now.getMinutes()).padStart(2, '0')}${String(now.getSeconds()).padStart(2, '0')}`;
         const fileName = `nomina_semana-${numeroSemana}_${nombreEmpleado}_${ts}.pdf`;
         const filePath = path.join(uploadsDir, fileName);
 
         // Crear el documento PDF con márgenes más pequeños
         const doc = new PDFDocument({ margin: 20, size: 'letter' });
-        
+
         // En modo streaming: enviar directo al cliente; en modo archivo: escribir a disco
         let stream = null;
         if (streamMode) {
@@ -232,32 +232,32 @@ const generarReciboPDF = async (req, res) => {
 
         // ===== ENCABEZADO PRINCIPAL =====
         let currentY = margin;
-        
+
         // Título principal - "Comprobante Fiscal Digital por Internet"
         doc.fontSize(16)
-           .font('Helvetica-Bold')
-           .fillColor('#000000')
-           .text('COMPROBANTE DIGITAL DE NÓMINA', margin, currentY, { align: 'center' });
-        
+            .font('Helvetica-Bold')
+            .fillColor('#000000')
+            .text('COMPROBANTE DIGITAL DE NÓMINA', margin, currentY, { align: 'center' });
+
         currentY += 30;
 
         // ===== DATOS DE LA EMPRESA =====
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('DATOS DE LA EMPRESA:', margin, currentY);
-        
+            .font('Helvetica-Bold')
+            .text('DATOS DE LA EMPRESA:', margin, currentY);
+
         currentY += 15;
-        
+
         doc.fontSize(9)
-           .font('Helvetica')
-           .text('EDIFICACIONES OROCAZA SA DE CV', margin, currentY);
-        
+            .font('Helvetica')
+            .text('EDIFICACIONES OROCAZA SA DE CV', margin, currentY);
+
         currentY += 12;
         doc.text('RFC: EOR161129LG4', margin, currentY);
-        
+
         currentY += 12;
         doc.text('Oficina: C. Aldama 1949, Col. San Antonio, Guadalajara, Jalisco, México', margin, currentY);
-        
+
         currentY += 12;
         doc.text('Email: admon.vlock.contructora@gmail.com', margin, currentY);
 
@@ -266,7 +266,7 @@ const generarReciboPDF = async (req, res) => {
         const fechaActual = new Date();
         const fechaFormateada = fechaActual.toLocaleDateString('es-MX');
         const horaFormateada = fechaActual.toLocaleTimeString('es-MX');
-        
+
         // Logo de la empresa (esquina superior derecha) - PRIMERO
         try {
             const logoPath = path.join(__dirname, '..', 'public', 'images', 'vlock_logo.png');
@@ -276,28 +276,28 @@ const generarReciboPDF = async (req, res) => {
                 const logoHeight = 88; // Aumentado proporcionalmente
                 const logoX = pageWidth - margin - logoWidth;
                 const logoY = margin;
-                
+
                 doc.image(logoPath, logoX, logoY, { width: logoWidth });
-                
+
                 // Posicionar fecha/hora MUY abajo del logo para evitar superposición
                 doc.fontSize(8)
-                   .font('Helvetica')
-                   .text(`Fecha: ${fechaFormateada}`, logoX - 40, logoY + logoHeight + 20)
-                   .text(`Hora: ${horaFormateada}`, logoX - 40, logoY + logoHeight + 33);
+                    .font('Helvetica')
+                    .text(`Fecha: ${fechaFormateada}`, logoX - 40, logoY + logoHeight + 20)
+                    .text(`Hora: ${horaFormateada}`, logoX - 40, logoY + logoHeight + 33);
             } else {
                 // Si no hay logo, posicionar fecha/hora en esquina derecha
                 doc.fontSize(9)
-                   .font('Helvetica')
-                   .text(`Fecha: ${fechaFormateada}`, pageWidth - 120, margin + 20)
-                   .text(`Hora: ${horaFormateada}`, pageWidth - 120, margin + 35);
+                    .font('Helvetica')
+                    .text(`Fecha: ${fechaFormateada}`, pageWidth - 120, margin + 20)
+                    .text(`Hora: ${horaFormateada}`, pageWidth - 120, margin + 35);
             }
         } catch (logoError) {
             console.log('No se pudo cargar el logo:', logoError.message);
             // Fallback sin logo
             doc.fontSize(9)
-               .font('Helvetica')
-               .text(`Fecha: ${fechaFormateada}`, pageWidth - 120, margin + 20)
-               .text(`Hora: ${horaFormateada}`, pageWidth - 120, margin + 35);
+                .font('Helvetica')
+                .text(`Fecha: ${fechaFormateada}`, pageWidth - 120, margin + 20)
+                .text(`Hora: ${horaFormateada}`, pageWidth - 120, margin + 35);
         }
 
         currentY += 25; // Reducir espacio después de datos de empresa
@@ -308,73 +308,73 @@ const generarReciboPDF = async (req, res) => {
         const semanaInfo = nomina.semana || {};
         const añoActual = new Date().getFullYear();
         const mesActual = new Date().getMonth() + 1;
-        
+
         // Definir columnas para mejor distribución
         const empCol1X = margin;
         const empCol2X = margin + 250; // Columna derecha
         const colWidth = 200;
-        
+
         // Columna izquierda - DATOS DEL EMPLEADO
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('DATOS DEL EMPLEADO:', empCol1X, currentY);
-        
+            .font('Helvetica-Bold')
+            .text('DATOS DEL EMPLEADO:', empCol1X, currentY);
+
         currentY += 15;
-        
+
         // ID del empleado y nombre
         doc.fontSize(9)
-           .font('Helvetica-Bold')
-           .text(`Nombre: ${nombreCompleto}`, empCol1X, currentY);
-        
+            .font('Helvetica-Bold')
+            .text(`Nombre: ${nombreCompleto}`, empCol1X, currentY);
+
         currentY += 12;
-        
+
         // RFC del empleado
         if (empleado.rfc) {
             doc.fontSize(8)
-               .font('Helvetica')
-               .text(`RFC: ${empleado.rfc}`, empCol1X, currentY);
+                .font('Helvetica')
+                .text(`RFC: ${empleado.rfc}`, empCol1X, currentY);
             currentY += 10;
         }
-        
+
         // NSS del empleado
         if (empleado.nss) {
             doc.fontSize(8)
-               .text(`NSS: ${empleado.nss}`, empCol1X, currentY);
+                .text(`NSS: ${empleado.nss}`, empCol1X, currentY);
             currentY += 10;
         }
-        
+
         // Fecha de inicio de relación laboral (fecha de alta/creación del usuario) con formato legible
         const fechaInicioDate = empleado?.fecha_alta ? new Date(empleado.fecha_alta) : null;
         const fechaInicio = (fechaInicioDate && !isNaN(fechaInicioDate))
-          ? fechaInicioDate.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
-          : 'N/A';
+            ? fechaInicioDate.toLocaleDateString('es-MX', { day: '2-digit', month: 'long', year: 'numeric' })
+            : 'N/A';
         doc.fontSize(8)
-           .text(`Fecha de Inicio: ${fechaInicio}`, empCol1X, currentY);
-        
+            .text(`Fecha de Inicio: ${fechaInicio}`, empCol1X, currentY);
+
         currentY += 10;
-        
+
         // Puesto/Oficio del empleado
         const puesto = nomina.empleado?.oficio?.nombre || 'Sin especificar';
         doc.fontSize(8)
-           .text(`Puesto: ${puesto}`, empCol1X, currentY);
-        
+            .text(`Puesto: ${puesto}`, empCol1X, currentY);
+
         currentY += 10;
-        
+
         // Proyecto del empleado (ahora nomina.proyecto ya es un objeto plano sin referencias circulares)
         const proyecto = nomina.empleado?.proyecto?.nombre || nomina.proyecto?.nombre || 'Sin proyecto';
         doc.fontSize(8)
-           .text(`Proyecto: ${proyecto}`, empCol1X, currentY);
-        
+            .text(`Proyecto: ${proyecto}`, empCol1X, currentY);
+
 
         // Columna derecha - INFORMACIÓN DEL PERÍODO
         let col2Y = currentY - 50; // Ajustar para alinear con columna izquierda
-        
+
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('INFORMACIÓN DEL PERÍODO:', empCol2X, col2Y);
-        
+            .font('Helvetica-Bold')
+            .text('INFORMACIÓN DEL PERÍODO:', empCol2X, col2Y);
+
         col2Y += 15;
-        
+
         // Helpers ISO para periodo/semana del mes
         function getMondayOfISOWeek(year, week) {
             const simple = new Date(year, 0, 4 + (week - 1) * 7);
@@ -443,7 +443,7 @@ const generarReciboPDF = async (req, res) => {
         let semanaFinal = 'N/A';
         let periodoInfo = '';
         let semanaLinea = '';
-        
+
         if (nomina.semana) {
             // Usar la información de la semana desde la base de datos
             const semanaData = nomina.semana;
@@ -466,11 +466,11 @@ const generarReciboPDF = async (req, res) => {
             const d2 = saturday.getDate();
             const m2 = meses[saturday.getMonth()];
             const rango = m1 === m2 ? `del ${d1} al ${d2} de ${m1}` : `del ${d1} de ${m1} al ${d2} de ${m2}`;
-            
+
             periodoInfo = `Semana ${semanaFinal} - ${rango}`;
             // No mostrar línea adicional de semana ni ISO en el PDF
             semanaLinea = '';
-            
+
             console.log('🔍 [PDF] Información de semana desde BD:', {
                 semanaISO: semanaData.semana_iso,
                 año: semanaData.anio,
@@ -484,62 +484,62 @@ const generarReciboPDF = async (req, res) => {
             const fechaCreacion = new Date(nomina.createdAt);
             const año = fechaCreacion.getFullYear();
             const mes = fechaCreacion.getMonth();
-            
+
             function calcularSemanaDelMes(fecha) {
                 const año = fecha.getFullYear();
                 const mes = fecha.getMonth();
                 const dia = fecha.getDate();
-                
+
                 const primerDiaDelMes = new Date(año, mes, 1);
                 const diaPrimerDia = primerDiaDelMes.getDay();
                 const diasEnPrimeraFila = 7 - diaPrimerDia;
-                
+
                 if (dia <= diasEnPrimeraFila) {
                     return 1;
                 } else {
                     const diasRestantes = dia - diasEnPrimeraFila;
                     const semanaDelMes = 1 + Math.ceil(diasRestantes / 7);
-                    
+
                     const ultimoDiaDelMes = new Date(año, mes + 1, 0);
                     const diasEnElMes = ultimoDiaDelMes.getDate();
                     const diasRestantesTotal = diasEnElMes - diasEnPrimeraFila;
                     const filasAdicionales = Math.ceil(diasRestantesTotal / 7);
                     const totalFilas = 1 + filasAdicionales;
-                    
+
                     return Math.max(1, Math.min(semanaDelMes, totalFilas));
                 }
             }
-            
+
             semanaFinal = calcularSemanaDelMes(fechaCreacion);
-            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
-                          'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+            const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
             const nombreMes = meses[mes];
             periodoInfo = `Semana ${semanaFinal} de ${nombreMes}`;
             // No mostrar línea adicional de semana
             semanaLinea = '';
-            
+
             console.log('🔍 [PDF] Calculando semana desde fecha de creación:', {
                 fechaCreacion: fechaCreacion.toLocaleDateString('es-MX'),
                 semanaDelMes: semanaFinal,
                 periodo: periodoInfo
             });
         }
-        
+
         doc.fontSize(8)
-           .font('Helvetica')
-           .text(`Período: ${periodoInfo}`, empCol2X, col2Y);
-        
+            .font('Helvetica')
+            .text(`Período: ${periodoInfo}`, empCol2X, col2Y);
+
         col2Y += 10;
         // Omitido: línea adicional de semana (ya se muestra en 'Período')
         doc.text(`Días de Pago: 6`, empCol2X, col2Y); // Siempre 6 días para pago semanal
-        
+
         col2Y += 10;
         // SBC calculado para semana de 6 días laborales
         const pagoSemanal = parseFloat(nomina.pago_semanal); // pago_semanal contiene el pago semanal
         const sbcDiario = pagoSemanal / 6; // SBC diario basado en 6 días laborales
         const sbcSemanal = sbcDiario * 6; // SBC semanal (6 días)
         doc.text(`SBC: $${sbcDiario.toFixed(2)}/día`, empCol2X, col2Y);
-        
+
         // Ajustar currentY para la siguiente sección
         currentY = Math.max(currentY, col2Y) + 10;
 
@@ -547,69 +547,69 @@ const generarReciboPDF = async (req, res) => {
 
         // ===== PERCEPCIONES (GANANCIAS) =====
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('PERCEPCIONES:', margin, currentY);
-        
+            .font('Helvetica-Bold')
+            .text('PERCEPCIONES:', margin, currentY);
+
         currentY += 15; // Reducir espacio después del título
-        
+
         // Tabla de percepciones - usar más ancho de página
         const tableStartY = currentY;
         const col1X = margin;
         const col2X = margin + 100;
         const col3X = margin + 200;
         const col4X = margin + 450;
-        
+
         // Encabezados de la tabla
         doc.fontSize(8)
-           .font('Helvetica-Bold')
-           .text('Agrup SAT', col1X, currentY)
-           .text('No.', col2X, currentY)
-           .text('Concepto', col3X, currentY)
-           .text('Total', col4X, currentY);
-        
+            .font('Helvetica-Bold')
+            .text('Agrup SAT', col1X, currentY)
+            .text('No.', col2X, currentY)
+            .text('Concepto', col3X, currentY)
+            .text('Total', col4X, currentY);
+
         currentY += 15;
-        
+
         // Línea bajo encabezados
         doc.moveTo(col1X, currentY)
-           .lineTo(col4X + 80, currentY)
-           .lineWidth(0.5)
-           .strokeColor('#000000')
-           .stroke();
-        
+            .lineTo(col4X + 80, currentY)
+            .lineWidth(0.5)
+            .strokeColor('#000000')
+            .stroke();
+
         currentY += 10;
-        
+
         // Para pago semanal: el salario base ES el pago semanal directamente
         const salarioBase = parseFloat(nomina.pago_semanal); // pago_semanal contiene el pago semanal
         doc.fontSize(8)
-           .font('Helvetica')
-           .text('P', col1X, currentY)
-           .text('001', col2X, currentY)
-           .text('Sueldo', col3X, currentY)
-           .text(`$${salarioBase.toFixed(2)}`, col4X, currentY);
-        
+            .font('Helvetica')
+            .text('P', col1X, currentY)
+            .text('001', col2X, currentY)
+            .text('Sueldo', col3X, currentY)
+            .text(`$${salarioBase.toFixed(2)}`, col4X, currentY);
+
         currentY += 15;
-        
+
         // Horas extra (si aplica) - calcular basándose en el pago semanal
         if (nomina.horas_extra && nomina.horas_extra > 0) {
             // Para pago semanal: (pago semanal / 7 días) / 8 horas por día
             const pagoPorHora = (parseFloat(nomina.pago_semanal) / 7) / 8;
             const montoHorasExtra = parseFloat(nomina.horas_extra) * pagoPorHora * 2; // Doble tiempo
             doc.text('P', col1X, currentY)
-               .text('002', col2X, currentY)
-               .text('Horas Extra', col3X, currentY)
-               .text(`$${montoHorasExtra.toFixed(2)}`, col4X, currentY);
+                .text('002', col2X, currentY)
+                .text('Horas Extra', col3X, currentY)
+                .text(`$${montoHorasExtra.toFixed(2)}`, col4X, currentY);
             currentY += 15;
         }
-        
+
         // Bonos (si aplica) - usar el dato exacto del sistema
         if (nomina.bonos && nomina.bonos > 0) {
             doc.text('P', col1X, currentY)
-               .text('003', col2X, currentY)
-               .text('Bonos', col3X, currentY)
-               .text(`$${parseFloat(nomina.bonos).toFixed(2)}`, col4X, currentY);
+                .text('003', col2X, currentY)
+                .text('Bonos', col3X, currentY)
+                .text(`$${parseFloat(nomina.bonos).toFixed(2)}`, col4X, currentY);
             currentY += 15;
         }
-        
+
         // Total de percepciones - usar el cálculo del sistema
         // Calcular horas extra si aplican (basándose en pago semanal)
         let montoHorasExtra = 0;
@@ -618,14 +618,14 @@ const generarReciboPDF = async (req, res) => {
             const pagoPorHora = (parseFloat(nomina.pago_semanal) / 7) / 8;
             montoHorasExtra = parseFloat(nomina.horas_extra) * pagoPorHora * 2;
         }
-        
+
         const totalPercepciones = salarioBase + montoHorasExtra + (parseFloat(nomina.bonos) || 0);
-        
+
         currentY += 10;
         doc.fontSize(9)
-           .font('Helvetica-Bold')
-           .text(`Total Percepc. más Otros Pagos $`, col3X, currentY)
-           .text(`${totalPercepciones.toFixed(2)}`, col4X, currentY);
+            .font('Helvetica-Bold')
+            .text(`Total Percepc. más Otros Pagos $`, col3X, currentY)
+            .text(`${totalPercepciones.toFixed(2)}`, col4X, currentY);
 
         currentY += 15; // Reducir espacio antes de deducciones
 
@@ -637,174 +637,174 @@ const generarReciboPDF = async (req, res) => {
         const hasAdelantos = parseFloat(nomina.descuentos || 0) > 0;
 
         if (hasFaltas || hasAdelantos) {
-          // ===== DEDUCCIONES =====
-          doc.fontSize(10)
-             .font('Helvetica-Bold')
-             .text('DEDUCCIONES:', margin, currentY);
-          
-          currentY += 15; // Reducir espacio después del título
-          
-          // Encabezados de deducciones
-          doc.fontSize(8)
-             .font('Helvetica-Bold')
-             .text('Agrup SAT', col1X, currentY)
-             .text('No.', col2X, currentY)
-             .text('Concepto', col3X, currentY)
-             .text('Total', col4X, currentY);
-          
-          currentY += 15;
-          
-          // Línea bajo encabezados
-          doc.moveTo(col1X, currentY)
-             .lineTo(col4X + 80, currentY)
-             .lineWidth(0.5)
-             .strokeColor('#000000')
-             .stroke();
-          
-          currentY += 10;
-          
-          // Deducciones - mostrar todas las deducciones aplicadas
-          let contadorDeduccion = 1;
-          let hayDeducciones = false;
-        
-        // Líneas de deducciones fiscales (mantenidas en código pero NO visibles)
-        // if (nomina.deducciones_isr && nomina.deducciones_isr > 0) {
-        //     doc.fontSize(8)
-        //        .font('Helvetica')
-        //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-        //        .text('045', col2X, currentY)
-        //        .text('ISR', col3X, currentY)
-        //        .text(`$${parseFloat(nomina.deducciones_isr).toFixed(2)}`, col4X, currentY);
-        //     currentY += 15;
-        //     contadorDeduccion++;
-        //     hayDeducciones = true;
-        // }
-        
-        // if (nomina.deducciones_imss && nomina.deducciones_imss > 0) {
-        //     doc.fontSize(8)
-        //        .font('Helvetica')
-        //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-        //        .text('052', col2X, currentY)
-        //        .text('IMSS', col3X, currentY)
-        //        .text(`$${parseFloat(nomina.deducciones_imss).toFixed(2)}`, col4X, currentY);
-        //     currentY += 15;
-        //     contadorDeduccion++;
-        //     hayDeducciones = true;
-        // }
-        
-        // if (nomina.deducciones_infonavit && nomina.deducciones_infonavit > 0) {
-        //     doc.fontSize(8)
-        //        .font('Helvetica')
-        //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-        //        .text('053', col2X, currentY)
-        //        .text('INFONAVIT', col3X, currentY)
-        //        .text(`$${parseFloat(nomina.deducciones_infonavit).toFixed(2)}`, col4X, currentY);
-        //     currentY += 15;
-        //     contadorDeduccion++;
-        //     hayDeducciones = true;
-        // }
-        
-        // Mostrar deducciones adicionales si existen (OCULTO: Requerimiento actual es no mostrarlas)
-        // if (nomina.deducciones_adicionales && nomina.deducciones_adicionales > 0) {
-        //     doc.fontSize(8)
-        //        .font('Helvetica')
-        //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-        //        .text('999', col2X, currentY)
-        //        .text('Adicionales', col3X, currentY)
-        //        .text(`$${parseFloat(nomina.deducciones_adicionales).toFixed(2)}`, col4X, currentY);
-        //     currentY += 15;
-        //     contadorDeduccion++;
-        //     hayDeducciones = true;
-        // }
-        
-        // Calcular y mostrar descuento por días no trabajados
-        if (diasNoTrabajados > 0) {
-            // Calcular descuento por día no trabajado
-            const pagoDiario = pagoSemanal / diasBase;
-            const descuentoPorDias = pagoDiario * diasNoTrabajados;
-            
+            // ===== DEDUCCIONES =====
+            doc.fontSize(10)
+                .font('Helvetica-Bold')
+                .text('DEDUCCIONES:', margin, currentY);
+
+            currentY += 15; // Reducir espacio después del título
+
+            // Encabezados de deducciones
             doc.fontSize(8)
-               .font('Helvetica')
-               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-               .text('997', col2X, currentY)
-               .text(`Descuento por ${diasNoTrabajados} día(s) no trabajado(s)`, col3X, currentY)
-               .text(`$${descuentoPorDias.toFixed(2)}`, col4X, currentY);
+                .font('Helvetica-Bold')
+                .text('Agrup SAT', col1X, currentY)
+                .text('No.', col2X, currentY)
+                .text('Concepto', col3X, currentY)
+                .text('Total', col4X, currentY);
+
             currentY += 15;
-            contadorDeduccion++;
-            hayDeducciones = true;
-        }
-        
-        // Mostrar adelantos si existen (antes: 'Otros descuentos')
-        if (nomina.descuentos && nomina.descuentos > 0) {
-            doc.fontSize(8)
-               .font('Helvetica')
-               .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
-               .text('998', col2X, currentY)
-               .text('Adelantos', col3X, currentY)
-               .text(`$${parseFloat(nomina.descuentos).toFixed(2)}`, col4X, currentY);
-            currentY += 15;
-            hayDeducciones = true;
-        }
-        
-        // Si no hay deducciones, NO mostrar ningún mensaje (PDF debe verse como completo)
-        // if (!hayDeducciones) {
-        //   doc.fontSize(8)
-        //      .font('Helvetica-Oblique')
-        //      .text('Sin deducciones aplicadas', col1X, currentY);
-        //   currentY += 15;
-        // }
+
+            // Línea bajo encabezados
+            doc.moveTo(col1X, currentY)
+                .lineTo(col4X + 80, currentY)
+                .lineWidth(0.5)
+                .strokeColor('#000000')
+                .stroke();
+
+            currentY += 10;
+
+            // Deducciones - mostrar todas las deducciones aplicadas
+            let contadorDeduccion = 1;
+            let hayDeducciones = false;
+
+            // Líneas de deducciones fiscales (mantenidas en código pero NO visibles)
+            // if (nomina.deducciones_isr && nomina.deducciones_isr > 0) {
+            //     doc.fontSize(8)
+            //        .font('Helvetica')
+            //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+            //        .text('045', col2X, currentY)
+            //        .text('ISR', col3X, currentY)
+            //        .text(`$${parseFloat(nomina.deducciones_isr).toFixed(2)}`, col4X, currentY);
+            //     currentY += 15;
+            //     contadorDeduccion++;
+            //     hayDeducciones = true;
+            // }
+
+            // if (nomina.deducciones_imss && nomina.deducciones_imss > 0) {
+            //     doc.fontSize(8)
+            //        .font('Helvetica')
+            //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+            //        .text('052', col2X, currentY)
+            //        .text('IMSS', col3X, currentY)
+            //        .text(`$${parseFloat(nomina.deducciones_imss).toFixed(2)}`, col4X, currentY);
+            //     currentY += 15;
+            //     contadorDeduccion++;
+            //     hayDeducciones = true;
+            // }
+
+            // if (nomina.deducciones_infonavit && nomina.deducciones_infonavit > 0) {
+            //     doc.fontSize(8)
+            //        .font('Helvetica')
+            //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+            //        .text('053', col2X, currentY)
+            //        .text('INFONAVIT', col3X, currentY)
+            //        .text(`$${parseFloat(nomina.deducciones_infonavit).toFixed(2)}`, col4X, currentY);
+            //     currentY += 15;
+            //     contadorDeduccion++;
+            //     hayDeducciones = true;
+            // }
+
+            // Mostrar deducciones adicionales si existen (OCULTO: Requerimiento actual es no mostrarlas)
+            // if (nomina.deducciones_adicionales && nomina.deducciones_adicionales > 0) {
+            //     doc.fontSize(8)
+            //        .font('Helvetica')
+            //        .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+            //        .text('999', col2X, currentY)
+            //        .text('Adicionales', col3X, currentY)
+            //        .text(`$${parseFloat(nomina.deducciones_adicionales).toFixed(2)}`, col4X, currentY);
+            //     currentY += 15;
+            //     contadorDeduccion++;
+            //     hayDeducciones = true;
+            // }
+
+            // Calcular y mostrar descuento por días no trabajados
+            if (diasNoTrabajados > 0) {
+                // Calcular descuento por día no trabajado
+                const pagoDiario = pagoSemanal / diasBase;
+                const descuentoPorDias = pagoDiario * diasNoTrabajados;
+
+                doc.fontSize(8)
+                    .font('Helvetica')
+                    .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+                    .text('997', col2X, currentY)
+                    .text(`Descuento por ${diasNoTrabajados} día(s) no trabajado(s)`, col3X, currentY)
+                    .text(`$${descuentoPorDias.toFixed(2)}`, col4X, currentY);
+                currentY += 15;
+                contadorDeduccion++;
+                hayDeducciones = true;
+            }
+
+            // Mostrar adelantos si existen (antes: 'Otros descuentos')
+            if (nomina.descuentos && nomina.descuentos > 0) {
+                doc.fontSize(8)
+                    .font('Helvetica')
+                    .text(contadorDeduccion.toString().padStart(3, '0'), col1X, currentY)
+                    .text('998', col2X, currentY)
+                    .text('Adelantos', col3X, currentY)
+                    .text(`$${parseFloat(nomina.descuentos).toFixed(2)}`, col4X, currentY);
+                currentY += 15;
+                hayDeducciones = true;
+            }
+
+            // Si no hay deducciones, NO mostrar ningún mensaje (PDF debe verse como completo)
+            // if (!hayDeducciones) {
+            //   doc.fontSize(8)
+            //      .font('Helvetica-Oblique')
+            //      .text('Sin deducciones aplicadas', col1X, currentY);
+            //   currentY += 15;
+            // }
         }
 
         currentY += 15; // Reducir espacio antes del resumen
 
         // ===== RESUMEN FINAL =====
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('RESUMEN:', margin, currentY);
-        
+            .font('Helvetica-Bold')
+            .text('RESUMEN:', margin, currentY);
+
         currentY += 15; // Reducir espacio después del título
-        
+
         // Calcular descuento por días no trabajados
         const diasBaseSemana = 6;
         const diasLaboradosEmpleado = parseInt(nomina.dias_laborados) || 6;
         const diasNoTrabajadosEmpleado = diasBaseSemana - diasLaboradosEmpleado;
         const pagoDiarioEmpleado = pagoSemanal / diasBaseSemana;
         const descuentoPorDiasNoTrabajados = diasNoTrabajadosEmpleado > 0 ? (pagoDiarioEmpleado * diasNoTrabajadosEmpleado) : 0;
-        
+
         // Total de deducciones SOLO por faltas y adelantos (lo que sí se resta)
         const totalDeducciones = (
-          (diasNoTrabajadosEmpleado > 0 ? (pagoDiarioEmpleado * diasNoTrabajadosEmpleado) : 0) +
-          parseFloat(nomina.descuentos || 0)
+            (diasNoTrabajadosEmpleado > 0 ? (pagoDiarioEmpleado * diasNoTrabajadosEmpleado) : 0) +
+            parseFloat(nomina.descuentos || 0)
         );
-        
+
         // Total a pagar = Percepciones - (faltas + adelantos)
         const totalNeto = totalPercepciones - totalDeducciones;
-        
+
         // No mostrar pago parcial ni notas de movimientos en el PDF
         const montoPagado = 0;
         const esPagoParcial = false;
-        
+
         // Usar columnas para el resumen también
         const resumenCol1X = margin + 300;
         const resumenCol2X = margin + 450;
-        
+
         // Mostrar resumen simplificado y claro
         doc.fontSize(9)
-           .font('Helvetica')
-           .text(`Total Percepciones:`, resumenCol1X, currentY)
-           .text(`$${totalPercepciones.toFixed(2)}`, resumenCol2X, currentY);
-        
+            .font('Helvetica')
+            .text(`Total Percepciones:`, resumenCol1X, currentY)
+            .text(`$${totalPercepciones.toFixed(2)}`, resumenCol2X, currentY);
+
         currentY += 15;
-        
+
         // Solo mostrar deducciones si hay alguna
         if (totalDeducciones > 0) {
             doc.text(`Total Deducciones:`, resumenCol1X, currentY)
-               .text(`$${totalDeducciones.toFixed(2)}`, resumenCol2X, currentY);
+                .text(`$${totalDeducciones.toFixed(2)}`, resumenCol2X, currentY);
             currentY += 15;
         }
-        
+
         currentY += 5;
-        
+
         // Mostrar el total a pagar (destacado)
         // Caja de fondo para destacar
         const totalBoxY = currentY - 4;
@@ -813,17 +813,17 @@ const generarReciboPDF = async (req, res) => {
         const totalBoxWidth = (pageWidth - margin) - totalBoxX;
         doc.save();
         doc.rect(totalBoxX, totalBoxY, totalBoxWidth, totalBoxHeight)
-           .fill('#f2f6ff');
+            .fill('#f2f6ff');
         doc.restore();
 
         doc.fontSize(13)
-           .font('Helvetica-Bold')
-           .fillColor('#0a7')
-           .text(`TOTAL A PAGAR:`, resumenCol1X, currentY)
-           .fillColor('#0a7')
-           .text(`$${totalNeto.toFixed(2)}`, resumenCol2X, currentY);
+            .font('Helvetica-Bold')
+            .fillColor('#0a7')
+            .text(`TOTAL A PAGAR:`, resumenCol1X, currentY)
+            .fillColor('#0a7')
+            .text(`$${totalNeto.toFixed(2)}`, resumenCol2X, currentY);
         doc.fillColor('#000000');
-        
+
         currentY += 20; // Reducir espacio antes del importe en letra
 
         // ===== IMPORTE CON LETRA =====
@@ -831,55 +831,55 @@ const generarReciboPDF = async (req, res) => {
         const montoParaLetra = totalNeto;
         const montoEnLetra = convertirNumeroALetra(montoParaLetra);
         doc.fontSize(9)
-           .font('Helvetica-Bold')
-           .text('Importe con letra:', margin, currentY);
-        
+            .font('Helvetica-Bold')
+            .text('Importe con letra:', margin, currentY);
+
         currentY += 15;
-        
+
         doc.fontSize(8)
-           .font('Helvetica')
-           .text(montoEnLetra, margin, currentY, { align: 'left', width: pageWidth - 2 * margin });
-        
+            .font('Helvetica')
+            .text(montoEnLetra, margin, currentY, { align: 'left', width: pageWidth - 2 * margin });
+
         currentY += 70; // Más espacio antes de la firma (aumentado de 30 a 50)
 
         // ===== FIRMA DEL EMPLEADO =====
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('FIRMA DEL EMPLEADO:', margin, currentY);
-        
+            .font('Helvetica-Bold')
+            .text('FIRMA DEL EMPLEADO:', margin, currentY);
+
         currentY += 25; // Más espacio después del título (aumentado de 20 a 25)
-        
+
         // Línea horizontal para firma - centrada
         const firmaWidth = 200;
         const firmaX = (pageWidth - firmaWidth) / 2; // Centrar horizontalmente
-        
+
         // Línea horizontal para firma
         doc.moveTo(firmaX, currentY)
-           .lineTo(firmaX + firmaWidth, currentY)
-           .lineWidth(1)
-           .strokeColor('#000000')
-           .stroke();
-        
+            .lineTo(firmaX + firmaWidth, currentY)
+            .lineWidth(1)
+            .strokeColor('#000000')
+            .stroke();
+
         currentY += 25; // Más espacio después de la línea (aumentado de 20 a 25)
-        
+
         doc.fontSize(10)
-           .font('Helvetica')
-           .text(nombreCompleto, firmaX, currentY, { align: 'center', width: firmaWidth });
+            .font('Helvetica')
+            .text(nombreCompleto, firmaX, currentY, { align: 'center', width: firmaWidth });
 
         // Pie de página - posicionar más abajo (reducir margen desde el fondo)
         const piePageY = pageHeight - margin - 10; // Reducido de 20 a 10px desde el fondo
-        
+
         doc.fontSize(7)
-           .font('Helvetica')
-           .text(`Documento generado el ${fechaFormateada} a las ${horaFormateada} en Guadalajara Jalisco`, margin, piePageY - 15, { align: 'center', width: pageWidth - 2 * margin });
-        
+            .font('Helvetica')
+            .text(`Documento generado el ${fechaFormateada} a las ${horaFormateada} en Guadalajara Jalisco`, margin, piePageY - 15, { align: 'center', width: pageWidth - 2 * margin });
+
         //const nombreResponsable = req.usuario ? 
-          //  `${req.usuario.nombre_usuario.toUpperCase()}` : 
-            //'Vlock Constructora';
+        //  `${req.usuario.nombre_usuario.toUpperCase()}` : 
+        //'Vlock Constructora';
         const nombreResponsable = 'ZAIDA KAREN COVARRUBIAS CASILLAS';
-        
+
         doc.fontSize(7)
-           .text(`Emitido por: ${nombreResponsable}`, margin, piePageY, { align: 'center', width: pageWidth - 2 * margin });
+            .text(`Emitido por: ${nombreResponsable}`, margin, piePageY, { align: 'center', width: pageWidth - 2 * margin });
 
         // Completar el documento PDF
         doc.end();
@@ -920,8 +920,8 @@ const generarReciboPDF = async (req, res) => {
             res.status(200).send(fileBuffer);
         } catch (err) {
             console.error('Error al enviar el archivo:', err);
-            res.status(500).json({ 
-                message: 'Error al enviar el archivo PDF', 
+            res.status(500).json({
+                message: 'Error al enviar el archivo PDF',
                 error: err.message
             });
         }

@@ -1352,7 +1352,7 @@ export default function Nomina() {
                       (showAllNominas ? getNominasFiltradas() : getNominasFiltradas().slice(0, 20))
                         .slice()
                         // Orden descendente robusto por fecha (prioriza fecha_creacion; luego createdAt, fecha_pago, fecha y fecha_inicio de semana)
-                        .sort((a,b) => {
+                        .sort((a, b) => {
                           const da = new Date(b.fecha_creacion || b.createdAt || b.fecha_pago || b.fecha || b?.semana?.fecha_inicio || 0);
                           const db = new Date(a.fecha_creacion || a.createdAt || a.fecha_pago || a.fecha || a?.semana?.fecha_inicio || 0);
                           return da - db;
@@ -1375,7 +1375,7 @@ export default function Nomina() {
                           const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
                           if (!base) return '—';
                           const d = new Date(base);
-                          const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+                          const periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
                           const idx = semanaDelMesDesdeISO(periodo, n.semana.anio, n.semana.semana_iso);
                           return Number.isNaN(idx) || !idx ? '—' : idx;
                         } catch { return '—'; }
