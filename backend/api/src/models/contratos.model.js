@@ -27,7 +27,7 @@ module.exports = (sequelize) => {
   });
 
   Contrato.associate = models => {
-    Contrato.hasMany(models.Empleados, { foreignKey: 'id_contrato', as: 'empleados' });
+    // ❌ ELIMINADO: Contrato.hasMany(models.Empleados) - causaba circular reference
   };
 
   return Contrato;

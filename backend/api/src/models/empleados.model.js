@@ -83,7 +83,7 @@ module.exports = (sequelize) => {
     Empleado.belongsTo(models.Contratos, { foreignKey: 'id_contrato', as: 'contrato' });
     Empleado.belongsTo(models.Oficios, { foreignKey: 'id_oficio', as: 'oficio' });
     Empleado.belongsTo(models.Proyectos, { foreignKey: 'id_proyecto', as: 'proyecto' });
-    Empleado.hasMany(models.NominaEmpleados, { foreignKey: 'id_empleado' });
+    // ❌ ELIMINADO: Empleado.hasMany(models.NominaEmpleados) - causaba circular reference
   };
 
   return Empleado;

@@ -95,41 +95,44 @@ async function registrarMovimientoNomina(nominaInstance, options = {}) {
  */
 const getAllNominas = async (req, res) => {
     try {
-        // Compatibilidad: si en alguna versión antigua el frontend pedía alias 'proyectos',
-        // evitamos el 500 construyendo el include solo con los alias realmente registrados.
-        const asociaciones = NominaEmpleado.associations || {};
-        const incluyeProyecto = asociaciones.proyecto ? { model: Proyecto, as: 'proyecto' } : null;
-        const incluyeProyectoPlural = asociaciones.proyectos ? { model: Proyecto, as: 'proyectos' } : null;
+        // Query SIN includes para evitar referencias circulares
+        // Obtenemos los datos manualmente
+        const nominasRaw = await NominaEmpleado.findAll({
+            attributes: { exclude: ['createdAt', 'updatedAt'] }
+        });
 
-        const includeList = [
-            { model: Empleado, as: 'empleado' },
-            { model: SemanaNomina, as: 'semana' }
-        ];
+        // Obtener IDs únicos de empleados y semanas
+        const empleadoIds = [...new Set(nominasRaw.map(n => n.id_empleado))];
+        const semanaIds = [...new Set(nominasRaw.map(n => n.id_semana))];
 
-        if (incluyeProyecto) includeList.push(incluyeProyecto);
-        // Solo añadimos el plural si existe realmente la asociación para evitar el error:
-        // "proyectos is not associated to nomina_empleado!"
-        if (incluyeProyectoPlural) includeList.push(incluyeProyectoPlural);
+        // Consultas separadas sin includes anidados
+        const empleados = await Empleado.findAll({
+            where: { id_empleado: empleadoIds },
+            attributes: ['id_empleado', 'nombre', 'apellido', 'nss', 'rfc', 'telefono', 'pago_semanal', 'activo', 'id_proyecto']
+        });
 
-        if (!incluyeProyecto && !incluyeProyectoPlural) {
-            console.warn('⚠️ [GET_NOMINAS] Sin asociación de proyecto en nomina_empleado. Revisar modelo.');
-        } else if (incluyeProyecto && incluyeProyectoPlural) {
-            console.log('ℹ️ [GET_NOMINAS] Asociaciones disponibles: proyecto y proyectos (modo compatibilidad).');
-        } else if (incluyeProyecto) {
-            console.log('ℹ️ [GET_NOMINAS] Usando alias de proyecto: proyecto');
-        } else if (incluyeProyectoPlural) {
-            console.log('ℹ️ [GET_NOMINAS] Usando alias de proyecto (plural): proyectos');
-        }
+        const semanas = await SemanaNomina.findAll({
+            where: { id_semana: semanaIds },
+            attributes: ['id_semana', 'anio', 'semana_iso', 'etiqueta', 'fecha_inicio', 'fecha_fin', 'estado']
+        });
 
-        const nominas = await NominaEmpleado.findAll({ include: includeList });
+        // Mapear para acceso rápido
+        const empleadosMap = new Map(empleados.map(e => [e.id_empleado, e.toJSON()]));
+        const semanasMap = new Map(semanas.map(s => [s.id_semana, s.toJSON()]));
+
+        // Combinar datos manualmente
+        const nominas = nominasRaw.map(nomina => {
+            const nominaJSON = nomina.toJSON();
+            return {
+                ...nominaJSON,
+                empleado: empleadosMap.get(nomina.id_empleado) || null,
+                semana: semanasMap.get(nomina.id_semana) || null
+            };
+        });
 
         res.status(200).json({
             message: 'Nóminas obtenidas exitosamente',
-            nominas,
-            compatibilidad_proyecto: {
-                proyecto: Boolean(incluyeProyecto),
-                proyectos: Boolean(incluyeProyectoPlural)
-            }
+            nominas
         });
     } catch (error) {
         console.error('Error al obtener nóminas:', error);

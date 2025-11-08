@@ -33,7 +33,7 @@ module.exports = (sequelize) => {
   });
 
   SemanaNomina.associate = models => {
-    SemanaNomina.hasMany(models.Nomina_empleado, { foreignKey: 'id_semana', as: 'nominas' });
+    // ❌ ELIMINADO: SemanaNomina.hasMany(models.Nomina_empleado) - causaba circular reference
   };
 
   return SemanaNomina;
