@@ -63,48 +63,6 @@ Object.keys(models).forEach(modelName => {
     }
 });
 
-// --- AUTO FIX ESQUEMA NOMINA (periodo, semana) ---
-// En producción se observó error "Unknown column 'nomina_empleado.periodo'".
-// Este bloque verifica si las columnas existen y las crea en caliente si faltan.
-(async () => {
-    try {
-        const qi = sequelize.getQueryInterface();
-        const table = 'nomina_empleados';
-        const desc = await qi.describeTable(table).catch(() => null);
-        if (!desc) {
-            console.warn(`⚠️ No se pudo describir la tabla ${table}; omitiendo auto-fix de columnas periodo/semana.`);
-            return;
-        }
-        const faltaPeriodo = !desc.periodo;
-        const faltaSemana = !desc.semana;
-        if (!faltaPeriodo && !faltaSemana) {
-            return; // Nada que hacer
-        }
-        console.log('🔧 Auto-fix nomina_empleados: columnas faltantes detectadas', { faltaPeriodo, faltaSemana });
-        // Ejecutar alters de manera independiente para minimizar riesgo
-        if (faltaPeriodo) {
-            try {
-                await sequelize.query(`ALTER TABLE ${table} ADD COLUMN periodo VARCHAR(7) NULL COMMENT 'Periodo en formato YYYY-MM' AFTER monto_pagado`);
-                console.log('✅ Columna periodo creada');
-            } catch (e) {
-                if (!/Duplicate column|exists/i.test(e.message)) console.error('❌ Error creando columna periodo:', e.message);
-            }
-        }
-        if (faltaSemana) {
-            try {
-                // Colocar después de periodo si existe, sino después de monto_pagado
-                const afterRef = faltaPeriodo ? 'monto_pagado' : 'periodo';
-                await sequelize.query(`ALTER TABLE ${table} ADD COLUMN semana INT NULL COMMENT 'Número de semana del mes (1-5)' AFTER ${afterRef}`);
-                console.log('✅ Columna semana creada');
-            } catch (e) {
-                if (!/Duplicate column|exists/i.test(e.message)) console.error('❌ Error creando columna semana:', e.message);
-            }
-        }
-    } catch (err) {
-        console.error('⚠️ Auto-fix columnas periodo/semana falló:', err.message);
-    }
-})();
-
 // Exportar modelos y conexión
 models.sequelize = sequelize;
 

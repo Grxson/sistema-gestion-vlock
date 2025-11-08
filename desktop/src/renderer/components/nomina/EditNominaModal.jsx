@@ -3,6 +3,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { useToast } from '../../contexts/ToastContext';
 import { formatCurrency } from '../../utils/currency';
 import nominasServices from '../../services/nominas';
+import apiService from '../../services/api';
 import {
   XCircleIcon,
   PencilIcon,
@@ -58,6 +59,10 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
   const [initialSnapshot, setInitialSnapshot] = useState(null);
   const diasRef = React.useRef(null);
   const toNum = (v) => (v === '' || v === null || v === undefined ? 0 : (typeof v === 'string' ? parseFloat(v) : Number(v))) || 0;
+  
+  // Estados para proyectos
+  const [proyectosActivos, setProyectosActivos] = useState([]);
+  const [proyectoTemporal, setProyectoTemporal] = useState(null);
 
   const resumenCalculo = React.useMemo(() => {
     const base = toNum(calculoNomina?.salarioBase);
@@ -87,6 +92,20 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
       total
     };
   }, [calculoNomina, formData.montoISR, formData.montoIMSS, formData.montoInfonavit, formData.descuentos, formData.deduccionesAdicionales]);
+
+  // Cargar proyectos activos
+  useEffect(() => {
+    if (!isOpen) return;
+    (async () => {
+      try {
+        const res = await apiService.getProyectosActivos();
+        const arr = res?.data || res || [];
+        setProyectosActivos(Array.isArray(arr) ? arr : []);
+      } catch (e) {
+        setProyectosActivos([]);
+      }
+    })();
+  }, [isOpen]);
 
   // Cargar datos iniciales cuando se abre el modal
   useEffect(() => {
@@ -121,8 +140,16 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
       
       setFormData(newFormData);
       setInitialSnapshot(newFormData);
+      
+      // Cargar proyecto si existe
+      if (nominaData.id_proyecto) {
+        const proj = proyectosActivos.find(p => p.id_proyecto === nominaData.id_proyecto);
+        setProyectoTemporal(proj || null);
+      } else {
+        setProyectoTemporal(null);
+      }
     }
-  }, [isOpen, nominaData]);
+  }, [isOpen, nominaData, proyectosActivos]);
 
   useEffect(() => {
     if (isOpen && diasRef.current) {
@@ -399,7 +426,8 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
         pago_parcial: formData.pagoParcial,
         monto_a_pagar: formData.montoAPagar === '' ? null : (formData.montoAPagar || null),
         liquidar_adeudos: formData.liquidarAdeudos,
-        monto_total: montoTotalCalculado // ✅ Actualizar el monto total calculado
+        monto_total: montoTotalCalculado, // ✅ Actualizar el monto total calculado
+        id_proyecto: proyectoTemporal?.id_proyecto || empleado?.id_proyecto || empleado?.proyecto?.id_proyecto || 1
       };
       
       const response = await nominasServices.nominas.update(nominaData.id_nomina, updateData);
@@ -446,19 +474,19 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
 
   return (
     <div className="fixed inset-0 bg-gray-600 dark:bg-gray-900 bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50 flex items-center justify-center p-4">
-      <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-4xl shadow-2xl rounded-lg bg-white dark:bg-dark-100">
+      <div className="relative mx-auto border border-gray-200 dark:border-gray-700 w-full max-w-7xl shadow-2xl rounded-lg bg-white dark:bg-dark-100 max-h-[95vh] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="px-6 py-3 border-b border-gray-200 dark:border-gray-700 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
-              <div className="h-10 w-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-3">
-                <PencilIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+              <div className="h-9 w-9 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center mr-3">
+                <PencilIcon className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
                   Editar Nómina
                 </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {empleado?.nombre} {empleado?.apellido}
                 </p>
               </div>
@@ -467,24 +495,128 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
               onClick={handleClose}
               className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             >
-              <XCircleIcon className="w-6 h-6" />
+              <XCircleIcon className="w-5 h-5" />
             </button>
           </div>
         </div>
 
-        {/* Contenido */}
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Formulario de edición */}
-            <div className="space-y-6">
+        {/* Contenido - Con scroll */}
+        <div className="p-6 overflow-y-auto flex-1">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Columna 1: Información del Empleado */}
+            <div className="space-y-3">
+              <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">
+                Información del Empleado
+              </h3>
+              {empleado && (
+                <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-2 text-sm">
+                  <div className="flex items-center">
+                    <UserIcon className="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" />
+                    <span className="text-gray-600 dark:text-gray-400">{empleado.nombre} {empleado.apellido}</span>
+                  </div>
+                  <div className="flex items-center">
+                    <CurrencyDollarIcon className="h-4 w-4 text-gray-400 mr-2 flex-shrink-0" />
+                    <span className="text-gray-600 dark:text-gray-400">Pago: {formatCurrency(empleado.pago_semanal || empleado.salario_semanal || nominaData?.pago_semanal || 0)}</span>
+                  </div>
+                  <div className="flex items-start">
+                    <CalendarIcon className="h-4 w-4 text-gray-400 mr-2 mt-[2px] flex-shrink-0" />
+                    <span className="text-gray-600 dark:text-gray-400 text-xs">
+                      Período: {(() => {
+                        try {
+                          if (nominaData?.periodo) return nominaData.periodo;
+                          const baseSemana = nominaData?.semana?.fecha_inicio || nominaData?.semana?.fecha_fin;
+                          if (baseSemana) {
+                            const d = new Date(baseSemana);
+                            if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                          }
+                          const fechaPago = nominaData?.fecha_pago;
+                          if (fechaPago) {
+                            const d = new Date(fechaPago);
+                            if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                          }
+                          const fechaGenerica = nominaData?.fecha;
+                          if (fechaGenerica) {
+                            const d = new Date(fechaGenerica);
+                            if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                          }
+                          const fechaCreacion = nominaData?.fecha_creacion || nominaData?.createdAt;
+                          if (fechaCreacion) {
+                            const d = new Date(fechaCreacion);
+                            if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                          }
+                        } catch (_) {}
+                        return 'N/A';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Cálculos Actualizados - Movido aquí */}
               <div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
-                  Datos de la Nómina
-                </h3>
+                <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">Cálculos</h3>
+                {loading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+                    <span className="ml-2 text-xs text-gray-600 dark:text-gray-400">Calculando...</span>
+                  </div>
+                ) : calculoNomina ? (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 space-y-1.5 text-xs">
+                    <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Salario Base:</span><span className="font-medium text-gray-900 dark:text-white">{formatCurrency(resumenCalculo.base)}</span></div>
+                    {resumenCalculo.horasExtraMonto > 0 && (
+                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Horas Extra:</span><span className="font-medium text-gray-900 dark:text-white">{formatCurrency(resumenCalculo.horasExtraMonto)}</span></div>
+                    )}
+                    {resumenCalculo.bonosMonto > 0 && (
+                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Bonos:</span><span className="font-medium text-gray-900 dark:text-white">{formatCurrency(resumenCalculo.bonosMonto)}</span></div>
+                    )}
+                    <div className="border-t border-gray-300 dark:border-gray-600 pt-1.5" />
+                    {resumenCalculo.isr > 0 && (
+                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">ISR:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.isr)}</span></div>
+                    )}
+                    {resumenCalculo.imss > 0 && (
+                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">IMSS:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.imss)}</span></div>
+                    )}
+                    {resumenCalculo.infonavit > 0 && (
+                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Infonavit:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.infonavit)}</span></div>
+                    )}
+                    {resumenCalculo.descuentos > 0 && (
+                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Descuentos:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.descuentos)}</span></div>
+                    )}
+                    {resumenCalculo.otras > 0 && (
+                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Ded. Adicionales:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.otras)}</span></div>
+                    )}
+                    {resumenCalculo.autoDeducciones > 0 && (
+                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Ded. Automáticas:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.autoDeducciones)}</span></div>
+                    )}
+                    <div className="border-t border-gray-300 dark:border-gray-600 pt-1.5">
+                      <div className="flex justify-between"><span className="text-gray-700 dark:text-gray-300 font-medium">Total Deducciones:</span><span className="font-semibold text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.deduccionesTotal)}</span></div>
+                    </div>
+                    <div className="border-t border-gray-300 dark:border-gray-600 pt-1.5">
+                      <div className="flex justify-between"><span className="text-sm font-medium text-gray-900 dark:text-white">{formData.pagoParcial ? 'Total (Parcial):' : 'Total:'}</span><span className="text-sm font-bold text-green-600 dark:text-green-400">{formatCurrency(formData.pagoParcial ? (formData.montoAPagar || 0) : resumenCalculo.total)}</span></div>
+                    </div>
+                    {formData.pagoParcial && formData.montoAPagar > 0 && (
+                      <div className="mt-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 rounded border border-yellow-200 dark:border-yellow-800">
+                        <div className="flex justify-between text-xs"><span className="text-yellow-800 dark:text-yellow-300">Adeudo:</span><span className="font-medium text-yellow-900 dark:text-yellow-200">{formatCurrency(resumenCalculo.total - (formData.montoAPagar || 0))}</span></div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center text-xs text-gray-500 dark:text-gray-400">
+                    Ingresa datos para calcular
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Columna 2: Datos Principales */}
+            <div className="space-y-3">
+              <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">
+                Datos de Nómina
+              </h3>
                 
                 {/* Días Laborados */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Días Laborados
                   </label>
                   <input
@@ -506,116 +638,47 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
                       num = Math.min(7, Math.max(1, isNaN(num) ? 1 : num));
                       handleInputChange('diasLaborados', num);
                     }}
-                    className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
                       errors.diasLaborados ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                     }`}
                     placeholder="6"
                   />
                   {errors.diasLaborados && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.diasLaborados}</p>
+                    <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{errors.diasLaborados}</p>
                   )}
                 </div>
 
-                {/* Deducciones Fiscales */}
-                <div className="mt-6">
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    Deducciones Fiscales (ingresar monto solo si aplica)
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* ISR */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">ISR</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={formData.montoISR ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v === '') return handleInputChange('montoISR', '');
-                          const num = parseFloat(v);
-                          if (!isNaN(num) && num >= 0) handleInputChange('montoISR', num);
-                        }}
-                        onBlur={(e) => {
-                          const v = e.target.value; if (v === '') return; const num = parseFloat(v); if (!isNaN(num)) handleInputChange('montoISR', Math.round(num * 100) / 100);
-                        }}
-                        placeholder="0.00 (dejar en 0 si no aplica)"
-                        className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${errors.montoISR ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
-                      />
-                      {errors.montoISR && (<p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.montoISR}</p>)}
-                    </div>
-                    {/* IMSS */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IMSS</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={formData.montoIMSS ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v === '') return handleInputChange('montoIMSS', '');
-                          const num = parseFloat(v);
-                          if (!isNaN(num) && num >= 0) handleInputChange('montoIMSS', num);
-                        }}
-                        onBlur={(e) => {
-                          const v = e.target.value; if (v === '') return; const num = parseFloat(v); if (!isNaN(num)) handleInputChange('montoIMSS', Math.round(num * 100) / 100);
-                        }}
-                        placeholder="0.00 (dejar en 0 si no aplica)"
-                        className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${errors.montoIMSS ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
-                      />
-                      {errors.montoIMSS && (<p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.montoIMSS}</p>)}
-                    </div>
-                    {/* Infonavit */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Infonavit</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={formData.montoInfonavit ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v === '') return handleInputChange('montoInfonavit', '');
-                          const num = parseFloat(v);
-                          if (!isNaN(num) && num >= 0) handleInputChange('montoInfonavit', num);
-                        }}
-                        onBlur={(e) => {
-                          const v = e.target.value; if (v === '') return; const num = parseFloat(v); if (!isNaN(num)) handleInputChange('montoInfonavit', Math.round(num * 100) / 100);
-                        }}
-                        placeholder="0.00 (dejar en 0 si no aplica)"
-                        className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${errors.montoInfonavit ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
-                      />
-                      {errors.montoInfonavit && (<p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.montoInfonavit}</p>)}
-                    </div>
-                    {/* Descuentos (Adelantos) */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Descuentos (Adelantos)</label>
-                      <input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={formData.descuentos ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          if (v === '') return handleInputChange('descuentos', '');
-                          const num = parseFloat(v);
-                          if (!isNaN(num) && num >= 0) handleInputChange('descuentos', num);
-                        }}
-                        onBlur={(e) => {
-                          const v = e.target.value; if (v === '') return; const num = parseFloat(v); if (!isNaN(num)) handleInputChange('descuentos', Math.round(num * 100) / 100);
-                        }}
-                        placeholder="0.00"
-                        className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${errors.descuentos ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
-                      />
-                      {errors.descuentos && (<p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.descuentos}</p>)}
-                    </div>
-                  </div>
+                {/* Proyecto Temporal */}
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Proyecto (opcional)
+                  </label>
+                  <select
+                    value={proyectoTemporal?.id_proyecto || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (!val) {
+                        setProyectoTemporal(null);
+                      } else {
+                        const proj = proyectosActivos.find(p => p.id_proyecto === Number(val));
+                        setProyectoTemporal(proj || null);
+                      }
+                    }}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Usar proyecto del empleado ({empleado?.proyecto?.nombre || 'Sin proyecto'})</option>
+                    {proyectosActivos.map(p => (
+                      <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
+                    ))}
+                  </select>
+                  <p className="mt-0.5 text-[10px] text-gray-500 dark:text-gray-400">
+                    Solo afecta esta nómina
+                  </p>
                 </div>
 
                 {/* Horas Extra */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Horas Extra
                   </label>
                   <input
@@ -635,19 +698,19 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
                       const num = parseFloat(v);
                       if (!isNaN(num)) handleInputChange('horasExtra', Math.round(num * 100) / 100);
                     }}
-                    className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
                       errors.horasExtra ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                     }`}
                     placeholder="0"
                   />
                   {errors.horasExtra && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.horasExtra}</p>
+                    <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{errors.horasExtra}</p>
                   )}
                 </div>
 
                 {/* Bonos */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Bonos
                   </label>
                   <input
@@ -667,19 +730,19 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
                       const num = parseFloat(v);
                       if (!isNaN(num)) handleInputChange('bonos', Math.round(num * 100) / 100);
                     }}
-                    className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
                       errors.bonos ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                     }`}
                     placeholder="0.00"
                   />
                   {errors.bonos && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.bonos}</p>
+                    <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{errors.bonos}</p>
                   )}
                 </div>
 
                 {/* Deducciones Adicionales */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                <div className="mb-3">
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Deducciones Adicionales
                   </label>
                   <input
@@ -699,211 +762,190 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
                       const num = parseFloat(v);
                       if (!isNaN(num)) handleInputChange('deduccionesAdicionales', Math.round(num * 100) / 100);
                     }}
-                    className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
                       errors.deduccionesAdicionales ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                     }`}
                     placeholder="0.00"
                   />
                   {errors.deduccionesAdicionales && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.deduccionesAdicionales}</p>
+                    <p className="mt-0.5 text-xs text-red-600 dark:text-red-400">{errors.deduccionesAdicionales}</p>
                   )}
                 </div>
-
-                {/* Pago Parcial */}
-                <div className="mb-4">
-                  <label className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.pagoParcial}
-                      onChange={(e) => {
-                        const isChecked = e.target.checked;
-                        handleInputChange('pagoParcial', isChecked);
-                        if (isChecked && calculoNomina) {
-                          // Establecer el monto a pagar como el total calculado
-                          handleInputChange('montoAPagar', Math.round(calculoNomina.montoTotal * 100) / 100);
-                        } else {
-                          handleInputChange('montoAPagar', null);
-                        }
-                      }}
-                      className="rounded border-gray-300 text-primary-600 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50"
-                    />
-                    <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-300">Pago Parcial</span>
-                  </label>
-                  
-                  {formData.pagoParcial && calculoNomina && (
-                    <div className="mt-2">
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Monto a Pagar (Máximo: {formatCurrency(calculoNomina.montoTotal)})
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.montoAPagar || ''}
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          if (value === '' || /^\d*\.?\d*$/.test(value)) {
-                            const cleanValue = value.replace(',', '.');
-                            const num = parseFloat(cleanValue);
-                            if (value === '' || (!isNaN(num) && num >= 0 && num <= calculoNomina.montoTotal)) {
-                              handleInputChange('montoAPagar', value === '' ? '' : num);
-                            }
-                          }
-                        }}
-                        onBlur={(e) => {
-                          if (e.target.value === '') {
-                            handleInputChange('montoAPagar', 0);
-                          } else {
-                            const cleanValue = e.target.value.replace(',', '.');
-                            const num = parseFloat(cleanValue);
-                            if (!isNaN(num)) {
-                              const roundedNum = Math.round(num * 100) / 100;
-                              handleInputChange('montoAPagar', roundedNum);
-                            }
-                          }
-                        }}
-                        className={`w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
-                          errors.montoAPagar ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
-                        }`}
-                        placeholder="0.00"
-                      />
-                      {errors.montoAPagar && (
-                        <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.montoAPagar}</p>
-                      )}
-                      
-                      {formData.montoAPagar > 0 && (
-                        <div className="mt-2 text-xs text-yellow-700 dark:text-yellow-300">
-                          <div className="flex justify-between">
-                            <span>Monto a pagar:</span>
-                            <span className="font-medium">{formatCurrency(formData.montoAPagar)}</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span>Quedará a deber:</span>
-                            <span className="font-medium text-red-600 dark:text-red-400">
-                              {formatCurrency(Math.round((calculoNomina.montoTotal - formData.montoAPagar) * 100) / 100)}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
 
-            {/* Panel derecho: primero Información del Empleado, después Cálculos */}
-            <div className="space-y-6">
-              {/* Información del Empleado */}
-              {empleado && (
+            {/* Columna 3: Deducciones Fiscales y Pago Parcial */}
+            <div className="space-y-3">
+              <h3 className="text-base font-medium text-gray-900 dark:text-white mb-2">
+                Deducciones Fiscales
+              </h3>
+              
+              <div className="grid grid-cols-2 gap-2">
+                {/* ISR */}
                 <div>
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Información del Empleado</h3>
-                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-2">
-                    <div className="flex items-center">
-                      <UserIcon className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">{empleado.nombre} {empleado.apellido}</span>
-                    </div>
-                    <div className="flex items-center">
-                      <CurrencyDollarIcon className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">Pago Semanal: {formatCurrency(empleado.pago_semanal || 0)}</span>
-                    </div>
-                    <div className="flex items-start">
-                      <CalendarIcon className="h-4 w-4 text-gray-400 mr-2 mt-[2px]" />
-                      <span className="text-sm text-gray-600 dark:text-gray-400" title="Período calculado desde semana.fecha_inicio → fecha_pago → fecha → createdAt (no creado en el mes si es nómina retroactiva)">
-                        Período: {(() => {
-                          try {
-                            // 1. Si el backend ya envía el período normalizado, úsalo.
-                            if (nominaData?.periodo) return nominaData.periodo;
-
-                            // 2. Intentar derivar del objeto semana (fecha_inicio fiable del ciclo real de la nómina)
-                            const baseSemana = nominaData?.semana?.fecha_inicio || nominaData?.semana?.fecha_fin;
-                            if (baseSemana) {
-                              const d = new Date(baseSemana);
-                              if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                            }
-
-                            // 3. Fecha de pago (si existe) más representativa que la de creación para nóminas retroactivas
-                            const fechaPago = nominaData?.fecha_pago;
-                            if (fechaPago) {
-                              const d = new Date(fechaPago);
-                              if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                            }
-
-                            // 4. Campo genérico fecha (algunos registros antiguos)
-                            const fechaGenerica = nominaData?.fecha;
-                            if (fechaGenerica) {
-                              const d = new Date(fechaGenerica);
-                              if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                            }
-
-                            // 5. Último recurso: fecha_creacion / createdAt (puede ser distinto al período real en nóminas retroactivas)
-                            const fechaCreacion = nominaData?.fecha_creacion || nominaData?.createdAt;
-                            if (fechaCreacion) {
-                              const d = new Date(fechaCreacion);
-                              if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                            }
-                          } catch (_) {}
-                          return 'N/A';
-                        })()}
-                      </span>
-                    </div>
-                  </div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">ISR</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={formData.montoISR ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') return handleInputChange('montoISR', '');
+                      const num = parseFloat(v);
+                      if (!isNaN(num) && num >= 0) handleInputChange('montoISR', num);
+                    }}
+                    onBlur={(e) => {
+                      const v = e.target.value; if (v === '') return; const num = parseFloat(v); if (!isNaN(num)) handleInputChange('montoISR', Math.round(num * 100) / 100);
+                    }}
+                    placeholder="0.00"
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${errors.montoISR ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+                  />
+                  {errors.montoISR && (<p className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">{errors.montoISR}</p>)}
                 </div>
-              )}
+                
+                {/* IMSS */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">IMSS</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={formData.montoIMSS ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') return handleInputChange('montoIMSS', '');
+                      const num = parseFloat(v);
+                      if (!isNaN(num) && num >= 0) handleInputChange('montoIMSS', num);
+                    }}
+                    onBlur={(e) => {
+                      const v = e.target.value; if (v === '') return; const num = parseFloat(v); if (!isNaN(num)) handleInputChange('montoIMSS', Math.round(num * 100) / 100);
+                    }}
+                    placeholder="0.00"
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${errors.montoIMSS ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+                  />
+                  {errors.montoIMSS && (<p className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">{errors.montoIMSS}</p>)}
+                </div>
+                
+                {/* Infonavit */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Infonavit</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={formData.montoInfonavit ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') return handleInputChange('montoInfonavit', '');
+                      const num = parseFloat(v);
+                      if (!isNaN(num) && num >= 0) handleInputChange('montoInfonavit', num);
+                    }}
+                    onBlur={(e) => {
+                      const v = e.target.value; if (v === '') return; const num = parseFloat(v); if (!isNaN(num)) handleInputChange('montoInfonavit', Math.round(num * 100) / 100);
+                    }}
+                    placeholder="0.00"
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${errors.montoInfonavit ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+                  />
+                  {errors.montoInfonavit && (<p className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">{errors.montoInfonavit}</p>)}
+                </div>
+                
+                {/* Descuentos (Adelantos) */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">Descuentos</label>
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={formData.descuentos ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === '') return handleInputChange('descuentos', '');
+                      const num = parseFloat(v);
+                      if (!isNaN(num) && num >= 0) handleInputChange('descuentos', num);
+                    }}
+                    onBlur={(e) => {
+                      const v = e.target.value; if (v === '') return; const num = parseFloat(v); if (!isNaN(num)) handleInputChange('descuentos', Math.round(num * 100) / 100);
+                    }}
+                    placeholder="0.00"
+                    className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${errors.descuentos ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'}`}
+                  />
+                  {errors.descuentos && (<p className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">{errors.descuentos}</p>)}
+                </div>
+              </div>
 
-              {/* Cálculos Actualizados */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-4">Cálculos Actualizados</h3>
-                {loading ? (
-                  <div className="flex items-center justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-                    <span className="ml-2 text-gray-600 dark:text-gray-400">Calculando...</span>
-                  </div>
-                ) : calculoNomina ? (
-                  <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
-                    <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Salario Base:</span><span className="font-medium text-gray-900 dark:text-white">{formatCurrency(resumenCalculo.base)}</span></div>
-                    {resumenCalculo.horasExtraMonto > 0 && (
-                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Horas Extra:</span><span className="font-medium text-gray-900 dark:text-white">{formatCurrency(resumenCalculo.horasExtraMonto)}</span></div>
+              {/* Pago Parcial */}
+              <div className="mt-3">
+                <label className="flex items-center">
+                  <input
+                    type="checkbox"
+                    checked={formData.pagoParcial}
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      handleInputChange('pagoParcial', isChecked);
+                      if (isChecked && calculoNomina) {
+                        handleInputChange('montoAPagar', Math.round(calculoNomina.montoTotal * 100) / 100);
+                      } else {
+                        handleInputChange('montoAPagar', null);
+                      }
+                    }}
+                    className="rounded border-gray-300 text-primary-600 shadow-sm focus:border-primary-300 focus:ring focus:ring-primary-200 focus:ring-opacity-50"
+                  />
+                  <span className="ml-2 text-xs font-medium text-gray-700 dark:text-gray-300">Pago Parcial</span>
+                </label>
+                
+                {formData.pagoParcial && calculoNomina && (
+                  <div className="mt-2">
+                    <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      Monto a Pagar (Máx: {formatCurrency(calculoNomina.montoTotal)})
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.montoAPagar || ''}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        if (value === '' || /^\d*\.?\d*$/.test(value)) {
+                          const cleanValue = value.replace(',', '.');
+                          const num = parseFloat(cleanValue);
+                          if (value === '' || (!isNaN(num) && num >= 0 && num <= calculoNomina.montoTotal)) {
+                            handleInputChange('montoAPagar', value === '' ? '' : num);
+                          }
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value === '') {
+                          handleInputChange('montoAPagar', 0);
+                        } else {
+                          const cleanValue = e.target.value.replace(',', '.');
+                          const num = parseFloat(cleanValue);
+                          if (!isNaN(num)) {
+                            const roundedNum = Math.round(num * 100) / 100;
+                            handleInputChange('montoAPagar', roundedNum);
+                          }
+                        }
+                      }}
+                      className={`w-full px-3 py-1.5 text-sm border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white ${
+                        errors.montoAPagar ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                      }`}
+                      placeholder="0.00"
+                    />
+                    {errors.montoAPagar && (
+                      <p className="mt-0.5 text-[10px] text-red-600 dark:text-red-400">{errors.montoAPagar}</p>
                     )}
-                    {resumenCalculo.bonosMonto > 0 && (
-                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Bonos:</span><span className="font-medium text-gray-900 dark:text-white">{formatCurrency(resumenCalculo.bonosMonto)}</span></div>
-                    )}
-                    <div className="border-t border-gray-300 dark:border-gray-600 pt-3" />
-                    {resumenCalculo.isr > 0 && (
-                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">ISR:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.isr)}</span></div>
-                    )}
-                    {resumenCalculo.imss > 0 && (
-                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">IMSS:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.imss)}</span></div>
-                    )}
-                    {resumenCalculo.infonavit > 0 && (
-                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Infonavit:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.infonavit)}</span></div>
-                    )}
-                    {resumenCalculo.descuentos > 0 && (
-                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Descuentos (Adelantos):</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.descuentos)}</span></div>
-                    )}
-                    {resumenCalculo.otras > 0 && (
-                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Deducciones Adicionales:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.otras)}</span></div>
-                    )}
-                    {resumenCalculo.autoDeducciones > 0 && (
-                      <div className="flex justify-between"><span className="text-gray-600 dark:text-gray-400">Deducciones Automáticas:</span><span className="font-medium text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.autoDeducciones)}</span></div>
-                    )}
-                    <div className="border-t border-gray-300 dark:border-gray-600 pt-3">
-                      <div className="flex justify-between"><span className="text-gray-700 dark:text-gray-300 font-medium">Total Deducciones:</span><span className="font-semibold text-red-600 dark:text-red-400">-{formatCurrency(resumenCalculo.deduccionesTotal)}</span></div>
-                    </div>
-                    <div className="border-t border-gray-300 dark:border-gray-600 pt-3">
-                      <div className="flex justify-between"><span className="text-lg font-medium text-gray-900 dark:text-white">{formData.pagoParcial ? 'Total a Pagar (Parcial):' : 'Total a Pagar:'}</span><span className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(formData.pagoParcial ? (formData.montoAPagar || 0) : resumenCalculo.total)}</span></div>
-                    </div>
-                    {formData.pagoParcial && formData.montoAPagar > 0 && (
-                      <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
-                        <div className="text-sm text-yellow-800 dark:text-yellow-200">
-                          <div className="flex justify-between mb-1"><span>Total original:</span><span className="font-medium">{formatCurrency(resumenCalculo.total)}</span></div>
-                          <div className="flex justify-between mb-1"><span>Monto a pagar:</span><span className="font-medium text-green-600">{formatCurrency(formData.montoAPagar)}</span></div>
-                          <div className="flex justify-between"><span>Quedará a deber:</span><span className="font-medium text-red-600">{formatCurrency(Math.round((resumenCalculo.total - formData.montoAPagar) * 100) / 100)}</span></div>
+                    
+                    {formData.montoAPagar > 0 && (
+                      <div className="mt-1.5 text-[10px] text-yellow-700 dark:text-yellow-300">
+                        <div className="flex justify-between">
+                          <span>Monto a pagar:</span>
+                          <span className="font-medium">{formatCurrency(formData.montoAPagar)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Quedará a deber:</span>
+                          <span className="font-medium text-red-600 dark:text-red-400">
+                            {formatCurrency(Math.round((calculoNomina.montoTotal - formData.montoAPagar) * 100) / 100)}
+                          </span>
                         </div>
                       </div>
                     )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                    <CalculatorIcon className="h-12 w-12 mx-auto mb-2" />
-                    <p>Los cálculos aparecerán aquí</p>
                   </div>
                 )}
               </div>
@@ -911,8 +953,8 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="flex justify-end space-x-3 px-6 py-4 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg border-t border-gray-200 dark:border-gray-700">
+        {/* Footer - Fijo */}
+        <div className="flex justify-end space-x-3 px-6 py-3 bg-gray-50 dark:bg-gray-900/30 rounded-b-lg border-t border-gray-200 dark:border-gray-700 flex-shrink-0">
           <button
             onClick={handleClose}
             className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"

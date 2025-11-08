@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import apiService from '../services/api';
 import nominasServices from '../services/nominas';
 import { formatCurrency } from '../utils/currency';
@@ -207,6 +207,16 @@ export default function Nomina() {
   const [filtroFechaFin, setFiltroFechaFin] = useState('');
   const [filtroBusquedaHistorial, setFiltroBusquedaHistorial] = useState('');
 
+  // Debug: Monitorear cambios en los filtros
+  useEffect(() => {
+    console.log('📅 Filtros actualizados:', {
+      inicio: filtroFechaInicio,
+      fin: filtroFechaFin,
+      busqueda: filtroBusquedaHistorial,
+      totalNominas: nominas.length
+    });
+  }, [filtroFechaInicio, filtroFechaFin, filtroBusquedaHistorial, nominas.length]);
+
   // Estados para proyectos
   const [proyectos, setProyectos] = useState([]);
 
@@ -214,6 +224,9 @@ export default function Nomina() {
   const [showNominaPreview, setShowNominaPreview] = useState(false);
   const [selectedEmpleadoPreview, setSelectedEmpleadoPreview] = useState(null);
   const [nominaPreviewData, setNominaPreviewData] = useState(null);
+  
+  // Estado para toggle de filtros del historial
+  const [showHistorialFilters, setShowHistorialFilters] = useState(true);
 
   // Funciones de filtrado mejoradas
   const getEmpleadosFiltrados = () => {
@@ -441,32 +454,47 @@ export default function Nomina() {
     };
   };
 
-  const getNominasFiltradas = () => {
-    let nominasFiltradas = nominas;
+  // useMemo para calcular nóminas filtradas cuando cambien los filtros
+  const nominasFiltradas = useMemo(() => {
+    console.log('🔄 Recalculando nominasFiltradas...', {
+      totalNominas: nominas.length,
+      filtroInicio: filtroFechaInicio,
+      filtroFin: filtroFechaFin,
+      filtroBusqueda: filtroBusquedaHistorial
+    });
+    
+    let resultado = nominas;
 
-    // Filtrar por rango de fechas
+    // Filtrar por rango de fechas (usando createdAt como campo principal)
     if (filtroFechaInicio) {
-      nominasFiltradas = nominasFiltradas.filter(nomina => {
-        const fechaNomina = new Date(nomina.fecha_creacion || nomina.fecha || nomina.createdAt);
+      const antesInicio = resultado.length;
+      resultado = resultado.filter(nomina => {
+        // Priorizar createdAt, luego fecha_creacion como fallback
+        const fechaNomina = new Date(nomina.createdAt || nomina.fecha_creacion || nomina.fecha);
         const fechaInicio = new Date(filtroFechaInicio);
+        fechaInicio.setHours(0, 0, 0, 0); // Inicio del día
         return fechaNomina >= fechaInicio;
       });
+      console.log(`  ✅ Filtro inicio (${filtroFechaInicio}): ${antesInicio} → ${resultado.length}`);
     }
 
     if (filtroFechaFin) {
-      nominasFiltradas = nominasFiltradas.filter(nomina => {
-        const fechaNomina = new Date(nomina.fecha_creacion || nomina.fecha || nomina.createdAt);
+      const antesFin = resultado.length;
+      resultado = resultado.filter(nomina => {
+        // Priorizar createdAt, luego fecha_creacion como fallback
+        const fechaNomina = new Date(nomina.createdAt || nomina.fecha_creacion || nomina.fecha);
         const fechaFin = new Date(filtroFechaFin);
-        // Agregar un día para incluir el día completo
-        fechaFin.setDate(fechaFin.getDate() + 1);
-        return fechaNomina < fechaFin;
+        fechaFin.setHours(23, 59, 59, 999); // Fin del día
+        return fechaNomina <= fechaFin;
       });
+      console.log(`  ✅ Filtro fin (${filtroFechaFin}): ${antesFin} → ${resultado.length}`);
     }
 
     // Filtrar por búsqueda de texto
     if (filtroBusquedaHistorial) {
+      const antesBusqueda = resultado.length;
       const busqueda = filtroBusquedaHistorial.toLowerCase();
-      nominasFiltradas = nominasFiltradas.filter(nomina => {
+      resultado = resultado.filter(nomina => {
         const nombreEmpleado = typeof nomina.empleado === 'object' && nomina.empleado
           ? `${nomina.empleado.nombre || ''} ${nomina.empleado.apellido || ''}`.trim().toLowerCase()
           : (nomina.nombre_empleado || nomina.empleado || '').toLowerCase();
@@ -480,10 +508,15 @@ export default function Nomina() {
           rfc.includes(busqueda) ||
           idNomina.includes(busqueda);
       });
+      console.log(`  ✅ Filtro búsqueda: ${antesBusqueda} → ${resultado.length}`);
     }
 
-    return nominasFiltradas;
-  };
+    console.log(`📊 Total después de filtros: ${resultado.length}`);
+    return resultado;
+  }, [nominas, filtroFechaInicio, filtroFechaFin, filtroBusquedaHistorial]);
+
+  // Función de compatibilidad (para código que aún llame a getNominasFiltradas())
+  const getNominasFiltradas = () => nominasFiltradas;
 
 
   // Función para calcular el subtotal de la semana actual
@@ -1291,42 +1324,84 @@ export default function Nomina() {
       {activeTab === 'historial' && (
         <div className="bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium text-gray-900 dark:text-white">
                 Historial de Nóminas ({getNominasFiltradas().length})
               </h2>
+              <button
+                onClick={() => setShowHistorialFilters(!showHistorialFilters)}
+                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+              >
+                {showHistorialFilters ? (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                    Ocultar Filtros
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                    </svg>
+                    Mostrar Filtros
+                  </>
+                )}
+              </button>
             </div>
 
-            {/* Filtros del Historial */}
-            <div className="mt-4 space-y-4">
-              {/* Primera fila: Búsqueda Rápida */}
-              <div className="max-w-md">
-                <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Búsqueda Rápida
-                </label>
-                <input
-                  type="text"
-                  placeholder="Buscar por nombre, NSS, RFC o ID..."
-                  value={filtroBusquedaHistorial}
-                  onChange={(e) => setFiltroBusquedaHistorial(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
-                />
-              </div>
+            {/* Filtros del Historial - Mejorados y colapsables */}
+            {showHistorialFilters && (
+              <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-700/30 rounded-lg">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Búsqueda Rápida */}
+                  <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Búsqueda Rápida
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Buscar por nombre, NSS, RFC o ID..."
+                      value={filtroBusquedaHistorial}
+                      onChange={(e) => setFiltroBusquedaHistorial(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
 
-              {/* Segunda fila: Rango de Fechas */}
-              <div className="max-w-lg">
-                <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Rango de Fechas
-                </label>
-                <DateRangePicker
-                  startDate={filtroFechaInicio}
-                  endDate={filtroFechaFin}
-                  onStartDateChange={setFiltroFechaInicio}
-                  onEndDateChange={setFiltroFechaFin}
-                />
+                  {/* Rango de Fechas */}
+                  <div>
+                    <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Rango de Fechas
+                    </label>
+                    <DateRangePicker
+                      startDate={filtroFechaInicio}
+                      endDate={filtroFechaFin}
+                      onStartDateChange={setFiltroFechaInicio}
+                      onEndDateChange={setFiltroFechaFin}
+                    />
+                  </div>
+                </div>
 
+                {/* Botón para limpiar filtros */}
+                {(filtroBusquedaHistorial || filtroFechaInicio || filtroFechaFin) && (
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => {
+                        setFiltroBusquedaHistorial('');
+                        setFiltroFechaInicio('');
+                        setFiltroFechaFin('');
+                      }}
+                      className="inline-flex items-center px-3 py-1.5 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Limpiar Filtros
+                    </button>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
           <div className={`p-6 ${showAllNominas ? 'max-h-[600px] overflow-y-auto' : ''}`}>
             {getNominasFiltradas().length > 0 ? (
