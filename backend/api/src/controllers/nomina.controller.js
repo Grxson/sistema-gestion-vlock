@@ -314,18 +314,18 @@ const createNomina = async (req, res) => {
                 // Generar info de la semana ISO
                 const infoSem = generarInfoSemana(fechaActual);
                 const key = `${infoSem.año}-${infoSem.semanaISO}`;
-                
+
                 // Contar cuántos días de esta semana caen dentro del mes
                 const lunesSemana = new Date(infoSem.fechaInicio);
                 const domingoSemana = new Date(infoSem.fechaFin);
-                
+
                 let diasEnMes = 0;
                 for (let d = new Date(lunesSemana); d <= domingoSemana; d.setDate(d.getDate() + 1)) {
                     if (d.getMonth() === month0 && d.getFullYear() === year) {
                         diasEnMes++;
                     }
                 }
-                
+
                 // Solo incluir la semana si ≥4 días caen en este mes
                 if (!seen.has(key) && diasEnMes >= 4) {
                     seen.add(key);
@@ -338,7 +338,7 @@ const createNomina = async (req, res) => {
                         diasEnMes
                     });
                 }
-                
+
                 // Avanzar 7 días
                 fechaActual.setDate(fechaActual.getDate() + 7);
             }
@@ -368,7 +368,7 @@ const createNomina = async (req, res) => {
             infoSemana = generarInfoSemana(fechaActual);
             console.log('⚠️ [CREATE_NOMINA] Usando fecha actual (retrocompatibilidad)');
         }
-        
+
         console.log('🔍 [CREATE_NOMINA] Información de semana calculada:', {
             semanaISO: infoSemana.semanaISO,
             año: infoSemana.año,
@@ -466,7 +466,7 @@ const createNomina = async (req, res) => {
         if (montoAPagar > resultado.montoTotal) {
             const excedente = montoAPagar - resultado.montoTotal;
             console.log(`💰 [LIQUIDACION_AUTOMATICA] Excedente detectado: $${excedente.toFixed(2)}`);
-            
+
             // Buscar adeudos pendientes del empleado
             const adeudosPendientes = await NominaEmpleado.findAll({
                 where: {
@@ -480,20 +480,20 @@ const createNomina = async (req, res) => {
             console.log(`💰 [LIQUIDACION_AUTOMATICA] Adeudos pendientes encontrados: ${adeudosPendientes.length}`);
 
             let excedenteRestante = excedente;
-            
+
             // Liquidar adeudos con el excedente
             for (const adeudo of adeudosPendientes) {
                 if (excedenteRestante <= 0) break;
-                
+
                 const montoTotalAdeudo = parseFloat(adeudo.monto_total);
                 const montoYaPagadoAdeudo = parseFloat(adeudo.monto_pagado || 0);
                 const montoPendienteAdeudo = montoTotalAdeudo - montoYaPagadoAdeudo;
-                
+
                 if (montoPendienteAdeudo > 0) {
                     const montoALiquidar = Math.min(excedenteRestante, montoPendienteAdeudo);
                     const nuevoMontoPagadoAdeudo = montoYaPagadoAdeudo + montoALiquidar;
                     const pagoCompletadoAdeudo = nuevoMontoPagadoAdeudo >= montoTotalAdeudo;
-                    
+
                     // Actualizar el adeudo
                     await adeudo.update({
                         monto_pagado: nuevoMontoPagadoAdeudo,
@@ -503,19 +503,19 @@ const createNomina = async (req, res) => {
                         fecha_pago: pagoCompletadoAdeudo ? new Date() : adeudo.fecha_pago,
                         motivo_ultimo_cambio: `Liquidación automática desde nómina ${id_semana}: $${montoALiquidar.toFixed(2)}`
                     });
-                    
+
                     adeudosLiquidados.push({
                         id_nomina: adeudo.id_nomina,
                         monto_liquidado: montoALiquidar,
                         pago_completado: pagoCompletadoAdeudo
                     });
-                    
+
                     excedenteRestante -= montoALiquidar;
-                    
+
                     console.log(`✅ [LIQUIDACION_AUTOMATICA] Adeudo ${adeudo.id_nomina} liquidado: $${montoALiquidar.toFixed(2)}`);
                 }
             }
-            
+
             // Si aún hay excedente, ajustar el monto a pagar
             if (excedenteRestante > 0) {
                 montoAPagar = resultado.montoTotal + excedenteRestante;
@@ -558,14 +558,14 @@ const createNomina = async (req, res) => {
         if (montoAdeudo > 0) {
             // Calcular explícitamente el monto pendiente
             const montoPendienteCalculado = resultado.montoTotal - montoAPagar;
-            
+
             console.log('🔍 [CONTROLLER] Creando adeudo:', {
                 monto_adeudo: resultado.montoTotal,
                 monto_pagado: montoAPagar,
                 monto_pendiente: montoPendienteCalculado,
                 estado: montoAPagar > 0 ? 'Parcial' : 'Pendiente'
             });
-            
+
             await models.Adeudo_empleado.create({
                 id_empleado: id_empleado,
                 monto_adeudo: resultado.montoTotal, // Monto total que se debe
@@ -617,7 +617,7 @@ const createNomina = async (req, res) => {
         }
 
         res.status(201).json({
-            message: adeudosLiquidados.length > 0 
+            message: adeudosLiquidados.length > 0
                 ? `Nómina creada exitosamente. ${adeudosLiquidados.length} adeudo(s) liquidado(s) automáticamente.`
                 : 'Nómina creada exitosamente',
             nomina: nuevaNomina,
@@ -803,7 +803,7 @@ const deleteNomina = async (req, res) => {
         // Iniciar transacción para eliminar en cascada
         await sequelize.transaction(async (t) => {
             console.log('🔍 [DELETE_NOMINA] Eliminando pagos relacionados...');
-            
+
             // Eliminar pagos relacionados
             await PagoNomina.destroy({
                 where: { id_nomina: id },
@@ -811,7 +811,7 @@ const deleteNomina = async (req, res) => {
             });
 
             console.log('🔍 [DELETE_NOMINA] Eliminando historial relacionado...');
-            
+
             // Eliminar historial relacionado
             await NominaHistorial.destroy({
                 where: { id_nomina: id },
@@ -830,7 +830,7 @@ const deleteNomina = async (req, res) => {
                         },
                         transaction: t
                     });
-                    
+
                     if (movimientosEliminados > 0) {
                         console.log(`✅ [DELETE_NOMINA] Eliminados ${movimientosEliminados} movimiento(s) de capital asociado(s)`);
                     } else {
@@ -843,7 +843,7 @@ const deleteNomina = async (req, res) => {
             }
 
             console.log('🔍 [DELETE_NOMINA] Eliminando nómina principal...');
-            
+
             // Eliminar la nómina principal
             await nomina.destroy({ transaction: t });
         });
@@ -902,7 +902,7 @@ const registrarPagoNomina = async (req, res) => {
         // Actualizar estado de la nómina a pagado
         const estadoAnterior = nomina.estado;
         await nomina.update({ estado: 'Pagado' });
-        
+
         // 🆕 Registrar movimiento en ingresos (si la nómina tiene proyecto asociado)
         if (nomina.id_proyecto) {
             try {
@@ -933,7 +933,7 @@ const registrarPagoNomina = async (req, res) => {
         } else {
             console.log('ℹ️  Nómina sin proyecto - no se registrará movimiento');
         }
-        
+
         // Registrar en historial
         if (req.usuario) {
             await registrarCambioNomina(
@@ -978,7 +978,7 @@ const generarReciboPDFOld = async (req, res) => {
             include: [
                 { model: Empleado, as: 'empleado' },
                 { model: SemanaNomina, as: 'semana' },
-                { 
+                {
                     model: PagoNomina,
                     as: 'pagos_nominas',
                     limit: 1,
@@ -1001,7 +1001,7 @@ const generarReciboPDFOld = async (req, res) => {
         const PDFDocument = require('pdfkit');
         const fs = require('fs-extra');
         const path = require('path');
-        
+
         // Crear directorio para guardar los recibos si no existe
         const uploadsDir = path.join(__dirname, '..', 'uploads', 'recibos');
         await fs.ensureDir(uploadsDir);
@@ -1012,7 +1012,7 @@ const generarReciboPDFOld = async (req, res) => {
 
         // Crear el documento PDF
         const doc = new PDFDocument({ margin: 50, size: 'letter' });
-        
+
         // Stream para escribir en archivo
         const stream = fs.createWriteStream(filePath);
         doc.pipe(stream);
@@ -1025,22 +1025,22 @@ const generarReciboPDFOld = async (req, res) => {
         // Eliminamos el borde alrededor del documento para un diseño más limpio
         // (Comentamos la siguiente línea para quitar el borde)
         // doc.rect(margin, margin, pageWidth - margin * 2, pageHeight - margin * 2).stroke();
-        
-            // Determinar el nombre del proyecto
+
+        // Determinar el nombre del proyecto
         const nombreProyecto = nomina.proyecto ? nomina.proyecto.nombre : 'N/A';
         const ubicacionProyecto = nomina.proyecto ? (nomina.proyecto.ubicacion || 'SIN UBICACIÓN') : 'N/A';
-        
+
         // Obtener información del empleado
         const nombreEmpleado = nomina.empleado ? nomina.empleado.nombre : 'EMPLEADO NO ESPECIFICADO';
-        
+
         // Obtener información del pago
-        const montoPagado = nomina.pagos_nominas && nomina.pagos_nominas.length > 0 ? 
-            parseFloat(nomina.pagos_nominas[0].monto).toFixed(2) : 
+        const montoPagado = nomina.pagos_nominas && nomina.pagos_nominas.length > 0 ?
+            parseFloat(nomina.pagos_nominas[0].monto).toFixed(2) :
             parseFloat(nomina.monto_total).toFixed(2);
-        
+
         // Fecha actual en formato DD/MM/AAAA
         const fechaActual = new Date().toLocaleDateString('es-MX');
-        
+
         // Información de la semana
         const semanaInfo = nomina.semana ? {
             semana_iso: nomina.semana.semana_iso || 'N/A',
@@ -1053,41 +1053,41 @@ const generarReciboPDFOld = async (req, res) => {
             fecha_inicio: 'N/A',
             fecha_fin: 'N/A'
         };
-        
+
         // Título en la parte superior con diseño mejorado
         doc.fontSize(18)
-           .font('Helvetica-Bold')
-           .fillColor('#444444')
-           .text('RECIBO DE PAGO', margin + 10, margin + 20, { align: 'left' });
-           
+            .font('Helvetica-Bold')
+            .fillColor('#444444')
+            .text('RECIBO DE PAGO', margin + 10, margin + 20, { align: 'left' });
+
         // Línea separadora bajo el título
         doc.moveTo(margin + 10, margin + 42)
-           .lineTo(pageWidth/2 - 20, margin + 42)
-           .lineWidth(1)
-           .strokeColor('#888888')
-           .stroke();
-           
+            .lineTo(pageWidth / 2 - 20, margin + 42)
+            .lineWidth(1)
+            .strokeColor('#888888')
+            .stroke();
+
         // Información del proyecto con mayor visibilidad
         doc.fontSize(12)
-           .fillColor('black')
-           .font('Helvetica-Bold')
-           .text(`PROYECTO ${nombreProyecto.toUpperCase()}`, margin + 10, margin + 48);
+            .fillColor('black')
+            .font('Helvetica-Bold')
+            .text(`PROYECTO ${nombreProyecto.toUpperCase()}`, margin + 10, margin + 48);
         doc.font('Helvetica');
-        
+
         // Añadir logo desde archivo PNG en la esquina superior derecha
         try {
             // Ruta al logo PNG
             const logoPath = path.join(__dirname, '..', 'public', 'images', 'vlock_logo.png');
             const absoluteLogoPath = '/home/grxson/Documentos/Github/sistema-gestion-vlock/backend/api/src/public/images/vlock_logo.png';
-            
+
             // Verificar si el archivo existe
-            
+
             // Calculamos posición para el logo más arriba y a la derecha para evitar sobreposiciones
             const logoWidth = 80;
             const logoHeight = 60;
             const logoX = pageWidth - margin - logoWidth + 10; // Movemos más a la derecha
             const logoY = margin - 10; // Movemos más arriba
-            
+
             if (fs.existsSync(logoPath)) {
                 doc.image(logoPath, logoX, logoY, { width: logoWidth });
             } else if (fs.existsSync(absoluteLogoPath)) {
@@ -1102,55 +1102,55 @@ const generarReciboPDFOld = async (req, res) => {
             const logoHeight = 60;
             const logoX = pageWidth - margin - logoWidth + 10; // Movemos más a la derecha
             const logoY = margin - 10; // Movemos más arriba igual que el logo PNG
-            
+
             // Dibujar un rectángulo rojo como fondo
             doc.save()
-               .rect(logoX, logoY, logoWidth, logoHeight)
-               .fillAndStroke('red', '#000');
-               
+                .rect(logoX, logoY, logoWidth, logoHeight)
+                .fillAndStroke('red', '#000');
+
             // Añadir texto "VLOCK" en blanco sobre fondo rojo
             doc.fillColor('white')
-               .font('Helvetica-Bold')
-               .fontSize(20)
-               .text('VLOCK', logoX, logoY + 10, { align: 'center', width: logoWidth });
-               
+                .font('Helvetica-Bold')
+                .fontSize(20)
+                .text('VLOCK', logoX, logoY + 10, { align: 'center', width: logoWidth });
+
             // Añadir texto "CONSTRUCTORA" en gris debajo
             doc.fillColor('lightgrey')
-               .fontSize(8)
-               .text('CONSTRUCTORA', logoX, logoY + 35, { align: 'center', width: logoWidth });
-               
+                .fontSize(8)
+                .text('CONSTRUCTORA', logoX, logoY + 35, { align: 'center', width: logoWidth });
+
             // Restaurar color para el resto del documento
             doc.fillColor('black')
-               .font('Helvetica');
+                .font('Helvetica');
         }
-        
+
         // Información general con espaciado mejorado para evitar sobreposición
-        
+
         // Definimos posiciones para las columnas con más espacio
         const leftColumnX = margin + 10;
         const rightColumnX = pageWidth - margin - 200;
         let currentY = margin + 80; // Comenzamos más abajo del título del proyecto para dar más espacio
-        
+
         // Datos del trabajador (izquierda)
         doc.fontSize(12).text('TRABAJADOR:', leftColumnX, currentY);
         currentY += 20; // Bajamos una línea
         doc.font('Helvetica-Bold').text(nombreEmpleado, leftColumnX, currentY);
         doc.font('Helvetica');
-        
+
         // Información de la semana/periodo
         currentY += 25; // Aumentamos el espacio para evitar sobreposiciones
         doc.fontSize(12).text('PERIODO:', leftColumnX, currentY);
         currentY += 20; // Bajamos una línea
         doc.font('Helvetica-Bold').text(`${semanaInfo.fecha_inicio} al ${semanaInfo.fecha_fin}`, leftColumnX, currentY);
         doc.font('Helvetica');
-        
+
         // Columna derecha: Fecha y monto
         currentY = margin + 80; // Comenzamos a la misma altura que la columna izquierda
-        
+
         doc.fontSize(12).text('FECHA:', rightColumnX, currentY);
         doc.font('Helvetica-Bold').text(fechaActual, rightColumnX + 50, currentY);
         doc.font('Helvetica');
-        
+
         currentY += 20; // Bajamos una línea
         doc.fontSize(12).text('MONTO PAGADO:', rightColumnX, currentY);
         doc.font('Helvetica-Bold').text(`$${montoPagado}`, rightColumnX + 110, currentY);
@@ -1158,319 +1158,319 @@ const generarReciboPDFOld = async (req, res) => {
 
         // Texto central - Comenzar después de la información de encabezado con más espacio
         let contentStartY = currentY + 65; // 50px de espacio después de la última información de encabezado
-        
+
         // Calculamos el ancho efectivo para el contenido centrado
         const contentWidth = pageWidth - (margin * 2);
         const centerX = margin;
-        
+
         // Creamos un área de texto centrada en la página
         doc.fontSize(10)
-           .font('Helvetica')
-           .text('RECIBÍ POR MEDIO DE EDIFICACIONES OROCAZA SA DE CV, LA CANTIDAD DE', centerX, contentStartY, { 
-               align: 'center', 
-               width: contentWidth
-           });
-        
+            .font('Helvetica')
+            .text('RECIBÍ POR MEDIO DE EDIFICACIONES OROCAZA SA DE CV, LA CANTIDAD DE', centerX, contentStartY, {
+                align: 'center',
+                width: contentWidth
+            });
+
         contentStartY += 20;
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text(`$${montoPagado} MXN`, centerX, contentStartY, { 
-               align: 'center', 
-               width: contentWidth
-           });
-        
+            .font('Helvetica-Bold')
+            .text(`$${montoPagado} MXN`, centerX, contentStartY, {
+                align: 'center',
+                width: contentWidth
+            });
+
         contentStartY += 25;
         doc.font('Helvetica')
-           .fontSize(10)
-           .text('EN EFECTIVO POR CONCEPTO DE', centerX, contentStartY, { 
-               align: 'center', 
-               width: contentWidth
-           });
-        
+            .fontSize(10)
+            .text('EN EFECTIVO POR CONCEPTO DE', centerX, contentStartY, {
+                align: 'center',
+                width: contentWidth
+            });
+
         contentStartY += 20;
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('PAGO DE NÓMINA', centerX, contentStartY, { 
-               align: 'center', 
-               width: contentWidth
-           });
+            .font('Helvetica-Bold')
+            .text('PAGO DE NÓMINA', centerX, contentStartY, {
+                align: 'center',
+                width: contentWidth
+            });
         doc.font('Helvetica');
-        
+
         // Información del proyecto
         contentStartY += 20;
-        doc.text(`DEL PROYECTO ${nombreProyecto.toUpperCase()}, ${ubicacionProyecto.toUpperCase()}.`, centerX, contentStartY, { 
-            align: 'center', 
+        doc.text(`DEL PROYECTO ${nombreProyecto.toUpperCase()}, ${ubicacionProyecto.toUpperCase()}.`, centerX, contentStartY, {
+            align: 'center',
             width: contentWidth
         });
 
         // Desglose de nómina - Nueva sección (con posición Y ajustada)
         // Calculamos la posición inicial basada en el contenido anterior
         let desgloseY = contentStartY + 40; // Dejamos espacio después de la sección anterior
-        
+
         // Línea separadora antes del desglose
         doc.moveTo(margin, desgloseY - 10)
-           .lineTo(pageWidth - margin, desgloseY - 10)
-           .lineWidth(0.5)
-           .strokeColor('#cccccc')
-           .stroke();
-           
+            .lineTo(pageWidth - margin, desgloseY - 10)
+            .lineWidth(0.5)
+            .strokeColor('#cccccc')
+            .stroke();
+
         // Título de la sección de desglose con mejor diseño
         doc.font('Helvetica-Bold')
-           .fillColor('#444444')
-           .fontSize(12)
-           .text('DESGLOSE DE NÓMINA', margin + 10, desgloseY);
-           
+            .fillColor('#444444')
+            .fontSize(12)
+            .text('DESGLOSE DE NÓMINA', margin + 10, desgloseY);
+
         desgloseY += 25;
-        
+
         // Creamos dos columnas para la información de desglose
         const col1X = margin + 30;
-        const col2X = pageWidth/2;
-        
+        const col2X = pageWidth / 2;
+
         // Columna 1 - Información de semana y periodo
         doc.fontSize(10)
-           .fillColor('black')
-           .font('Helvetica-Bold')
-           .text('Semana:', col1X, desgloseY);
+            .fillColor('black')
+            .font('Helvetica-Bold')
+            .text('Semana:', col1X, desgloseY);
         doc.font('Helvetica')
-           .text(`${semanaInfo.semana_iso} del ${semanaInfo.anio}`, col1X + 70, desgloseY);
-        
+            .text(`${semanaInfo.semana_iso} del ${semanaInfo.anio}`, col1X + 70, desgloseY);
+
         desgloseY += 20;
         doc.font('Helvetica-Bold')
-           .text('Periodo:', col1X, desgloseY);
+            .text('Periodo:', col1X, desgloseY);
         doc.font('Helvetica')
-           .text(`${semanaInfo.fecha_inicio} al ${semanaInfo.fecha_fin}`, col1X + 70, desgloseY);
-           
+            .text(`${semanaInfo.fecha_inicio} al ${semanaInfo.fecha_fin}`, col1X + 70, desgloseY);
+
         // Columna 2 - Información del empleado y días
         const col2Y = desgloseY - 20; // Regresamos arriba para la segunda columna
         doc.font('Helvetica-Bold')
-           .text('Empleado:', col2X, col2Y);
+            .text('Empleado:', col2X, col2Y);
         doc.font('Helvetica')
-           .text(nombreEmpleado, col2X + 70, col2Y);
-        
+            .text(nombreEmpleado, col2X + 70, col2Y);
+
         doc.font('Helvetica-Bold')
-           .text('Días laborados:', col2X, col2Y + 20);
+            .text('Días laborados:', col2X, col2Y + 20);
         doc.font('Helvetica')
-           .text(nomina.dias_laborados, col2X + 100, col2Y + 20);
-           
+            .text(nomina.dias_laborados, col2X + 100, col2Y + 20);
+
         // Pago por día en una nueva línea
         desgloseY += 20;
         doc.font('Helvetica-Bold')
-           .text('Pago por día:', col1X, desgloseY);
+            .text('Pago por día:', col1X, desgloseY);
         doc.font('Helvetica')
-           .text(`$${parseFloat(nomina.pago_semanal).toFixed(2)}`, col1X + 90, desgloseY);
-        
+            .text(`$${parseFloat(nomina.pago_semanal).toFixed(2)}`, col1X + 90, desgloseY);
+
         // Restauramos para el resto del documento
         doc.font('Helvetica')
-           .fillColor('black');
+            .fillColor('black');
 
         // Tabla de conceptos con espacio adecuado desde la sección anterior
         const tableY = desgloseY + 50; // Posición ajustada después de la información de desglose
         const tableWidth = pageWidth - margin * 2;
-        
+
         // Líneas para delimitar la tabla (sin fondo)
         doc.moveTo(margin, tableY)
-           .lineTo(margin + tableWidth, tableY)
-           .lineWidth(0.5)
-           .strokeColor('#cccccc')
-           .stroke();
-        
+            .lineTo(margin + tableWidth, tableY)
+            .lineWidth(0.5)
+            .strokeColor('#cccccc')
+            .stroke();
+
         // Encabezados de la tabla
         doc.fillColor('#444444')
-           .font('Helvetica-Bold')
-           .fontSize(11);
-        
+            .font('Helvetica-Bold')
+            .fontSize(11);
+
         // Línea después del encabezado
         doc.moveTo(margin, tableY + 25)
-           .lineTo(margin + tableWidth, tableY + 25)
-           .lineWidth(0.5)
-           .strokeColor('#cccccc')
-           .stroke();
-        
+            .lineTo(margin + tableWidth, tableY + 25)
+            .lineWidth(0.5)
+            .strokeColor('#cccccc')
+            .stroke();
+
         const conceptosX = margin + 50;
         const importeX = pageWidth - margin - 100;
-        
+
         // Texto de encabezado
         doc.fillColor('black')
-           .text('CONCEPTO', conceptosX, tableY + 8);
+            .text('CONCEPTO', conceptosX, tableY + 8);
         doc.text('IMPORTE', importeX, tableY + 8);
-        
+
         // Restauramos para las filas
         doc.font('Helvetica')
-           .fillColor('black');
-        
+            .fillColor('black');
+
         // Posición inicial para los conceptos
         let yPosition = tableY + 35;
-        
+
         // Función para agregar fila sin fondo alternante
         let rowCount = 0;
         function addRow(concepto, importe) {
             const rowY = yPosition;
             const rowHeight = 22; // Incrementado para dar más espacio
-            
+
             // Texto de la fila sin fondos
             doc.fillColor('black')
-               .font('Helvetica')
-               .text(concepto, conceptosX, rowY);
+                .font('Helvetica')
+                .text(concepto, conceptosX, rowY);
             doc.text(importe, importeX, rowY);
-            
+
             yPosition += rowHeight;
             rowCount++;
         }
-        
+
         // Salario base
         const salarioBase = parseFloat(nomina.dias_laborados) * parseFloat(nomina.pago_semanal);
         addRow('Salario Base', `$${salarioBase.toFixed(2)}`);
-        
+
         // Horas extra
         if (nomina.horas_extra && parseFloat(nomina.horas_extra) > 0) {
             addRow('Horas Extra', `$${parseFloat(nomina.horas_extra).toFixed(2)}`);
         }
-        
+
         // Bonos
         if (nomina.bonos && parseFloat(nomina.bonos) > 0) {
             addRow('Bonos', `$${parseFloat(nomina.bonos).toFixed(2)}`);
         }
-        
+
         // Deducciones
         if (nomina.deducciones && parseFloat(nomina.deducciones) > 0) {
             addRow('Deducciones', `-$${parseFloat(nomina.deducciones).toFixed(2)}`);
         }
-        
+
         // Total sin fondo destacado
         const totalY = yPosition + 15;
-        
+
         // Línea divisoria antes del total
         doc.moveTo(margin, totalY - 10)
-           .lineTo(margin + tableWidth, totalY - 10)
-           .strokeColor('#cccccc')
-           .stroke();
-           
+            .lineTo(margin + tableWidth, totalY - 10)
+            .strokeColor('#cccccc')
+            .stroke();
+
         // Texto del total
         doc.fillColor('black')
-           .font('Helvetica-Bold')
-           .fontSize(12)
-           .text('TOTAL', conceptosX, totalY);
+            .font('Helvetica-Bold')
+            .fontSize(12)
+            .text('TOTAL', conceptosX, totalY);
         doc.text(`$${parseFloat(nomina.monto_total).toFixed(2)}`, importeX, totalY);
-        
+
         // Sección de firmas en la parte inferior
         const firmasY = totalY + 60; // 60 puntos después del total
-        
+
         // Crear dos recuadros para las firmas
         const firmaWidth = (pageWidth - margin * 2 - 30) / 2;
         const leftBoxX = margin;
         const rightBoxX = margin + firmaWidth + 30;
-        
+
         // Líneas divisorias para las firmas (sin recuadros con fondo)
         doc.moveTo(leftBoxX, firmasY)
-           .lineTo(leftBoxX + firmaWidth, firmasY)
-           .moveTo(leftBoxX, firmasY + 80)
-           .lineTo(leftBoxX + firmaWidth, firmasY + 80)
-           .strokeColor('#dddddd')
-           .stroke();
-           
+            .lineTo(leftBoxX + firmaWidth, firmasY)
+            .moveTo(leftBoxX, firmasY + 80)
+            .lineTo(leftBoxX + firmaWidth, firmasY + 80)
+            .strokeColor('#dddddd')
+            .stroke();
+
         doc.moveTo(rightBoxX, firmasY)
-           .lineTo(rightBoxX + firmaWidth, firmasY)
-           .moveTo(rightBoxX, firmasY + 80)
-           .lineTo(rightBoxX + firmaWidth, firmasY + 80)
-           .strokeColor('#dddddd')
-           .stroke();
-           
+            .lineTo(rightBoxX + firmaWidth, firmasY)
+            .moveTo(rightBoxX, firmasY + 80)
+            .lineTo(rightBoxX + firmaWidth, firmasY + 80)
+            .strokeColor('#dddddd')
+            .stroke();
+
         // Posiciones centradas en cada recuadro
-        const leftFirmaX = leftBoxX + firmaWidth/2;
-        const rightFirmaX = rightBoxX + firmaWidth/2;
-        
+        const leftFirmaX = leftBoxX + firmaWidth / 2;
+        const rightFirmaX = rightBoxX + firmaWidth / 2;
+
         // Firma izquierda (empleado)
         doc.fillColor('black')
-           .fontSize(10)
-           .font('Helvetica-Bold')
-           .text('FIRMA DE RECIBIDO', leftBoxX + 10, firmasY + 10, { 
-               width: firmaWidth - 20,
-               align: 'center'
-           });
-           
+            .fontSize(10)
+            .font('Helvetica-Bold')
+            .text('FIRMA DE RECIBIDO', leftBoxX + 10, firmasY + 10, {
+                width: firmaWidth - 20,
+                align: 'center'
+            });
+
         doc.fontSize(10)
-           .font('Helvetica')
-           .text('______________________________', leftBoxX + 20, firmasY + 35, {
-               width: firmaWidth - 40,
-               align: 'center'
-           });
-           
+            .font('Helvetica')
+            .text('______________________________', leftBoxX + 20, firmasY + 35, {
+                width: firmaWidth - 40,
+                align: 'center'
+            });
+
         // Nombre del empleado centrado debajo de la línea
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text(nombreEmpleado, leftBoxX + 10, firmasY + 55, { 
-               width: firmaWidth - 20,
-               align: 'center'
-           });
-        
+            .font('Helvetica-Bold')
+            .text(nombreEmpleado, leftBoxX + 10, firmasY + 55, {
+                width: firmaWidth - 20,
+                align: 'center'
+            });
+
         // Firma derecha (autorizador)
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text('FIRMA DE ENTREGADO', rightBoxX + 10, firmasY + 10, { 
-               width: firmaWidth - 20,
-               align: 'center'
-           });
-           
+            .font('Helvetica-Bold')
+            .text('FIRMA DE ENTREGADO', rightBoxX + 10, firmasY + 10, {
+                width: firmaWidth - 20,
+                align: 'center'
+            });
+
         doc.fontSize(10)
-           .font('Helvetica')
-           .text('______________________________', rightBoxX + 20, firmasY + 35, {
-               width: firmaWidth - 40,
-               align: 'center'
-           });
-        
+            .font('Helvetica')
+            .text('______________________________', rightBoxX + 20, firmasY + 35, {
+                width: firmaWidth - 40,
+                align: 'center'
+            });
+
         // Obtener el nombre del usuario que genera el recibo
-        const nombreFirmante = req.usuario ? 
-            `${req.usuario.nombre_usuario.toUpperCase()}` : 
+        const nombreFirmante = req.usuario ?
+            `${req.usuario.nombre_usuario.toUpperCase()}` :
             'LIC. KAREN COVARRUBIAS';
-        
+
         // Nombre del firmante centrado debajo de la línea
         doc.fontSize(10)
-           .font('Helvetica-Bold')
-           .text(nombreFirmante, rightBoxX + 10, firmasY + 55, { 
-               width: firmaWidth - 20,
-               align: 'center'
-           });
-        
+            .font('Helvetica-Bold')
+            .text(nombreFirmante, rightBoxX + 10, firmasY + 55, {
+                width: firmaWidth - 20,
+                align: 'center'
+            });
+
         // Completar el documento PDF
         doc.end();
-        
+
         // Esperar a que termine de escribir
         await new Promise((resolve, reject) => {
             stream.on('finish', resolve);
             stream.on('error', reject);
         });
-        
+
         // Actualizar la ruta del recibo en la base de datos
         const relativePath = `/uploads/recibos/${fileName}`;
         await nomina.update({ recibo_pdf: relativePath });
-        
+
         try {
             // Verificar que el archivo exista y sea accesible
             const exists = await fs.pathExists(filePath);
-            
+
             if (!exists) {
                 return res.status(404).json({ message: 'El archivo PDF no pudo generarse correctamente' });
             }
-            
+
             // Obtener información del archivo
             const stats = await fs.stat(filePath);
-            
+
             if (stats.size === 0) {
                 return res.status(500).json({ message: 'El archivo PDF generado está vacío' });
             }
-            
+
             // Configurar encabezados de respuesta
             res.setHeader('Content-Type', 'application/pdf');
             res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
             res.setHeader('Content-Length', stats.size);
-            
+
             // Leer el archivo completo y enviarlo como respuesta
             const fileBuffer = await fs.readFile(filePath);
             res.status(200).send(fileBuffer);
         } catch (err) {
             console.error('Error al enviar el archivo:', err);
-            res.status(500).json({ 
-                message: 'Error al enviar el archivo PDF', 
+            res.status(500).json({
+                message: 'Error al enviar el archivo PDF',
                 error: err.message
             });
         }
@@ -1491,7 +1491,7 @@ const generarReciboPDFOld = async (req, res) => {
 const getHistorialPagos = async (req, res) => {
     try {
         const { id_empleado } = req.query;
-        
+
         let where = {};
         if (id_empleado) {
             // Si se proporciona un ID de empleado, filtrar por ese empleado
@@ -1499,7 +1499,7 @@ const getHistorialPagos = async (req, res) => {
                 '$nomina.id_empleado$': id_empleado
             };
         }
-        
+
         const pagos = await PagoNomina.findAll({
             include: [{
                 model: NominaEmpleado,
@@ -1545,7 +1545,7 @@ const crearSemanaNomina = async (req, res) => {
         // Calcular automáticamente la semana ISO y año
         const fechaInicio = new Date(fecha_inicio);
         const infoSemana = generarInfoSemana(fechaInicio);
-        
+
         const anio = infoSemana.año;
         const semana_iso = infoSemana.semanaISO;
         const etiquetaFinal = etiqueta || infoSemana.etiqueta;
@@ -1657,7 +1657,7 @@ const cambiarEstadoNomina = async (req, res) => {
         // Estado actual (solo para registro en historial)
         const estadoActual = nomina.estado;
 
-        
+
         // Actualizar estado
         await nomina.update({ estado });
 
@@ -1743,7 +1743,7 @@ const getNominaStats = async (req, res) => {
         // Total de nómina pagada en el último mes
         const unMesAtras = new Date();
         unMesAtras.setMonth(unMesAtras.getMonth() - 1);
-        
+
         const nominaPagadaUltimoMes = await PagoNomina.sum('monto', {
             where: {
                 fecha_pago: { [Op.gte]: unMesAtras }
@@ -1775,11 +1775,11 @@ const getInfoParaNomina = async (req, res) => {
         // Obtener todos los proyectos activos
         const proyectos = await models.Proyectos.findAll({
             where: {
-                estado: 'Activo' 
+                estado: 'Activo'
             },
             attributes: ['id_proyecto', 'nombre', 'ubicacion', 'responsable']
         });
-        
+
         // Obtener todos los empleados activos (no dados de baja)
         const empleados = await models.Empleados.findAll({
             where: {
@@ -1794,7 +1794,7 @@ const getInfoParaNomina = async (req, res) => {
                 }
             ]
         });
-        
+
         // Obtener semanas de nómina activas
         const semanas = await models.Semanas_nomina.findAll({
             where: {
@@ -1804,7 +1804,7 @@ const getInfoParaNomina = async (req, res) => {
             },
             attributes: ['id_semana', 'semana_iso', 'anio', 'fecha_inicio', 'fecha_fin', 'etiqueta']
         });
-        
+
         // Preparar datos de empleados para respuesta más amigable
         const empleadosFormateados = empleados.map(emp => {
             // Valores por defecto de pago según oficio (puedes ajustarlo según tus necesidades)
@@ -1817,10 +1817,10 @@ const getInfoParaNomina = async (req, res) => {
                 'Pintor': 280,
                 'Ayudante': 200,
             };
-            
+
             const oficio = emp.oficio ? emp.oficio.nombre : 'No especificado';
             const pagoPorDia = pagoPorDiaSugerido[oficio] || 250; // Valor por defecto si no se encuentra el oficio
-            
+
             return {
                 id_empleado: emp.id_empleado,
                 nombre_completo: `${emp.nombre} ${emp.apellido}`,
@@ -1828,7 +1828,7 @@ const getInfoParaNomina = async (req, res) => {
                 pago_semanal_sugerido: pagoSemanal
             };
         });
-        
+
         res.status(200).json({
             message: 'Información para nómina obtenida exitosamente',
             proyectos,
@@ -1852,7 +1852,7 @@ const getInfoParaNomina = async (req, res) => {
 const verificarDuplicados = async (req, res) => {
     try {
         const { id_empleado, periodo, semana } = req.query;
-        
+
         console.log('🔍 [VERIFICAR_DUPLICADOS] Parámetros recibidos:', {
             id_empleado,
             periodo,
@@ -1887,60 +1887,60 @@ const verificarDuplicados = async (req, res) => {
 
         // Extraer año y mes del período
         const [año, mes] = periodo.split('-').map(Number);
-        
+
         // ALGORITMO CORREGIDO: Solo contar semanas ISO cuya MAYORÍA de días (≥4) 
         // caen dentro del mes solicitado (estándar ISO 8601)
         const primerDiaDelMes = new Date(año, mes - 1, 1);
         const ultimoDiaDelMes = new Date(año, mes, 0);
-        
+
         // Obtener todas las semanas ISO que pertenecen mayoritariamente a este mes
         const semanasDelMes = [];
         let fechaActual = new Date(primerDiaDelMes);
-        
+
         // Retroceder hasta el lunes anterior al primer día del mes
         const diaInicio = fechaActual.getDay();
         const diasHastaLunes = diaInicio === 0 ? -6 : (1 - diaInicio);
         fechaActual.setDate(fechaActual.getDate() + diasHastaLunes);
-        
+
         // Iterar por todas las semanas que tocan el mes
         while (fechaActual <= ultimoDiaDelMes) {
             const infoSemanaActual = generarInfoSemana(fechaActual);
-            
+
             // Contar cuántos días de esta semana ISO caen dentro del mes
             const lunesSemana = new Date(infoSemanaActual.fechaInicio);
             const domingoSemana = new Date(infoSemanaActual.fechaFin);
-            
+
             let diasEnElMes = 0;
             for (let d = new Date(lunesSemana); d <= domingoSemana; d.setDate(d.getDate() + 1)) {
                 if (d.getMonth() === mes - 1 && d.getFullYear() === año) {
                     diasEnElMes++;
                 }
             }
-            
+
             // Solo incluir la semana si la MAYORÍA de sus días (4 o más) caen en este mes
-            const yaExiste = semanasDelMes.some(s => 
-                s.año === infoSemanaActual.año && 
+            const yaExiste = semanasDelMes.some(s =>
+                s.año === infoSemanaActual.año &&
                 s.semanaISO === infoSemanaActual.semanaISO
             );
-            
+
             if (!yaExiste && diasEnElMes >= 4) {
                 semanasDelMes.push({
                     ...infoSemanaActual,
                     diasEnMes: diasEnElMes
                 });
             }
-            
+
             // Avanzar 7 días
             fechaActual.setDate(fechaActual.getDate() + 7);
         }
-        
+
         console.log('🔍 [VERIFICAR_DUPLICADOS] Semanas ISO del mes:', {
             año,
             mes,
             totalSemanas: semanasDelMes.length,
             semanas: semanasDelMes.map(s => `ISO ${s.semanaISO} (${s.etiqueta})`)
         });
-        
+
         // Validar que la semana solicitada existe
         if (semanaNum > semanasDelMes.length) {
             return res.status(400).json({
@@ -1948,17 +1948,17 @@ const verificarDuplicados = async (req, res) => {
                 message: `El mes ${mes}/${año} solo tiene ${semanasDelMes.length} semanas ISO. Solicitaste la semana ${semanaNum}.`
             });
         }
-        
+
         // Obtener la semana ISO correspondiente (semanaNum - 1 porque el array es 0-indexado)
         const infoSemana = semanasDelMes[semanaNum - 1];
-        
+
         console.log('🔍 [VERIFICAR_DUPLICADOS] Semana seleccionada:', {
             semanaNumero: semanaNum,
             semanaISO: infoSemana.semanaISO,
             año: infoSemana.año,
             etiqueta: infoSemana.etiqueta
         });
-        
+
         // Buscar la semana en la tabla semanas_nomina
         const semanaNomina = await SemanaNomina.findOne({
             where: {
@@ -1975,7 +1975,7 @@ const verificarDuplicados = async (req, res) => {
                 message: 'No existe semana configurada para este período'
             });
         }
-        
+
         // CORRECCIÓN CRÍTICA: Buscar nóminas del empleado en esta semana ISO específica
         // Esto asegura que no se puedan crear múltiples nóminas del mismo empleado
         // en la misma semana ISO del mismo año
@@ -2031,7 +2031,7 @@ const verificarDuplicados = async (req, res) => {
                     etiqueta: nominaExistente.semana.etiqueta
                 }
             } : null,
-            message: existe 
+            message: existe
                 ? `Ya existe una nómina para este empleado en la ${infoSemana.etiqueta} (Semana ${semana} de ${periodo})`
                 : `No existe nómina para este empleado en la ${infoSemana.etiqueta} (Semana ${semana} de ${periodo})`
         });
@@ -2055,7 +2055,7 @@ const liquidarAdeudo = async (req, res) => {
     try {
         const { id } = req.params;
         const { monto_pagado, observaciones } = req.body;
-        
+
         console.log('💰 [LIQUIDAR_ADEUDO] Parámetros recibidos:', {
             id_nomina: id,
             monto_pagado,
@@ -2068,7 +2068,7 @@ const liquidarAdeudo = async (req, res) => {
                 { model: Empleado, as: 'empleado' }
             ]
         });
-        
+
         if (!nomina) {
             return res.status(404).json({
                 success: false,
@@ -2134,8 +2134,8 @@ const liquidarAdeudo = async (req, res) => {
 
         res.status(200).json({
             success: true,
-            message: pagoCompletado 
-                ? 'Adeudo liquidado completamente' 
+            message: pagoCompletado
+                ? 'Adeudo liquidado completamente'
                 : `Pago parcial procesado. Pendiente: $${nuevoMontoPendiente.toFixed(2)}`,
             data: {
                 id_nomina: nomina.id_nomina,

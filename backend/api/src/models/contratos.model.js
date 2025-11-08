@@ -12,7 +12,7 @@ module.exports = (sequelize) => {
       allowNull: false
     },
     salario_diario: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: false
     },
     fecha_inicio: {

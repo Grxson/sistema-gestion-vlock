@@ -24,50 +24,50 @@ module.exports = (sequelize) => {
       allowNull: false
     },
     pago_semanal: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: false,
       comment: 'Pago semanal del empleado'
     },
     horas_extra: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       defaultValue: 0
     },
     deducciones_isr: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       defaultValue: 0,
       comment: 'Monto de ISR (0 = no aplicado, >0 = monto aplicado)'
     },
     deducciones_imss: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       defaultValue: 0,
       comment: 'Monto de IMSS (0 = no aplicado, >0 = monto aplicado)'
     },
     deducciones_infonavit: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       defaultValue: 0,
       comment: 'Monto de Infonavit (0 = no aplicado, >0 = monto aplicado)'
     },
     deducciones_adicionales: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       defaultValue: 0,
       comment: 'Otras deducciones'
     },
     descuentos: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       defaultValue: 0,
       comment: 'Descuentos adicionales (adelantos, préstamos, etc.)'
     },
     bonos: {
-      type: DataTypes.DECIMAL(10,2)
+      type: DataTypes.DECIMAL(10, 2)
     },
     monto_total: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: false
     },
     fecha_pago: {
@@ -79,7 +79,7 @@ module.exports = (sequelize) => {
       defaultValue: 'Pendiente'
     },
     monto_pagado: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       defaultValue: 0,
       comment: 'Monto ya pagado (para pagos parciales)'
@@ -100,7 +100,7 @@ module.exports = (sequelize) => {
       comment: 'Indica si es un pago parcial'
     },
     monto_a_pagar: {
-      type: DataTypes.DECIMAL(10,2),
+      type: DataTypes.DECIMAL(10, 2),
       allowNull: true,
       comment: 'Monto específico a pagar en caso de pago parcial'
     },
