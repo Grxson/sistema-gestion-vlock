@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import nominasServices from '../services/nominas';
+import apiService from '../services/api';
 import { formatCurrency } from '../utils/currency';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
@@ -71,6 +72,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     selectedPeriodo: generarPeriodoActual(), // Auto-llenar con período actual
     semanaNum: detectarSemanaParaPeriodo(generarPeriodoActual()), // Auto-detectar semana según período seleccionado
     selectedEmpleado: null,
+    proyectoTemporal: null, // Proyecto override solo para esta nómina
     searchTerm: '',
     diasLaborados: 6,
     horasExtra: 0,
@@ -93,6 +95,20 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
   const [verificacionDuplicados, setVerificacionDuplicados] = useState(null);
   const [showPreview, setShowPreview] = useState(false);
   const [nominaGenerada, setNominaGenerada] = useState(null);
+  // Proyectos activos para selector de proyecto temporal
+  const [proyectosActivos, setProyectosActivos] = useState([]);
+  useEffect(() => {
+    if (!isOpen) return;
+    (async () => {
+      try {
+        const res = await apiService.getProyectosActivos();
+        const arr = res?.data || res || [];
+        setProyectosActivos(Array.isArray(arr) ? arr : []);
+      } catch (e) {
+        setProyectosActivos([]);
+      }
+    })();
+  }, [isOpen]);
 
   // Filtrar empleados por búsqueda y solo mostrar activos
   const empleadosFiltrados = Array.isArray(empleados) 
@@ -114,6 +130,7 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
     }
   }, [
     formData.selectedEmpleado, 
+    formData.proyectoTemporal,
     formData.diasLaborados, 
     formData.horasExtra, 
     formData.bonos, 
@@ -473,8 +490,10 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
       showInfo('Procesando', `Generando nómina para ${formData.selectedEmpleado.nombre} ${formData.selectedEmpleado.apellido}...`);
       
       // Validar y preparar datos para la nómina
-      const idProyecto = formData.selectedEmpleado.id_proyecto || 
-                        formData.selectedEmpleado.proyecto?.id_proyecto || 1;
+  // Proyecto temporal override: si el usuario seleccionó uno diferente usarlo, sin modificar empleado
+  const idProyecto = formData.proyectoTemporal?.id_proyecto ||
+        formData.selectedEmpleado.id_proyecto || 
+        formData.selectedEmpleado.proyecto?.id_proyecto || 1;
 
       // Usar el período y semana seleccionados por el usuario
       // NO usar la fecha actual, sino los datos del formulario
@@ -482,11 +501,12 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
 
       const nominaData = {
         id_empleado: formData.selectedEmpleado.id_empleado,
+        // id_proyecto temporal para la nómina (no muta empleado)
+        id_proyecto: idProyecto,
         // Enviar período y semana seleccionados por el usuario
         periodo_anio: anio,
         periodo_mes: mes,
         semana_del_mes: Number(formData.semanaNum),
-        id_proyecto: idProyecto,
         dias_laborados: formData.diasLaborados || 6, // Usar el valor ingresado por el usuario
         pago_semanal: pagoIngresado, // Contiene el pago semanal
         es_pago_semanal: true, // Siempre es pago semanal
@@ -1223,6 +1243,34 @@ const NominaWizardSimplificado = ({ isOpen, onClose, onSuccess, empleados = [], 
                     </h5>
                     
                     <div className="space-y-4">
+                      {/* Proyecto temporal para esta nómina */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Proyecto Temporal (opcional)
+                        </label>
+                        <select
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-700 dark:text-white"
+                          value={formData.proyectoTemporal?.id_proyecto || ''}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (!val) {
+                              updateFormData({ proyectoTemporal: null });
+                            } else {
+                              const proj = proyectosActivos.find(p => p.id_proyecto === Number(val));
+                              updateFormData({ proyectoTemporal: proj || null });
+                            }
+                          }}
+                        >
+                          <option value="">Usar proyecto del empleado ({formData.selectedEmpleado?.proyecto?.nombre || 'Sin proyecto'})</option>
+                          {proyectosActivos.map(p => (
+                            <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          Este proyecto afectará solamente a esta nómina. No modifica el proyecto del empleado.
+                        </p>
+                      </div>
+                      <div className="border-t border-dashed border-gray-300 dark:border-gray-600" />
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">

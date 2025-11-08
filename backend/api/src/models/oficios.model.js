@@ -20,7 +20,12 @@ module.exports = (sequelize) => {
   });
 
   Oficio.associate = models => {
-    // ❌ ELIMINADO: Oficio.hasMany(models.Empleados) - causaba circular reference
+    // Asociación unidireccional: Oficio puede tener muchos Empleados
+    // (No crear hasMany en sentido inverso para evitar circular refs)
+    Oficio.hasMany(models.Empleados, {
+      foreignKey: 'id_oficio',
+      as: 'empleados'
+    });
   };
 
   return Oficio;

@@ -226,9 +226,12 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
   }, [open]);
 
   const getProyectoNombre = (n) => {
-    if (n?.proyecto?.nombre) return n.proyecto.nombre;
+    // Prioridad 1: id_proyecto directo de la nómina (puede ser proyecto temporal override)
     const idp = n?.id_proyecto || n?.proyecto?.id_proyecto;
     if (idp && proyectosMap[idp]?.nombre) return proyectosMap[idp].nombre;
+    // Prioridad 2: objeto proyecto incluido en la nómina
+    if (n?.proyecto?.nombre) return n.proyecto.nombre;
+    // Fallback: Administrativo (cuando no hay proyecto asignado)
     return 'Administrativo';
   };
 

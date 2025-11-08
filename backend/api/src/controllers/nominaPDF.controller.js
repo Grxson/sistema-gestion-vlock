@@ -360,8 +360,8 @@ const generarReciboPDF = async (req, res) => {
 
         currentY += 10;
 
-        // Proyecto del empleado (ahora nomina.proyecto ya es un objeto plano sin referencias circulares)
-        const proyecto = nomina.empleado?.proyecto?.nombre || nomina.proyecto?.nombre || 'Sin proyecto';
+        // Proyecto: priorizar el de la nómina (puede ser temporal) sobre el del empleado
+        const proyecto = nomina.proyecto?.nombre || nomina.empleado?.proyecto?.nombre || 'Sin proyecto';
         doc.fontSize(8)
             .text(`Proyecto: ${proyecto}`, empCol1X, currentY);
 

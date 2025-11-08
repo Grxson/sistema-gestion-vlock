@@ -582,6 +582,7 @@ const createNomina = async (req, res) => {
         const estadoNomina = 'Borrador';
 
         // Crear la nueva nómina
+        console.log('🧾 [CREATE_NOMINA] Persistiendo con id_proyecto:', id_proyecto);
         const nuevaNomina = await NominaEmpleado.create({
             id_empleado,
             id_semana: idSemanaCorrecto, // Usar el ID correcto de la semana
@@ -669,11 +670,23 @@ const createNomina = async (req, res) => {
             );
         }
 
+        // Cargar proyecto para incluirlo en la respuesta (facilita UI para proyecto temporal)
+        let proyectoRespuesta = null;
+        if (nuevaNomina.id_proyecto) {
+            try {
+                const proyectoInst = await Proyecto.findByPk(nuevaNomina.id_proyecto, { attributes: ['id_proyecto', 'nombre'] });
+                proyectoRespuesta = proyectoInst ? proyectoInst.toJSON() : null;
+            } catch (e) {
+                console.warn('No se pudo cargar proyecto para respuesta (no crítico):', e.message);
+            }
+        }
+
         res.status(201).json({
             message: adeudosLiquidados.length > 0
                 ? `Nómina creada exitosamente. ${adeudosLiquidados.length} adeudo(s) liquidado(s) automáticamente.`
                 : 'Nómina creada exitosamente',
             nomina: nuevaNomina,
+            proyecto: proyectoRespuesta,
             calculo: resultado, // Incluir desglose del cálculo en la respuesta
             adeudos_liquidados: adeudosLiquidados // Información sobre adeudos liquidados
         });
