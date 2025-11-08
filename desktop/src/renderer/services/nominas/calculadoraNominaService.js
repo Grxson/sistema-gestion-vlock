@@ -75,16 +75,22 @@ export class CalculadoraNominaService {
       if (!diasLaborados || diasLaborados <= 0) {
         throw new Error('Los días laborados deben ser mayor a 0');
       }
-      if (!pagoPorDia || pagoPorDia <= 0) {
-        throw new Error('El pago por día debe ser mayor a 0');
+      // Nueva lógica: permitir cálculo si existe salarioBase (>0) aunque falte pagoPorDia.
+      // Sólo lanzar error si NO hay pagoPorDia válido Y tampoco salarioBase positivo.
+      if ((!pagoPorDia || pagoPorDia <= 0) && (!salarioBase || salarioBase <= 0)) {
+        throw new Error('El pago por día debe ser mayor a 0 (o proporcione salario base)');
       }
 
       // Para pago semanal: usar el salario base calculado o calcularlo
-      const salarioBaseCalculado = salarioBase || pagoPorDia; // Usar salario base si se proporciona, sino usar pagoPorDia
+  // Si pagoPorDia es 0 pero salarioBase > 0, usar salarioBase; si ambos >0, priorizar salarioBase explícito.
+  const salarioBaseCalculado = (salarioBase && salarioBase > 0) ? salarioBase : pagoPorDia; // Fallback seguro
       
-      // Cálculo de horas extra (basándose en pago semanal)
-      const pagoParaHorasExtra = pagoPorDia / 6; // Convertir pago semanal a diario para horas extra (semana de 6 días)
-      const montoHorasExtra = this.calcularHorasExtra(horasExtra, pagoParaHorasExtra);
+      // Cálculo de horas extra
+      // Si pagoPorDia representa el pago semanal, convertirlo a diario; si no existe, derivar del salarioBase/días.
+      const pagoDiarioBase = (pagoPorDia && pagoPorDia > 0)
+        ? (pagoPorDia / 6)
+        : ((salarioBase && salarioBase > 0 && diasLaborados && diasLaborados > 0) ? (salarioBase / diasLaborados) : 0);
+      const montoHorasExtra = this.calcularHorasExtra(horasExtra, pagoDiarioBase);
       
       // Subtotal antes de deducciones
       const subtotal = salarioBaseCalculado + montoHorasExtra + bonos;

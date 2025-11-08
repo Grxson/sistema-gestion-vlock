@@ -28,7 +28,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const { showError, showSuccess } = useToast();
   const { empleados } = useEmpleados();
 
-  
+
   const [activeTab, setActiveTab] = useState(() => {
     try {
       return localStorage.getItem('nominaReports_activeTab') || 'summary';
@@ -40,22 +40,22 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [chartsData, setChartsData] = useState(null);
   const [paymentsData, setPaymentsData] = useState(null);
   const [monthlyData, setMonthlyData] = useState(null);
-  
+
   // Estados para reportes por semanas
   const [weeklyReportsData, setWeeklyReportsData] = useState(null);
   const [selectedPeriod, setSelectedPeriod] = useState(() => {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [proyectos, setProyectos] = useState([]);
   // Filtros específicos del tab "Reportes por Semanas"
   const [filtroProyectoSem, setFiltroProyectoSem] = useState('');
-  
+
   // Filtros para el tab de Gráficas y Desglose por Proyectos
   const [chartsPeriodo, setChartsPeriodo] = useState(() => {
     const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
   const [chartsYear, setChartsYear] = useState(new Date().getFullYear());
   const [chartsProyecto, setChartsProyecto] = useState('');
@@ -117,7 +117,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   });
   const [showColsPicker, setShowColsPicker] = useState(false);
   const [showColsPopover, setShowColsPopover] = useState(false);
-  
+
   // Estado para mostrar/ocultar filtros en tabla detallada
   const [showFiltersDetailed, setShowFiltersDetailed] = useState(() => {
     try {
@@ -138,12 +138,12 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         if (p.selectedYear) setSelectedYear(p.selectedYear);
         if (typeof p.filtroProyectoSem !== 'undefined') setFiltroProyectoSem(p.filtroProyectoSem);
       }
-    } catch {}
+    } catch { }
   }, []);
 
   // Guardar pestaña activa
   useEffect(() => {
-    try { localStorage.setItem('nominaReports_activeTab', activeTab); } catch {}
+    try { localStorage.setItem('nominaReports_activeTab', activeTab); } catch { }
   }, [activeTab]);
 
   // Guardar filtros del tab Weekly Reports
@@ -151,21 +151,21 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     try {
       const payload = { selectedPeriod, selectedYear, filtroProyectoSem };
       localStorage.setItem('nominaReports_weeklyFilters', JSON.stringify(payload));
-    } catch {}
+    } catch { }
   }, [selectedPeriod, selectedYear, filtroProyectoSem]);
 
   // Guardar columnas visibles cuando cambien
   useEffect(() => {
     try {
       localStorage.setItem('nominaTablaDetallada_visibleCols', JSON.stringify(visibleCols));
-    } catch {}
+    } catch { }
   }, [visibleCols]);
-  
+
   // Guardar estado de visibilidad de filtros
   useEffect(() => {
     try {
       localStorage.setItem('nominaTablaDetallada_showFilters', JSON.stringify(showFiltersDetailed));
-    } catch {}
+    } catch { }
   }, [showFiltersDetailed]);
 
   const toggleCol = (key) => setVisibleCols((v) => ({ ...v, [key]: !v[key] }));
@@ -203,7 +203,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     const v = parseFloat(n?.monto_total ?? n?.monto ?? n?.pago_semanal ?? 0);
     return Number.isFinite(v) ? v : 0;
   };
-  
+
   // Helper para obtener sueldo base
   const getSueldoBase = (n) => {
     const v = parseFloat(n?.pago_semanal ?? 0);
@@ -245,8 +245,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         // Fecha base
         const d = getBaseDate(n);
         if (!d) return false;
-        if (start && d < new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0,0,0,0)) return false;
-        if (end && d > new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23,59,59,999)) return false;
+        if (start && d < new Date(start.getFullYear(), start.getMonth(), start.getDate(), 0, 0, 0, 0)) return false;
+        if (end && d > new Date(end.getFullYear(), end.getMonth(), end.getDate(), 23, 59, 59, 999)) return false;
         // Búsqueda
         if (debouncedSearch) {
           const emp = `${n.empleado?.nombre || ''} ${n.empleado?.apellido || ''}`.toLowerCase();
@@ -287,19 +287,19 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     if (n?.semana && typeof n.semana === 'number') {
       return n.semana;
     }
-    
+
     // PRIORIDAD 2: Si viene en el objeto semana como semana_mes o similar
     if (n?.semana?.semana_mes && typeof n.semana.semana_mes === 'number') {
       return n.semana.semana_mes;
     }
-    
+
     // PRIORIDAD 3: Recalcular usando semana ISO
     const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt || n?.fecha_creacion;
     if (n?.semana?.anio && n?.semana?.semana_iso) {
       // Derivar período desde la fecha base (YYYY-MM)
       if (base) {
         const d = new Date(base);
-        const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         const idx = semanaDelMesDesdeISO(periodo, n.semana.anio, n.semana.semana_iso);
         if (!Number.isNaN(idx) && idx) return idx;
       }
@@ -333,7 +333,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   // Helpers: semana ISO (jueves) -> semana del mes (1-5) que toca el mes de la fecha
   function getPeriodoFromDate(date) {
     const d = new Date(date);
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 
   function getWeeksTouchingMonth(periodo) {
@@ -395,10 +395,10 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
         const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
         const semanaDelMes = calcularSemanaDelMes(fechaNomina);
-        
+
         // Determinar tipo de pago
         const tipoPago = esPagoParcial(nomina.tipo_pago) ? 'PARCIAL' : 'COMPLETA';
-        
+
         // Determinar estado
         let estado = 'PENDIENTE';
         if (nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado') {
@@ -624,9 +624,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       return d && d >= startOfWeek && d <= endOfWeek;
     });
 
-    const paidNominas = weeklyNominas.filter(n => (n.estado||'').toLowerCase().includes('pagad'));
+    const paidNominas = weeklyNominas.filter(n => (n.estado || '').toLowerCase().includes('pagad'));
     const pendingNominas = weeklyNominas.filter(n => {
-      const est = (n.estado||'').toLowerCase();
+      const est = (n.estado || '').toLowerCase();
       return est === 'pendiente' || est === 'borrador' || est === 'en_proceso' || est === 'en proceso';
     });
 
@@ -648,14 +648,14 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     // Determinar período a usar: chartsPeriodo si está seleccionado, sino el mes actual
     const periodoParaCalculo = chartsPeriodo || (() => {
       const now = new Date();
-      return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     })();
 
     // Filtrar nóminas del período seleccionado (o año si solo año está seleccionado) y por proyecto
     const nominasFiltradas = nominas.filter(n => {
       const d = getBaseDate(n);
       if (!d) return false;
-      
+
       // Filtro por período/año
       if (chartsPeriodo) {
         const [a, m] = chartsPeriodo.split('-').map(Number);
@@ -663,14 +663,14 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       } else if (chartsYear) {
         if (d.getFullYear() !== chartsYear) return false;
       }
-      
+
       // Filtro por proyecto
       if (chartsProyecto) {
         const pid = String(chartsProyecto);
         const nid = n.id_proyecto || n.proyecto?.id_proyecto || n.proyecto?.id;
         if (!nid || String(nid) !== pid) return false;
       }
-      
+
       return true;
     });
 
@@ -678,14 +678,14 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     const proyectosData = {};
     nominasFiltradas.forEach(nomina => {
       const proyectoId = nomina.id_proyecto || (nomina.proyecto && nomina.proyecto.id_proyecto);
-      
+
       // Buscar nombre del proyecto en el array de proyectos
       let proyectoNombre = 'Administrativo';
       if (proyectoId) {
         const proyecto = proyectos.find(p => p.id_proyecto === proyectoId);
         proyectoNombre = proyecto ? proyecto.nombre : `Proyecto ${proyectoId}`;
       }
-      
+
       if (!proyectosData[proyectoNombre]) {
         proyectosData[proyectoNombre] = {
           monto: 0,
@@ -693,27 +693,27 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           empleados: new Set()
         };
       }
-      
+
       const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
       proyectosData[proyectoNombre].monto += (isNaN(monto) ? 0 : monto);
       proyectosData[proyectoNombre].cantidad += 1;
-      
+
       const empleadoId = nomina.id_empleado || (nomina.empleado && nomina.empleado.id_empleado);
       if (empleadoId) {
         proyectosData[proyectoNombre].empleados.add(empleadoId);
       }
     });
-    
+
     // Convertir Set a número para empleados únicos
     Object.keys(proyectosData).forEach(proyecto => {
       proyectosData[proyecto].empleadosUnicos = proyectosData[proyecto].empleados.size;
       delete proyectosData[proyecto].empleados;
     });
-    
+
     // Ordenar por monto descendente
     const proyectosOrdenados = Object.entries(proyectosData)
       .sort((a, b) => b[1].monto - a[1].monto);
-    
+
     // Colores para proyectos
     const coloresProyectos = [
       '#3B82F6', // Azul
@@ -737,7 +737,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     nominasFiltradas.forEach(nomina => {
       const d = getBaseDate(nomina);
       if (!d) return;
-      const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       if (chartsPeriodo && periodo !== chartsPeriodo) return;
       const w = computeSemanaDelMes(nomina);
       if (w && weeklyData[`Semana ${w}`] !== undefined) {
@@ -822,7 +822,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         }
         paymentsByEmpleado[empleadoId].nominas.push(nomina);
         paymentsByEmpleado[empleadoId].totalAmount += getMonto(nomina);
-        
+
         // Determinar estado general
         if (nomina.estado === 'pagada' || nomina.estado === 'Pagado') {
           paymentsByEmpleado[empleadoId].status = 'paid';
@@ -915,7 +915,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           semana: i,
           año: parseInt(a, 10),
           mes: parseInt(m, 10),
-          nombreMes: new Date(parseInt(a,10), parseInt(m,10)-1, 1).toLocaleDateString('es-MX', { month: 'long' }),
+          nombreMes: new Date(parseInt(a, 10), parseInt(m, 10) - 1, 1).toLocaleDateString('es-MX', { month: 'long' }),
           nominas: [],
           totalNominas: 0,
           totalMonto: 0,
@@ -930,7 +930,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     nominasFiltradas.forEach((n) => {
       const d = getBaseDate(n);
       if (!d) return;
-      const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      const periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const semanaDelMes = computeSemanaDelMes(n) || calcularSemanaDelMes(d);
       const clave = `${periodo}-Semana${semanaDelMes}`;
       if (!reportesPorSemana[clave]) {
@@ -939,7 +939,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           periodo,
           semana: semanaDelMes,
           año: d.getFullYear(),
-          mes: d.getMonth()+1,
+          mes: d.getMonth() + 1,
           nombreMes: d.toLocaleDateString('es-MX', { month: 'long' }),
           nominas: [],
           totalNominas: 0,
@@ -951,7 +951,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       }
 
       const monto = parseFloat(n.monto_total || n.monto || 0) || 0;
-  const est = (n.estado || '').toLowerCase();
+      const est = (n.estado || '').toLowerCase();
 
       reportesPorSemana[clave].nominas.push(n);
       reportesPorSemana[clave].totalNominas += 1;
@@ -1014,7 +1014,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       monto: b.monto,
       nominas: b.nominas,
       empleados: b.empleados.size,
-    })).sort((a,b)=> b.monto - a.monto);
+    })).sort((a, b) => b.monto - a.monto);
     const proyectosTotalesResumen = proyectosTotales.reduce((acc, p) => ({
       monto: acc.monto + p.monto,
       nominas: acc.nominas + p.nominas,
@@ -1029,12 +1029,12 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       periodosDisponibles: [...new Set(nominas.map(n => {
         const d = getBaseDate(n);
         if (!d) return null;
-        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       }).filter(Boolean))].sort().reverse(),
       añosDisponibles: [...new Set(nominas.map(n => {
         const d = getBaseDate(n);
         return d ? d.getFullYear() : null;
-      }).filter(Boolean))].sort((a,b)=>b-a)
+      }).filter(Boolean))].sort((a, b) => b - a)
     });
   };
 
@@ -1049,9 +1049,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-96 bg-white dark:bg-dark-100 rounded-lg">
+      <div className="flex items-center justify-center bg-white rounded-lg h-96 dark:bg-dark-100">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
+          <div className="w-12 h-12 mx-auto mb-4 border-b-2 rounded-full animate-spin border-primary-600"></div>
           <p className="text-gray-600 dark:text-gray-400">Cargando reportes de nómina...</p>
         </div>
       </div>
@@ -1061,55 +1061,55 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+      <div className="p-6 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
               Reportes y Gráficas de Nómina
             </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Análisis detallado de pagos semanales y tendencias
             </p>
           </div>
           <div className="flex items-center space-x-6">
             <div className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400">
-              <CalendarIcon className="h-4 w-4" />
+              <CalendarIcon className="w-4 h-4" />
               <span>
-                {weeklyData ? 
+                {weeklyData ?
                   `${weeklyData.startOfWeek.toLocaleDateString('es-MX')} - ${weeklyData.endOfWeek.toLocaleDateString('es-MX')}` :
                   'Cargando...'
                 }
               </span>
             </div>
-            
+
             {/* Subtotal Mensual */}
             {monthlyData && (
-              <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg px-4 py-2">
+              <div className="px-4 py-2 rounded-lg bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20">
                 <div className="flex items-center space-x-3">
-                  <div className="h-8 w-8 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                    <span className="text-green-600 dark:text-green-400 text-sm font-bold">
+                  <div className="flex items-center justify-center w-8 h-8 bg-green-100 rounded-full dark:bg-green-900/30">
+                    <span className="text-sm font-bold text-green-600 dark:text-green-400">
                       $
                     </span>
                   </div>
-              
-              {/* Tarjetas de Totales (Fase B) */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
-                  <div className="text-xs text-gray-500">Total Pagado</div>
-                  <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(totalesFiltrados.totalPagado)}</div>
-                  <div className="text-xs text-gray-500">{totalesFiltrados.countPagadas} nóminas</div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
-                  <div className="text-xs text-gray-500 dark:text-gray-400">Comprometido (Pendiente/Parcial)</div>
-                  <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalesFiltrados.totalPendienteSueldoBase)}</div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">{totalesFiltrados.countPendientes} nóminas</div>
-                </div>
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 text-center">
-                  <div className="text-xs text-gray-500">Registros filtrados</div>
-                  <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">{totalesFiltrados.countTotal}</div>
-                  <div className="text-xs text-gray-500">Aplicando filtros</div>
-                </div>
-              </div>
+
+                  {/* Tarjetas de Totales (Fase B) */}
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                    <div className="p-4 text-center bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+                      <div className="text-xs text-gray-500">Total Pagado</div>
+                      <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(totalesFiltrados.totalPagado)}</div>
+                      <div className="text-xs text-gray-500">{totalesFiltrados.countPagadas} nóminas</div>
+                    </div>
+                    <div className="p-4 text-center bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Comprometido (Pendiente/Parcial)</div>
+                      <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">{formatCurrency(totalesFiltrados.totalPendienteSueldoBase)}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">{totalesFiltrados.countPendientes} nóminas</div>
+                    </div>
+                    <div className="p-4 text-center bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+                      <div className="text-xs text-gray-500">Registros filtrados</div>
+                      <div className="text-2xl font-bold text-primary-600 dark:text-primary-400">{totalesFiltrados.countTotal}</div>
+                      <div className="text-xs text-gray-500">Aplicando filtros</div>
+                    </div>
+                  </div>
                   <div>
                     <div className="text-sm font-medium text-gray-900 dark:text-white">
                       Total del Mes
@@ -1134,22 +1134,21 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       </div>
 
       {/* Tabs */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
-        <div className="border-b border-gray-200 dark:border-gray-700"> 
-          <nav className="flex space-x-8 px-6" aria-label="Tabs">
+      <div className="bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+        <div className="border-b border-gray-200 dark:border-gray-700">
+          <nav className="flex px-6 space-x-8" aria-label="Tabs">
             {tabs.map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`${
-                    activeTab === tab.id
-                      ? 'border-primary-500 text-primary-600 dark:text-primary-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                  } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors duration-200`}
+                  className={`${activeTab === tab.id
+                    ? 'border-primary-500 text-primary-600 dark:text-primary-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                    } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors duration-200`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="w-4 h-4" />
                   <span>{tab.name}</span>
                 </button>
               );
@@ -1160,19 +1159,19 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         {/* Tab Content */}
         <div className="p-6">
           {activeTab === 'summary' && (
-            <NominaWeeklySummary 
+            <NominaWeeklySummary
               weeklyData={weeklyData}
               loading={loading}
             />
           )}
-          
+
           {activeTab === 'charts' && (
             <div className="space-y-6">
               {/* Filtros compactos para las tablas de Empleados y Este Mes */}
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Año
                     </label>
                     <select
@@ -1181,7 +1180,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         setChartsYear(parseInt(e.target.value));
                         setChartsPeriodo('');
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white text-sm"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
                     >
                       <option value="">Todos los años</option>
                       {weeklyReportsData?.añosDisponibles?.map(año => (
@@ -1190,7 +1189,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Período (Mes)
                     </label>
                     <select
@@ -1202,7 +1201,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           setChartsYear(parseInt(año));
                         }
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white text-sm"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
                     >
                       <option value="">Todos los períodos</option>
                       {weeklyReportsData?.periodosDisponibles?.map(periodo => (
@@ -1214,10 +1213,10 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     <button
                       onClick={() => {
                         const now = new Date();
-                        setChartsPeriodo(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
+                        setChartsPeriodo(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
                         setChartsYear(now.getFullYear());
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      className="w-full px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 dark:text-gray-300 dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                     >
                       Restablecer (Mes Actual)
                     </button>
@@ -1225,28 +1224,28 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                 </div>
               </div>
 
-              <NominaCharts 
+              <NominaCharts
                 chartsData={chartsData}
                 loading={loading}
                 selectedPeriodo={chartsPeriodo}
               />
             </div>
           )}
-          
+
           {activeTab === 'payments' && (
-            <NominaPaymentsList 
+            <NominaPaymentsList
               paymentsData={paymentsData}
               loading={loading}
             />
           )}
-          
+
           {activeTab === 'projects' && (
             <div className="space-y-6">
               {/* Filtros compactos para desglose por proyectos */}
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Período (Año-Mes)
                     </label>
                     <select
@@ -1258,7 +1257,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           setChartsYear(parseInt(año));
                         }
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white text-sm"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
                     >
                       <option value="">Todos los períodos</option>
                       {weeklyReportsData?.periodosDisponibles?.map(periodo => (
@@ -1267,13 +1266,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Proyecto
                     </label>
                     <select
                       value={chartsProyecto}
                       onChange={(e) => setChartsProyecto(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white text-sm"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
                     >
                       <option value="">Todos los proyectos</option>
                       {proyectos.map(p => (
@@ -1285,11 +1284,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     <button
                       onClick={() => {
                         const now = new Date();
-                        setChartsPeriodo(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
+                        setChartsPeriodo(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
                         setChartsYear(now.getFullYear());
                         setChartsProyecto('');
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      className="w-full px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 dark:text-gray-300 dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                     >
                       Restablecer (Mes Actual)
                     </button>
@@ -1299,12 +1298,12 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
               {/* Tabla Desglosada de Nómina por Proyecto */}
               {chartsData && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="overflow-hidden bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
                   <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                     <h4 className="text-lg font-medium text-gray-900 dark:text-white">
                       Desglose Detallado por Proyecto
                     </h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                       {(() => {
                         let texto = '';
                         if (chartsPeriodo) {
@@ -1326,33 +1325,33 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-900">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase dark:text-gray-400">
                             Proyecto
                           </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">
                             Monto Total
                           </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">
                             Nóminas
                           </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">
                             Empleados
                           </th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">
                             %
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                         {chartsData.proyectosDistribution.detalles.map((detalle, index) => {
                           const total = chartsData.proyectosDistribution.data.reduce((a, b) => a + b, 0);
                           const percentage = total > 0 ? ((detalle.monto / total) * 100).toFixed(1) : '0.0';
                           return (
-                            <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                            <tr key={index} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <div className="flex items-center space-x-2">
-                                  <div 
-                                    className="w-3 h-3 rounded-full flex-shrink-0"
+                                  <div
+                                    className="flex-shrink-0 w-3 h-3 rounded-full"
                                     style={{ backgroundColor: chartsData.proyectosDistribution.colors[index] }}
                                   ></div>
                                   <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1360,16 +1359,16 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                   </span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-gray-900 dark:text-white">
+                              <td className="px-6 py-4 text-sm font-semibold text-right text-gray-900 whitespace-nowrap dark:text-white">
                                 {formatCurrency(detalle.monto)}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400">
+                              <td className="px-6 py-4 text-sm text-right text-gray-600 whitespace-nowrap dark:text-gray-400">
                                 {detalle.cantidad}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400">
+                              <td className="px-6 py-4 text-sm text-right text-gray-600 whitespace-nowrap dark:text-gray-400">
                                 {detalle.empleados}
                               </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <td className="px-6 py-4 text-right whitespace-nowrap">
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300">
                                   {percentage}%
                                 </span>
@@ -1378,20 +1377,20 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           );
                         })}
                         {/* Fila de totales */}
-                        <tr className="bg-gray-50 dark:bg-gray-900 font-semibold">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                        <tr className="font-semibold bg-gray-50 dark:bg-gray-900">
+                          <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">
                             TOTAL
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                          <td className="px-6 py-4 text-sm text-right text-gray-900 whitespace-nowrap dark:text-white">
                             {formatCurrency(chartsData.proyectosDistribution.data.reduce((a, b) => a + b, 0))}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                          <td className="px-6 py-4 text-sm text-right text-gray-900 whitespace-nowrap dark:text-white">
                             {chartsData.proyectosDistribution.cantidad.reduce((a, b) => a + b, 0)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                          <td className="px-6 py-4 text-sm text-right text-gray-900 whitespace-nowrap dark:text-white">
                             {chartsData.proyectosDistribution.empleados.reduce((a, b) => a + b, 0)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">
+                          <td className="px-6 py-4 text-sm text-right text-gray-900 whitespace-nowrap dark:text-white">
                             100%
                           </td>
                         </tr>
@@ -1403,13 +1402,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
               {/* Tablas de Empleados y Este Mes */}
               {chartsData && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                   {/* Top Empleados */}
-                  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  <div className="p-6 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+                    <h4 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                       Empleados
                     </h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
                       {chartsPeriodo ? (() => {
                         const [year, month] = chartsPeriodo.split('-');
                         const date = new Date(parseInt(year), parseInt(month) - 1, 1);
@@ -1419,7 +1418,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     <div className="space-y-3">
                       {chartsData.topEmpleados.labels.slice(0, 10).map((label, index) => (
                         <div key={index} className="flex items-center justify-between">
-                          <span className="text-sm text-gray-600 dark:text-gray-400 truncate">
+                          <span className="text-sm text-gray-600 truncate dark:text-gray-400">
                             {label}
                           </span>
                           <span className="text-sm font-medium text-gray-900 dark:text-white">
@@ -1431,11 +1430,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   </div>
 
                   {/* Estadísticas Mensuales */}
-                  <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-                    <h4 className="text-lg font-medium text-gray-900 dark:text-white mb-4">
+                  <div className="p-6 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+                    <h4 className="mb-4 text-lg font-medium text-gray-900 dark:text-white">
                       {chartsPeriodo ? 'Este Mes' : 'Período Seleccionado'}
                     </h4>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
+                    <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
                       {chartsPeriodo ? (() => {
                         const [year, month] = chartsPeriodo.split('-');
                         const date = new Date(parseInt(year), parseInt(month) - 1, 1);
@@ -1451,7 +1450,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           </span>
                         </div>
                       ))}
-                      
+
                       {/* Total del Mes */}
                       <div className="pt-3 mt-3 border-t border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between">
@@ -1462,7 +1461,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             {formatCurrency(chartsData.monthlyPayments.data.reduce((sum, amount) => sum + amount, 0))}
                           </span>
                         </div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           Suma de las {chartsData.monthlyPayments.labels.length} semanas
                         </div>
                       </div>
@@ -1472,14 +1471,14 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
               )}
             </div>
           )}
-          
+
           {activeTab === 'weekly-reports' && (
             <div className="space-y-6">
               {/* Filtros */}
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+              <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Año
                     </label>
                     <select
@@ -1488,7 +1487,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         setSelectedYear(parseInt(e.target.value));
                         setSelectedPeriod('');
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
                     >
                       <option value="">Todos los años</option>
                       {weeklyReportsData?.añosDisponibles?.map(año => (
@@ -1497,7 +1496,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
                       Período Específico
                     </label>
                     <select
@@ -1509,7 +1508,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           setSelectedYear(parseInt(año));
                         }
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
                     >
                       <option value="">Todos los períodos</option>
                       {weeklyReportsData?.periodosDisponibles?.map(periodo => (
@@ -1518,11 +1517,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
+                    <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Proyecto</label>
                     <select
                       value={filtroProyectoSem}
-                      onChange={(e)=>setFiltroProyectoSem(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
+                      onChange={(e) => setFiltroProyectoSem(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 focus:ring-primary-500 focus:border-primary-500 dark:bg-gray-600 dark:text-white"
                     >
                       <option value="">Todos</option>
                       {proyectos.map(p => (
@@ -1538,18 +1537,18 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         setSelectedYear(new Date().getFullYear());
                         setFiltroProyectoSem('');
                       }}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                      className="w-full px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg shadow-sm dark:border-gray-600 dark:text-gray-300 dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
                     >
                       Limpiar Filtros
                     </button>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center justify-end">
+                <div className="flex items-center justify-end mt-4">
                   <button
                     onClick={exportWeeklyReportsToExcel}
-                    className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white transition-colors duration-200 bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
-                    <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     Exportar Excel
@@ -1559,16 +1558,16 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
               {/* Total General */}
               {weeklyReportsData?.totales && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+                <div className="p-6 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
                   <div className="text-center">
                     <div className="flex items-center justify-center">
                       <div className="flex-shrink-0">
-                        <CurrencyDollarIcon className="h-12 w-12 text-green-600 dark:text-green-400" />
+                        <CurrencyDollarIcon className="w-12 h-12 text-green-600 dark:text-green-400" />
                       </div>
                       <div className="ml-4">
                         <p className="text-lg font-medium text-gray-500 dark:text-gray-400">Total General Pagado</p>
                         <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(weeklyReportsData.totales.totalPagado)}</p>
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                           {weeklyReportsData.totales.totalNominas} nóminas en {weeklyReportsData.reportes.length} semanas
                         </p>
                       </div>
@@ -1579,46 +1578,46 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
               {/* Totales por Proyecto del período */}
               {weeklyReportsData?.proyectosTotales && weeklyReportsData.proyectosTotales.length > 0 && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="overflow-hidden bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
                   <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                     <h4 className="text-lg font-medium text-gray-900 dark:text-white">Totales por Proyecto (Período Seleccionado)</h4>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                    <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                       {selectedPeriod ? `Período: ${selectedPeriod}` : `Año: ${selectedYear}`}
                     </p>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                    <table className="min-w-full text-sm divide-y divide-gray-200 dark:divide-gray-700">
                       <thead className="bg-gray-50 dark:bg-gray-900">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Proyecto</th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Monto Pagado</th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Nóminas</th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Empleados</th>
-                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">%</th>
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase dark:text-gray-400">Proyecto</th>
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">Monto Pagado</th>
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">Nóminas</th>
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">Empleados</th>
+                          <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">%</th>
                         </tr>
                       </thead>
-                      <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                      <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                         {weeklyReportsData.proyectosTotales.map((p, idx) => {
                           const totalMonto = weeklyReportsData.proyectosTotalesResumen.monto || 0;
                           const porcentaje = totalMonto > 0 ? ((p.monto / totalMonto) * 100).toFixed(1) : '0.0';
                           return (
-                            <tr key={`proj-total-${idx}`} className="hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{p.proyecto}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-semibold text-green-600 dark:text-green-400">{formatCurrency(p.monto)}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400">{p.nominas}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400">{p.empleados}</td>
-                              <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <tr key={`proj-total-${idx}`} className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700">
+                              <td className="px-6 py-4 text-sm font-medium text-gray-900 whitespace-nowrap dark:text-white">{p.proyecto}</td>
+                              <td className="px-6 py-4 text-sm font-semibold text-right text-green-600 whitespace-nowrap dark:text-green-400">{formatCurrency(p.monto)}</td>
+                              <td className="px-6 py-4 text-sm text-right text-gray-600 whitespace-nowrap dark:text-gray-400">{p.nominas}</td>
+                              <td className="px-6 py-4 text-sm text-right text-gray-600 whitespace-nowrap dark:text-gray-400">{p.empleados}</td>
+                              <td className="px-6 py-4 text-right whitespace-nowrap">
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-100 text-primary-800 dark:bg-primary-900/30 dark:text-primary-300">{porcentaje}%</span>
                               </td>
                             </tr>
                           );
                         })}
-                        <tr className="bg-gray-50 dark:bg-gray-900 font-semibold">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">TOTAL</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">{formatCurrency(weeklyReportsData.proyectosTotalesResumen.monto)}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">{weeklyReportsData.proyectosTotalesResumen.nominas}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">{weeklyReportsData.proyectosTotalesResumen.empleados}</td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm text-gray-900 dark:text-white">100%</td>
+                        <tr className="font-semibold bg-gray-50 dark:bg-gray-900">
+                          <td className="px-6 py-4 text-sm text-gray-900 whitespace-nowrap dark:text-white">TOTAL</td>
+                          <td className="px-6 py-4 text-sm text-right text-gray-900 whitespace-nowrap dark:text-white">{formatCurrency(weeklyReportsData.proyectosTotalesResumen.monto)}</td>
+                          <td className="px-6 py-4 text-sm text-right text-gray-900 whitespace-nowrap dark:text-white">{weeklyReportsData.proyectosTotalesResumen.nominas}</td>
+                          <td className="px-6 py-4 text-sm text-right text-gray-900 whitespace-nowrap dark:text-white">{weeklyReportsData.proyectosTotalesResumen.empleados}</td>
+                          <td className="px-6 py-4 text-sm text-right text-gray-900 whitespace-nowrap dark:text-white">100%</td>
                         </tr>
                       </tbody>
                     </table>
@@ -1628,20 +1627,20 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
               {/* Tabla Única: Semanas del Mes (1..N) + Total del Mes */}
               <div className="flex justify-center">
-                <div className="w-full max-w-xl bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="w-full max-w-xl overflow-hidden bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
                   <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-white text-center">
+                    <h3 className="text-base font-semibold text-center text-gray-900 dark:text-white">
                       {selectedPeriod ? `Semanas del Mes ${selectedPeriod}` : 'Selecciona un período (YYYY-MM)'}
                     </h3>
                     {selectedPeriod && (
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
+                      <p className="mt-1 text-xs text-center text-gray-500 dark:text-gray-400">
                         {`Este período tiene ${weeksInSelectedPeriod || 4} semanas`}
                       </p>
                     )}
                   </div>
                   {selectedPeriod ? (
                     <div className="overflow-x-auto">
-                      <table className="w-full divide-y divide-gray-200 dark:divide-gray-700 text-sm">
+                      <table className="w-full text-sm divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700">
                           <tr>
                             <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
@@ -1650,23 +1649,23 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             <th className="px-4 py-2 text-left text-[11px] font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Total Pagado</th>
                           </tr>
                         </thead>
-                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                           {weekRowsData.rows.map((row, idx) => (
                             <tr key={`row-semana-${row.semana}`} className={idx % 2 === 0 ? 'bg-white dark:bg-gray-800' : 'bg-gray-50 dark:bg-gray-700'}>
-                              <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                              <td className="px-4 py-2 text-sm font-medium text-gray-900 whitespace-nowrap dark:text-white">
                                 {`Semana ${row.semana}`}
                               </td>
-                              <td className="px-4 py-2 whitespace-nowrap text-sm font-bold text-green-600 dark:text-green-400">
+                              <td className="px-4 py-2 text-sm font-bold text-green-600 whitespace-nowrap dark:text-green-400">
                                 {formatCurrency(row.monto)}
                               </td>
                             </tr>
                           ))}
                           {/* Total del Mes */}
                           <tr className="bg-gray-100 dark:bg-gray-700">
-                            <td className="px-4 py-2 whitespace-nowrap text-sm font-semibold text-gray-900 dark:text-white">
+                            <td className="px-4 py-2 text-sm font-semibold text-gray-900 whitespace-nowrap dark:text-white">
                               Total del Mes
                             </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-sm font-extrabold text-primary-600 dark:text-primary-400">
+                            <td className="px-4 py-2 text-sm font-extrabold whitespace-nowrap text-primary-600 dark:text-primary-400">
                               {formatCurrency(weekRowsData.total)}
                             </td>
                           </tr>
@@ -1674,8 +1673,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                       </table>
                     </div>
                   ) : (
-                    <div className="text-center py-10">
-                      <DocumentTextIcon className="mx-auto h-10 w-10 text-gray-400" />
+                    <div className="py-10 text-center">
+                      <DocumentTextIcon className="w-10 h-10 mx-auto text-gray-400" />
                       <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Selecciona un período</h3>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                         Elige un mes (YYYY-MM) para ver el desglose por semana.
@@ -1686,7 +1685,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
               </div>
             </div>
           )}
-          
+
           {activeTab === 'detailed' && (
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -1700,10 +1699,10 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   {/* Botón para mostrar/ocultar filtros */}
                   <button
                     onClick={() => setShowFiltersDetailed(!showFiltersDetailed)}
-                    className="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 text-sm font-medium rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500"
                     title={showFiltersDetailed ? 'Ocultar filtros' : 'Mostrar filtros'}
                   >
-                    <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                     </svg>
                     {showFiltersDetailed ? 'Ocultar' : 'Mostrar'} Filtros
@@ -1713,13 +1712,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                       let suf = '';
                       if (drStart && drEnd) {
                         const s = new Date(drStart); const e = new Date(drEnd);
-                        suf = `${s.getFullYear()}-${String(s.getMonth()+1).padStart(2,'0')}-${String(s.getDate()).padStart(2,'0')}_a_${e.getFullYear()}-${String(e.getMonth()+1).padStart(2,'0')}-${String(e.getDate()).padStart(2,'0')}`;
+                        suf = `${s.getFullYear()}-${String(s.getMonth() + 1).padStart(2, '0')}-${String(s.getDate()).padStart(2, '0')}_a_${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, '0')}-${String(e.getDate()).padStart(2, '0')}`;
                       }
                       exportToExcel(null, suf);
                     }}
-                    className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    className="inline-flex items-center px-4 py-2 text-sm font-medium text-white transition-colors duration-200 bg-green-600 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                   >
-                    <svg className="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     Exportar Excel
@@ -1728,8 +1727,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={()=>setShowColsPopover(v=>!v)}
-                      className="inline-flex items-center px-3 py-2 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-200 text-sm font-medium rounded-lg border border-gray-300 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900"
+                      onClick={() => setShowColsPopover(v => !v)}
+                      className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-lg dark:bg-slate-700 dark:text-slate-200 dark:border-slate-600 hover:bg-gray-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-900"
                       title="Columnas"
                     >
                       Columnas
@@ -1737,58 +1736,58 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     {showColsPopover && (
                       <div className="absolute right-0 mt-2 w-[480px] z-20 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-4">
                         {/* Header minimalista */}
-                        <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                        <div className="flex items-center justify-between pb-3 mb-3 border-b border-gray-200 dark:border-gray-700">
                           <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Columnas Visibles</h3>
                           <div className="flex gap-2">
-                            <button 
-                              type="button" 
-                              className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600" 
-                              onClick={()=>{
-                                const allTrue = Object.fromEntries(Object.keys(visibleCols).map(k=>[k,true]));
+                            <button
+                              type="button"
+                              className="px-2 py-1 text-xs text-gray-700 bg-gray-100 rounded dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                              onClick={() => {
+                                const allTrue = Object.fromEntries(Object.keys(visibleCols).map(k => [k, true]));
                                 setVisibleCols(allTrue);
                               }}
                             >
                               Todas
                             </button>
-                            <button 
-                              type="button" 
-                              className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600" 
-                              onClick={()=>{
-                                const allFalse = Object.fromEntries(Object.keys(visibleCols).map(k=>[k,false]));
+                            <button
+                              type="button"
+                              className="px-2 py-1 text-xs text-gray-700 bg-gray-100 rounded dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                              onClick={() => {
+                                const allFalse = Object.fromEntries(Object.keys(visibleCols).map(k => [k, false]));
                                 setVisibleCols(allFalse);
                               }}
                             >
                               Ninguna
                             </button>
-                            <button 
-                              type="button" 
-                              className="text-xs px-2 py-1 rounded bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600" 
-                              onClick={()=>{
-                                setVisibleCols({empleado:true,oficio:true,proyecto:true,dias:true,sueldo:true,horasExtra:true,bonos:true,isr:true,imss:true,infonavit:true,descuentos:true,semana:true,total:true,tipoPago:true,fecha:true});
+                            <button
+                              type="button"
+                              className="px-2 py-1 text-xs text-gray-700 bg-gray-100 rounded dark:bg-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                              onClick={() => {
+                                setVisibleCols({ empleado: true, oficio: true, proyecto: true, dias: true, sueldo: true, horasExtra: true, bonos: true, isr: true, imss: true, infonavit: true, descuentos: true, semana: true, total: true, tipoPago: true, fecha: true });
                               }}
                             >
                               Restablecer
                             </button>
                           </div>
                         </div>
-                        
+
                         {/* Grid simple de columnas */}
                         <div className="space-y-3">
                           {/* Información básica */}
                           <div>
-                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Información</div>
+                            <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Información</div>
                             <div className="grid grid-cols-3 gap-2">
                               {[
-                                ['empleado','Empleado'],
-                                ['oficio','Oficio'],
-                                ['proyecto','Proyecto']
-                              ].map(([k,label])=> (
-                                <label key={k} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
-                                  <input 
-                                    type="checkbox" 
-                                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 cursor-pointer" 
-                                    checked={!!visibleCols[k]} 
-                                    onChange={()=>toggleCol(k)} 
+                                ['empleado', 'Empleado'],
+                                ['oficio', 'Oficio'],
+                                ['proyecto', 'Proyecto']
+                              ].map(([k, label]) => (
+                                <label key={k} className="flex items-center gap-2 px-3 py-2 rounded cursor-pointer bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 border-gray-300 rounded cursor-pointer dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                                    checked={!!visibleCols[k]}
+                                    onChange={() => toggleCol(k)}
                                   />
                                   <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
                                 </label>
@@ -1798,20 +1797,20 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
                           {/* Conceptos */}
                           <div>
-                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Conceptos</div>
+                            <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Conceptos</div>
                             <div className="grid grid-cols-4 gap-2">
                               {[
-                                ['dias','Días'],
-                                ['sueldo','Sueldo'],
-                                ['horasExtra','H. Extra'],
-                                ['bonos','Bonos']
-                              ].map(([k,label])=> (
-                                <label key={k} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
-                                  <input 
-                                    type="checkbox" 
-                                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 cursor-pointer" 
-                                    checked={!!visibleCols[k]} 
-                                    onChange={()=>toggleCol(k)} 
+                                ['dias', 'Días'],
+                                ['sueldo', 'Sueldo'],
+                                ['horasExtra', 'H. Extra'],
+                                ['bonos', 'Bonos']
+                              ].map(([k, label]) => (
+                                <label key={k} className="flex items-center gap-2 px-3 py-2 rounded cursor-pointer bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 border-gray-300 rounded cursor-pointer dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                                    checked={!!visibleCols[k]}
+                                    onChange={() => toggleCol(k)}
                                   />
                                   <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
                                 </label>
@@ -1821,20 +1820,20 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
                           {/* Deducciones */}
                           <div>
-                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Deducciones</div>
+                            <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Deducciones</div>
                             <div className="grid grid-cols-4 gap-2">
                               {[
-                                ['isr','ISR'],
-                                ['imss','IMSS'],
-                                ['infonavit','Infonavit'],
-                                ['descuentos','Desc.']
-                              ].map(([k,label])=> (
-                                <label key={k} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
-                                  <input 
-                                    type="checkbox" 
-                                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 cursor-pointer" 
-                                    checked={!!visibleCols[k]} 
-                                    onChange={()=>toggleCol(k)} 
+                                ['isr', 'ISR'],
+                                ['imss', 'IMSS'],
+                                ['infonavit', 'Infonavit'],
+                                ['descuentos', 'Desc.']
+                              ].map(([k, label]) => (
+                                <label key={k} className="flex items-center gap-2 px-3 py-2 rounded cursor-pointer bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 border-gray-300 rounded cursor-pointer dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                                    checked={!!visibleCols[k]}
+                                    onChange={() => toggleCol(k)}
                                   />
                                   <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
                                 </label>
@@ -1844,20 +1843,20 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
                           {/* Otros */}
                           <div>
-                            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Otros</div>
+                            <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Otros</div>
                             <div className="grid grid-cols-4 gap-2">
                               {[
-                                ['semana','Semana'],
-                                ['total','Total'],
-                                ['tipoPago','Tipo'],
-                                ['fecha','Fecha']
-                              ].map(([k,label])=> (
-                                <label key={k} className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-700/50 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700">
-                                  <input 
-                                    type="checkbox" 
-                                    className="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-primary-600 focus:ring-primary-500 cursor-pointer" 
-                                    checked={!!visibleCols[k]} 
-                                    onChange={()=>toggleCol(k)} 
+                                ['semana', 'Semana'],
+                                ['total', 'Total'],
+                                ['tipoPago', 'Tipo'],
+                                ['fecha', 'Fecha']
+                              ].map(([k, label]) => (
+                                <label key={k} className="flex items-center gap-2 px-3 py-2 rounded cursor-pointer bg-gray-50 dark:bg-gray-700/50 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                  <input
+                                    type="checkbox"
+                                    className="w-4 h-4 border-gray-300 rounded cursor-pointer dark:border-gray-600 text-primary-600 focus:ring-primary-500"
+                                    checked={!!visibleCols[k]}
+                                    onChange={() => toggleCol(k)}
                                   />
                                   <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
                                 </label>
@@ -1865,13 +1864,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             </div>
                           </div>
                         </div>
-                        
+
                         {/* Footer simple */}
-                        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
+                        <div className="flex items-center justify-between pt-3 mt-3 border-t border-gray-200 dark:border-gray-700">
                           <span className="text-xs text-gray-500 dark:text-gray-400">
                             {Object.values(visibleCols).filter(Boolean).length} de {Object.keys(visibleCols).length} visibles
                           </span>
-                          <button 
+                          <button
                             type="button"
                             onClick={() => setShowColsPopover(false)}
                             className="text-xs px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded font-medium"
@@ -1884,13 +1883,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   </div>
                 </div>
               </div>
-              
+
               {/* Filtros alineados (DateRangePicker, Proyecto, Estado, Búsqueda) - Mostrar/Ocultar */}
               {showFiltersDetailed && (
-                <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div className="p-4 bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
+                  <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rango de fechas</label>
+                      <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Rango de fechas</label>
                       <DateRangePicker
                         startDate={drStart}
                         endDate={drEnd}
@@ -1900,8 +1899,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Proyecto</label>
-                      <select value={filtroProyecto} onChange={(e)=>setFiltroProyecto(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-gray-400">
+                      <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Proyecto</label>
+                      <select value={filtroProyecto} onChange={(e) => setFiltroProyecto(e.target.value)} className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">
                         <option value="">Todos</option>
                         {proyectos.map(p => (
                           <option key={p.id_proyecto} value={p.id_proyecto}>{p.nombre}</option>
@@ -1910,24 +1909,24 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Estado</label>
-                        <select value={filtroEstado} onChange={(e)=>setFiltroEstado(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm dark:text-gray-400">
-                          {['Pagado','Pendiente','Aprobada','Cancelada','Todos'].map(s => <option key={s} value={s}>{s}</option>)}
+                        <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Estado</label>
+                        <select value={filtroEstado} onChange={(e) => setFiltroEstado(e.target.value)} className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400">
+                          {['Pagado', 'Pendiente', 'Aprobada', 'Cancelada', 'Todos'].map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Buscar</label>
-                        <input value={searchText} onChange={(e)=>setSearchText(e.target.value)} placeholder="Empleado o Proyecto" className="w-full px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm" />
+                        <label className="block mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">Buscar</label>
+                        <input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Empleado o Proyecto" className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg dark:border-gray-600 dark:bg-gray-700" />
                       </div>
                     </div>
                   </div>
                 </div>
               )}
-              
+
               {filteredNominas && filteredNominas.length > 0 ? (
                 <div className="overflow-x-auto">
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                    <thead className="bg-gray-50 dark:bg-gray-700 sticky top-0 z-10">
+                    <thead className="sticky top-0 z-10 bg-gray-50 dark:bg-gray-700">
                       <tr>
                         <th className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.empleado ? 'hidden' : ''}`}>
                           Empleado
@@ -1977,129 +1976,129 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                    <tbody className="bg-white divide-y divide-gray-200 dark:bg-gray-800 dark:divide-gray-700">
                       {gruposPorSemana.map(([semanaGrupo, bucket]) => (
                         <React.Fragment key={`grupo-semana-${semanaGrupo}`}>
                           {bucket.rows.map((nomina, index) => {
-                          const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
-                          const diasLaborados = parseInt(nomina.dias_laborados) || 6;
-                          const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
-                          const horasExtra = parseFloat(nomina.horas_extra) || 0;
-                          const bonos = parseFloat(nomina.bonos) || 0;
-                          const isr = parseFloat(nomina.deducciones_isr) || 0;
-                          const imss = parseFloat(nomina.deducciones_imss) || 0;
-                          const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
-                          const descuentos = parseFloat(nomina.descuentos) || 0;
-                          const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
-                          
-                          // Determinar tipo de pago
-                          const esParcial = esPagoParcial(nomina.tipo_pago);
-                          const tipoPago = esParcial ? 'PARCIAL' : 'COMPLETA';
-                          const tipoPagoColor = esParcial 
-                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
-                            : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
-                          
-                          // Determinar estado
-                          let estado = 'PENDIENTE';
-                          let estadoColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-                          if (nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado') {
-                            estado = 'PAGADO';
-                            estadoColor = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-                          } else if (nomina.estado === 'borrador' || nomina.estado === 'Borrador') {
-                            estado = 'BORRADOR';
-                            estadoColor = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
-                          }
-                          
-                          // Calcular semana del mes con base correcta e ISO
-                          const semanaDelMes = computeSemanaDelMes(nomina);
-                          
-                          return (
-                            <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                              <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.empleado ? 'hidden' : ''}`}>
-                                <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                  {empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado'}
-                                </div>
-                              </td>
-                              <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.oficio ? 'hidden' : ''}`}>
-                                <div className="text-sm text-gray-900 dark:text-white">
-                                  {empleado?.oficio?.nombre || 'Sin oficio'}
-                                </div>
-                              </td>
-                              <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.proyecto ? 'hidden' : ''}`}>
-                                <div className="text-sm text-gray-900 dark:text-white">
-                                  {nomina.proyecto?.nombre || 'Sin proyecto'}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.dias ? 'hidden' : ''}`}>
-                                <div className="text-sm text-center font-medium text-gray-900 dark:text-white">
-                                  {diasLaborados}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.sueldo ? 'hidden' : ''}`}>
-                                <div className="text-sm text-gray-900 dark:text-white">
-                                  {formatCurrency(sueldoBase)}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.horasExtra ? 'hidden' : ''}`}>
-                                <div className="text-sm text-gray-900 dark:text-white">
-                                  {horasExtra > 0 ? formatCurrency(horasExtra) : '-'}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.bonos ? 'hidden' : ''}`}>
-                                <div className="text-sm text-gray-900 dark:text-white">
-                                  {bonos > 0 ? formatCurrency(bonos) : '-'}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.isr ? 'hidden' : ''}`}>
-                                <div className="text-sm text-red-600 dark:text-red-400">
-                                  {isr > 0 ? `-${formatCurrency(isr)}` : '-'}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.imss ? 'hidden' : ''}`}>
-                                <div className="text-sm text-red-600 dark:text-red-400">
-                                  {imss > 0 ? `-${formatCurrency(imss)}` : '-'}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.infonavit ? 'hidden' : ''}`}>
-                                <div className="text-sm text-red-600 dark:text-red-400">
-                                  {infonavit > 0 ? `-${formatCurrency(infonavit)}` : '-'}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.descuentos ? 'hidden' : ''}`}>
-                                <div className="text-sm text-red-600 dark:text-red-400">
-                                  {descuentos > 0 ? `-${formatCurrency(descuentos)}` : '-'}
-                                </div>
-                              </td>
-                              <td className={`px-4 py-4 whitespace-nowrap ${!visibleCols.semana ? 'hidden' : ''}`}>
-                                <div className="text-sm text-gray-900 dark:text-white">
-                                  {semanaDelMes}
-                                </div>
-                              </td>
-                              <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.total ? 'hidden' : ''}`}>
-                                <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-                                  {formatCurrency(totalAPagar)}
-                                </div>
-                              </td>
-                              <td className={`px-4 py-4 whitespace-nowrap ${!visibleCols.tipoPago ? 'hidden' : ''}`}>
-                                <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${tipoPagoColor}`}>
-                                  {tipoPago}
-                                </span>
-                              </td>
-                              {/* Celda Status eliminada */}
-                              <td className={`px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 ${!visibleCols.fecha ? 'hidden' : ''}`}>
-                                {(() => {
-                                  const fc = nomina?.fecha_creacion || nomina?.createdAt;
-                                  return fc ? new Date(fc).toLocaleDateString('es-MX') : '';
-                                })()}
-                              </td>
-                            </tr>
-                          );
+                            const empleado = empleados?.find(emp => emp.id_empleado === nomina.id_empleado);
+                            const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+                            const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+                            const horasExtra = parseFloat(nomina.horas_extra) || 0;
+                            const bonos = parseFloat(nomina.bonos) || 0;
+                            const isr = parseFloat(nomina.deducciones_isr) || 0;
+                            const imss = parseFloat(nomina.deducciones_imss) || 0;
+                            const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
+                            const descuentos = parseFloat(nomina.descuentos) || 0;
+                            const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
+
+                            // Determinar tipo de pago
+                            const esParcial = esPagoParcial(nomina.tipo_pago);
+                            const tipoPago = esParcial ? 'PARCIAL' : 'COMPLETA';
+                            const tipoPagoColor = esParcial
+                              ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+
+                            // Determinar estado
+                            let estado = 'PENDIENTE';
+                            let estadoColor = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
+                            if (nomina.estado === 'pagada' || nomina.estado === 'Pagado' || nomina.estado === 'pagado') {
+                              estado = 'PAGADO';
+                              estadoColor = 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+                            } else if (nomina.estado === 'borrador' || nomina.estado === 'Borrador') {
+                              estado = 'BORRADOR';
+                              estadoColor = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300';
+                            }
+
+                            // Calcular semana del mes con base correcta e ISO
+                            const semanaDelMes = computeSemanaDelMes(nomina);
+
+                            return (
+                              <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.empleado ? 'hidden' : ''}`}>
+                                  <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                    {empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado'}
+                                  </div>
+                                </td>
+                                <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.oficio ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {empleado?.oficio?.nombre || 'Sin oficio'}
+                                  </div>
+                                </td>
+                                <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.proyecto ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {nomina.proyecto?.nombre || empleado?.proyecto?.nombre || 'Sin proyecto'}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.dias ? 'hidden' : ''}`}>
+                                  <div className="text-sm font-medium text-center text-gray-900 dark:text-white">
+                                    {diasLaborados}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.sueldo ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {formatCurrency(sueldoBase)}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.horasExtra ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {horasExtra > 0 ? formatCurrency(horasExtra) : '-'}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.bonos ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {bonos > 0 ? formatCurrency(bonos) : '-'}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.isr ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-red-600 dark:text-red-400">
+                                    {isr > 0 ? `-${formatCurrency(isr)}` : '-'}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.imss ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-red-600 dark:text-red-400">
+                                    {imss > 0 ? `-${formatCurrency(imss)}` : '-'}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.infonavit ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-red-600 dark:text-red-400">
+                                    {infonavit > 0 ? `-${formatCurrency(infonavit)}` : '-'}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.descuentos ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-red-600 dark:text-red-400">
+                                    {descuentos > 0 ? `-${formatCurrency(descuentos)}` : '-'}
+                                  </div>
+                                </td>
+                                <td className={`px-4 py-4 whitespace-nowrap ${!visibleCols.semana ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {semanaDelMes}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.total ? 'hidden' : ''}`}>
+                                  <div className="text-sm font-semibold text-green-600 dark:text-green-400">
+                                    {formatCurrency(totalAPagar)}
+                                  </div>
+                                </td>
+                                <td className={`px-4 py-4 whitespace-nowrap ${!visibleCols.tipoPago ? 'hidden' : ''}`}>
+                                  <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${tipoPagoColor}`}>
+                                    {tipoPago}
+                                  </span>
+                                </td>
+                                {/* Celda Status eliminada */}
+                                <td className={`px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 ${!visibleCols.fecha ? 'hidden' : ''}`}>
+                                  {(() => {
+                                    const fc = nomina?.fecha_creacion || nomina?.createdAt;
+                                    return fc ? new Date(fc).toLocaleDateString('es-MX') : '';
+                                  })()}
+                                </td>
+                              </tr>
+                            );
                           })}
                         </React.Fragment>
                       ))}
-                    
+
                       {/* Fila de totales dinámica según columnas visibles */}
-                      <tr className="bg-gray-50 dark:bg-gray-700 border-t-2 border-gray-300 dark:border-gray-600">
+                      <tr className="border-t-2 border-gray-300 bg-gray-50 dark:bg-gray-700 dark:border-gray-600">
                         {visibleCols.empleado && (
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="text-sm font-bold text-gray-900 dark:text-white">TOTALES</div>
@@ -2183,8 +2182,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                   </table>
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
+                <div className="py-12 text-center">
+                  <DocumentTextIcon className="w-12 h-12 mx-auto text-gray-400" />
                   <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
                     No hay nóminas generadas
                   </h3>

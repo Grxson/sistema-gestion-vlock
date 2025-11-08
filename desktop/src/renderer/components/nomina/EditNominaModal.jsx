@@ -236,9 +236,25 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
         return;
       }
 
-      // Calcular salario base proporcional a los días laborados
-      const pagoSemanal = parseFloat(empleado.pago_semanal) || 0;
-      const salarioBaseProporcional = (pagoSemanal / 6) * diasLaborados; // Pago diario * días trabajados
+      // Calcular salario base proporcional a los días laborados con múltiples fallbacks
+      let pagoSemanal = 0;
+      const rawEmpleadoPago = empleado?.pago_semanal ?? empleado?.pagoSemanal;
+      const rawNominaPago = nominaData?.pago_semanal ?? nominaData?.empleado?.pago_semanal ?? nominaData?.empleado?.pagoSemanal;
+      pagoSemanal = parseFloat(rawEmpleadoPago) || parseFloat(rawNominaPago) || 0;
+
+      // Si no tenemos pagoSemanal pero sí un monto_total previo, intentar aproximar
+      if (!pagoSemanal && nominaData?.monto_total && diasLaborados > 0) {
+        const aproxDiario = parseFloat(nominaData.monto_total) / diasLaborados;
+        if (aproxDiario > 0) {
+          pagoSemanal = aproxDiario * 6; // asumir semana base de 6 días
+        }
+      }
+
+      // Salario base proporcional; si sigue en 0 pero existe monto_total, usarlo como base directa
+      let salarioBaseProporcional = pagoSemanal > 0 ? (pagoSemanal / 6) * diasLaborados : 0;
+      if (salarioBaseProporcional <= 0 && nominaData?.monto_total > 0) {
+        salarioBaseProporcional = parseFloat(nominaData.monto_total) || 0;
+      }
       
       const datosNomina = {
         id_empleado: empleado.id_empleado,
@@ -258,7 +274,7 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
         return;
       }
 
-      const calculo = await nominasServices.calculadora.calcularNomina(datosNomina);
+  const calculo = await nominasServices.calculadora.calcularNomina(datosNomina);
       setCalculoNomina(calculo);
       
     } catch (error) {
@@ -788,17 +804,42 @@ const EditNominaModal = ({ isOpen, onClose, nominaData, empleado, onSuccess }) =
                       <CurrencyDollarIcon className="h-4 w-4 text-gray-400 mr-2" />
                       <span className="text-sm text-gray-600 dark:text-gray-400">Pago Semanal: {formatCurrency(empleado.pago_semanal || 0)}</span>
                     </div>
-                    <div className="flex items-center">
-                      <CalendarIcon className="h-4 w-4 text-gray-400 mr-2" />
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                    <div className="flex items-start">
+                      <CalendarIcon className="h-4 w-4 text-gray-400 mr-2 mt-[2px]" />
+                      <span className="text-sm text-gray-600 dark:text-gray-400" title="Período calculado desde semana.fecha_inicio → fecha_pago → fecha → createdAt (no creado en el mes si es nómina retroactiva)">
                         Período: {(() => {
-                          if (nominaData?.periodo) return nominaData.periodo;
-                          if (nominaData?.fecha_creacion || nominaData?.createdAt) {
-                            const fecha = new Date(nominaData.fecha_creacion || nominaData.createdAt);
-                            const año = fecha.getFullYear();
-                            const mes = fecha.getMonth() + 1;
-                            return `${año}-${String(mes).padStart(2, '0')}`;
-                          }
+                          try {
+                            // 1. Si el backend ya envía el período normalizado, úsalo.
+                            if (nominaData?.periodo) return nominaData.periodo;
+
+                            // 2. Intentar derivar del objeto semana (fecha_inicio fiable del ciclo real de la nómina)
+                            const baseSemana = nominaData?.semana?.fecha_inicio || nominaData?.semana?.fecha_fin;
+                            if (baseSemana) {
+                              const d = new Date(baseSemana);
+                              if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                            }
+
+                            // 3. Fecha de pago (si existe) más representativa que la de creación para nóminas retroactivas
+                            const fechaPago = nominaData?.fecha_pago;
+                            if (fechaPago) {
+                              const d = new Date(fechaPago);
+                              if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                            }
+
+                            // 4. Campo genérico fecha (algunos registros antiguos)
+                            const fechaGenerica = nominaData?.fecha;
+                            if (fechaGenerica) {
+                              const d = new Date(fechaGenerica);
+                              if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                            }
+
+                            // 5. Último recurso: fecha_creacion / createdAt (puede ser distinto al período real en nóminas retroactivas)
+                            const fechaCreacion = nominaData?.fecha_creacion || nominaData?.createdAt;
+                            if (fechaCreacion) {
+                              const d = new Date(fechaCreacion);
+                              if (!isNaN(d)) return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                            }
+                          } catch (_) {}
                           return 'N/A';
                         })()}
                       </span>

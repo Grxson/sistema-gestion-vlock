@@ -2,8 +2,8 @@ const models = require('../models');
 const NominaEmpleado = models.Nomina_empleado;
 const Empleado = models.Empleados;
 const SemanaNomina = models.Semanas_nomina;
-const PagoNomina = models.Pagos_nomina;
-const Proyecto = models.Proyectos;
+// const PagoNomina = models.Pagos_nomina; // ❌ Asociación eliminada del modelo
+// const Proyecto = models.Proyectos; // ❌ Usar models.Proyectos directamente en el include
 
 // Función para convertir números a letra
 function convertirNumeroALetra(numero) {
@@ -117,31 +117,59 @@ const generarReciboPDF = async (req, res) => {
     try {
         const { id_nomina } = req.params;
 
-        // Verificar si existe la nómina con todas las relaciones necesarias
-        const nomina = await NominaEmpleado.findByPk(id_nomina, {
-            include: [
-                { 
-                    model: Empleado, 
-                    as: 'empleado',
-                    include: [
-                        { model: models.Oficios, as: 'oficio' },
-                        { model: models.Proyectos, as: 'proyecto' }
-                    ]
-                },
-                { model: SemanaNomina, as: 'semana' },
-                { 
-                    model: PagoNomina,
-                    as: 'pagos_nominas',
-                    required: false
-                },
-                { model: Proyecto, as: 'proyecto' }
-            ]
-        });
+        // Cargar nómina SIN includes para evitar referencias circulares de Sequelize
+        // Construiremos el objeto manualmente con queries separadas
+        const nominaRaw = await NominaEmpleado.findByPk(id_nomina);
 
-        if (!nomina) {
+        if (!nominaRaw) {
             return res.status(404).json({
                 message: 'Nómina no encontrada'
             });
+        }
+
+        // Convertir a objeto plano
+        const nomina = nominaRaw.toJSON();
+
+        // Cargar empleado manualmente
+        if (nomina.id_empleado) {
+            const empleadoRaw = await Empleado.findByPk(nomina.id_empleado);
+            if (empleadoRaw) {
+                const empleado = empleadoRaw.toJSON();
+                
+                // Cargar oficio del empleado si existe
+                if (empleado.id_oficio) {
+                    const oficioRaw = await models.Oficios.findByPk(empleado.id_oficio);
+                    if (oficioRaw) {
+                        empleado.oficio = oficioRaw.toJSON();
+                    }
+                }
+                
+                // Cargar proyecto del empleado si existe
+                if (empleado.id_proyecto) {
+                    const proyectoEmpleadoRaw = await models.Proyectos.findByPk(empleado.id_proyecto);
+                    if (proyectoEmpleadoRaw) {
+                        empleado.proyecto = proyectoEmpleadoRaw.toJSON();
+                    }
+                }
+                
+                nomina.empleado = empleado;
+            }
+        }
+
+        // Cargar semana manualmente
+        if (nomina.id_semana) {
+            const semanaRaw = await SemanaNomina.findByPk(nomina.id_semana);
+            if (semanaRaw) {
+                nomina.semana = semanaRaw.toJSON();
+            }
+        }
+
+        // Cargar proyecto de la nómina si existe
+        if (nomina.id_proyecto) {
+            const proyectoRaw = await models.Proyectos.findByPk(nomina.id_proyecto);
+            if (proyectoRaw) {
+                nomina.proyecto = proyectoRaw.toJSON();
+            }
         }
 
         // Importamos las dependencias para PDF
@@ -332,7 +360,7 @@ const generarReciboPDF = async (req, res) => {
         
         currentY += 10;
         
-        // Proyecto del empleado
+        // Proyecto del empleado (ahora nomina.proyecto ya es un objeto plano sin referencias circulares)
         const proyecto = nomina.empleado?.proyecto?.nombre || nomina.proyecto?.nombre || 'Sin proyecto';
         doc.fontSize(8)
            .text(`Proyecto: ${proyecto}`, empCol1X, currentY);
@@ -866,8 +894,12 @@ const generarReciboPDF = async (req, res) => {
         });
 
         // Actualizar la ruta del recibo en la base de datos
+        // Como nomina es un objeto plano (JSON), usamos el modelo directamente
         const relativePath = `/uploads/recibos/${fileName}`;
-        await nomina.update({ recibo_pdf: relativePath });
+        await NominaEmpleado.update(
+            { recibo_pdf: relativePath },
+            { where: { id_nomina: nomina.id_nomina } }
+        );
 
         try {
             // Verificar que el archivo exista y sea accesible

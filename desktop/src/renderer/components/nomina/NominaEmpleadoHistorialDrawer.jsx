@@ -5,6 +5,7 @@ import apiService from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import EditNominaModal from './EditNominaModal';
 import ConfirmModal from '../ui/ConfirmModal';
+import { semanaDelMesDesdeISO } from '../../utils/weekCalculator';
 
 // Caché simple en memoria por empleado
 const HIST_CACHE = new Map(); // key: empleadoId, value: { data, timestamp }
@@ -145,34 +146,20 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
   };
 
   // Calcula semana del mes (1-5) para una nómina específica usando su periodo y su (anio, semana_iso)
+  // Cálculo consistente de semana del mes (1..N) usando util semanaDelMesDesdeISO.
+  // Evita duplicar lógica y corrige desajustes (semanas marcadas como 2 cuando son 1, etc.).
   const getSemanaDelMes = (n) => {
-    // PRIORIDAD 1: Si la nómina tiene el campo 'semana' (número directo 1-5), usarlo
-    if (n?.semana && typeof n.semana === 'number') {
-      return n.semana;
-    }
-    
-    // PRIORIDAD 2: Si viene en el objeto semana como semana_mes o similar
-    if (n?.semana?.semana_mes && typeof n.semana.semana_mes === 'number') {
-      return n.semana.semana_mes;
-    }
-    
-    // PRIORIDAD 3: Recalcular usando semana ISO (último recurso)
-    // Derivar periodo si no viene: usar semana.fecha_inicio o createdAt
-    let periodo = n?.periodo;
-    if (!periodo) {
-      const baseDateStr = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
-      if (baseDateStr) {
-        const d = new Date(baseDateStr);
-        const y = d.getFullYear();
-        const m = String(d.getMonth() + 1).padStart(2, '0');
-        periodo = `${y}-${m}`;
-      }
-    }
-    const semana = n?.semana;
-    if (!periodo || !semana?.anio || !semana?.semana_iso) return null;
-    const weeks = getWeeksTouchingMonth(periodo);
-    const idx = weeks.findIndex(w => w.anio === semana.anio && w.semana_iso === semana.semana_iso);
-    return idx >= 0 ? (idx + 1) : null;
+    // Prioridad 1: si la nómina trae campo escalar 'semana' (1-5) almacenado directamente
+    if (typeof n?.semana === 'number') return n.semana;
+    // Prioridad 2: si el include trae 'semana.semana_mes'
+    if (typeof n?.semana?.semana_mes === 'number') return n.semana.semana_mes;
+    // Prioridad 3: reconstruir usando ISO
+    const fechaBase = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
+    if (!fechaBase || !n?.semana?.anio || !n?.semana?.semana_iso) return '—';
+    const d = new Date(fechaBase);
+    const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const idx = semanaDelMesDesdeISO(periodo, n.semana.anio, n.semana.semana_iso);
+    return Number.isNaN(idx) || !idx ? '—' : idx;
   };
 
   const loadData = async (force = false) => {
@@ -189,7 +176,7 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
       }
   // Obtener nóminas SOLO del empleado seleccionado desde el backend (bypass cache ApiService si force)
   const res = await apiService.getNominasPorEmpleado(empleadoId, { noCache: force });
-      const lista = res?.data || res?.nominas || res || [];
+  const lista = res?.nominas || res?.data || res || [];
       const base = Array.isArray(lista) ? lista : [];
       // Enriquecer con proyecto real si falta
       const enriched = await Promise.all(base.map(async (n) => {
@@ -424,7 +411,11 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                {filteredNominas.map((n, idx) => (
+                {/* Ordenar por fecha de creación descendente antes de renderizar */}
+                {filteredNominas
+                  .slice() // copia
+                  .sort((a,b) => new Date(b.createdAt || b.fecha_pago || b.fecha || 0) - new Date(a.createdAt || a.fecha_pago || a.fecha || 0))
+                  .map((n, idx) => (
                   <tr key={n.id_nomina || n.id} className={`hover:bg-gray-50 dark:hover:bg-slate-800/50 ${idx % 2 === 1 ? 'bg-gray-50/40 dark:bg-slate-800/30' : ''}`}>
                     <td className="px-3 py-2 text-sm text-gray-800 dark:text-gray-100">{getSemanaDelMes(n) || '—'}</td>
                     <td className="px-3 py-2 text-sm text-gray-800 dark:text-gray-100">{(n?.periodo) || (() => { const b = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt; if (!b) return '—'; const d = new Date(b); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; })()}</td>

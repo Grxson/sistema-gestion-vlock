@@ -182,12 +182,30 @@ const getNominasPorEmpleado = async (req, res) => {
     try {
         const { id_empleado } = req.params;
 
-        const nominas = await NominaEmpleado.findAll({
+        // Evitar recursiones de includes: datos planos + carga manual de semanas
+        const nominasRaw = await NominaEmpleado.findAll({
             where: { id_empleado },
-            include: [
-                { model: Empleado, as: 'empleado' },
-                { model: SemanaNomina, as: 'semana' }
-            ]
+            order: [['createdAt', 'DESC']]
+        });
+
+        // Extraer IDs únicos de semanas para este empleado
+        const semanaIds = [...new Set(nominasRaw.map(n => n.id_semana).filter(Boolean))];
+        let semanasMap = new Map();
+        if (semanaIds.length) {
+            const semanas = await SemanaNomina.findAll({
+                where: { id_semana: semanaIds },
+                attributes: ['id_semana', 'anio', 'semana_iso', 'fecha_inicio', 'fecha_fin']
+            });
+            semanasMap = new Map(semanas.map(s => [s.id_semana, s.toJSON()]));
+        }
+
+        // Combinar manualmente
+        const nominas = nominasRaw.map(n => {
+            const base = n.toJSON();
+            return {
+                ...base,
+                semana: semanasMap.get(base.id_semana) || null
+            };
         });
 
         res.status(200).json({
@@ -212,24 +230,59 @@ const getNominaById = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const nomina = await NominaEmpleado.findByPk(id, {
-            include: [
-                { model: Empleado, as: 'empleado' },
-                { model: SemanaNomina, as: 'semana' },
-                { model: Proyecto, as: 'proyecto' }
-            ]
-        });
+        // IMPORTANTE: Evitamos cualquier include para cortar la recursión interna de Sequelize (_setInclude loop)
+        // Recuperamos la nómina base primero
+        const nominaInstance = await NominaEmpleado.findByPk(id);
 
-        if (!nomina) {
+        if (!nominaInstance) {
             return res.status(404).json({
                 success: false,
                 message: 'Nómina no encontrada'
             });
         }
 
+        // Cargar empleado relacionado de forma independiente con atributos mínimos
+        let empleado = null;
+        if (nominaInstance.id_empleado) {
+            empleado = await Empleado.findByPk(nominaInstance.id_empleado, {
+                attributes: ['id_empleado', 'nombre', 'apellido', 'nss', 'rfc', 'id_proyecto']
+            });
+            empleado = empleado ? empleado.toJSON() : null;
+        }
+
+        // Cargar semana relacionada de forma independiente
+        let semana = null;
+        if (nominaInstance.id_semana) {
+            semana = await SemanaNomina.findByPk(nominaInstance.id_semana, {
+                attributes: ['id_semana', 'anio', 'semana_iso', 'fecha_inicio', 'fecha_fin']
+            });
+            semana = semana ? semana.toJSON() : null;
+        }
+
+        // Resolver proyecto vía id_proyecto directo de la nómina o del empleado (sin include)
+        let proyecto = null;
+        const proyectoId = nominaInstance.id_proyecto || empleado?.id_proyecto;
+        if (proyectoId) {
+            try {
+                const proyectoInstance = await Proyecto.findByPk(proyectoId, {
+                    attributes: ['id_proyecto', 'nombre']
+                });
+                proyecto = proyectoInstance ? proyectoInstance.toJSON() : null;
+            } catch (e) {
+                console.warn('No se pudo cargar proyecto (no crítico):', e.message);
+            }
+        }
+
+        const data = {
+            ...nominaInstance.toJSON(),
+            empleado,
+            semana,
+            proyecto
+        };
+
         res.status(200).json({
             success: true,
-            data: nomina
+            data
         });
     } catch (error) {
         console.error('Error al obtener nómina por ID:', error);
