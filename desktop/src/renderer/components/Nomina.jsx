@@ -266,13 +266,35 @@ export default function Nomina() {
     return empleadosActivos;
   };
 
-  // Helper: obtener última nómina de un empleado
+  // Helper: obtener última nómina de un empleado (de la semana actual si existe, sino la más reciente)
   const getLatestNominaForEmpleado = (empleado) => {
     const nominasEmpleado = nominas.filter(nomina =>
       nomina.empleado?.id_empleado === empleado.id_empleado ||
       nomina.id_empleado === empleado.id_empleado
     );
     if (nominasEmpleado.length === 0) return null;
+    
+    // Primero intentar obtener la nómina de la semana actual
+    const hoy = new Date();
+    const infoSemanaActual = generarInfoSemana(hoy);
+    
+    const nominasSemanaActual = nominasEmpleado.filter(nomina => {
+      const semanaNomina = nomina.semana;
+      if (semanaNomina) {
+        return semanaNomina.anio === infoSemanaActual.año &&
+          semanaNomina.semana_iso === infoSemanaActual.semanaISO;
+      }
+      return false;
+    });
+    
+    // Si hay nóminas de la semana actual, devolver la más reciente de esas
+    if (nominasSemanaActual.length > 0) {
+      return nominasSemanaActual.sort((a, b) =>
+        new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
+      )[0];
+    }
+    
+    // Si no hay nóminas de la semana actual, devolver la más reciente de todas
     return nominasEmpleado.sort((a, b) =>
       new Date(b.fecha_creacion || b.createdAt) - new Date(a.fecha_creacion || a.createdAt)
     )[0];
