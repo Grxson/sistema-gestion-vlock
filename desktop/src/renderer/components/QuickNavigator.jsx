@@ -18,7 +18,7 @@ const QuickNavigator = ({ isOpen, onClose, onNavigate }) => {
     { name: 'Empleados', path: '/empleados', keywords: ['personal', 'trabajadores', 'staff'], icon: '👥', module: 'empleados' },
     { name: 'Proyectos', path: '/proyectos', keywords: ['obras', 'construcciones'], icon: '🏗️', module: 'proyectos' },
     { name: 'Nómina', path: '/nomina', keywords: ['pagos', 'salarios', 'nominas'], icon: '💰', module: 'nomina' },
-  { name: 'Suministros', path: '/suministros', keywords: ['materiales', 'inventario', 'gastos', 'gasto'], icon: '📦', module: 'suministros' },
+  { name: 'Gastos', path: '/suministros', keywords: ['materiales', 'inventario', 'gastos', 'gasto'], icon: '📦', module: 'suministros' },
     { name: 'Proveedores', path: '/proveedores', keywords: ['suppliers', 'vendedores'], icon: '🏢', module: 'proveedores' },
     { name: 'Herramientas', path: '/herramientas', keywords: ['equipos', 'tools'], icon: '🔧', module: 'herramientas' },
     { name: 'Contratos', path: '/contratos', keywords: ['acuerdos', 'convenios'], icon: '📄', module: 'contratos' },

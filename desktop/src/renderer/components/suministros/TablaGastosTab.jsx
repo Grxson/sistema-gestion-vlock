@@ -8,13 +8,12 @@ import {
 import { formatCurrency } from '../../utils/formatters';
 import { STANDARD_ICONS } from '../../constants/icons';
 import FiltroTipoCategoria from '../common/FiltroTipoCategoria';
-import DateInput from '../ui/DateInput';
+import DateRangePicker from '../ui/DateRangePicker';
 
 const TablaGastosTab = ({
   // Datos
   searchTerm,
   filters,
-  filteredStats,
   showFilters,
   proyectos,
   categoriasDinamicas,
@@ -56,224 +55,206 @@ const TablaGastosTab = ({
   handleViewRecibo,
   formatPriceDisplay
 }) => {
+  const [showControls, setShowControls] = React.useState(true);
+
   return (
     <>
-      {/* Filtro por Tipo de Categoría */}
-      <FiltroTipoCategoria
-        filtroActivo={filters.tipo_categoria}
-        onFiltroChange={onFiltroTipoChange}
-        estadisticas={estadisticasTipo}
-        className="mb-4"
-      />
+      {/* Bloque de controles con icono toggle flotante */}
+      <div className="  " style={{ minHeight: showControls ? 'auto' : '56px' }}>
+        {/* Icono toggle flotante, nunca sobre la tabla */}
+        <button
+          onClick={() => setShowControls(!showControls)}
+          className="absolute top-2 right-2 z-20 bg-gray-700 hover:bg-gray-800 text-white p-3 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-110 active:scale-95"
+          style={{ pointerEvents: 'auto' }}
+          title={showControls ? "Ocultar controles de búsqueda y filtros" : "Mostrar controles de búsqueda y filtros"}
+        >
+          <FaChevronUp 
+            className={`w-4 h-4 transition-transform duration-300 ${!showControls ? 'rotate-180' : 'rotate-0'}`}
+          />
+        </button>
 
-      {/* Información de filtros activos */}
-      {(searchTerm || filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria || filters.fechaInicio || filters.fechaFin) && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 mb-4">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div className="flex items-center gap-4">
-              <span className="text-blue-700 dark:text-blue-300 font-medium">Vista filtrada:</span>
-              <span className="text-blue-600 dark:text-blue-400">
-                {filteredStats.totalSuministrosFiltrados} suministros
-              </span>
-              <span className="text-blue-600 dark:text-blue-400">
-                Total: {formatCurrency(filteredStats.totalGastadoFiltrado)}
-              </span>
-            </div>
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setFilters({ categoria: '', estado: '', proyecto: '', proveedor: '', tipo_categoria: '', fechaInicio: '', fechaFin: '' });
-              }}
-              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium flex items-center gap-1"
-            >
-              <FaTimes className="h-3 w-3" />
-              Limpiar filtros
-            </button>
-          </div>
-        </div>
-      )}
+        {/* Contenido de controles, solo visible si showControls */}
+        {showControls && (
+          <>
+            <FiltroTipoCategoria
+              filtroActivo={filters.tipo_categoria}
+              onFiltroChange={onFiltroTipoChange}
+              estadisticas={estadisticasTipo}
+            />
+          </>
+        )}
+      </div>
 
-      {/* Controles superiores compactos */}
-      <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 mb-4">
-        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between">
-          {/* Barra de búsqueda y filtros de fecha */}
-          <div className="flex flex-1 gap-3 w-full lg:w-auto">
-            {/* Barra de búsqueda */}
-            <div className="relative flex-1 max-w-md">
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
-              <input
-                type="text"
-                placeholder="Buscar por nombre, código, folio o descripción..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-red-500"
-              />
-            </div>
-
-            {/* Filtro por rango de fechas */}
-            <div className="flex gap-2 items-center">
-              <div className="relative">
-                <FaCalendarAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-3 w-3 pointer-events-none z-10" />
-                <DateInput
-                  value={filters.fechaInicio || ''}
-                  onChange={(value) => setFilters({...filters, fechaInicio: value})}
-                  placeholder="Fecha inicio"
-                  className="pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500 w-44"
-                />
-              </div>
-              <span className="text-gray-400 dark:text-gray-500 text-sm">-</span>
-              <div className="relative">
-                <FaCalendarAlt className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-3 w-3 pointer-events-none z-10" />
-                <DateInput
-                  value={filters.fechaFin || ''}
-                  onChange={(value) => setFilters({...filters, fechaFin: value})}
-                  placeholder="Fecha fin"
-                  className="pl-9 pr-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500 w-44"
-                />
-              </div>
-            </div>
+      {/* Controles superiores con diseño mejorado y distribución optimizada */}
+      {showControls && (
+        <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-5 mb-4">
+        {/* Fila superior: Buscador y botones de acción */}
+        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between mb-5">
+          {/* Buscador */}
+          <div className="relative w-full lg:flex-1 max-w-xl">
+            <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
+            <input
+              type="text"
+              placeholder="Buscar por nombre, código, folio o descripción..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+            />
           </div>
 
-          {/* Botones compactos */}
-          <div className="flex-shrink-0 flex gap-2 flex-wrap">
+          {/* Botones de acción */}
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
+              className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md"
             >
-              <FaFilter className="w-3 h-3" />
-              Filtros
+              <FaFilter className="w-3.5 h-3.5" />
+              {showFilters ? 'Ocultar' : 'Filtros'}
               {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.tipo_categoria) && (
-                <span className="bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+                <span className="bg-white/20 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
                   {[filters.categoria, filters.estado, filters.proyecto, filters.proveedor, filters.tipo_categoria].filter(f => f).length}
                 </span>
               )}
-              {showFilters ? <FaChevronUp className="w-2 h-2" /> : <FaChevronDown className="w-2 h-2" />}
+              {showFilters ? <FaChevronUp className="w-3 h-3" /> : <FaChevronDown className="w-3 h-3" />}
             </button>
             <button
               onClick={() => setShowMultipleModal(true)}
-              className="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md"
             >
-              <STANDARD_ICONS.CREATE className="w-3 h-3" />
+              <STANDARD_ICONS.CREATE className="w-3.5 h-3.5" />
               Nuevo Suministro
             </button>
-            
             <button
               onClick={() => setShowUnidadesModal(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg flex items-center gap-1.5 transition-colors duration-200 text-sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all duration-200 text-sm font-medium shadow-sm hover:shadow-md"
               title="Gestionar Unidades de Medida"
             >
-              <FaRuler className="w-3 h-3" />
+              <FaRuler className="w-3.5 h-3.5" />
               Unidades
             </button>
           </div>
         </div>
-      </div>
 
-      {/* Sección de Filtros ultra-compacta */}
-      {showFilters && (
-        <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-3 mb-4">
-          <div className="mb-3">
-            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-2">Filtros de Suministros</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Filtro por Proyecto */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  <FaBuilding className="inline w-3 h-3 mr-1" />
-                  Proyecto ({proyectos.length})
-                </label>
-                <select
-                  value={filters.proyecto}
-                  onChange={(e) => setFilters({...filters, proyecto: e.target.value})}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-                >
-                  <option value="">Todos los proyectos</option>
-                  {proyectos.map((proyecto) => {
-                    const nombreProyecto = proyecto.nombre_proyecto || proyecto.nombre || proyecto.title || proyecto.name || `Proyecto ${proyecto.id_proyecto || proyecto.id}`;
-                    const idProyecto = proyecto.id_proyecto || proyecto.id;
-                    return (
-                      <option key={idProyecto} value={idProyecto}>
-                        {nombreProyecto}
+        {/* Rango de fechas y filtros desplegables */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Rango de fechas */}
+          <div>
+            <DateRangePicker
+              startDate={filters.fechaInicio || ''}
+              endDate={filters.fechaFin || ''}
+              onChange={({ startDate, endDate }) => setFilters({ ...filters, fechaInicio: startDate, fechaFin: endDate })}
+              startLabel="Fecha inicio"
+              endLabel="Fecha fin"
+            />
+          </div>
+
+          {/* Filtros desplegables */}
+          {showFilters && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <FaFilter className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                  Filtros de Suministros
+                </h3>
+                {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.fechaInicio || filters.fechaFin) && (
+                  <button
+                    onClick={() => setFilters({categoria: '', estado: '', proyecto: '', proveedor: '', tipo_categoria: '', fechaInicio: '', fechaFin: ''})}
+                    className="px-3 py-1.5 text-xs text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 flex items-center gap-1.5 border border-red-300 dark:border-red-600 font-medium"
+                  >
+                    <FaTimes className="w-3 h-3" />
+                    Limpiar
+                  </button>
+                )}
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {/* Filtro por Proyecto */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    <FaBuilding className="inline w-3 h-3 mr-1" />
+                    Proyecto ({proyectos.length})
+                  </label>
+                  <select
+                    value={filters.proyecto}
+                    onChange={(e) => setFilters({...filters, proyecto: e.target.value})}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
+                  >
+                    <option value="">Todos los proyectos</option>
+                    {proyectos.map((proyecto) => {
+                      const nombreProyecto = proyecto.nombre_proyecto || proyecto.nombre || proyecto.title || proyecto.name || `Proyecto ${proyecto.id_proyecto || proyecto.id}`;
+                      const idProyecto = proyecto.id_proyecto || proyecto.id;
+                      return (
+                        <option key={idProyecto} value={idProyecto}>
+                          {nombreProyecto}
+                        </option>
+                      );
+                    })}
+                  </select>
+                </div>
+
+                {/* Filtro por Categoría */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    <FaBox className="inline w-3 h-3 mr-1" />
+                    Categoría
+                  </label>
+                  <select
+                    value={filters.categoria}
+                    onChange={(e) => setFilters({...filters, categoria: e.target.value})}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
+                  >
+                    <option value="">Todas las categorías</option>
+                    {categoriasDinamicas.map((categoria, index) => (
+                      <option key={`categoria-${categoria.id || categoria.id_categoria || index}`} value={categoria.id || categoria.id_categoria}>{categoria.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro por Estado */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    <FaClock className="inline w-3 h-3 mr-1" />
+                    Estado
+                  </label>
+                  <select
+                    value={filters.estado}
+                    onChange={(e) => setFilters({...filters, estado: e.target.value})}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
+                  >
+                    <option value="">Todos los estados</option>
+                    {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filtro por Proveedor */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                    <FaTruck className="inline w-3 h-3 mr-1" />
+                    Proveedor
+                  </label>
+                  <select
+                    value={filters.proveedor}
+                    onChange={(e) => setFilters({...filters, proveedor: e.target.value})}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500 transition-colors"
+                  >
+                    <option value="">Todos los proveedores</option>
+                    {proveedores.map((proveedor) => (
+                      <option 
+                        key={proveedor.id_proveedor} 
+                        value={proveedor.nombre}
+                        title={proveedor.nombre}
+                      >
+                        {proveedor.nombre}
                       </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* Filtro por Categoría */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  <FaBox className="inline w-3 h-3 mr-1" />
-                  Categoría
-                </label>
-                <select
-                  value={filters.categoria}
-                  onChange={(e) => setFilters({...filters, categoria: e.target.value})}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-                >
-                  <option value="">Todas las categorías</option>
-                  {categoriasDinamicas.map((categoria, index) => (
-                    <option key={`categoria-${categoria.id || categoria.id_categoria || index}`} value={categoria.id || categoria.id_categoria}>{categoria.nombre}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filtro por Estado */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  <FaClock className="inline w-3 h-3 mr-1" />
-                  Estado
-                </label>
-                <select
-                  value={filters.estado}
-                  onChange={(e) => setFilters({...filters, estado: e.target.value})}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-                >
-                  <option value="">Todos los estados</option>
-                  {Object.entries(ESTADOS_SUMINISTRO).map(([key, {label}]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filtro por Proveedor */}
-              <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  <FaTruck className="inline w-3 h-3 mr-1" />
-                  Proveedor
-                </label>
-                <select
-                  value={filters.proveedor}
-                  onChange={(e) => setFilters({...filters, proveedor: e.target.value})}
-                  className="w-full px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-dark-100 text-gray-900 dark:text-white focus:outline-none focus:border-red-500"
-                >
-                  <option value="">Todos los proveedores</option>
-                  {proveedores.map((proveedor) => (
-                    <option 
-                      key={proveedor.id_proveedor} 
-                      value={proveedor.nombre}
-                      title={proveedor.nombre}
-                    >
-                      {proveedor.nombre}
-                    </option>
-                  ))}
-                </select>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
-
-            {/* Botón para limpiar filtros compacto */}
-            {(filters.categoria || filters.estado || filters.proyecto || filters.proveedor || filters.fechaInicio || filters.fechaFin) && (
-              <div className="mt-3 flex justify-end">
-                <button
-                  onClick={() => setFilters({categoria: '', estado: '', proyecto: '', proveedor: '', tipo_categoria: '', fechaInicio: '', fechaFin: ''})}
-                  className="px-3 py-1.5 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 flex items-center gap-1.5 border border-red-300 dark:border-red-600"
-                >
-                  <FaTimes className="w-3 h-3" />
-                  Limpiar filtros
-                </button>
-              </div>
-            )}
-          </div>
+          )}
+        </div>
         </div>
       )}
 

@@ -694,8 +694,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         };
       }
 
-      const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-      proyectosData[proyectoNombre].monto += (isNaN(monto) ? 0 : monto);
+      // Usar solo sueldo base (pago_semanal) para la distribución por proyectos
+      const sueldoBase = parseFloat(nomina.pago_semanal || 0);
+      proyectosData[proyectoNombre].monto += (isNaN(sueldoBase) ? 0 : sueldoBase);
       proyectosData[proyectoNombre].cantidad += 1;
 
       const empleadoId = nomina.id_empleado || (nomina.empleado && nomina.empleado.id_empleado);
@@ -745,7 +746,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       }
     });
 
-    // Datos para gráfica de top empleados por monto (del período/año seleccionado)
+    // Datos para gráfica de top empleados por monto (del período/año seleccionado) - usando sueldo base
     const empleadosData = {};
     nominasFiltradas.forEach(nomina => {
       const empleadoId = nomina.id_empleado || nomina.empleado?.id_empleado;
@@ -758,8 +759,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
             count: 0
           };
         }
-        const monto = parseFloat(nomina.monto_total || nomina.monto || nomina.pago_semanal || 0);
-        empleadosData[empleadoId].total += (isNaN(monto) ? 0 : monto);
+        // Usar solo sueldo base (pago_semanal)
+        const sueldoBase = parseFloat(nomina.pago_semanal || 0);
+        empleadosData[empleadoId].total += (isNaN(sueldoBase) ? 0 : sueldoBase);
         empleadosData[empleadoId].count += 1;
       }
     });
@@ -950,14 +952,15 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         };
       }
 
-      const monto = parseFloat(n.monto_total || n.monto || 0) || 0;
+      // Usar solo sueldo base (pago_semanal) en vez del monto_total
+      const sueldoBase = parseFloat(n.pago_semanal || 0) || 0;
       const est = (n.estado || '').toLowerCase();
 
       reportesPorSemana[clave].nominas.push(n);
       reportesPorSemana[clave].totalNominas += 1;
-      reportesPorSemana[clave].totalMonto += monto;
-      // En este reporte solo se consideran pagadas/completadas
-      reportesPorSemana[clave].totalPagado += monto;
+      reportesPorSemana[clave].totalMonto += sueldoBase;
+      // En este reporte solo se consideran pagadas/completadas (suma de sueldos base)
+      reportesPorSemana[clave].totalPagado += sueldoBase;
       reportesPorSemana[clave].empleados.add(n.id_empleado);
     });
 
@@ -986,7 +989,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       totalEmpleados: globalEmps.size
     }), { totalNominas: 0, totalMonto: 0, totalPagado: 0, totalPendiente: 0, totalEmpleados: 0 });
 
-    // 8) Totales por proyecto (solo pagadas/completadas ya filtradas arriba)
+    // 8) Totales por proyecto (solo pagadas/completadas ya filtradas arriba) - suma de sueldos base
     const proyectosTotalesMap = new Map();
     nominasFiltradas.forEach(n => {
       const proyectoId = n.id_proyecto || n.proyecto?.id_proyecto || n.proyecto?.id;
@@ -1004,8 +1007,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         });
       }
       const bucket = proyectosTotalesMap.get(proyectoNombre);
-      const monto = parseFloat(n.monto_total || n.monto || 0) || 0;
-      bucket.monto += monto;
+      // Usar solo sueldo base (pago_semanal) en vez del monto_total
+      const sueldoBase = parseFloat(n.pago_semanal || 0) || 0;
+      bucket.monto += sueldoBase;
       bucket.nominas += 1;
       if (n.id_empleado) bucket.empleados.add(n.id_empleado);
     });
@@ -1301,7 +1305,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                 <div className="overflow-hidden bg-white border border-gray-200 rounded-lg dark:bg-gray-800 dark:border-gray-700">
                   <div className="p-6 border-b border-gray-200 dark:border-gray-700">
                     <h4 className="text-lg font-medium text-gray-900 dark:text-white">
-                      Desglose Detallado por Proyecto
+                      Desglose de Sueldos Base por Proyecto
                     </h4>
                     <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                       {(() => {
@@ -1317,6 +1321,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           const proyecto = proyectos.find(p => p.id_proyecto === parseInt(chartsProyecto));
                           texto += ` - Proyecto: ${proyecto?.nombre || 'Desconocido'}`;
                         }
+                        texto += ' • Solo sueldos base (sin deducciones)';
                         return texto;
                       })()}
                     </p>
@@ -1329,7 +1334,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             Proyecto
                           </th>
                           <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">
-                            Monto Total
+                            Sueldo Base
                           </th>
                           <th className="px-6 py-3 text-xs font-medium tracking-wider text-right text-gray-500 uppercase dark:text-gray-400">
                             Nóminas
@@ -1461,9 +1466,6 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             {formatCurrency(chartsData.monthlyPayments.data.reduce((sum, amount) => sum + amount, 0))}
                           </span>
                         </div>
-                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          Suma de las {chartsData.monthlyPayments.labels.length} semanas
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -1474,6 +1476,22 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
 
           {activeTab === 'weekly-reports' && (
             <div className="space-y-6">
+              {/* Nota informativa */}
+              <div className="p-4 border-l-4 border-blue-500 rounded-lg bg-blue-50 dark:bg-blue-900/20 dark:border-blue-400">
+                <div className="flex">
+                  <div className="flex-shrink-0">
+                    <svg className="w-5 h-5 text-blue-500 dark:text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3">
+                    <p className="text-sm text-blue-700 dark:text-blue-300">
+                      <strong>Nota:</strong> Los montos mostrados en este reporte representan únicamente los <strong>sueldos base</strong> de las nóminas pagadas, sin incluir deducciones (IMSS, ISR, etc.). Para ver el total a pagar con deducciones aplicadas, consulta la <strong>Tabla Detallada</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Filtros */}
               <div className="p-4 rounded-lg bg-gray-50 dark:bg-gray-700">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-5">
@@ -1567,9 +1585,6 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                       <div className="ml-4">
                         <p className="text-lg font-medium text-gray-500 dark:text-gray-400">Total General Pagado</p>
                         <p className="text-4xl font-bold text-green-600 dark:text-green-400">{formatCurrency(weeklyReportsData.totales.totalPagado)}</p>
-                        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                          {weeklyReportsData.totales.totalNominas} nóminas en {weeklyReportsData.reportes.length} semanas
-                        </p>
                       </div>
                     </div>
                   </div>
@@ -1632,11 +1647,6 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                     <h3 className="text-base font-semibold text-center text-gray-900 dark:text-white">
                       {selectedPeriod ? `Semanas del Mes ${selectedPeriod}` : 'Selecciona un período (YYYY-MM)'}
                     </h3>
-                    {selectedPeriod && (
-                      <p className="mt-1 text-xs text-center text-gray-500 dark:text-gray-400">
-                        {`Este período tiene ${weeksInSelectedPeriod || 4} semanas`}
-                      </p>
-                    )}
                   </div>
                   {selectedPeriod ? (
                     <div className="overflow-x-auto">

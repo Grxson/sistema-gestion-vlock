@@ -214,17 +214,6 @@ const DateRangePicker = ({
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
       )}
-
-      {/* Información del rango seleccionado */}
-      {startDate && endDate && !startError && !endError && (
-        <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg">
-          <p className="text-sm text-red-700 dark:text-red-300">
-            <span className="font-medium">Rango seleccionado:</span> {' '}
-            {new Date(startDate).toLocaleDateString('es-ES')} - {new Date(endDate).toLocaleDateString('es-ES')}
-            {' '}({Math.ceil((new Date(endDate) - new Date(startDate)) / (1000 * 60 * 60 * 24)) + 1} días)
-          </p>
-        </div>
-      )}
     </div>
   );
 };

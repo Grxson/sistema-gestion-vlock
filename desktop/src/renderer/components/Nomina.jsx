@@ -86,7 +86,7 @@ export default function Nomina() {
   const [virtBuffer, setVirtBuffer] = useState(5); // filas extra arriba/abajo
   const virtContainerRef = React.useRef(null);
 
-  // Total mensual solo con nóminas Pagadas (mes/año actuales)
+  // Total mensual solo con nóminas Pagadas (mes/año actuales) - suma solo sueldos base
   const getFechaBaseNomina = (n) => {
     const base = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
     const d = base ? new Date(base) : null;
@@ -101,8 +101,9 @@ export default function Nomina() {
       if (estado !== 'pagado' && estado !== 'pagada') return acc;
       const d = getFechaBaseNomina(n);
       if (!d || d.getFullYear() !== y || d.getMonth() !== m) return acc;
-      const monto = parseFloat(n.monto_total || n.monto || 0);
-      return acc + (isNaN(monto) ? 0 : monto);
+      // Solo sumar el sueldo base (pago_semanal), no el monto total
+      const sueldoBase = parseFloat(n.pago_semanal || 0);
+      return acc + (isNaN(sueldoBase) ? 0 : sueldoBase);
     }, 0);
   }, [nominas]);
 
@@ -487,15 +488,31 @@ export default function Nomina() {
     
     let resultado = nominas;
 
-    // Filtrar por rango de fechas (usando createdAt como campo principal)
+    // Filtrar por rango de fechas
     if (filtroFechaInicio) {
       const antesInicio = resultado.length;
       resultado = resultado.filter(nomina => {
-        // Priorizar createdAt, luego fecha_creacion como fallback
-        const fechaNomina = new Date(nomina.createdAt || nomina.fecha_creacion || nomina.fecha);
+        // Buscar la fecha en múltiples campos posibles
+        const fechaPosible = nomina.createdAt || 
+                            nomina.fecha_creacion || 
+                            nomina.fecha_pago || 
+                            nomina.fecha || 
+                            nomina.semana?.fecha_inicio;
+        
+        if (!fechaPosible) {
+          console.log('⚠️ Nómina sin fecha:', nomina.id_nomina);
+          return false; // Excluir nóminas sin fecha
+        }
+        
+        const fechaNomina = new Date(fechaPosible);
         const fechaInicio = new Date(filtroFechaInicio);
         fechaInicio.setHours(0, 0, 0, 0); // Inicio del día
-        return fechaNomina >= fechaInicio;
+        
+        const cumple = fechaNomina >= fechaInicio;
+        if (!cumple) {
+          console.log(`  ❌ Excluida (${fechaNomina.toLocaleDateString()}) < inicio`);
+        }
+        return cumple;
       });
       console.log(`  ✅ Filtro inicio (${filtroFechaInicio}): ${antesInicio} → ${resultado.length}`);
     }
@@ -503,11 +520,26 @@ export default function Nomina() {
     if (filtroFechaFin) {
       const antesFin = resultado.length;
       resultado = resultado.filter(nomina => {
-        // Priorizar createdAt, luego fecha_creacion como fallback
-        const fechaNomina = new Date(nomina.createdAt || nomina.fecha_creacion || nomina.fecha);
+        // Buscar la fecha en múltiples campos posibles
+        const fechaPosible = nomina.createdAt || 
+                            nomina.fecha_creacion || 
+                            nomina.fecha_pago || 
+                            nomina.fecha || 
+                            nomina.semana?.fecha_inicio;
+        
+        if (!fechaPosible) {
+          return false; // Excluir nóminas sin fecha
+        }
+        
+        const fechaNomina = new Date(fechaPosible);
         const fechaFin = new Date(filtroFechaFin);
         fechaFin.setHours(23, 59, 59, 999); // Fin del día
-        return fechaNomina <= fechaFin;
+        
+        const cumple = fechaNomina <= fechaFin;
+        if (!cumple) {
+          console.log(`  ❌ Excluida (${fechaNomina.toLocaleDateString()}) > fin`);
+        }
+        return cumple;
       });
       console.log(`  ✅ Filtro fin (${filtroFechaFin}): ${antesFin} → ${resultado.length}`);
     }
@@ -1066,7 +1098,7 @@ export default function Nomina() {
                   </div>
                   <div className="ml-3">
                     <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Mensual</p>
-                    <p className="text-lg font-semibold text-gray-900 dark:text-white" title="Suma de nóminas Pagadas del mes actual">
+                    <p className="text-lg font-semibold text-gray-900 dark:text-white" title="Suma de sueldos base de nóminas pagadas del mes actual">
                       {formatCurrency(totalMensualPagado)}
                     </p>
                   </div>
