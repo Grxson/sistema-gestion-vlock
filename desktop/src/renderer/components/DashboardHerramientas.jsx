@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatCurrencyMXN, formatShortDateES } from '../utils/formatters';
 import {
   WrenchScrewdriverIcon,
   CheckCircleIcon,
@@ -12,6 +13,7 @@ import {
   ArrowUpIcon,
   ArrowDownIcon
 } from '@heroicons/react/24/outline';
+import { EJEMPLO_DASHBOARD_HERRAMIENTAS } from '../utils/herramientasUtils';
 
 const DashboardHerramientas = () => {
   const [dashboardData, setDashboardData] = useState({
@@ -38,9 +40,9 @@ const DashboardHerramientas = () => {
       try {
         // Simular llamada a API
         setTimeout(() => {
-          setDashboardData(ejemploData);
+          setDashboardData(EJEMPLO_DASHBOARD_HERRAMIENTAS);
           setLoading(false);
-        }, 1000);
+        }, 500);
       } catch (error) {
         console.error('Error al cargar datos del dashboard:', error);
         setLoading(false);
@@ -50,19 +52,7 @@ const DashboardHerramientas = () => {
     loadDashboardData();
   }, []);
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: 'short'
-    });
-  };
+  // Utilidades movidas a utils/formatters
 
   if (loading) {
     return (
@@ -237,7 +227,7 @@ const DashboardHerramientas = () => {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium text-gray-900 dark:text-white">
-                        {formatDate(item.fecha_mantenimiento)}
+                        {formatShortDateES(item.fecha_mantenimiento)}
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
                         {item.dias_restantes} días
@@ -285,7 +275,7 @@ const DashboardHerramientas = () => {
                         {item.dias_prestado} días
                       </p>
                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                        {formatDate(item.fecha_prestamo)}
+                        {formatShortDateES(item.fecha_prestamo)}
                       </p>
                     </div>
                   </div>
@@ -312,7 +302,7 @@ const DashboardHerramientas = () => {
           </div>
           <div className="text-center">
             <p className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
-              {formatCurrency(dashboardData.valorInventario)}
+              {formatCurrencyMXN(dashboardData.valorInventario)}
             </p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
               Valor total de {resumen.total_herramientas} herramientas

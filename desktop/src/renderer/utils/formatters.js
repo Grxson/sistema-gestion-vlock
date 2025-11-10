@@ -1,3 +1,57 @@
+// Utilidades de formato reutilizables para el módulo de herramientas (y otros módulos)
+
+// Formato de moneda MXN
+export const formatCurrencyMXN = (amount) => {
+  if (amount === null || amount === undefined || amount === '') return '$0.00';
+  const number = Number(amount) || 0;
+  return new Intl.NumberFormat('es-MX', {
+    style: 'currency',
+    currency: 'MXN'
+  }).format(number);
+};
+
+// Fecha corta dd/mmm (sin año) - usada en dashboard
+export const formatShortDateES = (dateString) => {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleDateString('es-ES', {
+    day: '2-digit',
+    month: 'short'
+  });
+};
+
+// Fecha estándar dd/mm/aaaa
+export const formatDateES = (dateString) => {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleDateString('es-ES');
+};
+
+// Fecha con hora 24h
+export const formatDateTimeES = (dateString) => {
+  if (!dateString) return 'N/A';
+  return new Date(dateString).toLocaleDateString('es-ES', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
+
+// Formatear números con separadores (para cantidades / vida útil)
+export const formatNumberES = (value) => {
+  if (value === null || value === undefined || value === '') return '';
+  const num = Number(value);
+  if (isNaN(num)) return value;
+  return num.toLocaleString('es-MX');
+};
+
+// Capitalizar primera letra de cada palabra (utilidad para razones / labels)
+export const capitalizeWords = (str = '') => {
+  return str
+    .split(' ')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+};
 /**
  * Utilidades para formatear y mostrar información de proveedores
  */

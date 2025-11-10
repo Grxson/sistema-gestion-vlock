@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { useToast } from '../contexts/ToastContext';
@@ -23,6 +23,7 @@ import {
   ArrowsRightLeftIcon,
   ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
+import { getEstadoConfig } from '../utils/herramientasUtils';
 
 const Herramientas = () => {
   const { user } = useAuth();
@@ -55,14 +56,7 @@ const Herramientas = () => {
   const [proyectos, setProyectos] = useState([]);
   const [paginationData, setPaginationData] = useState({ total: 0, totalPages: 1, currentPage: 1 });
 
-  // Estados de herramientas (números del backend)
-  const estadosHerramientas = {
-    1: { label: 'Disponible', color: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' },
-    2: { label: 'Prestado', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' },
-    3: { label: 'Mantenimiento', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300' },
-    4: { label: 'Reparación', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300' },
-    5: { label: 'Fuera de Servicio', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300' }
-  };
+  // Estados movidos a util herramientasUtils
 
 
 
@@ -71,9 +65,7 @@ const Herramientas = () => {
   // Función para cargar categorías
   const loadCategorias = async () => {
     try {
-      console.log('Cargando categorías usando apiService...');
       const result = await apiService.getCategoriasHerramientas();
-      console.log('Categorías cargadas:', result);
       if (result && result.success) {
         setCategorias(result.data);
       }
@@ -85,9 +77,7 @@ const Herramientas = () => {
   // Función para cargar proyectos
   const loadProyectos = async () => {
     try {
-      console.log('Cargando proyectos usando apiService...');
       const result = await apiService.getProyectos();
-      console.log('Proyectos cargados:', result);
       if (result && result.success) {
         setProyectos(result.data || []);
       }
@@ -102,13 +92,9 @@ const Herramientas = () => {
   const loadHerramientas = async (isInitialLoad = true) => {
     setLoading(true);
     try {
-      console.log('Cargando herramientas usando apiService...');
       // Pasar un límite alto para obtener todas las herramientas
       const result = await apiService.getHerramientas({ limit: 1000 });
-      console.log('Respuesta completa del API:', result);
-      
       if (result && result.success) {
-        console.log('Herramientas cargadas:', result.data);
         setHerramientas(result.data || []);
       } else {
         console.error('Error en la respuesta de la API:', result);
@@ -137,40 +123,45 @@ const Herramientas = () => {
     setCurrentPage(1);
   }, [searchTerm, selectedCategoria, selectedEstado, selectedProyecto]);
 
-  // Filtrado local de herramientas (búsqueda en tiempo real)
-  const filteredHerramientas = herramientas.filter(herramienta => {
-    const matchesSearch = !searchTerm || 
-      herramienta.nombre?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      herramienta.marca?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      herramienta.serial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      herramienta.modelo?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesCategoria = !selectedCategoria || 
-      herramienta.id_categoria_herr?.toString() === selectedCategoria;
-    
-    const matchesEstado = !selectedEstado || 
-      herramienta.estado?.toString() === selectedEstado;
-    
-    const matchesProyecto = !selectedProyecto || 
-      herramienta.id_proyecto?.toString() === selectedProyecto;
-    
-    return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto;
-  });
+  // Filtrado local de herramientas (búsqueda en tiempo real) con memoización
+  const filteredHerramientas = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return herramientas.filter(herramienta => {
+      const matchesSearch = !term || 
+        herramienta.nombre?.toLowerCase().includes(term) ||
+        herramienta.marca?.toLowerCase().includes(term) ||
+        herramienta.serial?.toLowerCase().includes(term) ||
+        herramienta.modelo?.toLowerCase().includes(term);
 
-  // Calcular paginación basada en herramientas filtradas
+      const matchesCategoria = !selectedCategoria || 
+        herramienta.id_categoria_herr?.toString() === selectedCategoria;
+      
+      const matchesEstado = !selectedEstado || 
+        herramienta.estado?.toString() === selectedEstado;
+      
+      const matchesProyecto = !selectedProyecto || 
+        herramienta.id_proyecto?.toString() === selectedProyecto;
+      
+      return matchesSearch && matchesCategoria && matchesEstado && matchesProyecto;
+    });
+  }, [herramientas, searchTerm, selectedCategoria, selectedEstado, selectedProyecto]);
+
+  // Calcular totales y páginas
   const totalFilteredItems = filteredHerramientas.length;
-  const calculatedTotalPages = Math.ceil(totalFilteredItems / itemsPerPage);
-  
-  // Asegurar que currentPage esté dentro del rango válido
-  const validCurrentPage = Math.max(1, Math.min(currentPage, calculatedTotalPages || 1));
-  if (validCurrentPage !== currentPage) {
-    setCurrentPage(validCurrentPage);
-  }
-  
-  // Aplicar paginación a las herramientas filtradas
-  const startIndex = (validCurrentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedHerramientas = filteredHerramientas.slice(startIndex, endIndex);
+  const calculatedTotalPages = Math.ceil(totalFilteredItems / itemsPerPage) || 1;
+
+  // Mantener currentPage siempre en rango válido
+  useEffect(() => {
+    const maxPage = Math.max(1, calculatedTotalPages);
+    if (currentPage > maxPage) {
+      setCurrentPage(maxPage);
+    }
+  }, [calculatedTotalPages, currentPage]);
+
+  const paginatedHerramientas = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filteredHerramientas.slice(startIndex, startIndex + itemsPerPage);
+  }, [filteredHerramientas, currentPage, itemsPerPage]);
   
   const totalPages = calculatedTotalPages;
 
@@ -353,23 +344,11 @@ const Herramientas = () => {
     await loadHerramientas();
   };
 
-  const getEstadoConfig = (estado) => {
-    return estadosHerramientas[estado] || estadosHerramientas[1];
-  };
+  // getEstadoConfig ahora proviene de utils/herramientasUtils
 
 
 
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('es-MX', {
-      style: 'currency',
-      currency: 'MXN'
-    }).format(amount);
-  };
-
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('es-ES');
-  };
+  // Utilidades de formato centralizadas (formatters)
 
   if (loading) {
     return (

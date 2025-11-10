@@ -3,6 +3,8 @@ import { FaSave, FaTimes, FaTools, FaHistory, FaExchangeAlt, FaExclamationTriang
 import ConfirmationModal from './ConfirmationModal';
 import api from '../../services/api';
 import { useToast } from '../../contexts/ToastContext';
+import { getMovimientoConfig as getMovConfig, calcularPorcentajeStock as calcPctStock, getEstadoStock as getStockState } from '../../utils/herramientasUtils';
+import { formatNumberES, formatDateTimeES } from '../../utils/formatters';
 
 const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefresh, proyectos = [] }) => {
   const [formData, setFormData] = useState({
@@ -44,41 +46,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     { value: 5, label: 'Fuera de Servicio' }
   ];
 
-  // Función para formatear números
-  const formatNumber = (value) => {
-    if (!value) return '';
-    return parseFloat(value).toLocaleString('es-MX');
-  };
+  // Utilidad de número reemplazada por formatNumberES desde utils/formatters
 
-  // Función para calcular el porcentaje de stock disponible
-  const calcularPorcentajeStock = () => {
-    if (!formData.stock_inicial || !formData.stock) return null;
-    const stockInicial = parseInt(formData.stock_inicial);
-    const stockActual = parseInt(formData.stock);
-    
-    // Validaciones de seguridad
-    if (stockInicial === 0) return null;
-    if (isNaN(stockInicial) || isNaN(stockActual)) return null;
-    if (stockInicial < 0 || stockActual < 0) return null;
-    
-    // Si el stock actual es mayor que el inicial, limitar al 100%
-    if (stockActual > stockInicial) {
-      return 100;
-    }
-    
-    return Math.round((stockActual / stockInicial) * 100);
-  };
-
-  // Función para obtener el estado del stock
-  const getEstadoStock = () => {
-    const porcentaje = calcularPorcentajeStock();
-    if (porcentaje === null) return null;
-    
-    if (porcentaje <= 10) return { nivel: 'crítico', color: 'text-red-600', bg: 'bg-red-50' };
-    if (porcentaje <= 25) return { nivel: 'bajo', color: 'text-orange-600', bg: 'bg-orange-50' };
-    if (porcentaje <= 50) return { nivel: 'medio', color: 'text-yellow-600', bg: 'bg-yellow-50' };
-    return { nivel: 'bueno', color: 'text-green-600', bg: 'bg-green-50' };
-  };
+  // Cálculo de stock y estado movidos a utils
 
   // Función para obtener categorías
   const fetchCategorias = async () => {
@@ -331,7 +301,46 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
 
     try {
       setUploadingImage(true);
-      const result = await api.uploadHerramientaImage(herramientaId, selectedImage);
+      // Convertir a WebP antes de subir (ahorra espacio sin perder calidad)
+      const convertFileToWebP = (file, quality = 0.85) => {
+        return new Promise((resolve) => {
+          if (!file) return resolve(null);
+          if (file.type === 'image/webp') return resolve(file);
+          const img = new Image();
+          const url = URL.createObjectURL(file);
+          img.onload = () => {
+            try {
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth;
+              canvas.height = img.naturalHeight;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0);
+              canvas.toBlob((blob) => {
+                if (blob) {
+                  const webpFile = new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' });
+                  resolve(webpFile);
+                } else {
+                  resolve(file);
+                }
+                URL.revokeObjectURL(url);
+              }, 'image/webp', quality);
+            } catch (err) {
+              console.warn('Fallo conversión a WebP, usando archivo original:', err);
+              URL.revokeObjectURL(url);
+              resolve(file);
+            }
+          };
+          img.onerror = () => {
+            console.warn('No se pudo cargar imagen para convertir a WebP');
+            URL.revokeObjectURL(url);
+            resolve(file);
+          };
+          img.src = url;
+        });
+      };
+
+      const webpFile = await convertFileToWebP(selectedImage);
+      const result = await api.uploadHerramientaImage(herramientaId, webpFile || selectedImage);
       
       if (result.success) {
         return result.data.image_url;
@@ -379,55 +388,9 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
     }
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  // Fecha con hora ahora se usa formatDateTimeES util
 
-  // Función para obtener configuración de tipos de movimiento
-  const getMovimientoConfig = (tipoMovimiento) => {
-    const configs = {
-      'Entrada': {
-        titulo: 'Entrada de Stock',
-        color: '#10B981',
-        bgClass: 'bg-green-100 dark:bg-green-900/30',
-        textClass: 'text-green-600 dark:text-green-400',
-        badgeClass: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-        icon: FaBoxOpen
-      },
-      'Salida': {
-        titulo: 'Salida de Stock',
-        color: '#F59E0B',
-        bgClass: 'bg-amber-100 dark:bg-amber-900/30',
-        textClass: 'text-amber-600 dark:text-amber-400',
-        badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400',
-        icon: FaShare
-      },
-      'Devolucion': {
-        titulo: 'Devolución',
-        color: '#06B6D4',
-        bgClass: 'bg-cyan-100 dark:bg-cyan-900/30',
-        textClass: 'text-cyan-600 dark:text-cyan-400',
-        badgeClass: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-400',
-        icon: FaUndo
-      },
-      'Baja': {
-        titulo: 'Baja de Inventario',
-        color: '#EF4444',
-        bgClass: 'bg-red-100 dark:bg-red-900/30',
-        textClass: 'text-red-600 dark:text-red-400',
-        badgeClass: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-        icon: FaTrash
-      }
-    };
-    return configs[tipoMovimiento] || configs['Entrada'];
-  };
+  // Configuración de movimiento proviene de utils (getMovConfig)
 
   // Función para generar descripción contextual del movimiento con información detallada
   const getDescripcionMovimiento = (movimiento) => {
@@ -615,17 +578,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
   };
 
   // Función mejorada para formatear fecha con hora
-  const formatDateWithTime = (dateString) => {
-    if (!dateString) return '';
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    });
-  };
+  // Reemplazado por formatDateTimeES util
 
   if (!isOpen) return null;
 
@@ -744,7 +697,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Costo de Adquisición
                         {isReadOnly && formData.costo && (
-                          <span className="ml-2 text-green-600 font-semibold">${formatNumber(formData.costo)}</span>
+                          <span className="ml-2 text-green-600 font-semibold">${formatNumberES(formData.costo)}</span>
                         )}
                       </label>
                       <input
@@ -769,7 +722,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Vida Útil (meses)
                         {isReadOnly && formData.vida_util_meses && (
-                          <span className="ml-2 text-gray-600 dark:text-gray-400 font-semibold">{formatNumber(formData.vida_util_meses)} meses</span>
+                          <span className="ml-2 text-gray-600 dark:text-gray-400 font-semibold">{formatNumberES(formData.vida_util_meses)} meses</span>
                         )}
                       </label>
                       <input
@@ -851,7 +804,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Stock Inicial *
                           {isReadOnly && (
-                            <span className="ml-2 text-gray-600 font-semibold">{formatNumber(formData.stock_inicial)} unidades</span>
+                            <span className="ml-2 text-gray-600 font-semibold">{formatNumberES(formData.stock_inicial)} unidades</span>
                           )}
                         </label>
                         <input
@@ -883,7 +836,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                             </div>
                           )}
                           {isReadOnly && (
-                            <span className="ml-2 text-gray-600 font-semibold">{formatNumber(formData.stock)} unidades</span>
+                            <span className="ml-2 text-gray-600 font-semibold">{formatNumberES(formData.stock)} unidades</span>
                           )}
                         </label>
                         <input
@@ -936,8 +889,8 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         {formData.stock_inicial && formData.stock && (
                           <div>
                             {(() => {
-                              const porcentaje = calcularPorcentajeStock();
-                              const estado = getEstadoStock();
+                              const porcentaje = calcPctStock(formData.stock_inicial, formData.stock);
+                              const estado = getStockState(porcentaje);
                               const stockActual = parseInt(formData.stock);
                               const stockInicial = parseInt(formData.stock_inicial);
                               const stockNegativo = !isNaN(stockActual) && stockActual < 0;
@@ -1092,7 +1045,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                           const count = movimientos.filter(m => m.tipo_movimiento === tipo).length;
                           const total = movimientos.filter(m => m.tipo_movimiento === tipo)
                             .reduce((sum, m) => sum + (parseInt(m.cantidad) || 0), 0);
-                          const config = getMovimientoConfig(tipo);
+                          const config = getMovConfig(tipo);
                           
                           if (count === 0) return null;
                           
@@ -1122,7 +1075,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         {/* Información de actividad reciente */}
                         {movimientos.length > 0 && (
                           <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-4 p-3 bg-gradient-to-r from-gray-50/70 to-gray-100/50 dark:from-gray-800/50 dark:to-gray-700/30 rounded-lg border border-gray-200/60 dark:border-gray-600/60">
-                            <span className="font-medium">Último movimiento: {formatDateWithTime(movimientos[0].fecha_movimiento)}</span>
+                            <span className="font-medium">Último movimiento: {formatDateTimeES(movimientos[0].fecha_movimiento)}</span>
                             <span className="text-xs px-2 py-1 bg-white/70 dark:bg-gray-700/70 text-gray-700 dark:text-gray-300 rounded-full border border-gray-300/50 dark:border-gray-600/50 backdrop-blur-sm">
                               {(() => {
                                 const ultimaFecha = new Date(movimientos[0].fecha_movimiento);
@@ -1150,7 +1103,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                         ) : (
                       <div className="space-y-3 max-h-80 overflow-y-auto bg-gray-50/50 dark:bg-gray-800/30 rounded-lg p-4 border border-gray-200/50 dark:border-gray-700/50">
                         {movimientos.map((movimiento, index) => {
-                          const tipoConfig = getMovimientoConfig(movimiento.tipo_movimiento);
+                          const tipoConfig = getMovConfig(movimiento.tipo_movimiento);
                           const descripcionContextual = getDescripcionMovimiento(movimiento);
                           
                           return (
@@ -1176,10 +1129,10 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                                 </div>
                                 <div className="text-right">
                                   <span className={`px-2 py-1 text-xs font-bold rounded-full ${tipoConfig.badgeClass}`}>
-                                    {movimiento.cantidad > 0 ? '+' : ''}{formatNumber(movimiento.cantidad)}
+                                    {movimiento.cantidad > 0 ? '+' : ''}{formatNumberES(movimiento.cantidad)}
                                   </span>
                                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                    {formatDateWithTime(movimiento.fecha_movimiento)}
+                                    {formatDateTimeES(movimiento.fecha_movimiento)}
                                   </p>
                                 </div>
                               </div>
@@ -1363,7 +1316,7 @@ const HerramientaModal = ({ isOpen, onClose, mode, herramienta, onSave, onRefres
                                    dark:hover:file:bg-gray-600"
                         />
                         <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                          PNG, JPG, GIF, WebP hasta 5MB
+                          PNG, JPG, GIF, WebP hasta 10MB
                         </p>
                       </div>
 
