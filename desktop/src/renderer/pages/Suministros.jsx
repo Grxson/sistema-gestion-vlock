@@ -2260,7 +2260,7 @@ const Suministros = () => {
           result = await exportToExcel(dataToExport, { categorias: categoriasDinamicas });
         } else {
           console.log('📄 Exportando', dataToExport.length, 'registros a PDF');
-          result = await exportToPDF(dataToExport, filtrosInfo, { categorias: categoriasDinamicas });
+          result = await exportToPDF(dataToExport, filtrosInfo, { categorias: categoriasDinamicas, unidadesDinamicas });
         }
       
       if (result.success) {

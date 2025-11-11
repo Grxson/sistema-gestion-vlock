@@ -543,125 +543,275 @@ export const exportToExcel = async (data, options = {}) => {
 export const exportToPDF = async (data, filtrosInfo = null, options = {}) => {
   try {
     const categorias = options.categorias || [];
+    // LOG de depuración para comparar datos y categorías
+    console.log('🔍 [PDF] Exportando suministros:', data.length, 'registros');
+    if (data && data.length > 0) {
+      console.log('🔍 [PDF] Ejemplo de suministro:', data[0]);
+    }
+    console.log('🔍 [PDF] Categorías recibidas:', categorias.length);
+    if (categorias && categorias.length > 0) {
+      console.log('🔍 [PDF] Ejemplo de categoría:', categorias[0]);
+    }
+    // LOG de depuración por cada suministro
+    data.forEach((item, idx) => {
+      let tipoCategoria = resolveCategoriaNombre(item, categorias);
+      let tipoGasto = null;
+      if (categorias && categorias.length > 0) {
+        const catId = item.id_categoria_suministro || item.id_categoria || item.id_categoria_gasto;
+        const foundCat = categorias.find(c => c.id === catId || c.id_categoria === catId || String(c.id) === String(catId) || String(c.id_categoria) === String(catId));
+        if (foundCat && foundCat.tipo) {
+          tipoGasto = foundCat.tipo;
+        }
+      }
+      if (!tipoGasto) tipoGasto = tipoCategoria;
+      console.log(`[PDF] #${idx} Suministro:`, { id: item.id_suministro, nombre: item.nombre, costo: item.subtotal || item.costo_total, tipoCategoria, tipoGasto });
+    });
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
       format: 'a4'
     });
 
+    // Agregar logo en la parte superior derecha
+    try {
+      const logoPath = window.electron 
+        ? 'public/images/vlock_logo.png'
+        : '/images/vlock_logo.png';
+      
+      // Cargar imagen como base64
+      const img = new Image();
+      img.src = logoPath;
+      
+      // Agregar logo (esquina superior derecha)
+      // x=240 (cerca del borde derecho), y=10, width=45, height=auto
+      doc.addImage(img, 'PNG', 240, 10, 45, 0);
+    } catch (error) {
+      console.warn('No se pudo cargar el logo:', error);
+    }
+
     // Título principal
     doc.setFontSize(20);
     doc.setFont('helvetica', 'bold');
-    doc.text('REPORTE DE SUMINISTROS', 148, 15, { align: 'center' });
+    doc.text('REPORTE DE GASTOS', 148, 15, { align: 'center' });
 
     // Fecha de generación
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Generado el: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 148, 25, { align: 'center' });
+    doc.text(`Generado el: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 148, 22, { align: 'center' });
 
-    // Calcular estadísticas generales
-    const totalSupplies = data.length;
-    const totalSpent = data.reduce((sum, item) => sum + Number(item.subtotal || 0), 0);
-    const totalQuantity = data.reduce((sum, item) => sum + Number(item.cantidad || 0), 0);
-    const uniqueSuppliers = new Set(data.map(item => item.proveedor).filter(Boolean)).size;
-    const uniqueProjects = new Set(data.map(item => item.proyecto).filter(Boolean)).size;
-    const avgUnitPrice = totalSpent / totalQuantity || 0;
+    // Calcular estadísticas generales usando la misma lógica que calculateGeneralStats de Suministros.jsx
+    let projectExpenses = 0;
+    let adminExpenses = 0;
+    let payrollExpenses = 0;
+    let gatosCount = 0;
+    let totalSpent = 0;
+    data.forEach(item => {
+      // Usar la misma lógica de Suministros.jsx para obtener el tipo
+      let tipoCategoria = null;
+      if (item.categoria && item.categoria.tipo) {
+        tipoCategoria = item.categoria.tipo;
+      } else if (item.id_categoria_suministro && categorias && categorias.length > 0) {
+        const categoriaObj = categorias.find(cat => String(cat.id_categoria) === String(item.id_categoria_suministro));
+        if (categoriaObj && categoriaObj.tipo) {
+          tipoCategoria = categoriaObj.tipo;
+        }
+      }
+      // Calcular el costo igual que en calculateTotal
+      let costo = 0;
+      if (item.costo_total !== undefined && item.costo_total !== null && !isNaN(item.costo_total)) {
+        costo = parseFloat(item.costo_total);
+      } else if (item.isNominaRow === true) {
+        costo = parseFloat(item.precio_unitario || 0);
+      } else {
+        const cantidad = parseFloat(item.cantidad || 0);
+        const precio = parseFloat(item.precio_unitario || 0);
+        costo = Math.round((cantidad * precio) * 100) / 100;
+      }
+      totalSpent += costo;
+      // Clasificar por tipo
+      if (item.isNominaRow === true) {
+        payrollExpenses += costo;
+      } else if (tipoCategoria === 'Administrativo') {
+        adminExpenses += costo;
+      } else if (tipoCategoria === 'Proyecto') {
+        projectExpenses += costo;
+      }
+      if (item.tipo === 'gato') {
+        gatosCount++;
+      }
+    });
+    const totalExpenses = projectExpenses + adminExpenses + payrollExpenses;
 
     // Sección de estadísticas generales con mejor diseño
-    let statsY = 35;
+    let statsY = 40;
     doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
-    doc.text('RESUMEN EJECUTIVO', 10, statsY);
+    doc.text('RESUMEN EJECUTIVO', 148, statsY, { align: 'center' });
 
     statsY += 10;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
 
-    // Crear tabla de estadísticas (sin precio promedio)
-    const statsData = [
-      ['Total de Suministros:', totalSupplies.toLocaleString()],
-      ['Monto Total Gastado:', `$${totalSpent.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
-      ['Cantidad Total:', totalQuantity.toLocaleString()],
-      ['Proveedores Únicos:', uniqueSuppliers.toString()],
-      ['Proyectos Activos:', uniqueProjects.toString()]
-    ];
+    // Crear tabla de estadísticas con branding (centrada)
+   const statsData = [
+     ['Gastos de Proyecto', `$${projectExpenses.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+     ['Gastos Administrativos', `$${adminExpenses.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+     ['Nóminas', `$${payrollExpenses.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
+     ['Gastos (Cantidad de registros)', data.length.toLocaleString()],
+     ['Total', `$${totalExpenses.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`]
+   ];
+
+    const statsTableWidth = 160; // 100 + 60 = 160mm de ancho total (más grande)
+    const pageWidth = doc.internal.pageSize.width; // 297mm en landscape
+    const statsMarginLeft = (pageWidth - statsTableWidth) / 2; // Centrar horizontalmente
 
     autoTable(doc, {
+      head: [['Concepto', 'Monto']],
       body: statsData,
       startY: statsY,
       styles: {
-        fontSize: 9,
-        cellPadding: 3
+        fontSize: 11,
+        cellPadding: 6,
+        lineColor: [100, 100, 100],
+        lineWidth: 0.3
+      },
+      headStyles: {
+        fillColor: [220, 38, 38], // rojo corporativo
+        textColor: [255, 255, 255],
+        fontStyle: 'bold',
+        halign: 'center'
+      },
+      bodyStyles: {
+        halign: 'left'
       },
       columnStyles: {
-        0: { 
-          cellWidth: 60, 
-          fontStyle: 'bold',
-          fillColor: [240, 248, 255] 
-        },
-        1: { 
-          cellWidth: 40, 
-          halign: 'right',
-          fillColor: [248, 250, 252]
+        0: { cellWidth: 100, fontStyle: 'bold' },
+        1: { cellWidth: 60, halign: 'right' }
+      },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      didParseCell: function(data) {
+        // Resaltar fila de totales con un tenue rojo y texto en negritas
+        if (data.section === 'body' && data.row.index === (statsData.length - 1)) {
+          data.cell.styles.fillColor = [255, 240, 240];
+          data.cell.styles.fontStyle = 'bold';
         }
       },
-      margin: { left: 10 },
+      margin: { left: statsMarginLeft },
       theme: 'grid'
     });
 
     // Información de filtros si está disponible
     let startY = doc.lastAutoTable.finalY + 15;
     if (filtrosInfo) {
+      const boxWidth = 180;
+      const boxHeight = 24 + (filtrosInfo.filtros.busqueda ? 6 : 0) + 6; // Ajusta el alto según filtros
+      const boxX = (doc.internal.pageSize.width - boxWidth) / 2;
+      const boxY = startY - 5;
+      doc.setFillColor(255, 255, 255);
+      doc.roundedRect(boxX, boxY, boxWidth, boxHeight, 3, 3, 'F');
+
+      let infoY = boxY + 10;
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.text('FILTROS APLICADOS', 10, startY);
-      
-      startY += 8;
+      doc.setTextColor(220, 38, 38);
+      doc.text('INFORMACION DEL REPORTE', 148, infoY, { align: 'center' });
+
+      infoY += 8;
       doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Total de registros: ${filtrosInfo.registrosFiltrados}`, 148, infoY, { align: 'center' });
+
+      infoY += 6;
       doc.setFont('helvetica', 'normal');
-      doc.text(`Mostrando ${filtrosInfo.registrosFiltrados} registros`, 10, startY);
-      
+
       const filtrosActivos = [];
-      if (filtrosInfo.filtros.busqueda) filtrosActivos.push(`Búsqueda: "${filtrosInfo.filtros.busqueda}"`);
-      if (filtrosInfo.filtros.proyecto) filtrosActivos.push(`Proyecto: ${filtrosInfo.filtros.proyecto}`);
-      if (filtrosInfo.filtros.proveedor) filtrosActivos.push(`Proveedor: ${filtrosInfo.filtros.proveedor}`);
-      if (filtrosInfo.filtros.estado) filtrosActivos.push(`Estado: ${filtrosInfo.filtros.estado}`);
-      if (filtrosInfo.filtros.fechaInicio || filtrosInfo.filtros.fechaFin) {
-        const fechas = `${filtrosInfo.filtros.fechaInicio || ''} - ${filtrosInfo.filtros.fechaFin || ''}`;
-        filtrosActivos.push(`Fechas: ${fechas}`);
+      if (filtrosInfo.filtros.busqueda) {
+        filtrosActivos.push(`Busqueda: "${filtrosInfo.filtros.busqueda}"`);
       }
-      
+      if (filtrosInfo.filtros.proyecto) {
+        filtrosActivos.push(`Proyecto: ${filtrosInfo.filtros.proyecto}`);
+      }
+      if (filtrosInfo.filtros.proveedor) {
+        filtrosActivos.push(`Proveedor: ${filtrosInfo.filtros.proveedor}`);
+      }
+      if (filtrosInfo.filtros.estado) {
+        filtrosActivos.push(`Estado: ${filtrosInfo.filtros.estado}`);
+      }
+      if (filtrosInfo.filtros.fechaInicio && filtrosInfo.filtros.fechaFin) {
+        const fechaInicio = new Date(filtrosInfo.filtros.fechaInicio).toLocaleDateString('es-MX');
+        const fechaFin = new Date(filtrosInfo.filtros.fechaFin).toLocaleDateString('es-MX');
+        filtrosActivos.push(`Periodo: ${fechaInicio} - ${fechaFin}`);
+      } else if (filtrosInfo.filtros.fechaInicio) {
+        const fechaInicio = new Date(filtrosInfo.filtros.fechaInicio).toLocaleDateString('es-MX');
+        filtrosActivos.push(`Desde: ${fechaInicio}`);
+      } else if (filtrosInfo.filtros.fechaFin) {
+        const fechaFin = new Date(filtrosInfo.filtros.fechaFin).toLocaleDateString('es-MX');
+        filtrosActivos.push(`Hasta: ${fechaFin}`);
+      }
+
       if (filtrosActivos.length > 0) {
-        startY += 5;
-        doc.text(`${filtrosActivos.join(' | ')}`, 10, startY);
-        startY += 10;
+        doc.setFontSize(7);
+        filtrosActivos.forEach((filtro, index) => {
+          doc.text(filtro, 148, infoY + (index * 4), { align: 'center' });
+        });
+        infoY += (filtrosActivos.length * 4) + 5;
       } else {
-        startY += 10;
+        doc.text('Sin filtros aplicados - Mostrando todos los registros', 148, infoY, { align: 'center' });
+        infoY += 10;
       }
+      startY = infoY + 10;
     }
+
+    // Agregar pie de página en la primera página (página de presentación)
+    const firstPageHeight = doc.internal.pageSize.height;
+    const footerY = firstPageHeight - 15;
+    
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(100, 100, 100);
+    doc.text('Reporte generado automáticamente por Sistema de Gestión Vlock', 148, footerY, { align: 'center' });
+    doc.text('Constructora Vlock - Todos los derechos reservados', 148, footerY + 4, { align: 'center' });
+    doc.setTextColor(0, 0, 0); // Restaurar color negro
 
     // Agregar nueva página para la tabla de suministros
     doc.addPage();
+  startY = 20;
 
-    // Título de la tabla de datos en la nueva página
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'bold');
-    doc.text('DETALLE DE SUMINISTROS', 10, 20);
-    startY = 30;
-
-    // Configurar datos para la tabla con mejor formato
-    const tableData = data.map(item => [
+  // Configurar datos para la tabla con mejor formato
+    const unidades = options.unidadesDinamicas || [];
+    const getSimboloUnidad = (idUnidad, fallback) => {
+      if (!idUnidad) return fallback || '';
+      const unidad = unidades.find(u => String(u.id_unidad) === String(idUnidad));
+      return unidad?.simbolo || fallback || '';
+    };
+    const proyectos = options.proyectos || [];
+    const getProyectoNombre = (item) => {
+      if (item.proyecto) return item.proyecto;
+      if (item.id_proyecto && proyectos.length > 0) {
+        const p = proyectos.find(pr => String(pr.id_proyecto) === String(item.id_proyecto));
+        return p?.nombre || '';
+      }
+      return '';
+    };
+    // Ordenar por fecha descendente (más reciente primero)
+    const sortedData = [...data].sort((a, b) => {
+      const fechaA = new Date(a.createdAt);
+      const fechaB = new Date(b.createdAt);
+      return fechaB - fechaA;
+    });
+    const tableData = sortedData.map(item => [
       item.folio || '',
-      (item.nombre || '').substring(0, 30) + ((item.nombre || '').length > 30 ? '...' : ''),
+      item.nombre || '',
       item.codigo_producto || '',
       resolveCategoriaNombre(item, categorias),
       Number(item.cantidad || 0).toLocaleString(),
-      item.unidad_medida || '',
+      getSimboloUnidad(item.id_unidad_medida, item.unidad_medida),
       `$${Number(item.precio_unitario || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
       `$${Number(item.subtotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })}`,
       item.estado || '',
-      (item.proyecto || '').substring(0, 25) + ((item.proyecto || '').length > 25 ? '...' : ''),
-      (item.proveedor || '').substring(0, 25) + ((item.proveedor || '').length > 25 ? '...' : '')
+      getProyectoNombre(item),
+      item.proveedor || ''
     ]);
 
     // Configurar tabla con mejor espaciado y formato
@@ -674,34 +824,34 @@ export const exportToPDF = async (data, filtrosInfo = null, options = {}) => {
         cellPadding: 3,
         overflow: 'linebreak',
         halign: 'left',
-        lineColor: [200, 200, 200],
-        lineWidth: 0.1
+        lineColor: [100, 100, 100],
+        lineWidth: 0.3
       },
       headStyles: {
-        fillColor: [52, 73, 94],
-        textColor: 255,
+  fillColor: [220, 38, 38],
+  textColor: [255, 255, 255],
         fontStyle: 'bold',
         fontSize: 8,
         halign: 'center'
       },
       columnStyles: {
         0: { cellWidth: 18, halign: 'center' }, // Folio
-        1: { cellWidth: 38 }, // Nombre
-        2: { cellWidth: 22, halign: 'center' }, // Código
-        3: { cellWidth: 24 }, // Categoría
+        1: { cellWidth: 38, overflow: 'linebreak' }, // Nombre
+        2: { cellWidth: 22, halign: 'center', overflow: 'linebreak' }, // Código
+        3: { cellWidth: 24, overflow: 'linebreak' }, // Categoría
         4: { cellWidth: 18, halign: 'right' }, // Cantidad
         5: { cellWidth: 20, halign: 'center' }, // Unidad
         6: { cellWidth: 24, halign: 'right' }, // Precio Unit.
-        7: { cellWidth: 25, halign: 'right', fillColor: [252, 248, 227] }, // Subtotal
+  7: { cellWidth: 25, halign: 'right', fillColor: [255, 240, 240], fontStyle: 'bold' }, // Subtotal
         8: { cellWidth: 19, halign: 'center' }, // Estado
-        9: { cellWidth: 35 }, // Proyecto
-        10: { cellWidth: 35 } // Proveedor
+        9: { cellWidth: 35, overflow: 'linebreak' }, // Proyecto
+        10: { cellWidth: 35, overflow: 'linebreak' } // Proveedor
       },
       margin: { left: 8, right: 8 },
       pageBreak: 'auto',
       rowPageBreak: 'avoid',
       alternateRowStyles: {
-        fillColor: [248, 249, 250]
+        fillColor: [250, 250, 250]
       }
     });
 
@@ -780,70 +930,6 @@ export const exportToPDF = async (data, filtrosInfo = null, options = {}) => {
     });
     
     // Verificar si necesitamos nueva página
-    if (finalY > 180) {
-      doc.addPage();
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('TOTALES FINALES', 148, 20, { align: 'center' });
-    } else {
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'bold');
-      doc.text('TOTALES FINALES', 10, finalY);
-    }
-
-    const resumenY = finalY > 180 ? 35 : finalY + 10;
-    
-    // Usar el total calculado (suma de las tres categorías) en lugar de totalSpent
-    const totalGeneral = totalAdministrativo + totalProyecto + totalNomina;
-    
-    // Crear tabla de totales con desglose por tipo
-    const resumenData = [
-      ['CONCEPTO', 'VALOR'],
-      ['Total de Registros:', data.length.toLocaleString()],
-      ['Gastos Administrativos:', `$${totalAdministrativo.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
-      ['Gastos de Proyectos:', `$${totalProyecto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
-      ['Nóminas:', `$${totalNomina.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`],
-      ['TOTAL GENERAL:', `$${totalGeneral.toLocaleString('es-MX', { minimumFractionDigits: 2 })}`]
-    ];
-
-    autoTable(doc, {
-      body: resumenData,
-      startY: resumenY,
-      styles: {
-        fontSize: 9,
-        cellPadding: 4
-      },
-      headStyles: {
-        fillColor: [52, 73, 94],
-        textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 10
-      },
-      columnStyles: {
-        0: { 
-          cellWidth: 80, 
-          fontStyle: 'bold',
-          fillColor: [240, 248, 255] 
-        },
-        1: { 
-          cellWidth: 60, 
-          halign: 'right',
-          fillColor: [248, 250, 252]
-        }
-      },
-      didParseCell: function(data) {
-        // Resaltar la fila del TOTAL GENERAL (última fila)
-        if (data.row.index === resumenData.length - 1) {
-          data.cell.styles.fillColor = [16, 185, 129]; // Verde emerald
-          data.cell.styles.textColor = [255, 255, 255]; // Texto blanco
-          data.cell.styles.fontStyle = 'bold';
-          data.cell.styles.fontSize = 11;
-        }
-      },
-      margin: { left: 75, right: 75 },
-      theme: 'grid'
-    });
-
     // Agregar nota de pie
     const pageHeight = doc.internal.pageSize.height;
     doc.setFontSize(8);

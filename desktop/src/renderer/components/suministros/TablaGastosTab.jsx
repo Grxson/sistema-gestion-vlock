@@ -37,7 +37,7 @@ const TablaGastosTab = ({
   setCurrentPage,
   handleImportClick,
   handleDownloadTemplate,
-    handleOpenExportModal,
+  handleOpenExportModal,
   onFiltroTipoChange,
   
   // Estados adicionales
@@ -64,7 +64,7 @@ const TablaGastosTab = ({
         {/* Icono toggle flotante, nunca sobre la tabla */}
         <button
           onClick={() => setShowControls(!showControls)}
-          className="absolute top-2 right-2 z-20 bg-gray-700 hover:bg-gray-800 text-white p-3 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-110 active:scale-95"
+          className="fixed top-24 right-10 z-30 bg-red-600 hover:bg-red-800 text-white p-3 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg hover:shadow-xl hover:scale-110 active:scale-95"
           style={{ pointerEvents: 'auto' }}
           title={showControls ? "Ocultar controles de búsqueda y filtros" : "Mostrar controles de búsqueda y filtros"}
         >
@@ -298,6 +298,12 @@ const TablaGastosTab = ({
                     if (isNominaRow) {
                       // Renderizar fila de nómina
                       const nominaData = recibo.suministros[0];
+                      // Buscar el nombre del proyecto usando id_proyecto
+                      let nombreProyecto = '';
+                      if (nominaData.id_proyecto) {
+                        const proyectoObj = proyectos?.find(p => (p.id_proyecto || p.id) === nominaData.id_proyecto);
+                        nombreProyecto = proyectoObj?.nombre || `Proyecto ${nominaData.id_proyecto}`;
+                      }
                       rows.push(
                         <tr key={nominaData.id_suministro} className="bg-green-50 dark:bg-green-900/10 hover:bg-green-100 dark:hover:bg-green-900/20 transition-colors duration-150">
                           {/* Suministro (Nombre de nómina) */}
@@ -307,7 +313,7 @@ const TablaGastosTab = ({
                               <div>
                                 <div className="font-semibold">{nominaData.nombre}</div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  Proyecto: {nominaData.nombre_proyecto}
+                                  Proyecto: {nombreProyecto || nominaData.nombre_proyecto || 'Sin proyecto'}
                                 </div>
                                 <div className="text-xs text-gray-500 dark:text-gray-400">
                                   {nominaData.cantidad_empleados} empleado{nominaData.cantidad_empleados !== 1 ? 's' : ''}
@@ -344,7 +350,7 @@ const TablaGastosTab = ({
                                 {formatPriceDisplay(nominaData.costo_total)}
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
-                                Total semana: {formatPriceDisplay(nominaData.total_con_iva)}
+                                Pago semanal total
                               </div>
                             </div>
                           </td>

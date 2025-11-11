@@ -23,13 +23,13 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
   /**
    * Formatea una nómina agrupada por semana como una fila de tabla
    */
-  const formatNominaAsRow = (nominaData, semana, proyecto) => {
+  const formatNominaAsRow = (nominaData, semana, proyecto, proyectoId) => {
     console.log('🎨 Formateando fila de nómina:', {
       total: nominaData.total,
       cantidad_empleados: nominaData.cantidad_empleados,
       nominas_en_array: nominaData.nominas?.length,
       semana_id: semana.id_semana,
-      proyecto_id: proyecto?.id_proyecto,
+      proyecto_id: proyectoId || proyecto?.id_proyecto,
       proyecto_nombre: proyecto?.nombre // Corregido: usar .nombre
     });
     
@@ -57,8 +57,8 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
     });
 
     const resultado = {
-      // Identificadores únicos
-      id_suministro: `nomina-${semana.id_semana}-${proyecto?.id_proyecto || 'sin-proyecto'}`,
+      // Identificadores únicos - Agregar timestamp para evitar duplicados
+      id_suministro: `nomina-${semana.id_semana}-${proyectoId || 'sin-proyecto'}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       isNominaRow: true, // Flag para identificar que es una fila de nómina
       
       // Información de la nómina - Formato más conciso
@@ -66,7 +66,8 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
       codigo: folio,
       descripcion: `Pago de nómina correspondiente a la semana ${numeroSemana} de ${mes} del ${anio}`,
       
-      // Datos financieros
+      // Datos financieros - IMPORTANTE: Usa la suma de pago_semanal, NO monto_total
+      // nominaData.total se calcula sumando el pago_semanal de cada nómina en el grupo
       precio_unitario: nominaData.total,
       cantidad: 1,
       costo_total: nominaData.total,
@@ -77,9 +78,9 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
       categoria: 'Nómina',
       tipo_categoria: 'Mano de Obra',
       
-      // Información del proyecto - Corregido: usar proyecto.nombre en lugar de nombre_proyecto
-      id_proyecto: proyecto?.id_proyecto || null,
-      nombre_proyecto: proyecto?.nombre || 'Sin proyecto asignado',
+      // Información del proyecto - Corregido: usar proyectoId si proyecto es null
+      id_proyecto: proyectoId || proyecto?.id_proyecto || null,
+      nombre_proyecto: proyecto?.nombre || (proyectoId ? `Proyecto ${proyectoId}` : 'Sin proyecto asignado'),
       
       // Información de la semana
       id_semana: semana.id_semana,
@@ -108,9 +109,11 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
     };
 
     console.log('🔄 formatNominaAsRow - Salida:', {
-      costo_total: resultado.costo_total,
+      total_pagos_semanales: resultado.costo_total,
       precio_unitario: resultado.precio_unitario,
-      cantidad_empleados: resultado.cantidad_empleados
+      cantidad_empleados: resultado.cantidad_empleados,
+      id_proyecto: resultado.id_proyecto,
+      nombre_proyecto: resultado.nombre_proyecto
     });
 
     return resultado;
@@ -216,9 +219,16 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
         const key = `${semanaId}-${proyectoId}`;
 
         if (!acc[key]) {
+          // Si la nómina no trae el proyecto, intentar obtenerlo del empleado
+          let proyectoInfo = nomina.proyecto;
+          if (!proyectoInfo && nomina.empleado?.proyecto) {
+            proyectoInfo = nomina.empleado.proyecto;
+          }
+          
           acc[key] = {
             semana: nomina.semana,
-            proyecto: nomina.proyecto || null,
+            proyecto: proyectoInfo || null,
+            proyecto_id: nomina.id_proyecto, // Guardar el ID también
             nominas: [],
             total: 0,
             cantidad_empleados: 0
@@ -227,16 +237,16 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
 
         acc[key].nominas.push(nomina);
         
-        // Usar la misma lógica que en Nomina.jsx para calcular el monto
-        const monto = parseFloat(nomina.monto_total || nomina.monto || 0);
+        // CORREGIDO: Usar pago_semanal en lugar de monto_total para el total de gastos
+        const pagoSemanal = parseFloat(nomina.pago_semanal || 0);
         console.log(`💰 Nómina ID ${nomina.id_nomina} (Empleado ${nomina.id_empleado}):`, {
+          pago_semanal: nomina.pago_semanal,
           monto_total: nomina.monto_total,
-          monto: nomina.monto,
-          monto_calculado: monto,
+          pago_calculado: pagoSemanal,
           acumulado_antes: acc[key].total,
-          acumulado_despues: acc[key].total + (isNaN(monto) ? 0 : monto)
+          acumulado_despues: acc[key].total + (isNaN(pagoSemanal) ? 0 : pagoSemanal)
         });
-        acc[key].total += isNaN(monto) ? 0 : monto;
+        acc[key].total += isNaN(pagoSemanal) ? 0 : pagoSemanal;
         acc[key].cantidad_empleados += 1;
 
         return acc;
@@ -256,7 +266,7 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
           nominas_detalle: group.nominas.map(n => ({
             id: n.id_nomina,
             empleado: n.id_empleado,
-            monto_individual: n.monto_total || n.monto
+            pago_semanal: n.pago_semanal
           }))
         });
       });
@@ -266,9 +276,11 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
         console.log('🔄 Formateando grupo:', {
           total_a_pasar: group.total,
           cantidad_empleados: group.cantidad_empleados,
-          nominas_en_grupo: group.nominas.length
+          nominas_en_grupo: group.nominas.length,
+          proyecto_id: group.proyecto_id,
+          tiene_proyecto: !!group.proyecto
         });
-        return formatNominaAsRow(group, group.semana, group.proyecto);
+        return formatNominaAsRow(group, group.semana, group.proyecto, group.proyecto_id);
       });
 
       // Ordenar por fecha descendente
@@ -291,8 +303,11 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
 
   /**
    * Combina suministros con nóminas en un solo array
+   * IMPORTANTE: Filtrar nóminas del array de suministros para evitar duplicados
+   * Las nóminas se manejan por separado en nominaRows (agrupadas)
    */
-  const combinedData = [...suministros, ...nominaRows];
+  const suministrosSinNominas = suministros.filter(s => !s.isNominaRow && s.categoria !== 'Nómina');
+  const combinedData = [...suministrosSinNominas, ...nominaRows];
 
   // Helper para normalizar fechas confiables
   const normalizeDate = (value) => {
