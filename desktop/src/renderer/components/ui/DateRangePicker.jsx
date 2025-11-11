@@ -9,6 +9,7 @@ const DateRangePicker = ({
   onEndDateChange = () => {},
   // Nuevo: callback combinado opcional
   onChange, // ( { startDate, endDate } )
+  onReset, // Callback para resetear al estado inicial
   startLabel = "Fecha Inicio",
   endLabel = "Fecha Fin",
   className = "",
@@ -131,18 +132,36 @@ const DateRangePicker = ({
   };
 
   const applyQuickRange = (range) => {
-    // Si el filtro ya está activo, lo desactivamos (toggle)
+    // Si el filtro ya está activo, lo desactivamos (toggle) - RESETEAR al estado inicial
     if (activeFilter === range.label) {
       setActiveFilter(null);
-      onStartDateChange('');
-      onEndDateChange('');
-      if (onChange) {
-        onChange({ startDate: '', endDate: '' });
+      setStartError(null);
+      setEndError(null);
+      
+      // Si existe callback onReset, usarlo para regresar al estado inicial
+      if (onReset) {
+        onReset();
+      } else {
+        // Si no hay onReset, limpiar completamente (comportamiento anterior)
+        const emptyStart = '';
+        const emptyEnd = '';
+        
+        onStartDateChange(emptyStart);
+        onEndDateChange(emptyEnd);
+        
+        if (onChange) {
+          onChange({ startDate: emptyStart, endDate: emptyEnd });
+        }
       }
     } else {
+      // Aplicar el nuevo rango
       setActiveFilter(range.label);
+      setStartError(null);
+      setEndError(null);
+      
       onStartDateChange(range.start);
       onEndDateChange(range.end);
+      
       if (onChange) {
         onChange({ startDate: range.start, endDate: range.end });
       }

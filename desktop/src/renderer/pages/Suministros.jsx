@@ -84,6 +84,7 @@ import useCombinedTableData from '../hooks/useCombinedTableData';
 import GastosTab from '../components/suministros/GastosTab';
 import TablaGastosTab from '../components/suministros/TablaGastosTab';
 import ReportesTab from '../components/suministros/ReportesTab';
+import IngresosVsGastosTab from '../components/suministros/IngresosVsGastosTab';
 
 // Importar componentes de suministros refactorizados
 import SuministrosHeader from '../components/suministros/SuministrosHeader';
@@ -1272,6 +1273,18 @@ const Suministros = () => {
       } else {
         response = await api.createSuministro(submitData);
         if (response.success) {
+          // Asegurar movimiento de gasto en ingresos (fallback no crítico)
+          try {
+            await api.ensureMovimientoGastoForSuministro({
+              id_proyecto: submitData.id_proyecto,
+              fecha: submitData.fecha,
+              monto: submitData.costo_total,
+              descripcion: `Suministro - ${submitData.nombre || 'Material'} - ${submitData.proveedor || ''}`,
+              ref_tipo: 'suministro',
+              ref_id: response?.data?.id_suministro || null
+            });
+          } catch (_) {}
+
           // Para nuevos suministros, sí necesitamos recargar para obtener los datos completos
           await loadData();
           
@@ -1389,6 +1402,18 @@ const Suministros = () => {
           };
 
           await api.createMultipleSuministros(createPayload);
+          // Fallback: asegurar movimiento agregado del recibo
+          try {
+            const totalCreations = creations.reduce((acc, it) => acc + ((parseFloat(it.cantidad)||0) * (parseFloat(it.precio_unitario)||0)), 0);
+            await api.ensureMovimientoGastoForSuministro({
+              id_proyecto: createPayload.info_recibo.id_proyecto,
+              fecha: createPayload.info_recibo.fecha,
+              monto: totalCreations,
+              descripcion: `Recibo suministros${createPayload.info_recibo.folio ? ` ${createPayload.info_recibo.folio}` : ''} - ${createPayload.info_recibo.proveedor || ''}`,
+              ref_tipo: 'suministro-multiple',
+              ref_id: null
+            });
+          } catch(_){}
         }
         
         showSuccess(
@@ -1400,6 +1425,18 @@ const Suministros = () => {
       } else {
         // Modo creación: crear nuevos suministros
         const response = await api.createMultipleSuministros(suministrosData);
+        // Fallback: asegurar movimiento agregado del recibo
+        try {
+          const totalCreations = (suministrosData.suministros||[]).reduce((acc, it) => acc + ((parseFloat(it.cantidad)||0) * (parseFloat(it.precio_unitario)||0)), 0);
+          await api.ensureMovimientoGastoForSuministro({
+            id_proyecto: suministrosData.info_recibo?.id_proyecto || null,
+            fecha: suministrosData.info_recibo?.fecha,
+            monto: totalCreations,
+            descripcion: `Recibo suministros${suministrosData.info_recibo?.folio ? ` ${suministrosData.info_recibo.folio}` : ''} - ${suministrosData.info_recibo?.proveedor || ''}`,
+            ref_tipo: 'suministro-multiple',
+            ref_id: null
+          });
+        } catch(_){}
         showSuccess(
           'Suministros creados',
           `Se han creado ${suministrosData.suministros.length} suministros correctamente`,
@@ -2407,7 +2444,7 @@ const Suministros = () => {
     const proyectosUnicos = new Set(suministros.map(s => s.id_proyecto).filter(id => id)).size;
 
     return {
-      totalGastado: Math.round(totalGastado * 100) / 100,
+      totalGastado: Math.round((totalGastado + totalNominas) * 100) / 100,
       gastosAdministrativos: Math.round(gastosAdministrativos * 100) / 100,
       gastosProyectos: Math.round(gastosProyectos * 100) / 100,
       totalNominas: Math.round(totalNominas * 100) / 100,
@@ -2423,11 +2460,29 @@ const Suministros = () => {
     let gastosProyectosFiltrado = 0;
     let totalNominasFiltrado = 0; // Nueva métrica para nóminas filtradas
     
+    // Helper para detectar si un item es nómina
+    const esNomina = (item) => {
+      if (item?.isNominaRow === true) return true;
+      if (item?.categoria === 'Nómina' || item?.tipo_suministro === 'Nómina') return true;
+      // Buscar por objeto categoría
+      if (item?.categoria && typeof item.categoria === 'object' && item.categoria.tipo === 'Nómina') return true;
+      // Buscar por id en categoriasDinamicas
+      if (item?.id_categoria_suministro && Array.isArray(categoriasDinamicas)) {
+        const cat = categoriasDinamicas.find(cat => String(cat.id_categoria) === String(item.id_categoria_suministro) || String(cat.id) === String(item.id_categoria_suministro));
+        if (cat?.tipo === 'Nómina') return true;
+      }
+      return false;
+    };
+
     filteredSuministros.forEach((suministro) => {
       const costo = calculateTotal(suministro);
-      totalGastadoFiltrado += costo;
+
+      // Evitar doble conteo: no sumar nóminas en totalGastadoFiltrado aquí
+      if (!esNomina(suministro)) {
+        totalGastadoFiltrado += costo;
+      }
       
-      // Clasificar por tipo de categoría
+      // Clasificar por tipo de categoría para admin/proyecto
       let tipoCategoria = null;
       
       // Intentar obtener el tipo desde la categoría relacionada
@@ -2476,19 +2531,12 @@ const Suministros = () => {
         
         // Aplicar filtros de fecha
         if (filters.fechaInicio || filters.fechaFin) {
-          const itemFecha = new Date(item.fecha || item.fecha_registro || item.fecha_inicio || item.createdAt);
-          if (filters.fechaInicio) {
-            const fechaInicio = new Date(filters.fechaInicio);
-            if (itemFecha < fechaInicio) {
-              return false;
-            }
-          }
-          if (filters.fechaFin) {
-            const fechaFin = new Date(filters.fechaFin);
-            fechaFin.setHours(23, 59, 59, 999);
-            if (itemFecha > fechaFin) {
-              return false;
-            }
+          const itemFecha = normalizarFecha(item.fecha_necesaria || item.fecha || item.createdAt || item.fecha_registro || item.fecha_inicio || item.fecha_fin);
+          const fechaInicio = filters.fechaInicio ? normalizarFecha(filters.fechaInicio) : null;
+          const fechaFin = filters.fechaFin ? normalizarFecha(filters.fechaFin) : null;
+          if (fechaFin) fechaFin.setHours(23, 59, 59, 999);
+          if (!itemFecha || (fechaInicio && itemFecha < fechaInicio) || (fechaFin && itemFecha > fechaFin)) {
+            return false;
           }
         }
         
@@ -2508,12 +2556,23 @@ const Suministros = () => {
         gastosProyectosFiltrado,
         totalNominasFiltrado,
         nominasFiltradasCount: filteredNominas.length,
-        nominasEnCombinedData: combinedData.filter(i => i.isNominaRow).length
+        nominasEnCombinedData: combinedData.filter(i => i.isNominaRow).length,
+        SUMA_VERIFICACION: totalGastadoFiltrado + totalNominasFiltrado
       });
     }
 
+    console.log('✅ TOTAL FINAL FILTRADO:', {
+      totalGastadoFiltrado: Math.round((totalGastadoFiltrado + totalNominasFiltrado) * 100) / 100,
+      desglose: {
+        suministros: Math.round(totalGastadoFiltrado * 100) / 100,
+        nominas: Math.round(totalNominasFiltrado * 100) / 100,
+        admin: Math.round(gastosAdministrativosFiltrado * 100) / 100,
+        proyectos: Math.round(gastosProyectosFiltrado * 100) / 100
+      }
+    });
+
     return {
-      totalGastadoFiltrado: Math.round(totalGastadoFiltrado * 100) / 100,
+      totalGastadoFiltrado: Math.round((totalGastadoFiltrado + totalNominasFiltrado) * 100) / 100,
       gastosAdministrativosFiltrado: Math.round(gastosAdministrativosFiltrado * 100) / 100,
       gastosProyectosFiltrado: Math.round(gastosProyectosFiltrado * 100) / 100,
       totalNominasFiltrado: Math.round(totalNominasFiltrado * 100) / 100,
@@ -2767,6 +2826,15 @@ const Suministros = () => {
     showError={showError}
   />
 )}
+
+      {/* Pestaña Ingresos vs Gastos */}
+      {activeTab === 'ingresosVsGastos' && (
+        <IngresosVsGastosTab 
+          combinedData={combinedData || []} 
+          proyectos={proyectos || []}
+          categoriasDinamicas={categoriasDinamicas || []}
+        />
+      )}
 
 
       {/* Modal Formulario Unificado */}

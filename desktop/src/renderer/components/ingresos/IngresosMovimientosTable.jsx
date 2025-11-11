@@ -61,9 +61,9 @@ export default function IngresosMovimientosTable({ data, loading, error }) {
             const isNegativeSaldo = r.saldo_after != null && r.saldo_after < 0;
             
             return (
-              <tr key={r.id_mov || `${r.fecha}-${r.fuente}-${r.monto}`} className="hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors">
+              <tr key={r.id_mov || `${r.fecha || r.createdAt}-${r.fuente}-${r.monto}`} className="hover:bg-gray-50 dark:hover:bg-dark-200 transition-colors">
                 <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                  {new Date(r.fecha).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  {new Date(r.fecha || r.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-700 dark:text-gray-300">
                   <div className="flex items-center gap-1">

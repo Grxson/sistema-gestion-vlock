@@ -12,7 +12,7 @@ const SuministrosCards = React.memo(({ stats }) => {
           <div>
             <p className="text-emerald-100 text-xs font-medium mb-1">Total General</p>
             <p className="text-xl font-bold">
-              {formatCurrency((stats.gastosAdministrativos || 0) + (stats.gastosProyectos || 0) + (stats.totalNominas || 0))}
+              {formatCurrency(stats.totalGastado || 0)}
             </p>
           </div>
           <div className="bg-white bg-opacity-20 rounded-lg p-2">

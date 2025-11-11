@@ -6,10 +6,11 @@ export default function IngresoModal({ open, onClose, proyectos = [], initialDat
   const [form, setForm] = useState({
     fecha: '',
     id_proyecto: '',
-    monto: '',
+    monto: '', // valor real (sin formato)
     fuente: '',
     descripcion: ''
   });
+  const [montoDisplay, setMontoDisplay] = useState(''); // valor visual con comas
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -21,8 +22,10 @@ export default function IngresoModal({ open, onClose, proyectos = [], initialDat
         fuente: initialData.fuente || '',
         descripcion: initialData.descripcion || ''
       });
+      setMontoDisplay(initialData.monto != null ? Number(initialData.monto).toLocaleString('es-MX') : '');
     } else {
       setForm({ fecha: '', id_proyecto: '', monto: '', fuente: '', descripcion: '' });
+      setMontoDisplay('');
     }
   }, [initialData]);
 
@@ -32,10 +35,12 @@ export default function IngresoModal({ open, onClose, proyectos = [], initialDat
     e.preventDefault();
     setSaving(true);
     try {
+      // Limpiar comas y convertir a número
+      const montoNum = form.monto ? Number(String(form.monto).replace(/,/g, '')) : 0;
       const payload = {
         fecha: form.fecha,
         id_proyecto: form.id_proyecto ? Number(form.id_proyecto) : null,
-        monto: form.monto ? Number(form.monto) : 0,
+        monto: montoNum,
         fuente: form.fuente || null,
         descripcion: form.descripcion || null
       };
@@ -74,11 +79,28 @@ export default function IngresoModal({ open, onClose, proyectos = [], initialDat
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Monto *</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={form.monto}
-                onChange={(e) => setForm({ ...form, monto: e.target.value })}
+                type="text"
+                inputMode="decimal"
+                pattern="[0-9,.]*"
+                value={montoDisplay}
+                onChange={(e) => {
+                  // Permitir solo números y comas/puntos
+                  let raw = e.target.value.replace(/[^0-9.,]/g, '');
+                  // Reemplazar puntos por comas para consistencia visual
+                  raw = raw.replace(/\./g, ',');
+                  // Limpiar comas para el valor real
+                  const num = raw.replace(/,/g, '');
+                  setForm({ ...form, monto: num });
+                  // Formatear visualmente con comas
+                  if (num) {
+                    const parts = num.split('.');
+                    const intPart = parts[0];
+                    const decPart = parts[1] ? '.' + parts[1] : '';
+                    setMontoDisplay(Number(intPart).toLocaleString('es-MX') + decPart);
+                  } else {
+                    setMontoDisplay('');
+                  }
+                }}
                 className="mt-1 block w-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-dark-100 text-gray-900 dark:text-white rounded-md px-4 py-2 focus:outline-none focus:ring-primary-500 focus:border-primary-500"
                 placeholder="0.00"
                 required

@@ -624,6 +624,144 @@ class ApiService {
     return this.get(`/ingresos${queryString ? '?' + queryString : ''}`);
   }
 
+  // Movimientos de ingresos: listar y crear
+  async getMovimientosIngresos(params = {}) {
+    return this.get('/movimientos-ingresos', { params });
+  }
+
+  async createMovimientoIngreso(payload) {
+    return this.post('/movimientos-ingresos', payload);
+  }
+
+  // Interno: formatear a YYYY-MM-DD
+  _fmtDate(d) {
+    const dt = d ? new Date(d) : new Date();
+    const y = dt.getFullYear();
+    const m = String(dt.getMonth() + 1).padStart(2, '0');
+    const day = String(dt.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // Helper: asegurar registro de movimiento de gasto para un suministro (evita duplicados)
+  async ensureMovimientoGastoForSuministro({ id_proyecto, fecha, monto, descripcion, ref_tipo = 'suministro', ref_id = null }) {
+    try {
+      if (!id_proyecto || !monto || Number(monto) <= 0) {
+        return { created: false, reason: 'INVALID_PARAMS' };
+      }
+
+      // 1) Pre-checar si ya existe un movimiento equivalente (por ref_id o por monto cercano a la fecha)
+      const center = fecha ? new Date(fecha) : new Date();
+      const start = new Date(center.getTime() - 1000 * 60 * 60 * 24 * 3); // -3 días
+      const end = new Date(center.getTime() + 1000 * 60 * 60 * 24 * 3); // +3 días
+      const drStart = this._fmtDate(start);
+      const drEnd = this._fmtDate(end);
+
+      const lookup = await this.getMovimientosIngresos({
+        drStart,
+        drEnd,
+        proyectoId: id_proyecto,
+        tipo: 'gasto',
+        fuente: 'suministro'
+      });
+      const rows = Array.isArray(lookup?.data) ? lookup.data : Array.isArray(lookup?.rows) ? lookup.rows : [];
+      const existe = rows.some(r => {
+        if (ref_id && r.ref_tipo === ref_tipo && Number(r.ref_id) === Number(ref_id)) return true;
+        const sameMonto = Math.abs(Number(r.monto || 0) - Math.abs(Number(monto))) < 0.005;
+        return sameMonto && (r.fuente === 'suministro');
+      });
+      if (existe) return { created: false, reason: 'ALREADY_EXISTS' };
+
+      // Buscar ingreso más reciente del proyecto
+      const ingresos = await this.getIngresos({ id_proyecto });
+      const list = Array.isArray(ingresos?.data) ? ingresos.data : Array.isArray(ingresos) ? ingresos : [];
+      if (!list.length) {
+        console.warn('[API] No hay ingresos para el proyecto; no se puede registrar movimiento');
+        return { created: false, reason: 'NO_INGRESO' };
+      }
+
+      // Tomar el más reciente por fecha
+      const latest = list.slice().sort((a,b) => new Date(b.fecha || b.createdAt || 0) - new Date(a.fecha || a.createdAt || 0))[0];
+      const payload = {
+        id_ingreso: latest.id_ingreso,
+        id_proyecto,
+        tipo: 'gasto',
+        fuente: 'suministro',
+        monto: Math.abs(Number(monto)),
+        fecha: fecha || new Date(),
+        descripcion: descripcion || 'Gasto por suministro',
+        ref_tipo,
+        ref_id
+      };
+
+      const resp = await this.createMovimientoIngreso(payload);
+      if (resp?.success) {
+        return { created: true, data: resp.data };
+      }
+      return { created: false, reason: 'API_NOT_SUCCESS', resp };
+    } catch (e) {
+      console.warn('[API] ensureMovimientoGastoForSuministro fallo (no crítico):', e?.message);
+      return { created: false, reason: 'ERROR', error: e };
+    }
+  }
+
+  // Helper: asegurar registro de movimiento de gasto para nómina (evita duplicados)
+  async ensureMovimientoGastoForNomina({ id_nomina, id_proyecto, monto, fecha, descripcion }) {
+    try {
+      if (!id_proyecto || !id_nomina || !monto || Number(monto) <= 0) {
+        return { created: false, reason: 'INVALID_PARAMS' };
+      }
+
+      // 1) Pre-checar existencia cercana o por ref_id
+      const center = fecha ? new Date(fecha) : new Date();
+      const start = new Date(center.getTime() - 1000 * 60 * 60 * 24 * 7); // -7 días
+      const end = new Date(center.getTime() + 1000 * 60 * 60 * 24 * 7);   // +7 días
+      const drStart = this._fmtDate(start);
+      const drEnd = this._fmtDate(end);
+
+      const lookup = await this.getMovimientosIngresos({
+        drStart,
+        drEnd,
+        proyectoId: id_proyecto,
+        tipo: 'gasto',
+        fuente: 'nomina'
+      });
+      const rows = Array.isArray(lookup?.data) ? lookup.data : Array.isArray(lookup?.rows) ? lookup.rows : [];
+      const existe = rows.some(r => {
+        if (r.ref_tipo === 'nomina' && Number(r.ref_id) === Number(id_nomina)) return true;
+        const sameMonto = Math.abs(Number(r.monto || 0) - Math.abs(Number(monto))) < 0.005;
+        return sameMonto && r.fuente === 'nomina';
+      });
+      if (existe) return { created: false, reason: 'ALREADY_EXISTS' };
+
+      // 2) Obtener ingreso más reciente del proyecto
+      const ingresos = await this.getIngresos({ id_proyecto });
+      const list = Array.isArray(ingresos?.data) ? ingresos.data : Array.isArray(ingresos) ? ingresos : [];
+      if (!list.length) return { created: false, reason: 'NO_INGRESO' };
+      const latest = list.slice().sort((a,b) => new Date(b.fecha || b.createdAt || 0) - new Date(a.fecha || a.createdAt || 0))[0];
+
+      const payload = {
+        id_ingreso: latest.id_ingreso,
+        id_proyecto,
+        tipo: 'gasto',
+        fuente: 'nomina',
+        monto: Math.abs(Number(monto)),
+        fecha: fecha || new Date(),
+        descripcion: descripcion || 'Pago nómina (fallback)',
+        ref_tipo: 'nomina',
+        ref_id: id_nomina
+      };
+
+      const resp = await this.createMovimientoIngreso(payload);
+      if (resp?.success) {
+        return { created: true, data: resp.data };
+      }
+      return { created: false, reason: 'API_NOT_SUCCESS', resp };
+    } catch (e) {
+      console.warn('[API] ensureMovimientoGastoForNomina fallo (no crítico):', e?.message);
+      return { created: false, reason: 'ERROR', error: e };
+    }
+  }
+
   // Métodos para suministros
   async getSuministros(params = {}) {
     const queryString = new URLSearchParams(params).toString();

@@ -230,6 +230,29 @@ export class NominaService {
       this.clearCache();
       
       console.log('✅ [SERVICE] Nómina marcada como pagada exitosamente');
+      // Fallback: intentar registrar movimiento si backend no lo hizo
+      try {
+        // Necesitamos obtener detalles de la nómina para monto y proyecto
+        const detalle = await ApiService.get(`/nomina/${id}`);
+        const nominaData = detalle?.data || detalle?.nomina || detalle;
+        const idProyecto = nominaData?.id_proyecto || nominaData?.empleado?.id_proyecto;
+        const monto = parseFloat(nominaData?.monto_total || nominaData?.monto || datosPago?.monto || 0);
+        if (idProyecto && monto > 0) {
+          const descripcion = `Pago nómina - Empleado ${nominaData?.empleado?.nombre || ''}`;
+          const fallback = await ApiService.ensureMovimientoGastoForNomina({
+            id_nomina: id,
+            id_proyecto: idProyecto,
+            monto,
+            fecha: new Date(),
+            descripcion
+          });
+          console.log('[SERVICE] Fallback movimiento nómina resultado:', fallback);
+        } else {
+          console.warn('[SERVICE] Fallback movimiento nómina omitido: falta proyecto o monto');
+        }
+      } catch (movErr) {
+        console.warn('[SERVICE] Error en fallback movimiento nómina (no crítico):', movErr?.message);
+      }
       return {
         success: true,
         data: response.data || response,
