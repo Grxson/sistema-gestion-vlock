@@ -961,6 +961,193 @@ const importarJSON = async (req, res) => {
 };
 
 /**
+ * Importa datos desde un archivo SQL
+ * Ejecuta las sentencias SQL directamente en la base de datos
+ * Maneja duplicados inteligentemente: actualiza en lugar de duplicar
+ */
+const importarSQL = async (req, res) => {
+  try {
+    const { sql, validarAntes, manejarDuplicados = true } = req.body;
+
+    if (!sql || typeof sql !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Debe proporcionar el contenido SQL'
+      });
+    }
+
+    // Separar las sentencias SQL por punto y coma
+    // Filtrar líneas vacías, comentarios y comandos SET
+    const sentencias = sql
+      .split(';')
+      .map(s => s.trim())
+      .filter(s => 
+        s.length > 0 && 
+        !s.startsWith('--') && 
+        !s.startsWith('/*') &&
+        !s.toUpperCase().startsWith('SET FOREIGN_KEY_CHECKS') &&
+        !s.toUpperCase().startsWith('SET SQL_MODE') &&
+        !s.toUpperCase().startsWith('SET CHARACTER_SET')
+      );
+
+    console.log(`📥 Importando SQL: ${sentencias.length} sentencias detectadas`);
+    console.log(`🔄 Manejo de duplicados: ${manejarDuplicados ? 'ACTIVADO (actualizar)' : 'DESACTIVADO (ignorar)'}`);
+
+    // Validación previa (opcional): verificar que las sentencias son INSERT/UPDATE/CREATE
+    if (validarAntes) {
+      const sentenciasInvalidas = sentencias.filter(s => {
+        const cmd = s.toUpperCase().split(' ')[0];
+        return !['INSERT', 'UPDATE', 'CREATE', 'ALTER', 'REPLACE'].includes(cmd);
+      });
+
+      if (sentenciasInvalidas.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Se encontraron ${sentenciasInvalidas.length} sentencias no permitidas (solo INSERT, UPDATE, CREATE, ALTER, REPLACE)`,
+          sentencias: sentenciasInvalidas.slice(0, 5)
+        });
+      }
+    }
+
+    const resultados = {
+      ejecutadas: 0,
+      insertadas: 0,
+      actualizadas: 0,
+      errores: [],
+      advertencias: []
+    };
+
+    // Deshabilitar FK checks temporalmente
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+
+    // Ejecutar cada sentencia
+    for (let i = 0; i < sentencias.length; i++) {
+      let sentencia = sentencias[i];
+      
+      try {
+        // Si es INSERT y manejarDuplicados está activo, convertir a INSERT ... ON DUPLICATE KEY UPDATE
+        if (manejarDuplicados && sentencia.toUpperCase().trim().startsWith('INSERT INTO')) {
+          sentencia = convertirInsertConDuplicados(sentencia);
+        }
+
+        const [results, metadata] = await sequelize.query(sentencia);
+        resultados.ejecutadas++;
+        
+        // Detectar si fue INSERT nuevo o UPDATE (duplicado)
+        if (metadata && metadata.affectedRows !== undefined) {
+          if (metadata.affectedRows === 1) {
+            resultados.insertadas++;
+          } else if (metadata.affectedRows === 2) {
+            // En MySQL, affectedRows = 2 significa que se actualizó un registro existente
+            resultados.actualizadas++;
+          }
+        }
+        
+        // Log cada 50 sentencias
+        if ((i + 1) % 50 === 0) {
+          console.log(`✅ Ejecutadas ${i + 1}/${sentencias.length} (${resultados.insertadas} nuevos, ${resultados.actualizadas} actualizados)`);
+        }
+      } catch (error) {
+        // Si es un error de duplicado y no se está manejando, solo advertir
+        if (error.message.includes('Duplicate entry')) {
+          resultados.advertencias.push({
+            sentencia: sentencia.substring(0, 100) + '...',
+            error: 'Registro duplicado (ignorado)'
+          });
+        } else {
+          resultados.errores.push({
+            sentencia: sentencia.substring(0, 100) + '...',
+            error: error.message
+          });
+          console.error(`❌ Error en sentencia ${i + 1}:`, error.message);
+        }
+      }
+    }
+
+    // Reactivar FK checks
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+
+    console.log(`✅ Importación SQL completada: ${resultados.ejecutadas}/${sentencias.length}`);
+    console.log(`➕ Registros nuevos: ${resultados.insertadas}`);
+    console.log(`🔄 Registros actualizados: ${resultados.actualizadas}`);
+    console.log(`⚠️  Advertencias: ${resultados.advertencias.length}`);
+    console.log(`❌ Errores: ${resultados.errores.length}`);
+
+    const tieneErrores = resultados.errores.length > 0;
+    const mensaje = tieneErrores 
+      ? `Importación completada con ${resultados.errores.length} errores`
+      : `Importación completada: ${resultados.insertadas} nuevos, ${resultados.actualizadas} actualizados`;
+
+    res.json({
+      success: !tieneErrores,
+      message: mensaje,
+      resultados: {
+        total_sentencias: sentencias.length,
+        ejecutadas: resultados.ejecutadas,
+        insertadas: resultados.insertadas,
+        actualizadas: resultados.actualizadas,
+        advertencias: resultados.advertencias.length,
+        errores: resultados.errores.length,
+        detalle_errores: resultados.errores.slice(0, 10),
+        detalle_advertencias: resultados.advertencias.slice(0, 10)
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error al importar SQL:', error);
+    
+    // Asegurar que FK checks se reactiven
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1').catch(() => {});
+    
+    res.status(500).json({
+      success: false,
+      message: 'Error al importar archivo SQL',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Convierte un INSERT INTO en INSERT ... ON DUPLICATE KEY UPDATE
+ * para manejar duplicados actualizando en lugar de fallar
+ */
+const convertirInsertConDuplicados = (sentenciaInsert) => {
+  try {
+    // Extraer nombre de tabla y columnas
+    const match = sentenciaInsert.match(/INSERT INTO\s+`?(\w+)`?\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i);
+    
+    if (!match) {
+      // Si no coincide el patrón, devolver la sentencia original
+      return sentenciaInsert;
+    }
+
+    const [, tabla, columnasStr, valoresStr] = match;
+    const columnas = columnasStr.split(',').map(c => c.trim().replace(/`/g, ''));
+    
+    // Construir la parte ON DUPLICATE KEY UPDATE
+    // Actualizar todas las columnas excepto la PK (normalmente la primera columna o id_*)
+    const updateClauses = columnas
+      .filter(col => !col.toLowerCase().startsWith('id_') || col === columnas[0]) // Excluir PKs
+      .map(col => `\`${col}\` = VALUES(\`${col}\`)`)
+      .join(', ');
+
+    // Si no hay columnas para actualizar, devolver original
+    if (!updateClauses) {
+      return sentenciaInsert;
+    }
+
+    // Construir sentencia completa
+    const sentenciaConUpdate = `INSERT INTO \`${tabla}\` (${columnasStr}) VALUES (${valoresStr}) ON DUPLICATE KEY UPDATE ${updateClauses}`;
+    
+    return sentenciaConUpdate;
+  } catch (error) {
+    // Si hay algún error al parsear, devolver la sentencia original
+    console.warn('⚠️  No se pudo convertir sentencia a ON DUPLICATE KEY UPDATE:', error.message);
+    return sentenciaInsert;
+  }
+};
+
+/**
  * Vacía las tablas seleccionadas
  */
 const vaciarTablas = async (req, res) => {
@@ -1060,6 +1247,7 @@ module.exports = {
   exportarExcel,
   exportarSQL,
   importarJSON,
+  importarSQL,
   vaciarTablas,
   backupProyecto,
   vaciarProyecto

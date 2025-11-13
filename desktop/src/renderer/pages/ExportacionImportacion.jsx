@@ -238,31 +238,79 @@ const ExportacionImportacion = () => {
   const importarDatos = async (archivo) => {
     if (!archivo) return;
 
+    const extension = archivo.name.split('.').pop().toLowerCase();
     const reader = new FileReader();
+
     reader.onload = async (e) => {
       try {
         setLoading(true);
-        const datos = JSON.parse(e.target.result);
+        const contenido = e.target.result;
         const token = localStorage.getItem('token');
 
-        const response = await axios.post(
-          `${API_URL}/exportacion/importar`,
-          {
-            datos,
-            sobrescribir: false
-          },
-          {
-            headers: { Authorization: `Bearer ${token}` }
-          }
-        );
+        let response;
 
-        if (response.data.success) {
-          mostrarMensaje('success', `Importación completada. ${response.data.resultados.importados} registros importados`);
-          cargarTablas();
+        // Detectar el tipo de archivo y usar el endpoint correspondiente
+        if (extension === 'json') {
+          // Importar JSON
+          const datos = JSON.parse(contenido);
+          response = await axios.post(
+            `${API_URL}/exportacion/importar`,
+            {
+              datos,
+              sobrescribir: false
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          );
+
+          if (response.data.success) {
+            mostrarMensaje('success', `Importación completada. ${response.data.resultados.importados} registros importados`);
+            cargarTablas();
+          }
+        } else if (extension === 'sql') {
+          // Importar SQL
+          response = await axios.post(
+            `${API_URL}/exportacion/importar/sql`,
+            {
+              sql: contenido,
+              validarAntes: true, // Validar que solo sean INSERT/UPDATE/CREATE/ALTER
+              manejarDuplicados: true // Actualizar registros existentes en lugar de duplicar
+            },
+            {
+              headers: { Authorization: `Bearer ${token}` }
+            }
+          );
+
+          if (response.data.success || response.data.resultados.ejecutadas > 0) {
+            const { ejecutadas, insertadas, actualizadas, errores, advertencias } = response.data.resultados;
+            let mensaje = `SQL importado: ${ejecutadas} sentencias ejecutadas`;
+            
+            if (insertadas > 0 || actualizadas > 0) {
+              mensaje += ` (${insertadas} nuevos, ${actualizadas} actualizados)`;
+            }
+            
+            if (advertencias > 0) {
+              mensaje += `, ${advertencias} advertencias`;
+            }
+            
+            if (errores > 0) {
+              mostrarMensaje('warning', `${mensaje}. ${errores} errores encontrados.`);
+            } else {
+              mostrarMensaje('success', mensaje);
+            }
+            
+            cargarTablas();
+          } else {
+            mostrarMensaje('error', response.data.message || 'Error al importar SQL');
+          }
+        } else {
+          mostrarMensaje('error', `Formato de archivo no soportado: .${extension}. Use .json o .sql`);
         }
       } catch (error) {
         console.error('Error al importar:', error);
-        mostrarMensaje('error', error.response?.data?.message || 'Error al importar los datos');
+        const errorMsg = error.response?.data?.message || 'Error al importar los datos';
+        mostrarMensaje('error', errorMsg);
       } finally {
         setLoading(false);
       }
@@ -769,10 +817,10 @@ const ExportacionImportacion = () => {
 
               <label className="w-full flex items-center justify-center space-x-2 bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg font-medium transition-colors cursor-pointer">
                 <ArrowUpTrayIcon className="h-5 w-5" />
-                <span>Importar Datos</span>
+                <span>Importar Datos (JSON/SQL)</span>
                 <input
                   type="file"
-                  accept=".json"
+                  accept=".json,.sql"
                   onChange={(e) => importarDatos(e.target.files[0])}
                   className="hidden"
                 />

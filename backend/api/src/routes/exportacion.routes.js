@@ -52,6 +52,13 @@ router.post('/importar',
   exportacionController.importarJSON
 );
 
+// Importar datos desde SQL
+router.post('/importar/sql',
+  verifyToken,
+  verifyRole([1]),
+  exportacionController.importarSQL
+);
+
 // Vaciar tablas seleccionadas
 router.post('/vaciar',
   verifyToken,
