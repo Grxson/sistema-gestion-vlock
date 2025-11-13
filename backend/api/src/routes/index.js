@@ -20,6 +20,7 @@ const healthRoutes = require('./health.routes');
 const adeudosRoutes = require('./adeudos.routes');
 const adeudosGeneralesRoutes = require('./adeudosGenerales.routes');
 const ingresosRoutes = require('./ingresos.routes');
+const exportacionRoutes = require('./exportacion.routes');
 
 // Rutas del sistema de presupuestos
 const presupuestosRoutes = require('./presupuestos.routes');
@@ -49,6 +50,7 @@ router.use('/health', healthRoutes);
 router.use('/adeudos', adeudosRoutes);
 router.use('/adeudos-generales', adeudosGeneralesRoutes);
 router.use('/ingresos', ingresosRoutes);
+router.use('/exportacion', exportacionRoutes);
 
 // Registrar rutas del sistema de presupuestos
 router.use('/presupuestos', presupuestosRoutes);

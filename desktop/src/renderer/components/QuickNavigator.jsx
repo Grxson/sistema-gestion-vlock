@@ -29,6 +29,7 @@ const QuickNavigator = ({ isOpen, onClose, onNavigate }) => {
     { name: 'Auditoría', path: '/auditoria', keywords: ['logs', 'historial'], icon: '🔍', module: 'auditoria' },
     { name: 'Usuarios', path: '/usuarios', keywords: ['users', 'cuentas'], icon: '👤', module: 'usuarios' },
     { name: 'Roles', path: '/roles', keywords: ['permisos', 'accesos'], icon: '🔐', module: 'roles' },
+    { name: 'Exportar/Importar', path: '/exportacion', keywords: ['backup', 'respaldo', 'exportar', 'importar', 'datos'], icon: '💾', module: 'exportacion' },
     { name: 'Configuración', path: '/configuracion', keywords: ['ajustes', 'settings'], icon: '⚙️', module: 'config' },
     { name: 'Mi Perfil', path: '/perfil', keywords: ['cuenta', 'usuario', 'profile'], icon: '👨‍💼', module: null },
     { name: 'Diagnóstico', path: '/diagnostico', keywords: ['debug', 'system'], icon: '🩺', module: 'diagnostico' },

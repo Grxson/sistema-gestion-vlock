@@ -28,7 +28,8 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   BanknotesIcon,
-  LockClosedIcon
+  LockClosedIcon,
+  ArrowDownTrayIcon
 } from '@heroicons/react/24/outline';
 
 
@@ -74,6 +75,7 @@ const navigationItems = [
   { name: 'Auditoría', href: '/auditoria', icon: ClipboardDocumentCheckIcon, current: false, permissionModule: 'auditoria' },
   { name: 'Usuarios', href: '/usuarios', icon: UserIcon, current: false, permissionModule: 'usuarios' },
   { name: 'Roles', href: '/roles', icon: ShieldCheckIcon, current: false, permissionModule: 'roles' },
+  { name: 'Exportar/Importar', href: '/exportacion', icon: ArrowDownTrayIcon, current: false, permissionModule: 'exportacion' },
   { name: 'Configuración', href: '/configuracion', icon: CogIcon, current: false, permissionModule: 'configuracion' },
 ];
 
@@ -159,7 +161,8 @@ export default function Sidebar({ currentPath, onNavigate, isCollapsed, onToggle
       'finanzas': 'finanzas.gastos.ver',
       'proyectos': 'proyectos.ver',
       'adeudos': 'adeudos.ver',
-      'ingresos': 'ingresos.ver'
+      'ingresos': 'ingresos.ver',
+      'exportacion': 'exportacion.ver'
     };
     
     // Obtener el código de permiso para este módulo

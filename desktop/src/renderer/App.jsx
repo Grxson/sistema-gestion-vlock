@@ -23,6 +23,7 @@ import Auditoria from './pages/Auditoria';
 import DiagnosticPageAdvanced from './pages/DiagnosticPageAdvanced';
 import ProfilePage from './pages/ProfilePage';
 import ConfigurationPage from './pages/ConfigurationPage';
+import ExportacionImportacion from './pages/ExportacionImportacion';
 import AdeudosGenerales from './components/AdeudosGenerales'; 
 import { useDocumentTitle } from './hooks/useDocumentTitle';
 import Ingresos from './pages/Ingresos';
@@ -69,6 +70,7 @@ function MainApp() {
     '/ingresos': 'Ingresos',
     '/diagnostico': 'Diagnóstico',
     '/configuracion': 'Configuración',
+    '/exportacion': 'Exportar/Importar',
     '/perfil': 'Mi Perfil',
     '/presupuestos/conceptos': 'Conceptos de Obra',
     '/presupuestos/precios': 'Precios Unitarios',
@@ -165,7 +167,8 @@ function MainApp() {
         config: 'Configuración',
         presupuestos: 'Presupuestos',
         'adeudos-generales': 'Adeudos',
-        ingresos: 'Ingresos'
+        ingresos: 'Ingresos',
+        exportacion: 'Exportación/Importación'
       };
       
       return <AccessDenied moduleName={moduleNames[currentModule]} />;
@@ -199,6 +202,8 @@ function MainApp() {
         return <Ingresos />;
       case '/configuracion':
         return <ConfigurationPage />;
+      case '/exportacion':
+        return <ExportacionImportacion />;
       case '/usuarios':
         return <Usuarios />;
       case '/roles':
