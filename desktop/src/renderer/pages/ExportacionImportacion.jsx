@@ -67,13 +67,18 @@ const ExportacionImportacion = () => {
       const response = await axios.get(`${API_URL}/proyectos`, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      // El endpoint retorna {success, data}
+      const proyectosData = response.data.data || response.data || [];
       // Filtrar solo proyectos activos o en proceso
-      const proyectosActivos = response.data.filter(p => 
-        p.estado && p.estado !== 'Cancelado' && p.estado !== 'Archivado'
-      );
+      const proyectosActivos = Array.isArray(proyectosData) 
+        ? proyectosData.filter(p => 
+            p.estado && p.estado !== 'Cancelado' && p.estado !== 'Archivado'
+          )
+        : [];
       setProyectos(proyectosActivos);
     } catch (error) {
       console.error('Error al cargar proyectos:', error);
+      setProyectos([]); // Establecer array vacío en caso de error
     }
   };
 
