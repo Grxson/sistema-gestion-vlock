@@ -10,6 +10,357 @@ const { parse } = require('json2csv');
  */
 
 /**
+ * Obtiene todas las tablas relacionadas a un proyecto específico
+ * @param {number} idProyecto - ID del proyecto
+ * @returns {Array} - Lista de objetos {tabla, fk, orden} ordenados por dependencias
+ */
+const obtenerTablasProyecto = (idProyecto) => {
+  // Orden de eliminación (respetando FKs): primero hijos, luego padres
+  return [
+    // 1. Tablas que dependen de otras entidades del proyecto
+    { tabla: 'pagos_nomina', fk: 'id_nomina', referencia: 'nomina_empleado' },
+    { tabla: 'deducciones_nomina', fk: 'id_nomina', referencia: 'nomina_empleado' },
+    
+    // 2. Tablas principales con id_proyecto directo
+    { tabla: 'nomina_empleado', fk: 'id_proyecto', referencia: null },
+    { tabla: 'suministros', fk: 'id_proyecto', referencia: null },
+    { tabla: 'gastos', fk: 'id_proyecto', referencia: null },
+    { tabla: 'ingresos', fk: 'id_proyecto', referencia: null },
+    { tabla: 'ingresos_movimientos', fk: 'id_proyecto', referencia: null },
+    { tabla: 'movimientos_herramienta', fk: 'id_proyecto', referencia: null },
+    { tabla: 'presupuestos', fk: 'id_proyecto', referencia: null },
+    { tabla: 'estados_cuenta', fk: 'id_proyecto', referencia: null },
+    
+    // 3. Tablas donde id_proyecto puede ser indirecto (empleados, herramientas)
+    { tabla: 'empleados', fk: 'id_proyecto', referencia: null },
+    { tabla: 'herramientas', fk: 'id_proyecto', referencia: null },
+  ];
+};
+
+/**
+ * Exporta un backup completo de un proyecto específico
+ * Incluye todas las tablas relacionadas al proyecto
+ */
+const backupProyecto = async (req, res) => {
+  try {
+    const { id } = req.params; // id del proyecto
+    const { formato = 'sql' } = req.body; // sql, excel, json
+
+    // Verificar que el proyecto exista
+    const proyecto = await models.Proyectos.findByPk(id);
+    if (!proyecto) {
+      return res.status(404).json({ 
+        success: false, 
+        message: `Proyecto con ID ${id} no encontrado` 
+      });
+    }
+
+    const tablasRelacionadas = obtenerTablasProyecto(id);
+    const nombreProyecto = proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_');
+    const fecha = new Date().toISOString().split('T')[0];
+
+    console.log(`📦 Iniciando backup del proyecto ${id} (${proyecto.nombre})`);
+    console.log(`📋 Tablas a exportar: ${tablasRelacionadas.length}`);
+
+    // Según el formato, delegar a la función correspondiente
+    if (formato === 'sql') {
+      return await exportarProyectoSQL(req, res, proyecto, tablasRelacionadas, nombreProyecto, fecha);
+    } else if (formato === 'excel') {
+      return await exportarProyectoExcel(req, res, proyecto, tablasRelacionadas, nombreProyecto, fecha);
+    } else if (formato === 'json') {
+      return await exportarProyectoJSON(req, res, proyecto, tablasRelacionadas, nombreProyecto, fecha);
+    } else {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Formato no soportado. Usa: sql, excel, json' 
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error en backup de proyecto:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Error al generar backup del proyecto', 
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * Exporta proyecto en formato SQL
+ */
+const exportarProyectoSQL = async (req, res, proyecto, tablasRelacionadas, nombreProyecto, fecha) => {
+  try {
+    const dbName = getDatabaseName();
+    let output = `-- ============================================\n`;
+    output += `-- Backup de Proyecto: ${proyecto.nombre}\n`;
+    output += `-- ID Proyecto: ${proyecto.id_proyecto}\n`;
+    output += `-- Fecha: ${fecha}\n`;
+    output += `-- Base de datos: ${dbName}\n`;
+    output += `-- ============================================\n\n`;
+    output += `SET FOREIGN_KEY_CHECKS = 0;\n\n`;
+
+    // 1. Exportar datos del proyecto mismo
+    output += `-- ============================================\n`;
+    output += `-- DATOS DEL PROYECTO\n`;
+    output += `-- ============================================\n\n`;
+    
+    const proyectoData = await sequelize.query(
+      `SELECT * FROM proyectos WHERE id_proyecto = ?`,
+      { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
+    );
+    
+    if (proyectoData.length > 0) {
+      output += generarInsertSQL('proyectos', proyectoData);
+    }
+
+    // 2. Exportar todas las tablas relacionadas
+    for (const { tabla, fk } of tablasRelacionadas) {
+      try {
+        output += `\n-- ============================================\n`;
+        output += `-- Tabla: ${tabla}\n`;
+        output += `-- ============================================\n\n`;
+
+        // Obtener datos con la FK correspondiente
+        const datos = await sequelize.query(
+          `SELECT * FROM ${tabla} WHERE ${fk} = ?`,
+          { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
+        );
+
+        if (datos.length > 0) {
+          output += generarInsertSQL(tabla, datos);
+          console.log(`✅ ${tabla}: ${datos.length} registros exportados`);
+        } else {
+          output += `-- Sin registros en ${tabla}\n`;
+        }
+      } catch (error) {
+        console.error(`❌ Error exportando ${tabla}:`, error.message);
+        output += `-- Error al exportar ${tabla}: ${error.message}\n`;
+      }
+    }
+
+    output += `\nSET FOREIGN_KEY_CHECKS = 1;\n`;
+    output += `-- Fin del backup\n`;
+
+    res.setHeader('Content-Type', 'application/sql');
+    res.setHeader('Content-Disposition', `attachment; filename="backup_proyecto_${nombreProyecto}_${fecha}.sql"`);
+    return res.send(output);
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Exporta proyecto en formato Excel
+ */
+const exportarProyectoExcel = async (req, res, proyecto, tablasRelacionadas, nombreProyecto, fecha) => {
+  try {
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'Sistema VLOCK';
+    workbook.created = new Date();
+
+    // Hoja de información del proyecto
+    const infoSheet = workbook.addWorksheet('Proyecto');
+    infoSheet.columns = [
+      { header: 'Campo', key: 'campo', width: 25 },
+      { header: 'Valor', key: 'valor', width: 50 }
+    ];
+    infoSheet.addRow({ campo: 'ID', valor: proyecto.id_proyecto });
+    infoSheet.addRow({ campo: 'Nombre', valor: proyecto.nombre });
+    infoSheet.addRow({ campo: 'Descripción', valor: proyecto.descripcion || '' });
+    infoSheet.addRow({ campo: 'Ubicación', valor: proyecto.ubicacion || '' });
+    infoSheet.addRow({ campo: 'Estado', valor: proyecto.estado || '' });
+    infoSheet.addRow({ campo: 'Fecha Backup', valor: fecha });
+
+    // Una hoja por cada tabla relacionada
+    for (const { tabla, fk } of tablasRelacionadas) {
+      try {
+        const datos = await sequelize.query(
+          `SELECT * FROM ${tabla} WHERE ${fk} = ?`,
+          { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
+        );
+
+        if (datos.length === 0) continue;
+
+        // Resolver FKs para valores legibles
+        const datosResueltos = await resolverValoresFK(tabla, datos);
+
+        const sheet = workbook.addWorksheet(tabla.substring(0, 31)); // Excel limit
+        const columnas = Object.keys(datosResueltos[0]);
+        sheet.columns = columnas.map(col => ({ 
+          header: col, 
+          key: col, 
+          width: 15 
+        }));
+        datosResueltos.forEach(row => sheet.addRow(row));
+
+        console.log(`✅ ${tabla}: ${datos.length} registros en Excel`);
+      } catch (error) {
+        console.error(`❌ Error en Excel para ${tabla}:`, error.message);
+      }
+    }
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="backup_proyecto_${nombreProyecto}_${fecha}.xlsx"`);
+    await workbook.xlsx.write(res);
+    return res.end();
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Exporta proyecto en formato JSON
+ */
+const exportarProyectoJSON = async (req, res, proyecto, tablasRelacionadas, nombreProyecto, fecha) => {
+  try {
+    const backup = {
+      metadata: {
+        proyecto: proyecto.nombre,
+        id_proyecto: proyecto.id_proyecto,
+        fecha_backup: fecha,
+        version: '1.0'
+      },
+      proyecto: proyecto.toJSON(),
+      tablas: {}
+    };
+
+    for (const { tabla, fk } of tablasRelacionadas) {
+      try {
+        const datos = await sequelize.query(
+          `SELECT * FROM ${tabla} WHERE ${fk} = ?`,
+          { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
+        );
+        backup.tablas[tabla] = datos;
+        console.log(`✅ ${tabla}: ${datos.length} registros en JSON`);
+      } catch (error) {
+        console.error(`❌ Error en JSON para ${tabla}:`, error.message);
+        backup.tablas[tabla] = { error: error.message };
+      }
+    }
+
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Content-Disposition', `attachment; filename="backup_proyecto_${nombreProyecto}_${fecha}.json"`);
+    return res.json(backup);
+  } catch (error) {
+    throw error;
+  }
+};
+
+/**
+ * Vacía todos los datos de un proyecto específico
+ * CUIDADO: Esta operación es irreversible
+ */
+const vaciarProyecto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { confirmar } = req.body;
+
+    if (confirmar !== 'CONFIRMAR') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Debes confirmar la operación enviando {"confirmar": "CONFIRMAR"}' 
+      });
+    }
+
+    // Verificar que el proyecto exista
+    const proyecto = await models.Proyectos.findByPk(id);
+    if (!proyecto) {
+      return res.status(404).json({ 
+        success: false, 
+        message: `Proyecto con ID ${id} no encontrado` 
+      });
+    }
+
+    const tablasRelacionadas = obtenerTablasProyecto(id);
+    const resultado = {
+      proyecto: proyecto.nombre,
+      tablas_vaciadas: [],
+      errores: []
+    };
+
+    console.log(`🗑️  Iniciando limpieza del proyecto ${id} (${proyecto.nombre})`);
+
+    // Deshabilitar FK checks temporalmente
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+
+    // Eliminar registros de cada tabla (en orden inverso para respetar FKs)
+    for (const { tabla, fk } of tablasRelacionadas) {
+      try {
+        const [results] = await sequelize.query(
+          `DELETE FROM ${tabla} WHERE ${fk} = ?`,
+          { replacements: [id] }
+        );
+        
+        const registrosEliminados = results.affectedRows || 0;
+        resultado.tablas_vaciadas.push({ 
+          tabla, 
+          registros_eliminados: registrosEliminados 
+        });
+        
+        if (registrosEliminados > 0) {
+          console.log(`✅ ${tabla}: ${registrosEliminados} registros eliminados`);
+        }
+      } catch (error) {
+        console.error(`❌ Error vaciando ${tabla}:`, error.message);
+        resultado.errores.push({ tabla, error: error.message });
+      }
+    }
+
+    // Reactivar FK checks
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
+
+    const totalEliminados = resultado.tablas_vaciadas.reduce(
+      (sum, t) => sum + t.registros_eliminados, 0
+    );
+
+    console.log(`✅ Limpieza completada: ${totalEliminados} registros eliminados en total`);
+
+    return res.json({ 
+      success: true, 
+      message: `Proyecto ${proyecto.nombre} vaciado exitosamente`,
+      total_registros_eliminados: totalEliminados,
+      ...resultado
+    });
+  } catch (error) {
+    console.error('❌ Error al vaciar proyecto:', error);
+    // Asegurar que FK checks se reactiven incluso si hay error
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1').catch(() => {});
+    
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Error al vaciar proyecto', 
+      error: error.message 
+    });
+  }
+};
+
+/**
+ * Genera sentencias INSERT SQL a partir de datos
+ */
+const generarInsertSQL = (tabla, datos) => {
+  if (!datos || datos.length === 0) return `-- Sin datos para ${tabla}\n`;
+  
+  let sql = '';
+  const columnas = Object.keys(datos[0]);
+  
+  for (const row of datos) {
+    const valores = columnas.map(col => {
+      const val = row[col];
+      if (val === null || val === undefined) return 'NULL';
+      if (typeof val === 'number') return val;
+      if (typeof val === 'boolean') return val ? 1 : 0;
+      if (val instanceof Date) return `'${val.toISOString().slice(0, 19).replace('T', ' ')}'`;
+      // Escapar comillas simples
+      return `'${String(val).replace(/'/g, "''")}'`;
+    });
+    
+    sql += `INSERT INTO ${tabla} (${columnas.join(', ')}) VALUES (${valores.join(', ')});\n`;
+  }
+  
+  return sql + '\n';
+};
+
+/**
  * Obtiene el listado de todas las tablas disponibles para exportar
  */
 const obtenerTablas = async (req, res) => {
@@ -681,5 +1032,7 @@ module.exports = {
   exportarExcel,
   exportarSQL,
   importarJSON,
-  vaciarTablas
+  vaciarTablas,
+  backupProyecto,
+  vaciarProyecto
 };

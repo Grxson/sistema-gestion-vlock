@@ -59,4 +59,22 @@ router.post('/vaciar',
   exportacionController.vaciarTablas
 );
 
+// ==========================================
+// RUTAS PARA BACKUP POR PROYECTO
+// ==========================================
+
+// Backup completo de un proyecto específico
+router.post('/proyecto/:id/backup',
+  verifyToken,
+  verifyRole([1]),
+  exportacionController.backupProyecto
+);
+
+// Vaciar todos los datos de un proyecto
+router.delete('/proyecto/:id',
+  verifyToken,
+  verifyRole([1]),
+  exportacionController.vaciarProyecto
+);
+
 module.exports = router;

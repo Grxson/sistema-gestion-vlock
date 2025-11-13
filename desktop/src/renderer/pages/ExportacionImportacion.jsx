@@ -28,12 +28,18 @@ const ExportacionImportacion = () => {
   // Opciones específicas para SQL
   const [backupCompleto, setBackupCompleto] = useState(false);
   const [incluirEstructuraYVistas, setIncluirEstructuraYVistas] = useState(true);
+  // Estados para backup por proyecto
+  const [proyectos, setProyectos] = useState([]);
+  const [proyectoSeleccionado, setProyectoSeleccionado] = useState('');
+  const [formatoProyecto, setFormatoProyecto] = useState('sql');
+  const [modoProyecto, setModoProyecto] = useState(false); // false = tablas, true = proyecto
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState(null);
   const [estadisticas, setEstadisticas] = useState(null);
 
   useEffect(() => {
     cargarTablas();
+    cargarProyectos();
   }, []);
 
   const cargarTablas = async () => {
@@ -52,6 +58,22 @@ const ExportacionImportacion = () => {
       mostrarMensaje('error', 'Error al cargar las tablas disponibles');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarProyectos = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/proyectos`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      // Filtrar solo proyectos activos o en proceso
+      const proyectosActivos = response.data.filter(p => 
+        p.estado && p.estado !== 'Cancelado' && p.estado !== 'Archivado'
+      );
+      setProyectos(proyectosActivos);
+    } catch (error) {
+      console.error('Error al cargar proyectos:', error);
     }
   };
 
@@ -244,6 +266,105 @@ const ExportacionImportacion = () => {
     reader.readAsText(archivo);
   };
 
+  const backupProyectoHandler = async () => {
+    if (!proyectoSeleccionado) {
+      mostrarMensaje('warning', 'Debe seleccionar un proyecto');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const proyecto = proyectos.find(p => p.id_proyecto == proyectoSeleccionado);
+
+      const response = await axios.post(
+        `${API_URL}/exportacion/proyecto/${proyectoSeleccionado}/backup`,
+        { formato: formatoProyecto },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          responseType: 'blob'
+        }
+      );
+
+      const extension = formatoProyecto === 'excel' ? 'xlsx' : formatoProyecto;
+      const nombreArchivo = `backup_${proyecto.nombre.replace(/[^a-zA-Z0-9]/g, '_')}_${new Date().toISOString().split('T')[0]}.${extension}`;
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', nombreArchivo);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+
+      mostrarMensaje('success', `Backup del proyecto ${proyecto.nombre} exportado exitosamente`);
+    } catch (error) {
+      console.error('Error al exportar backup de proyecto:', error);
+      mostrarMensaje('error', 'Error al generar backup del proyecto');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const vaciarProyectoHandler = async () => {
+    if (!proyectoSeleccionado) {
+      mostrarMensaje('warning', 'Debe seleccionar un proyecto');
+      return;
+    }
+
+    const proyecto = proyectos.find(p => p.id_proyecto == proyectoSeleccionado);
+    
+    const confirmacion = window.confirm(
+      `⚠️ ADVERTENCIA: Está a punto de ELIMINAR PERMANENTEMENTE todos los datos del proyecto:\n\n` +
+      `"${proyecto.nombre}"\n\n` +
+      `Esto incluye:\n` +
+      `- Suministros\n` +
+      `- Gastos e Ingresos\n` +
+      `- Nóminas\n` +
+      `- Movimientos de herramientas\n` +
+      `- Estados de cuenta\n` +
+      `- Presupuestos\n\n` +
+      `Esta acción NO SE PUEDE DESHACER.\n\n` +
+      `¿Está seguro de continuar?`
+    );
+
+    if (!confirmacion) return;
+
+    const confirmacionFinal = window.confirm(
+      `¿Confirma que desea ELIMINAR PERMANENTEMENTE todos los datos del proyecto "${proyecto.nombre}"?\n\n` +
+      `Escriba "CONFIRMAR" mentalmente y haga clic en Aceptar.`
+    );
+
+    if (!confirmacionFinal) return;
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+
+      const response = await axios.delete(
+        `${API_URL}/exportacion/proyecto/${proyectoSeleccionado}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          data: { confirmar: 'CONFIRMAR' }
+        }
+      );
+
+      if (response.data.success) {
+        mostrarMensaje('success', 
+          `Proyecto "${proyecto.nombre}" vaciado exitosamente. ` +
+          `${response.data.total_registros_eliminados} registros eliminados.`
+        );
+        setProyectoSeleccionado('');
+        cargarTablas(); // Actualizar conteos
+      }
+    } catch (error) {
+      console.error('Error al vaciar proyecto:', error);
+      mostrarMensaje('error', error.response?.data?.message || 'Error al vaciar el proyecto');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const calcularEstadisticas = () => {
     const totalRegistros = tablas
       .filter(t => tablasSeleccionadas.includes(t.nombre))
@@ -319,9 +440,38 @@ const ExportacionImportacion = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Panel izquierdo: Selección de tablas */}
+        {/* Panel izquierdo: Selección de tablas o proyecto */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Tarjeta de tablas */}
+          {/* Toggle: Modo Tablas vs Modo Proyecto */}
+          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <div className="flex items-center justify-center space-x-4">
+              <button
+                onClick={() => setModoProyecto(false)}
+                className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                  !modoProyecto
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-300'
+                }`}
+              >
+                <TableCellsIcon className="h-5 w-5 inline mr-2" />
+                Por Tablas
+              </button>
+              <button
+                onClick={() => setModoProyecto(true)}
+                className={`px-6 py-2 rounded-lg font-medium transition-all ${
+                  modoProyecto
+                    ? 'bg-primary-600 text-white'
+                    : 'bg-gray-100 dark:bg-dark-200 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-dark-300'
+                }`}
+              >
+                <CircleStackIcon className="h-5 w-5 inline mr-2" />
+                Por Proyecto
+              </button>
+            </div>
+          </div>
+
+          {/* Modo Tablas */}
+          {!modoProyecto && (
           <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -368,8 +518,95 @@ const ExportacionImportacion = () => {
               ))}
             </div>
           </div>
+          )}
 
-          {/* Tarjeta de formato de exportación */}
+          {/* Modo Proyecto */}
+          {modoProyecto && (
+          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Backup y Limpieza por Proyecto
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Seleccionar Proyecto
+                </label>
+                <select
+                  value={proyectoSeleccionado}
+                  onChange={(e) => setProyectoSeleccionado(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-primary-500 focus:border-primary-500 bg-white dark:bg-dark-200 text-gray-900 dark:text-white"
+                >
+                  <option value="">-- Seleccione un proyecto --</option>
+                  {proyectos.map(proyecto => (
+                    <option key={proyecto.id_proyecto} value={proyecto.id_proyecto}>
+                      {proyecto.nombre} ({proyecto.estado || 'Sin estado'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Formato de Backup
+                </label>
+                <div className="flex space-x-3">
+                  {['sql', 'excel', 'json'].map((formato) => (
+                    <button
+                      key={formato}
+                      onClick={() => setFormatoProyecto(formato)}
+                      className={`flex-1 flex flex-col items-center justify-center p-3 rounded-lg border-2 transition-all ${
+                        formatoProyecto === formato
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20 text-primary-700 dark:text-primary-300'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600 text-gray-600 dark:text-gray-400'
+                      }`}
+                    >
+                      {getIconoFormato(formato)}
+                      <span className="mt-1 text-xs font-medium uppercase">{formato}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <p className="text-sm text-blue-800 dark:text-blue-300">
+                  <InformationCircleIcon className="h-5 w-5 inline mr-2" />
+                  El backup incluirá automáticamente todas las tablas relacionadas al proyecto:
+                </p>
+                <ul className="mt-2 text-xs text-blue-700 dark:text-blue-400 ml-7 space-y-1">
+                  <li>• Suministros y gastos</li>
+                  <li>• Nóminas y pagos</li>
+                  <li>• Movimientos de herramientas</li>
+                  <li>• Estados de cuenta y presupuestos</li>
+                  <li>• Ingresos y movimientos</li>
+                </ul>
+              </div>
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  onClick={backupProyectoHandler}
+                  disabled={!proyectoSeleccionado || loading}
+                  className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                >
+                  <ArrowDownTrayIcon className="h-5 w-5" />
+                  <span>Exportar Backup</span>
+                </button>
+                
+                <button
+                  onClick={vaciarProyectoHandler}
+                  disabled={!proyectoSeleccionado || loading}
+                  className="flex-1 px-4 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded-lg font-medium transition-colors flex items-center justify-center space-x-2"
+                >
+                  <TrashIcon className="h-5 w-5" />
+                  <span>Vaciar Proyecto</span>
+                </button>
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* Tarjeta de formato de exportación (solo en modo tablas) */}
+          {!modoProyecto && (
           <div className="bg-white dark:bg-dark-100 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Formato de Exportación
@@ -439,10 +676,12 @@ const ExportacionImportacion = () => {
               </div>
             )}
           </div>
+          )}
         </div>
 
         {/* Panel derecho: Acciones y opciones */}
-        <div className="space-y-6">
+        <div className="space-y-6">{!modoProyecto && (
+          <>
           {/* Estadísticas */}
           {estadisticas && (
             <div className="bg-gradient-to-br from-primary-500 to-primary-600 rounded-lg shadow-lg p-6 text-white">
@@ -540,13 +779,30 @@ const ExportacionImportacion = () => {
               </button>
             </div>
           </div>
+          </>
+          )}
+
+          {/* Información adicional para modo proyecto */}
+          {modoProyecto && proyectoSeleccionado && (
+            <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+              <h3 className="text-sm font-medium opacity-90 mb-2">Proyecto Seleccionado</h3>
+              <div className="space-y-2">
+                <div className="text-xl font-bold">
+                  {proyectos.find(p => p.id_proyecto == proyectoSeleccionado)?.nombre}
+                </div>
+                <div className="text-sm opacity-90">
+                  Se exportarán/eliminarán todas las tablas relacionadas automáticamente
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Advertencia */}
           <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
             <div className="flex items-start space-x-2">
               <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
               <div className="text-sm text-yellow-800 dark:text-yellow-300">
-                <strong>Advertencia:</strong> La acción de vaciar tablas es irreversible. Asegúrate de hacer un respaldo antes de continuar.
+                <strong>Advertencia:</strong> Las acciones de vaciar {modoProyecto ? 'proyecto' : 'tablas'} son irreversibles. Asegúrate de hacer un respaldo antes de continuar.
               </div>
             </div>
           </div>
