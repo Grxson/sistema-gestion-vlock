@@ -1188,39 +1188,57 @@ const importarSQL = async (req, res) => {
 /**
  * Convierte un INSERT INTO en INSERT ... ON DUPLICATE KEY UPDATE
  * para manejar duplicados actualizando en lugar de fallar
+ * 
+ * ESTRATEGIA MEJORADA:
+ * En lugar de parsear el SQL (que falla con comillas, paréntesis, etc.),
+ * simplemente agregamos ON DUPLICATE KEY UPDATE al final con todas las columnas.
  */
 const convertirInsertConDuplicados = (sentenciaInsert) => {
   try {
-    // Extraer nombre de tabla y columnas
-    const match = sentenciaInsert.match(/INSERT INTO\s+`?(\w+)`?\s*\(([^)]+)\)\s*VALUES\s*\(([^)]+)\)/i);
-    
-    if (!match) {
-      // Si no coincide el patrón, devolver la sentencia original
+    // Si ya tiene ON DUPLICATE KEY UPDATE, no hacer nada
+    if (sentenciaInsert.toUpperCase().includes('ON DUPLICATE KEY UPDATE')) {
       return sentenciaInsert;
     }
 
-    const [, tabla, columnasStr, valoresStr] = match;
-    const columnas = columnasStr.split(',').map(c => c.trim().replace(/`/g, ''));
+    // Extraer solo el nombre de tabla y columnas (antes de VALUES)
+    const matchTablaColumnas = sentenciaInsert.match(/INSERT INTO\s+`?(\w+)`?\s*\(([^)]+)\)/i);
     
-    // Construir la parte ON DUPLICATE KEY UPDATE
-    // Actualizar todas las columnas excepto la PK (normalmente la primera columna o id_*)
-    const updateClauses = columnas
-      .filter(col => !col.toLowerCase().startsWith('id_') || col === columnas[0]) // Excluir PKs
+    if (!matchTablaColumnas) {
+      console.warn('⚠️  No se pudo extraer tabla/columnas, devolviendo original');
+      return sentenciaInsert;
+    }
+
+    const [, tabla, columnasStr] = matchTablaColumnas;
+    const columnas = columnasStr.split(',').map(c => c.trim().replace(/`/g, '').trim());
+    
+    console.log(`🔍 Tabla: ${tabla}, Columnas detectadas: ${columnas.length}`);
+
+    // Filtrar columnas que NO son PKs para actualizar
+    // Excluimos columnas que empiezan con "id_" o son la primera columna
+    const columnasParaActualizar = columnas.filter((col, index) => {
+      const esPK = col.toLowerCase().startsWith('id_') || index === 0;
+      return !esPK;
+    });
+
+    if (columnasParaActualizar.length === 0) {
+      console.warn('⚠️  No hay columnas para actualizar (todas son PKs), devolviendo original');
+      return sentenciaInsert;
+    }
+
+    // Construir la cláusula UPDATE (solo nombres de columnas, no valores)
+    const updateClauses = columnasParaActualizar
       .map(col => `\`${col}\` = VALUES(\`${col}\`)`)
       .join(', ');
 
-    // Si no hay columnas para actualizar, devolver original
-    if (!updateClauses) {
-      return sentenciaInsert;
-    }
-
-    // Construir sentencia completa
-    const sentenciaConUpdate = `INSERT INTO \`${tabla}\` (${columnasStr}) VALUES (${valoresStr}) ON DUPLICATE KEY UPDATE ${updateClauses}`;
+    // Simplemente agregar la cláusula al final de la sentencia original
+    // No parseamos los VALUES, solo añadimos el UPDATE
+    const sentenciaConUpdate = `${sentenciaInsert} ON DUPLICATE KEY UPDATE ${updateClauses}`;
     
     return sentenciaConUpdate;
   } catch (error) {
     // Si hay algún error al parsear, devolver la sentencia original
-    console.warn('⚠️  No se pudo convertir sentencia a ON DUPLICATE KEY UPDATE:', error.message);
+    console.warn('⚠️  Error en convertirInsertConDuplicados:', error.message);
+    console.warn('   Sentencia problemática:', sentenciaInsert.substring(0, 200));
     return sentenciaInsert;
   }
 };
