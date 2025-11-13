@@ -373,7 +373,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   // Nota: el filtrado ahora se hace con useMemo (filteredNominas)
 
   // Función para exportar a Excel (con fuente y sufijo opcional)
-  const exportToExcel = (source = null, nombreSufijo = '') => {
+  const   exportToExcel = (source = null, nombreSufijo = '') => {
     const nominasToExport = source ? source : (filteredNominas.length > 0 ? filteredNominas : nominas);
     if (!nominasToExport || nominasToExport.length === 0) {
       showError('Error', 'No hay datos para exportar');
@@ -393,8 +393,53 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
         const descuentos = parseFloat(nomina.descuentos) || 0;
         const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
-        const fechaNomina = new Date(nomina.fecha_creacion || nomina.createdAt || nomina.fecha);
-        const semanaDelMes = calcularSemanaDelMes(fechaNomina);
+
+        // Proyecto: buscar en nomina, en empleado, o en lista de proyectos si existe
+        let proyectoNombre = 'Sin proyecto';
+        if (nomina.proyecto && nomina.proyecto.nombre) {
+          proyectoNombre = nomina.proyecto.nombre;
+        } else if (empleado && empleado.proyecto && empleado.proyecto.nombre) {
+          proyectoNombre = empleado.proyecto.nombre;
+        } else if (nomina.id_proyecto && proyectos?.length) {
+          const proyectoObj = proyectos.find(p => p.id_proyecto === nomina.id_proyecto);
+          if (proyectoObj && proyectoObj.nombre) proyectoNombre = proyectoObj.nombre;
+        }
+
+        // Semana: preferir datos de nomina.semana (ISO) y periodo si existen; si no, calcular por fecha
+        let semanaDelMes = '-';
+        if (nomina?.semana && typeof nomina.semana === 'object') {
+          const anioIso = nomina.semana.anio || nomina.semana.año || nomina.semana.anioISO || nomina.semana.anio_iso;
+          const semanaIso = nomina.semana.semana_iso || nomina.semana.semanaISO || nomina.semana.iso;
+          // Periodo YYYY-MM: usar nomina.periodo o derivarlo de una fecha base
+          let periodo = nomina.periodo;
+          const baseDateStr = nomina?.semana?.fecha_inicio || nomina?.fecha || nomina?.createdAt || nomina?.fecha_creacion;
+          if (!periodo && baseDateStr) {
+            const d = new Date(baseDateStr);
+            if (!isNaN(d.getTime())) {
+              periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+            }
+          }
+          if (anioIso && semanaIso && periodo) {
+            const idx = semanaDelMesDesdeISO(periodo, anioIso, semanaIso);
+            if (!Number.isNaN(idx)) semanaDelMes = idx;
+          }
+        }
+        if (semanaDelMes === '-' ) {
+          const fechaBase = nomina.fecha_creacion || nomina.createdAt || nomina.fecha;
+          if (fechaBase) {
+            const fechaObj = new Date(fechaBase);
+            const semanaCalc = calcularSemanaDelMes(fechaObj);
+            if (typeof semanaCalc === 'number' && !isNaN(semanaCalc)) semanaDelMes = semanaCalc;
+          }
+        }
+
+        // Fecha: usar createdAt, o semana.fecha_inicio, o fecha
+        let fechaValida = '-';
+        const fechaPreferida = nomina.createdAt || nomina.fecha_creacion || nomina?.semana?.fecha_inicio || nomina.fecha;
+        if (fechaPreferida) {
+          const fechaObj = new Date(fechaPreferida);
+          fechaValida = isNaN(fechaObj.getTime()) ? '-' : fechaObj.toLocaleDateString('es-MX');
+        }
 
         // Determinar tipo de pago
         const tipoPago = esPagoParcial(nomina.tipo_pago) ? 'PARCIAL' : 'COMPLETA';
@@ -410,7 +455,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         return {
           'Empleado': empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado',
           'Oficio': empleado?.oficio?.nombre || 'Sin oficio',
-          'Proyecto': nomina.proyecto?.nombre || 'Sin proyecto',
+          'Proyecto': proyectoNombre,
           'Días Laborados': diasLaborados,
           'Sueldo Base': sueldoBase,
           'Horas Extra': horasExtra,
@@ -423,7 +468,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           'Total a Pagar': totalAPagar,
           'Tipo Pago': tipoPago,
           'Status': estado,
-          'Fecha': fechaNomina.toLocaleDateString('es-MX')
+          'Fecha': fechaValida
         };
       });
 

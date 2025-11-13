@@ -129,18 +129,28 @@ const exportarProyectoSQL = async (req, res, proyecto, tablasRelacionadas, nombr
       output += generarInsertSQL('proyectos', proyectoData);
     }
 
-    // 2. Exportar todas las tablas relacionadas
-    for (const { tabla, fk } of tablasRelacionadas) {
+  // 2. Exportar todas las tablas relacionadas
+  for (const { tabla, fk, referencia } of tablasRelacionadas) {
       try {
         output += `\n-- ============================================\n`;
         output += `-- Tabla: ${tabla}\n`;
         output += `-- ============================================\n\n`;
 
-        // Obtener datos con la FK correspondiente
-        const datos = await sequelize.query(
-          `SELECT * FROM ${tabla} WHERE ${fk} = ?`,
-          { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
-        );
+        // Obtener datos con la FK correspondiente (directo o por referencia)
+        let datos = [];
+        if (fk === 'id_proyecto') {
+          datos = await sequelize.query(
+            `SELECT * FROM \`${tabla}\` WHERE \`${fk}\` = ?`,
+            { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
+          );
+        } else if (referencia) {
+          // Seleccionar registros cuya FK esté en la tabla de referencia para el proyecto dado
+          const sql = `SELECT * FROM \`${tabla}\` WHERE \`${fk}\` IN (SELECT \`${fk}\` FROM \`${referencia}\` WHERE \`id_proyecto\` = ?)`;
+          datos = await sequelize.query(sql, { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT });
+        } else {
+          // Si no hay referencia y la FK no es id_proyecto, no podemos determinar relación: omitir
+          datos = [];
+        }
 
         if (datos.length > 0) {
           output += generarInsertSQL(tabla, datos);
@@ -187,27 +197,69 @@ const exportarProyectoExcel = async (req, res, proyecto, tablasRelacionadas, nom
     infoSheet.addRow({ campo: 'Estado', valor: proyecto.estado || '' });
     infoSheet.addRow({ campo: 'Fecha Backup', valor: fecha });
 
-    // Una hoja por cada tabla relacionada
-    for (const { tabla, fk } of tablasRelacionadas) {
+  // Una hoja por cada tabla relacionada
+  for (const { tabla, fk, referencia } of tablasRelacionadas) {
       try {
-        const datos = await sequelize.query(
-          `SELECT * FROM ${tabla} WHERE ${fk} = ?`,
-          { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
-        );
+        let datos = [];
+        if (fk === 'id_proyecto') {
+          datos = await sequelize.query(
+            `SELECT * FROM \`${tabla}\` WHERE \`${fk}\` = ?`,
+            { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
+          );
+        } else if (referencia) {
+          const sql = `SELECT * FROM \`${tabla}\` WHERE \`${fk}\` IN (SELECT \`${fk}\` FROM \`${referencia}\` WHERE \`id_proyecto\` = ?)`;
+          datos = await sequelize.query(sql, { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT });
+        } else {
+          datos = [];
+        }
 
         if (datos.length === 0) continue;
 
         // Resolver FKs para valores legibles
-        const datosResueltos = await resolverValoresFK(tabla, datos);
 
-        const sheet = workbook.addWorksheet(tabla.substring(0, 31)); // Excel limit
-        const columnas = Object.keys(datosResueltos[0]);
-        sheet.columns = columnas.map(col => ({ 
-          header: col, 
-          key: col, 
-          width: 15 
-        }));
-        datosResueltos.forEach(row => sheet.addRow(row));
+        let datosResueltos = await resolverValoresFK(tabla, datos);
+        if (datosResueltos.length > 0) {
+          let columnas;
+          if (tabla === 'suministros') {
+            // Para la hoja de suministros, solo mostrar los nombres legibles y el id principal
+            const idPrincipal = Object.keys(datosResueltos[0]).find(col => col === 'id_suministro');
+            columnas = Object.keys(datosResueltos[0]).filter(col => {
+              if (col === idPrincipal) return true;
+              if (['proyecto_nombre','proveedor_nombre','unidad_nombre','categoria_nombre'].includes(col)) return true;
+              if (!col.startsWith('id_')) return true;
+              return false;
+            });
+            columnas = columnas.filter(col => !['id_proyecto','id_proveedor','id_unidad_medida'].includes(col));
+          } else if (['proveedores','proyectos','unidades_medida'].includes(tabla)) {
+            // Para tablas maestras, mostrar solo el id y el nombre
+            const idPrincipal = Object.keys(datosResueltos[0]).find(col => col.startsWith('id_'));
+            columnas = Object.keys(datosResueltos[0]).filter(col => col === idPrincipal || col === 'nombre');
+          } else {
+            // Para otras hojas, mantener el filtro anterior
+            const idPrincipal = Object.keys(datosResueltos[0]).find(col => col.startsWith('id_') && !['id_proveedor','id_unidad_medida','id_proyecto','id_categoria','id_categoria_suministro','id_empleado','id_usuario','id_rol','id_semana','id_contrato','id_oficio','id_herramienta','id_nomina','id_adeudo','id_ingreso'].includes(col));
+            columnas = Object.keys(datosResueltos[0]).filter(col => {
+              if (col === idPrincipal) return true;
+              if (col === 'proyecto_nombre' || col === 'proveedor_nombre' || col === 'unidad_nombre') return true;
+              if (col.endsWith('_nombre') || col.endsWith('_descripcion') || col.endsWith('_concepto')) return true;
+              if (!col.startsWith('id_')) return true;
+              return false;
+            });
+            columnas = columnas.filter(col => !['id_proyecto','id_proveedor','id_unidad_medida'].includes(col));
+          }
+          const sheet = workbook.addWorksheet(tabla.substring(0, 31)); // Excel limit
+          sheet.columns = columnas.map(col => ({
+            header: col,
+            key: col,
+            width: 15
+          }));
+          datosResueltos.forEach(row => {
+            const rowFiltrada = {};
+            columnas.forEach(col => {
+              rowFiltrada[col] = row[col];
+            });
+            sheet.addRow(rowFiltrada);
+          });
+        }
 
         console.log(`✅ ${tabla}: ${datos.length} registros en Excel`);
       } catch (error) {
@@ -240,12 +292,20 @@ const exportarProyectoJSON = async (req, res, proyecto, tablasRelacionadas, nomb
       tablas: {}
     };
 
-    for (const { tabla, fk } of tablasRelacionadas) {
+  for (const { tabla, fk, referencia } of tablasRelacionadas) {
       try {
-        const datos = await sequelize.query(
-          `SELECT * FROM ${tabla} WHERE ${fk} = ?`,
-          { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
-        );
+        let datos = [];
+        if (fk === 'id_proyecto') {
+          datos = await sequelize.query(
+            `SELECT * FROM \`${tabla}\` WHERE \`${fk}\` = ?`,
+            { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT }
+          );
+        } else if (referencia) {
+          const sql = `SELECT * FROM \`${tabla}\` WHERE \`${fk}\` IN (SELECT \`${fk}\` FROM \`${referencia}\` WHERE \`id_proyecto\` = ?)`;
+          datos = await sequelize.query(sql, { replacements: [proyecto.id_proyecto], type: sequelize.QueryTypes.SELECT });
+        } else {
+          datos = [];
+        }
         backup.tablas[tabla] = datos;
         console.log(`✅ ${tabla}: ${datos.length} registros en JSON`);
       } catch (error) {
