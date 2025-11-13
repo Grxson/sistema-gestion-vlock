@@ -12,28 +12,44 @@ const { parse } = require('json2csv');
 /**
  * Obtiene todas las tablas relacionadas a un proyecto específico
  * @param {number} idProyecto - ID del proyecto
- * @returns {Array} - Lista de objetos {tabla, fk, orden} ordenados por dependencias
+ * @returns {Array} - Lista de objetos {tabla, fk, vaciar, referencia}
+ * 
+ * vaciar: true = Se eliminará al vaciar proyecto
+ * vaciar: false = Solo se incluye en backup, NO se elimina
  */
 const obtenerTablasProyecto = (idProyecto) => {
-  // Orden de eliminación (respetando FKs): primero hijos, luego padres
   return [
-    // 1. Tablas que dependen de otras entidades del proyecto
-    { tabla: 'pagos_nomina', fk: 'id_nomina', referencia: 'nomina_empleado' },
-    { tabla: 'deducciones_nomina', fk: 'id_nomina', referencia: 'nomina_empleado' },
+    // ========================================
+    // GRUPO 1: TRANSACCIONALES (Vaciar - Datos únicos del proyecto)
+    // ========================================
+    { tabla: 'suministros', fk: 'id_proyecto', vaciar: true, referencia: null },
+    { tabla: 'gastos', fk: 'id_proyecto', vaciar: true, referencia: null },
+    { tabla: 'presupuestos', fk: 'id_proyecto', vaciar: true, referencia: null },
+    { tabla: 'estados_cuenta', fk: 'id_proyecto', vaciar: true, referencia: null },
     
-    // 2. Tablas principales con id_proyecto directo
-    { tabla: 'nomina_empleado', fk: 'id_proyecto', referencia: null },
-    { tabla: 'suministros', fk: 'id_proyecto', referencia: null },
-    { tabla: 'gastos', fk: 'id_proyecto', referencia: null },
-    { tabla: 'ingresos', fk: 'id_proyecto', referencia: null },
-    { tabla: 'ingresos_movimientos', fk: 'id_proyecto', referencia: null },
-    { tabla: 'movimientos_herramienta', fk: 'id_proyecto', referencia: null },
-    { tabla: 'presupuestos', fk: 'id_proyecto', referencia: null },
-    { tabla: 'estados_cuenta', fk: 'id_proyecto', referencia: null },
+    // ========================================
+    // GRUPO 2: NÓMINAS (Solo backup - Historial laboral/fiscal)
+    // ========================================
+    { tabla: 'pagos_nomina', fk: 'id_nomina', referencia: 'nomina_empleado', vaciar: false },
+    { tabla: 'deducciones_nomina', fk: 'id_nomina', referencia: 'nomina_empleado', vaciar: false },
+    { tabla: 'nomina_empleado', fk: 'id_proyecto', vaciar: false, referencia: null },
     
-    // 3. Tablas donde id_proyecto puede ser indirecto (empleados, herramientas)
-    { tabla: 'empleados', fk: 'id_proyecto', referencia: null },
-    { tabla: 'herramientas', fk: 'id_proyecto', referencia: null },
+    // ========================================
+    // GRUPO 3: FINANCIEROS (Solo backup - Trazabilidad contable)
+    // ========================================
+    { tabla: 'ingresos', fk: 'id_proyecto', vaciar: false, referencia: null },
+    { tabla: 'ingresos_movimientos', fk: 'id_proyecto', vaciar: false, referencia: null },
+    
+    // ========================================
+    // GRUPO 4: INVENTARIO (Solo backup - Recursos compartidos)
+    // ========================================
+    { tabla: 'movimientos_herramienta', fk: 'id_proyecto', vaciar: false, referencia: null },
+    
+    // ========================================
+    // GRUPO 5: MAESTROS (Solo backup - Entidades reutilizables)
+    // ========================================
+    { tabla: 'empleados', fk: 'id_proyecto', vaciar: false, referencia: null },
+    { tabla: 'herramientas', fk: 'id_proyecto', vaciar: false, referencia: null },
   ];
 };
 
@@ -247,7 +263,9 @@ const exportarProyectoJSON = async (req, res, proyecto, tablasRelacionadas, nomb
 };
 
 /**
- * Vacía todos los datos de un proyecto específico
+ * Vacía SELECTIVAMENTE los datos de un proyecto específico
+ * SOLO elimina datos transaccionales únicos (suministros, gastos, presupuestos)
+ * PRESERVA nóminas, empleados, herramientas, ingresos (historial/trazabilidad)
  * CUIDADO: Esta operación es irreversible
  */
 const vaciarProyecto = async (req, res) => {
@@ -271,20 +289,28 @@ const vaciarProyecto = async (req, res) => {
       });
     }
 
-    const tablasRelacionadas = obtenerTablasProyecto(id);
+    const todasLasTablas = obtenerTablasProyecto(id);
+    
+    // Filtrar SOLO las tablas con vaciar: true (transaccionales)
+    const tablasAVaciar = todasLasTablas.filter(t => t.vaciar === true);
+    const tablasPreservadas = todasLasTablas.filter(t => t.vaciar === false);
+    
     const resultado = {
       proyecto: proyecto.nombre,
       tablas_vaciadas: [],
+      tablas_preservadas: tablasPreservadas.map(t => t.tabla),
       errores: []
     };
 
-    console.log(`🗑️  Iniciando limpieza del proyecto ${id} (${proyecto.nombre})`);
+    console.log(`🗑️  Iniciando limpieza SELECTIVA del proyecto ${id} (${proyecto.nombre})`);
+    console.log(`📊 Tablas a vaciar: ${tablasAVaciar.length}`);
+    console.log(`🔒 Tablas a preservar: ${tablasPreservadas.length}`);
 
     // Deshabilitar FK checks temporalmente
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
 
-    // Eliminar registros de cada tabla (en orden inverso para respetar FKs)
-    for (const { tabla, fk } of tablasRelacionadas) {
+    // Eliminar registros SOLO de tablas transaccionales
+    for (const { tabla, fk } of tablasAVaciar) {
       try {
         const [results] = await sequelize.query(
           `DELETE FROM ${tabla} WHERE ${fk} = ?`,
@@ -313,12 +339,14 @@ const vaciarProyecto = async (req, res) => {
       (sum, t) => sum + t.registros_eliminados, 0
     );
 
-    console.log(`✅ Limpieza completada: ${totalEliminados} registros eliminados en total`);
+    console.log(`✅ Limpieza completada: ${totalEliminados} registros eliminados`);
+    console.log(`🔒 Preservadas: ${resultado.tablas_preservadas.join(', ')}`);
 
     return res.json({ 
       success: true, 
-      message: `Proyecto ${proyecto.nombre} vaciado exitosamente`,
+      message: `Proyecto ${proyecto.nombre} vaciado exitosamente (datos transaccionales)`,
       total_registros_eliminados: totalEliminados,
+      nota: 'Nóminas, empleados, herramientas e ingresos fueron preservados para historial y trazabilidad',
       ...resultado
     });
   } catch (error) {

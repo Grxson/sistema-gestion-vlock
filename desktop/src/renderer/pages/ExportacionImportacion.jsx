@@ -320,15 +320,19 @@ const ExportacionImportacion = () => {
     const proyecto = proyectos.find(p => p.id_proyecto == proyectoSeleccionado);
     
     const confirmacion = window.confirm(
-      `⚠️ ADVERTENCIA: Está a punto de ELIMINAR PERMANENTEMENTE todos los datos del proyecto:\n\n` +
+      `⚠️ ADVERTENCIA: Está a punto de ELIMINAR datos transaccionales del proyecto:\n\n` +
       `"${proyecto.nombre}"\n\n` +
-      `Esto incluye:\n` +
-      `- Suministros\n` +
-      `- Gastos e Ingresos\n` +
-      `- Nóminas\n` +
-      `- Movimientos de herramientas\n` +
-      `- Estados de cuenta\n` +
-      `- Presupuestos\n\n` +
+      `✅ SE ELIMINARÁN (datos específicos del proyecto):\n` +
+      `   • Suministros\n` +
+      `   • Gastos\n` +
+      `   • Estados de cuenta\n` +
+      `   • Presupuestos\n\n` +
+      `🔒 SE PRESERVARÁN (historial y trazabilidad):\n` +
+      `   • Empleados (datos maestros)\n` +
+      `   • Nóminas (requerido por IMSS/SAT)\n` +
+      `   • Ingresos y movimientos (auditoría)\n` +
+      `   • Herramientas (inventario compartido)\n` +
+      `   • Adeudos generales\n\n` +
       `Esta acción NO SE PUEDE DESHACER.\n\n` +
       `¿Está seguro de continuar?`
     );
@@ -336,7 +340,7 @@ const ExportacionImportacion = () => {
     if (!confirmacion) return;
 
     const confirmacionFinal = window.confirm(
-      `¿Confirma que desea ELIMINAR PERMANENTEMENTE todos los datos del proyecto "${proyecto.nombre}"?\n\n` +
+      `¿Confirma que desea ELIMINAR los datos transaccionales del proyecto "${proyecto.nombre}"?\n\n` +
       `Escriba "CONFIRMAR" mentalmente y haga clic en Aceptar.`
     );
 
