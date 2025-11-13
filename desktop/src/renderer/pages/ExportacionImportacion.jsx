@@ -25,6 +25,9 @@ const ExportacionImportacion = () => {
   const [formatoExportacion, setFormatoExportacion] = useState('json');
   const [incluirRelaciones, setIncluirRelaciones] = useState(false);
   const [vaciarDespues, setVaciarDespues] = useState(false);
+  // Opciones específicas para SQL
+  const [backupCompleto, setBackupCompleto] = useState(false);
+  const [incluirEstructuraYVistas, setIncluirEstructuraYVistas] = useState(true);
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState(null);
   const [estadisticas, setEstadisticas] = useState(null);
@@ -103,6 +106,11 @@ const ExportacionImportacion = () => {
         case 'sql':
           endpoint = `${API_URL}/exportacion/sql`;
           responseType = 'blob';
+          Object.assign(data, {
+            fullBackup: backupCompleto,
+            includeStructure: incluirEstructuraYVistas,
+            includeViews: incluirEstructuraYVistas
+          });
           break;
         default:
           throw new Error('Formato de exportación no válido');
@@ -390,6 +398,44 @@ const ExportacionImportacion = () => {
               <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300 rounded-lg text-sm">
                 <ExclamationTriangleIcon className="h-5 w-5 inline mr-2" />
                 El formato CSV solo permite exportar una tabla a la vez. Se exportará: <strong>{tablasSeleccionadas[0]}</strong>
+              </div>
+            )}
+
+            {formatoExportacion === 'sql' && (
+              <div className="mt-4 space-y-3">
+                <label className="flex items-start space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={backupCompleto}
+                    onChange={(e) => setBackupCompleto(e.target.checked)}
+                    className="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      Backup completo (estructura + datos + vistas)
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Incluye tablas, datos, vistas y (si es posible) triggers/rutinas. Ignora la selección de tablas.
+                    </div>
+                  </div>
+                </label>
+
+                <label className="flex items-start space-x-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={incluirEstructuraYVistas}
+                    onChange={(e) => setIncluirEstructuraYVistas(e.target.checked)}
+                    className="mt-1 h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <div>
+                    <div className="font-medium text-gray-900 dark:text-white">
+                      Incluir estructura y vistas
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      Para exportación parcial, agrega CREATE TABLE si no existe y las definiciones de vistas.
+                    </div>
+                  </div>
+                </label>
               </div>
             )}
           </div>

@@ -63,6 +63,75 @@ const obtenerTablas = async (req, res) => {
 };
 
 /**
+ * Utilidades de introspección de esquema y helpers de volcado
+ */
+const getDatabaseName = () => {
+  try {
+    return sequelize.config && sequelize.config.database
+      ? sequelize.config.database
+      : null;
+  } catch (_) {
+    return null;
+  }
+};
+
+async function describeTableSafe(table) {
+  const qi = sequelize.getQueryInterface();
+  return await qi.describeTable(table);
+}
+
+async function listBaseTables() {
+  const db = getDatabaseName();
+  const [rows] = await sequelize.query('SHOW FULL TABLES');
+  if (!rows || rows.length === 0) return [];
+  // Determinar nombre de la columna Tables_in_<db>
+  const tableKey = Object.keys(rows[0]).find((k) => k.toLowerCase().startsWith('tables_in')) || Object.keys(rows[0])[0];
+  return rows.filter(r => (r.Table_type || r.TABLE_TYPE || r[Object.keys(r)[1]])?.toString().toUpperCase().includes('BASE')).map(r => r[tableKey]);
+}
+
+async function listViews() {
+  const [rows] = await sequelize.query("SHOW FULL TABLES WHERE Table_type = 'VIEW'");
+  if (!rows || rows.length === 0) return [];
+  const tableKey = Object.keys(rows[0]).find((k) => k.toLowerCase().startsWith('tables_in')) || Object.keys(rows[0])[0];
+  return rows.map(r => r[tableKey]);
+}
+
+async function showCreateTable(table) {
+  const [rows] = await sequelize.query(`SHOW CREATE TABLE \`${table}\``);
+  const key = Object.keys(rows[0]).find(k => k.toLowerCase() === 'create table');
+  return rows[0][key];
+}
+
+async function showCreateView(view) {
+  const [rows] = await sequelize.query(`SHOW CREATE VIEW \`${view}\``);
+  const key = Object.keys(rows[0]).find(k => k.toLowerCase() === 'create view');
+  return rows[0][key];
+}
+
+async function listTriggers() {
+  const [rows] = await sequelize.query('SELECT TRIGGER_NAME FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA = DATABASE()');
+  return rows.map(r => r.TRIGGER_NAME);
+}
+
+async function showCreateTrigger(name) {
+  const [rows] = await sequelize.query(`SHOW CREATE TRIGGER \`${name}\``);
+  const key = Object.keys(rows[0]).find(k => k.toLowerCase().includes('trigger')); // Create Trigger
+  return rows[0][key];
+}
+
+async function listRoutines() {
+  const [rows] = await sequelize.query('SELECT ROUTINE_NAME, ROUTINE_TYPE FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA = DATABASE()');
+  return rows.map(r => ({ name: r.ROUTINE_NAME, type: r.ROUTINE_TYPE }));
+}
+
+async function showCreateRoutine(name, type) {
+  const cmd = type && type.toUpperCase() === 'FUNCTION' ? 'FUNCTION' : 'PROCEDURE';
+  const [rows] = await sequelize.query(`SHOW CREATE ${cmd} \`${name}\``);
+  const key = Object.keys(rows[0]).find(k => k.toLowerCase().includes(cmd.toLowerCase()));
+  return rows[0][key];
+}
+
+/**
  * Exporta datos en formato JSON
  */
 const exportarJSON = async (req, res) => {
@@ -83,14 +152,16 @@ const exportarJSON = async (req, res) => {
     };
 
     for (const nombreTabla of tablas) {
-      const mdl = findModelByTable(nombreTabla);
-      if (mdl) {
-        const opciones = {};
-        if (incluirRelaciones && mdl.associations) {
-          // Incluir todas las asociaciones definidas
-          opciones.include = Object.values(mdl.associations);
-        }
-        resultado.datos[nombreTabla] = await mdl.findAll(opciones);
+      try {
+        const descripcion = await describeTableSafe(nombreTabla);
+        const cols = Object.keys(descripcion);
+        if (cols.length === 0) continue;
+        const selectCols = cols.map(c => `\`${c}\``).join(', ');
+        const [filas] = await sequelize.query(`SELECT ${selectCols} FROM \`${nombreTabla}\``);
+        resultado.datos[nombreTabla] = filas;
+      } catch (e) {
+        console.error(`Error exportando JSON de ${nombreTabla}:`, e.message);
+        resultado.datos[nombreTabla] = [];
       }
     }
 
@@ -173,16 +244,18 @@ const exportarExcel = async (req, res) => {
     workbook.created = new Date();
 
     for (const nombreTabla of tablas) {
-      const mdl = findModelByTable(nombreTabla);
-      if (mdl) {
-        const datos = await mdl.findAll({ raw: true });
+      try {
+        const descripcion = await describeTableSafe(nombreTabla);
+        const cols = Object.keys(descripcion);
+        if (cols.length === 0) continue;
+        const selectCols = cols.map(c => `\`${c}\``).join(', ');
+        const [datos] = await sequelize.query(`SELECT ${selectCols} FROM \`${nombreTabla}\``);
 
-        if (datos.length > 0) {
+        if (Array.isArray(datos) && datos.length > 0) {
           const worksheet = workbook.addWorksheet(nombreTabla);
-          
+
           // Agregar encabezados
-          const columnas = Object.keys(datos[0]);
-          worksheet.columns = columnas.map(col => ({
+          worksheet.columns = cols.map(col => ({
             header: col,
             key: col,
             width: 15
@@ -213,6 +286,8 @@ const exportarExcel = async (req, res) => {
             column.width = maxLength < 10 ? 10 : maxLength + 2;
           });
         }
+      } catch (e) {
+        console.error(`Error exportando Excel de ${nombreTabla}:`, e.message);
       }
     }
 
@@ -236,13 +311,16 @@ const exportarExcel = async (req, res) => {
  */
 const exportarSQL = async (req, res) => {
   try {
-    const { tablas } = req.body;
+    const { tablas, fullBackup, includeStructure = true, includeViews = true } = req.body;
 
-    if (!tablas || !Array.isArray(tablas) || tablas.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Debe seleccionar al menos una tabla para exportar'
-      });
+    // Si es backup completo, ignorar tablas seleccionadas
+    if (!fullBackup) {
+      if (!tablas || !Array.isArray(tablas) || tablas.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Debe seleccionar al menos una tabla para exportar'
+        });
+      }
     }
 
     let sqlContent = `-- Exportación de base de datos\n`;
@@ -250,29 +328,105 @@ const exportarSQL = async (req, res) => {
     sqlContent += `-- Sistema de Gestión Vlock\n\n`;
     sqlContent += `SET FOREIGN_KEY_CHECKS = 0;\n\n`;
 
-    for (const nombreTabla of tablas) {
-      const mdl = findModelByTable(nombreTabla);
-      if (mdl) {
-        const datos = await mdl.findAll({ raw: true });
+    // Determinar tablas a exportar
+    const tablasAExportar = fullBackup ? await listBaseTables() : tablas;
 
-        if (datos.length > 0) {
-          sqlContent += `-- Tabla: ${nombreTabla}\n`;
+    // Incluir estructura de tablas si se solicita o si es backup completo
+    if (includeStructure || fullBackup) {
+      for (const nombreTabla of tablasAExportar) {
+        try {
+          const createStmt = await showCreateTable(nombreTabla);
+          sqlContent += `-- Estructura de tabla: ${nombreTabla}\n`;
+          sqlContent += `DROP TABLE IF EXISTS \`${nombreTabla}\`;\n`;
+          sqlContent += `${createStmt};\n\n`;
+        } catch (e) {
+          sqlContent += `-- Error obteniendo estructura de ${nombreTabla}: ${e.message}\n\n`;
+        }
+      }
+    }
+
+    // Datos de tablas
+    for (const nombreTabla of tablasAExportar) {
+      try {
+        const descripcion = await describeTableSafe(nombreTabla);
+        const columnasExistentes = Object.keys(descripcion);
+        if (columnasExistentes.length === 0) continue;
+        const selectCols = columnasExistentes.map(c => `\`${c}\``).join(', ');
+        const [filas] = await sequelize.query(`SELECT ${selectCols} FROM \`${nombreTabla}\`;`);
+        if (Array.isArray(filas) && filas.length > 0) {
+          sqlContent += `-- Datos de tabla: ${nombreTabla}\n`;
           sqlContent += `TRUNCATE TABLE \`${nombreTabla}\`;\n`;
-
-          datos.forEach(fila => {
-            const columnas = Object.keys(fila);
-            const valores = Object.values(fila).map(val => {
-              if (val === null) return 'NULL';
-              if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+          for (const fila of filas) {
+            const columnas = columnasExistentes;
+            const valores = columnas.map(col => {
+              const val = fila[col];
+              if (val === null || typeof val === 'undefined') return 'NULL';
               if (val instanceof Date) return `'${val.toISOString()}'`;
-              return val;
+              if (Buffer.isBuffer(val)) return `'${val.toString('base64')}'`;
+              if (typeof val === 'object') return `'${JSON.stringify(val).replace(/'/g, "''")}'`;
+              if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
+              return String(val);
             });
-
             sqlContent += `INSERT INTO \`${nombreTabla}\` (${columnas.map(c => `\`${c}\``).join(', ')}) VALUES (${valores.join(', ')});\n`;
-          });
-
+          }
           sqlContent += `\n`;
         }
+      } catch (e) {
+        sqlContent += `-- Error exportando datos de ${nombreTabla}: ${e.message}\n\n`;
+      }
+    }
+
+    // Vistas (solo en fullBackup o cuando se pide includeViews)
+    if (includeViews || fullBackup) {
+      try {
+        const vistas = await listViews();
+        for (const vista of vistas) {
+          try {
+            const createView = await showCreateView(vista);
+            sqlContent += `-- Vista: ${vista}\n`;
+            sqlContent += `DROP VIEW IF EXISTS \`${vista}\`;\n`;
+            sqlContent += `${createView};\n\n`;
+          } catch (ve) {
+            sqlContent += `-- Error obteniendo CREATE VIEW de ${vista}: ${ve.message}\n\n`;
+          }
+        }
+      } catch (e) {
+        sqlContent += `-- Error listando vistas: ${e.message}\n\n`;
+      }
+    }
+
+    // Triggers y rutinas: best-effort (puede requerir privilegios)
+    if (fullBackup) {
+      try {
+        const triggers = await listTriggers();
+        for (const trg of triggers) {
+          try {
+            const createTrig = await showCreateTrigger(trg);
+            sqlContent += `-- Trigger: ${trg}\n`;
+            sqlContent += `DROP TRIGGER IF EXISTS \`${trg}\`;\n`;
+            sqlContent += `${createTrig};\n\n`;
+          } catch (te) {
+            sqlContent += `-- Error obteniendo CREATE TRIGGER ${trg}: ${te.message}\n\n`;
+          }
+        }
+      } catch (e) {
+        sqlContent += `-- Error listando triggers: ${e.message}\n\n`;
+      }
+
+      try {
+        const routines = await listRoutines();
+        for (const r of routines) {
+          try {
+            const createRt = await showCreateRoutine(r.name, r.type);
+            sqlContent += `-- Rutina: ${r.type} ${r.name}\n`;
+            sqlContent += `DROP ${r.type.toUpperCase()} IF EXISTS \`${r.name}\`;\n`;
+            sqlContent += `${createRt};\n\n`;
+          } catch (re) {
+            sqlContent += `-- Error obteniendo CREATE ${r.type} ${r.name}: ${re.message}\n\n`;
+          }
+        }
+      } catch (e) {
+        sqlContent += `-- Error listando rutinas: ${e.message}\n\n`;
       }
     }
 
