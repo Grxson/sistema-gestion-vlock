@@ -969,44 +969,77 @@ const importarSQL = async (req, res) => {
   try {
     const { sql, validarAntes, manejarDuplicados = true } = req.body;
 
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📥 INICIO DE IMPORTACIÓN SQL');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
     if (!sql || typeof sql !== 'string') {
+      console.error('❌ Error: SQL no proporcionado o inválido');
+      console.error('   Tipo recibido:', typeof sql);
       return res.status(400).json({
         success: false,
         message: 'Debe proporcionar el contenido SQL'
       });
     }
 
+    console.log(`📊 Información del archivo SQL:`);
+    console.log(`   - Tamaño: ${sql.length} caracteres (${(sql.length / 1024).toFixed(2)} KB)`);
+    console.log(`   - Primeros 200 caracteres: ${sql.substring(0, 200)}...`);
+
     // Separar las sentencias SQL por punto y coma
     // Filtrar líneas vacías, comentarios y comandos SET
-    const sentencias = sql
-      .split(';')
-      .map(s => s.trim())
-      .filter(s => 
-        s.length > 0 && 
-        !s.startsWith('--') && 
-        !s.startsWith('/*') &&
-        !s.toUpperCase().startsWith('SET FOREIGN_KEY_CHECKS') &&
-        !s.toUpperCase().startsWith('SET SQL_MODE') &&
-        !s.toUpperCase().startsWith('SET CHARACTER_SET')
-      );
+    const todasLasSentencias = sql.split(';');
+    console.log(`📝 Total de fragmentos separados por ';': ${todasLasSentencias.length}`);
 
-    console.log(`📥 Importando SQL: ${sentencias.length} sentencias detectadas`);
+    const sentencias = todasLasSentencias
+      .map(s => s.trim())
+      .filter(s => {
+        if (s.length === 0) return false;
+        if (s.startsWith('--')) return false;
+        if (s.startsWith('/*')) return false;
+        if (s.toUpperCase().startsWith('SET FOREIGN_KEY_CHECKS')) return false;
+        if (s.toUpperCase().startsWith('SET SQL_MODE')) return false;
+        if (s.toUpperCase().startsWith('SET CHARACTER_SET')) return false;
+        return true;
+      });
+
+    console.log(`✅ Sentencias válidas después de filtrado: ${sentencias.length}`);
     console.log(`🔄 Manejo de duplicados: ${manejarDuplicados ? 'ACTIVADO (actualizar)' : 'DESACTIVADO (ignorar)'}`);
+
+    // Mostrar ejemplos de sentencias
+    if (sentencias.length > 0) {
+      console.log(`📋 Primeras 3 sentencias:`);
+      sentencias.slice(0, 3).forEach((s, idx) => {
+        const preview = s.length > 100 ? s.substring(0, 100) + '...' : s;
+        console.log(`   ${idx + 1}. ${preview}`);
+      });
+    }
 
     // Validación previa (opcional): verificar que las sentencias son INSERT/UPDATE/CREATE
     if (validarAntes) {
+      console.log('🔍 Validando tipos de sentencias...');
+      const comandosPermitidos = ['INSERT', 'UPDATE', 'CREATE', 'ALTER', 'REPLACE'];
       const sentenciasInvalidas = sentencias.filter(s => {
         const cmd = s.toUpperCase().split(' ')[0];
-        return !['INSERT', 'UPDATE', 'CREATE', 'ALTER', 'REPLACE'].includes(cmd);
+        const esValida = comandosPermitidos.includes(cmd);
+        if (!esValida) {
+          console.warn(`⚠️  Sentencia inválida detectada: ${cmd} - ${s.substring(0, 50)}...`);
+        }
+        return !esValida;
       });
 
       if (sentenciasInvalidas.length > 0) {
+        console.error(`❌ ${sentenciasInvalidas.length} sentencias no permitidas`);
+        sentenciasInvalidas.slice(0, 5).forEach((s, idx) => {
+          console.error(`   ${idx + 1}. ${s.substring(0, 100)}...`);
+        });
         return res.status(400).json({
           success: false,
           message: `Se encontraron ${sentenciasInvalidas.length} sentencias no permitidas (solo INSERT, UPDATE, CREATE, ALTER, REPLACE)`,
           sentencias: sentenciasInvalidas.slice(0, 5)
         });
       }
+      console.log('✅ Todas las sentencias son válidas');
     }
 
     const resultados = {
@@ -1017,8 +1050,11 @@ const importarSQL = async (req, res) => {
       advertencias: []
     };
 
-    // Deshabilitar FK checks temporalmente
+    console.log('🔓 Deshabilitando Foreign Key Checks...');
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 0');
+
+    console.log('⚙️  Iniciando ejecución de sentencias...');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
     // Ejecutar cada sentencia
     for (let i = 0; i < sentencias.length; i++) {
@@ -1027,7 +1063,13 @@ const importarSQL = async (req, res) => {
       try {
         // Si es INSERT y manejarDuplicados está activo, convertir a INSERT ... ON DUPLICATE KEY UPDATE
         if (manejarDuplicados && sentencia.toUpperCase().trim().startsWith('INSERT INTO')) {
+          const sentenciaOriginal = sentencia;
           sentencia = convertirInsertConDuplicados(sentencia);
+          
+          if (sentencia !== sentenciaOriginal && i < 2) {
+            // Mostrar conversión solo para las primeras 2 sentencias
+            console.log(`🔄 Sentencia ${i + 1} convertida a ON DUPLICATE KEY UPDATE`);
+          }
         }
 
         const [results, metadata] = await sequelize.query(sentencia);
@@ -1045,38 +1087,74 @@ const importarSQL = async (req, res) => {
         
         // Log cada 50 sentencias
         if ((i + 1) % 50 === 0) {
-          console.log(`✅ Ejecutadas ${i + 1}/${sentencias.length} (${resultados.insertadas} nuevos, ${resultados.actualizadas} actualizados)`);
+          console.log(`✅ Progreso: ${i + 1}/${sentencias.length} (${resultados.insertadas} nuevos, ${resultados.actualizadas} actualizados, ${resultados.errores.length} errores)`);
         }
       } catch (error) {
+        console.error(`❌ Error en sentencia ${i + 1}/${sentencias.length}:`);
+        console.error(`   SQL: ${sentencia.substring(0, 150)}...`);
+        console.error(`   Error: ${error.message}`);
+        console.error(`   Código: ${error.code || 'N/A'}`);
+        console.error(`   SQL State: ${error.sqlState || 'N/A'}`);
+        
         // Si es un error de duplicado y no se está manejando, solo advertir
         if (error.message.includes('Duplicate entry')) {
           resultados.advertencias.push({
             sentencia: sentencia.substring(0, 100) + '...',
-            error: 'Registro duplicado (ignorado)'
+            error: 'Registro duplicado (ignorado)',
+            indice: i + 1
           });
+          console.warn(`⚠️  Advertencia: Registro duplicado en sentencia ${i + 1}`);
         } else {
           resultados.errores.push({
             sentencia: sentencia.substring(0, 100) + '...',
-            error: error.message
+            error: error.message,
+            codigo: error.code,
+            sqlState: error.sqlState,
+            indice: i + 1
           });
-          console.error(`❌ Error en sentencia ${i + 1}:`, error.message);
         }
       }
     }
 
-    // Reactivar FK checks
-    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
-
-    console.log(`✅ Importación SQL completada: ${resultados.ejecutadas}/${sentencias.length}`);
-    console.log(`➕ Registros nuevos: ${resultados.insertadas}`);
-    console.log(`🔄 Registros actualizados: ${resultados.actualizadas}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('📊 RESUMEN DE IMPORTACIÓN');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`✅ Sentencias ejecutadas: ${resultados.ejecutadas}/${sentencias.length}`);
+    console.log(`➕ Registros nuevos (INSERT): ${resultados.insertadas}`);
+    console.log(`🔄 Registros actualizados (UPDATE): ${resultados.actualizadas}`);
     console.log(`⚠️  Advertencias: ${resultados.advertencias.length}`);
     console.log(`❌ Errores: ${resultados.errores.length}`);
+    
+    if (resultados.errores.length > 0) {
+      console.log('\n❌ DETALLE DE ERRORES:');
+      resultados.errores.slice(0, 5).forEach((err, idx) => {
+        console.log(`   ${idx + 1}. Sentencia ${err.indice}: ${err.error}`);
+        console.log(`      SQL: ${err.sentencia}`);
+      });
+      if (resultados.errores.length > 5) {
+        console.log(`   ... y ${resultados.errores.length - 5} errores más`);
+      }
+    }
+    
+    if (resultados.advertencias.length > 0 && resultados.advertencias.length <= 10) {
+      console.log('\n⚠️  DETALLE DE ADVERTENCIAS:');
+      resultados.advertencias.forEach((adv, idx) => {
+        console.log(`   ${idx + 1}. Sentencia ${adv.indice}: ${adv.error}`);
+      });
+    }
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+    // Reactivar FK checks
+    console.log('🔒 Reactivando Foreign Key Checks...');
+    await sequelize.query('SET FOREIGN_KEY_CHECKS = 1');
 
     const tieneErrores = resultados.errores.length > 0;
     const mensaje = tieneErrores 
       ? `Importación completada con ${resultados.errores.length} errores`
       : `Importación completada: ${resultados.insertadas} nuevos, ${resultados.actualizadas} actualizados`;
+
+    console.log(`📤 Enviando respuesta al cliente: ${mensaje}`);
 
     res.json({
       success: !tieneErrores,

@@ -36,6 +36,12 @@ const ExportacionImportacion = () => {
   const [loading, setLoading] = useState(false);
   const [mensaje, setMensaje] = useState(null);
   const [estadisticas, setEstadisticas] = useState(null);
+  const [progresoImportacion, setProgresoImportacion] = useState({
+    visible: false,
+    mensaje: '',
+    porcentaje: 0,
+    detalles: ''
+  });
 
   useEffect(() => {
     cargarTablas();
@@ -239,11 +245,24 @@ const ExportacionImportacion = () => {
     if (!archivo) return;
 
     const extension = archivo.name.split('.').pop().toLowerCase();
+    const tamanioMB = (archivo.size / 1024 / 1024).toFixed(2);
+    
+    console.log(`📂 Archivo seleccionado: ${archivo.name}`);
+    console.log(`📊 Tamaño: ${tamanioMB} MB`);
+    console.log(`📝 Extensión: ${extension}`);
+
     const reader = new FileReader();
 
     reader.onload = async (e) => {
       try {
         setLoading(true);
+        setProgresoImportacion({
+          visible: true,
+          mensaje: 'Leyendo archivo...',
+          porcentaje: 10,
+          detalles: `Archivo: ${archivo.name} (${tamanioMB} MB)`
+        });
+
         const contenido = e.target.result;
         const token = localStorage.getItem('token');
 
@@ -251,8 +270,23 @@ const ExportacionImportacion = () => {
 
         // Detectar el tipo de archivo y usar el endpoint correspondiente
         if (extension === 'json') {
+          console.log('🔍 Detectado: Archivo JSON');
+          setProgresoImportacion(prev => ({
+            ...prev,
+            mensaje: 'Procesando JSON...',
+            porcentaje: 30
+          }));
+
           // Importar JSON
           const datos = JSON.parse(contenido);
+          console.log('📦 Datos parseados:', Object.keys(datos));
+
+          setProgresoImportacion(prev => ({
+            ...prev,
+            mensaje: 'Enviando datos al servidor...',
+            porcentaje: 50
+          }));
+
           response = await axios.post(
             `${API_URL}/exportacion/importar`,
             {
@@ -264,12 +298,44 @@ const ExportacionImportacion = () => {
             }
           );
 
+          setProgresoImportacion(prev => ({
+            ...prev,
+            mensaje: 'Importación completada',
+            porcentaje: 100
+          }));
+
           if (response.data.success) {
+            console.log('✅ Importación JSON exitosa:', response.data.resultados);
             mostrarMensaje('success', `Importación completada. ${response.data.resultados.importados} registros importados`);
             cargarTablas();
           }
         } else if (extension === 'sql') {
+          console.log('🔍 Detectado: Archivo SQL');
+          
+          // Contar sentencias aproximadas
+          const lineas = contenido.split('\n');
+          const sentenciasAprox = contenido.split(';').filter(s => s.trim().length > 0).length;
+          
+          console.log(`📊 Estadísticas SQL:`);
+          console.log(`   - Líneas totales: ${lineas.length}`);
+          console.log(`   - Sentencias aproximadas: ${sentenciasAprox}`);
+          console.log(`   - Tamaño contenido: ${contenido.length} caracteres`);
+
+          setProgresoImportacion(prev => ({
+            ...prev,
+            mensaje: `Procesando SQL (${sentenciasAprox} sentencias aproximadas)...`,
+            porcentaje: 30,
+            detalles: `${sentenciasAprox} sentencias detectadas`
+          }));
+
           // Importar SQL
+          console.log('📤 Enviando SQL al servidor...');
+          setProgresoImportacion(prev => ({
+            ...prev,
+            mensaje: 'Ejecutando sentencias SQL...',
+            porcentaje: 50
+          }));
+
           response = await axios.post(
             `${API_URL}/exportacion/importar/sql`,
             {
@@ -278,12 +344,44 @@ const ExportacionImportacion = () => {
               manejarDuplicados: true // Actualizar registros existentes en lugar de duplicar
             },
             {
-              headers: { Authorization: `Bearer ${token}` }
+              headers: { Authorization: `Bearer ${token}` },
+              onUploadProgress: (progressEvent) => {
+                const porcentajeSubida = Math.round((progressEvent.loaded * 40) / progressEvent.total) + 50;
+                setProgresoImportacion(prev => ({
+                  ...prev,
+                  porcentaje: porcentajeSubida,
+                  detalles: `Subiendo... ${porcentajeSubida}%`
+                }));
+              }
             }
           );
 
+          console.log('📥 Respuesta del servidor:', response.data);
+
+          setProgresoImportacion(prev => ({
+            ...prev,
+            mensaje: 'Importación completada',
+            porcentaje: 100
+          }));
+
           if (response.data.success || response.data.resultados.ejecutadas > 0) {
-            const { ejecutadas, insertadas, actualizadas, errores, advertencias } = response.data.resultados;
+            const { ejecutadas, insertadas, actualizadas, errores, advertencias, detalle_errores } = response.data.resultados;
+            
+            console.log('✅ Resultados de importación:');
+            console.log(`   - Ejecutadas: ${ejecutadas}`);
+            console.log(`   - Insertadas: ${insertadas}`);
+            console.log(`   - Actualizadas: ${actualizadas}`);
+            console.log(`   - Errores: ${errores}`);
+            console.log(`   - Advertencias: ${advertencias}`);
+            
+            if (detalle_errores && detalle_errores.length > 0) {
+              console.error('❌ Errores detallados:');
+              detalle_errores.forEach((err, idx) => {
+                console.error(`   ${idx + 1}. ${err.error}`);
+                console.error(`      Sentencia: ${err.sentencia}`);
+              });
+            }
+
             let mensaje = `SQL importado: ${ejecutadas} sentencias ejecutadas`;
             
             if (insertadas > 0 || actualizadas > 0) {
@@ -295,27 +393,47 @@ const ExportacionImportacion = () => {
             }
             
             if (errores > 0) {
-              mostrarMensaje('warning', `${mensaje}. ${errores} errores encontrados.`);
+              mostrarMensaje('warning', `${mensaje}. ${errores} errores encontrados. Ver consola para detalles.`);
             } else {
               mostrarMensaje('success', mensaje);
             }
             
             cargarTablas();
           } else {
+            console.error('❌ Error en importación:', response.data);
             mostrarMensaje('error', response.data.message || 'Error al importar SQL');
           }
         } else {
+          console.error(`❌ Formato no soportado: .${extension}`);
           mostrarMensaje('error', `Formato de archivo no soportado: .${extension}. Use .json o .sql`);
         }
       } catch (error) {
-        console.error('Error al importar:', error);
-        const errorMsg = error.response?.data?.message || 'Error al importar los datos';
+        console.error('❌ Error al importar:', error);
+        console.error('   Detalles:', error.response?.data);
+        console.error('   Stack:', error.stack);
+        
+        const errorMsg = error.response?.data?.message || error.message || 'Error al importar los datos';
         mostrarMensaje('error', errorMsg);
       } finally {
         setLoading(false);
+        setTimeout(() => {
+          setProgresoImportacion({
+            visible: false,
+            mensaje: '',
+            porcentaje: 0,
+            detalles: ''
+          });
+        }, 2000);
       }
     };
 
+    reader.onerror = (error) => {
+      console.error('❌ Error al leer archivo:', error);
+      mostrarMensaje('error', 'Error al leer el archivo');
+      setLoading(false);
+    };
+
+    console.log('📖 Iniciando lectura de archivo...');
     reader.readAsText(archivo);
   };
 
@@ -493,6 +611,51 @@ const ExportacionImportacion = () => {
            mensaje.tipo === 'warning' ? <ExclamationTriangleIcon className="h-6 w-6" /> :
            <InformationCircleIcon className="h-6 w-6" />}
           <span>{mensaje.texto}</span>
+        </div>
+      )}
+
+      {/* Modal de Progreso de Importación */}
+      {progresoImportacion.visible && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-dark-100 rounded-lg shadow-2xl p-8 max-w-md w-full mx-4">
+            <div className="text-center">
+              {/* Spinner animado */}
+              <div className="mb-6 flex justify-center">
+                <div className="relative w-24 h-24">
+                  <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
+                  <div className="absolute inset-0 border-4 border-primary-600 rounded-full border-t-transparent animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-2xl font-bold text-primary-600">{progresoImportacion.porcentaje}%</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mensaje principal */}
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+                {progresoImportacion.mensaje}
+              </h3>
+
+              {/* Detalles */}
+              {progresoImportacion.detalles && (
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                  {progresoImportacion.detalles}
+                </p>
+              )}
+
+              {/* Barra de progreso */}
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+                <div 
+                  className="bg-primary-600 h-full transition-all duration-500 ease-out rounded-full"
+                  style={{ width: `${progresoImportacion.porcentaje}%` }}
+                ></div>
+              </div>
+
+              {/* Texto de progreso */}
+              <p className="mt-3 text-xs text-gray-500 dark:text-gray-500">
+                Por favor espere, no cierre esta ventana...
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
