@@ -226,6 +226,76 @@ const exportarCSV = async (req, res) => {
 };
 
 /**
+ * Resuelve valores legibles para columnas FK (id_*)
+ * Mapea id_proyecto → nombre, id_empleado → nombre completo, etc.
+ */
+async function resolverValoresFK(nombreTabla, datos) {
+  if (!Array.isArray(datos) || datos.length === 0) return datos;
+
+  // Mapeo de columnas FK a sus tablas y campos descriptivos
+  const fkMapping = {
+    id_proyecto: { tabla: 'proyectos', idCol: 'id_proyecto', campo: 'nombre', alias: 'proyecto_nombre' },
+    id_empleado: { tabla: 'empleados', idCol: 'id_empleado', campoFn: (row) => `${row.nombre} ${row.apellido_paterno || ''} ${row.apellido_materno || ''}`.trim(), alias: 'empleado_nombre' },
+    id_proveedor: { tabla: 'proveedores', idCol: 'id_proveedor', campo: 'nombre', alias: 'proveedor_nombre' },
+    id_usuario: { tabla: 'usuarios', idCol: 'id_usuario', campo: 'nombre_usuario', alias: 'usuario_nombre' },
+    id_categoria: { tabla: 'categorias_suministro', idCol: 'id_categoria', campo: 'nombre', alias: 'categoria_nombre' },
+    id_categoria_suministro: { tabla: 'categorias_suministro', idCol: 'id_categoria', campo: 'nombre', alias: 'categoria_nombre' },
+    id_categoria_herramienta: { tabla: 'categorias_herramienta', idCol: 'id_categoria', campo: 'nombre', alias: 'categoria_herramienta_nombre' },
+    id_unidad: { tabla: 'unidades_medida', idCol: 'id_unidad', campo: 'nombre', alias: 'unidad_nombre' },
+    id_unidad_medida: { tabla: 'unidades_medida', idCol: 'id_unidad', campo: 'nombre', alias: 'unidad_nombre' },
+    id_rol: { tabla: 'roles', idCol: 'id_rol', campo: 'nombre_rol', alias: 'rol_nombre' },
+    id_semana: { tabla: 'semanas_nomina', idCol: 'id_semana', campoFn: (row) => `Sem ${row.numero_semana} (${row.fecha_inicio || ''})`, alias: 'semana_descripcion' },
+    id_contrato: { tabla: 'contratos', idCol: 'id_contrato', campo: 'nombre', alias: 'contrato_nombre' },
+    id_oficio: { tabla: 'oficios', idCol: 'id_oficio', campo: 'nombre', alias: 'oficio_nombre' },
+    id_herramienta: { tabla: 'herramientas', idCol: 'id_herramienta', campo: 'nombre', alias: 'herramienta_nombre' },
+    id_nomina: { tabla: 'nomina_empleado', idCol: 'id_nomina', campoFn: (row) => `Nómina ${row.id_nomina}`, alias: 'nomina_descripcion' },
+    id_adeudo: { tabla: 'adeudos_empleados', idCol: 'id_adeudo', campo: 'concepto', alias: 'adeudo_concepto' },
+    id_ingreso: { tabla: 'ingresos', idCol: 'id_ingreso', campo: 'concepto', alias: 'ingreso_concepto' },
+  };
+
+  // Detectar qué FKs están presentes en estos datos
+  const colsPresentes = Object.keys(datos[0] || {});
+  const fksPresentes = colsPresentes.filter(col => fkMapping[col]);
+
+  if (fksPresentes.length === 0) return datos; // sin FKs
+
+  // Cachear lookups por FK
+  const cacheFKs = {};
+  for (const fkCol of fksPresentes) {
+    const { tabla, idCol, campo, campoFn } = fkMapping[fkCol];
+    try {
+      const [filas] = await sequelize.query(`SELECT * FROM \`${tabla}\``);
+      cacheFKs[fkCol] = filas.reduce((acc, row) => {
+        const id = row[idCol];
+        if (id != null) {
+          let valor = campoFn ? campoFn(row) : row[campo];
+          acc[id] = valor != null ? valor : `[${id}]`;
+        }
+        return acc;
+      }, {});
+    } catch (e) {
+      console.error(`Error cargando FK ${fkCol} desde ${tabla}:`, e.message);
+      cacheFKs[fkCol] = {};
+    }
+  }
+
+  // Enriquecer cada fila con los valores legibles
+  const datosEnriquecidos = datos.map(fila => {
+    const nuevaFila = { ...fila };
+    for (const fkCol of fksPresentes) {
+      const idVal = fila[fkCol];
+      if (idVal != null && cacheFKs[fkCol]) {
+        const alias = fkMapping[fkCol].alias;
+        nuevaFila[alias] = cacheFKs[fkCol][idVal] || `[${idVal}]`;
+      }
+    }
+    return nuevaFila;
+  });
+
+  return datosEnriquecidos;
+}
+
+/**
  * Exporta datos en formato Excel
  */
 const exportarExcel = async (req, res) => {
@@ -252,10 +322,16 @@ const exportarExcel = async (req, res) => {
         const [datos] = await sequelize.query(`SELECT ${selectCols} FROM \`${nombreTabla}\``);
 
         if (Array.isArray(datos) && datos.length > 0) {
+          // Enriquecer datos con valores legibles para FKs
+          const datosEnriquecidos = await resolverValoresFK(nombreTabla, datos);
+
           const worksheet = workbook.addWorksheet(nombreTabla);
 
+          // Determinar columnas finales (originales + alias de FK)
+          const colsFinales = Object.keys(datosEnriquecidos[0]);
+
           // Agregar encabezados
-          worksheet.columns = cols.map(col => ({
+          worksheet.columns = colsFinales.map(col => ({
             header: col,
             key: col,
             width: 15
@@ -270,7 +346,7 @@ const exportarExcel = async (req, res) => {
           };
 
           // Agregar datos
-          datos.forEach(fila => {
+          datosEnriquecidos.forEach(fila => {
             worksheet.addRow(fila);
           });
 
