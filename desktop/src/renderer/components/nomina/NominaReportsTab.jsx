@@ -101,8 +101,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       empleado: true,
       oficio: true,
       proyecto: true,
-      dias: true,
       sueldo: true,
+      dias: true,
+      totalNomina: true,
       horasExtra: true,
       bonos: true,
       isr: true,
@@ -394,16 +395,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         const descuentos = parseFloat(nomina.descuentos) || 0;
         const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
 
-        // Proyecto: buscar en nomina, en empleado, o en lista de proyectos si existe
-        let proyectoNombre = 'Sin proyecto';
-        if (nomina.proyecto && nomina.proyecto.nombre) {
-          proyectoNombre = nomina.proyecto.nombre;
-        } else if (empleado && empleado.proyecto && empleado.proyecto.nombre) {
-          proyectoNombre = empleado.proyecto.nombre;
-        } else if (nomina.id_proyecto && proyectos?.length) {
-          const proyectoObj = proyectos.find(p => p.id_proyecto === nomina.id_proyecto);
-          if (proyectoObj && proyectoObj.nombre) proyectoNombre = proyectoObj.nombre;
-        }
+        // Proyecto: usar solo el proyecto guardado con la nómina
+        const proyectoNombre = nomina.proyecto?.nombre || 'Sin proyecto';
 
         // Semana: preferir datos de nomina.semana (ISO) y periodo si existen; si no, calcular por fecha
         let semanaDelMes = '-';
@@ -452,12 +445,21 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
           estado = 'BORRADOR';
         }
 
+        // Calcular días no trabajados y su descuento
+        const diasBase = 6;
+        const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
+        const descuentoDiasNoTrabajados = (sueldoBase / diasBase) * diasNoTrabajados;
+        const totalNomina = sueldoBase - descuentoDiasNoTrabajados;
+
         return {
           'Empleado': empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado',
           'Oficio': empleado?.oficio?.nombre || 'Sin oficio',
           'Proyecto': proyectoNombre,
-          'Días Laborados': diasLaborados,
           'Sueldo Base': sueldoBase,
+          'Días Laborados': diasLaborados,
+          'Total Nómina': totalNomina,
+          'Días No Trabajados': diasNoTrabajados > 0 ? diasNoTrabajados : 0,
+          'Descuento Días No Trab.': diasNoTrabajados > 0 ? descuentoDiasNoTrabajados : 0,
           'Horas Extra': horasExtra,
           'Bonos': bonos,
           'ISR': isr,
@@ -480,6 +482,28 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       const totalIMSS = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.deducciones_imss) || 0), 0);
       const totalInfonavit = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.deducciones_infonavit) || 0), 0);
       const totalDescuentos = nominasToExport.reduce((total, nomina) => total + (parseFloat(nomina.descuentos) || 0), 0);
+      const totalNomina = nominasToExport.reduce((total, nomina) => {
+        const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+        const diasBase = 6;
+        const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
+        const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+        const descuento = (sueldoBase / diasBase) * diasNoTrabajados;
+        return total + (sueldoBase - descuento);
+      }, 0);
+      const totalDiasNoTrabajados = nominasToExport.reduce((total, nomina) => {
+        const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+        const diasBase = 6;
+        const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
+        return total + diasNoTrabajados;
+      }, 0);
+      const totalDescuentoDiasNoTrabajados = nominasToExport.reduce((total, nomina) => {
+        const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+        const diasBase = 6;
+        const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
+        const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+        const descuento = (sueldoBase / diasBase) * diasNoTrabajados;
+        return total + descuento;
+      }, 0);
       const totalAPagar = nominasToExport.reduce((total, nomina) => {
         const monto = parseFloat(nomina.monto_total || nomina.monto);
         return total + (isNaN(monto) ? 0 : monto);
@@ -489,8 +513,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         'Empleado': 'TOTALES',
         'Oficio': `${nominasToExport.length} empleados`,
         'Proyecto': '-',
-        'Días Laborados': '-',
         'Sueldo Base': totalSueldoBase,
+        'Días Laborados': '-',
+        'Total Nómina': totalNomina,
+        'Días No Trabajados': totalDiasNoTrabajados,
+        'Descuento Días No Trab.': totalDescuentoDiasNoTrabajados,
         'Horas Extra': totalHorasExtra,
         'Bonos': totalBonos,
         'ISR': totalISR,
@@ -513,8 +540,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         { wch: 25 }, // Empleado
         { wch: 20 }, // Oficio
         { wch: 20 }, // Proyecto
-        { wch: 10 }, // Días Laborados
         { wch: 12 }, // Sueldo Base
+        { wch: 10 }, // Días Laborados
+        { wch: 15 }, // Total Nómina
+        { wch: 12 }, // Días No Trabajados
+        { wch: 15 }, // Descuento Días No Trab.
         { wch: 12 }, // Horas Extra
         { wch: 12 }, // Bonos
         { wch: 12 }, // ISR
@@ -532,8 +562,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
       // Aplicar formato de número a las columnas numéricas
       const range = XLSX.utils.decode_range(ws['!ref']);
       for (let row = range.s.r + 1; row <= range.e.r; row++) {
-        // Columnas: E=Sueldo Base, F=Horas Extra, G=Bonos, H=ISR, I=IMSS, J=Infonavit, K=Descuentos, M=Total a Pagar
-        ['E', 'F', 'G', 'H', 'I', 'J', 'K', 'M'].forEach(col => {
+        // Columnas: D=Sueldo Base, F=Total Nómina, G=Días No Trab., H=Descuento, I=Horas Extra, J=Bonos, K=ISR, L=IMSS, M=Infonavit, N=Descuentos, P=Total a Pagar
+        ['D', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'P'].forEach(col => {
           const cellAddress = col + (row + 1);
           if (ws[cellAddress] && typeof ws[cellAddress].v === 'number') {
             ws[cellAddress].t = 'n'; // Tipo número
@@ -1853,10 +1883,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                           {/* Conceptos */}
                           <div>
                             <div className="mb-2 text-xs font-medium text-gray-500 dark:text-gray-400">Conceptos</div>
-                            <div className="grid grid-cols-4 gap-2">
+                            <div className="grid grid-cols-3 gap-2">
                               {[
-                                ['dias', 'Días'],
-                                ['sueldo', 'Sueldo'],
+                                ['sueldo', 'Sueldo Base'],
+                                ['dias', 'Días Lab.'],
+                                ['totalNomina', 'Total Nómina'],
                                 ['horasExtra', 'H. Extra'],
                                 ['bonos', 'Bonos']
                               ].map(([k, label]) => (
@@ -1992,11 +2023,14 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         <th className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.proyecto ? 'hidden' : ''}`}>
                           Proyecto
                         </th>
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.sueldo ? 'hidden' : ''}`}>
+                          Sueldo Base
+                        </th>
                         <th className={`px-3 py-3 text-center text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.dias ? 'hidden' : ''}`}>
                           Días Lab.
                         </th>
-                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.sueldo ? 'hidden' : ''}`}>
-                          Sueldo Base
+                        <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.totalNomina ? 'hidden' : ''}`}>
+                          Total Nómina
                         </th>
                         <th className={`px-3 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider ${!visibleCols.horasExtra ? 'hidden' : ''}`}>
                           Horas Extra
@@ -2046,6 +2080,12 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             const descuentos = parseFloat(nomina.descuentos) || 0;
                             const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
 
+                            // Calcular días no trabajados y su descuento
+                            const diasBase = 6; // Normalmente 6 días a la semana
+                            const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
+                            const pagoDiario = sueldoBase / diasBase;
+                            const descuentoDiasNoTrabajados = pagoDiario * diasNoTrabajados;
+
                             // Determinar tipo de pago
                             const esParcial = esPagoParcial(nomina.tipo_pago);
                             const tipoPago = esParcial ? 'PARCIAL' : 'COMPLETA';
@@ -2081,7 +2121,12 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                 </td>
                                 <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.proyecto ? 'hidden' : ''}`}>
                                   <div className="text-sm text-gray-900 dark:text-white">
-                                    {nomina.proyecto?.nombre || empleado?.proyecto?.nombre || 'Sin proyecto'}
+                                    {nomina.proyecto?.nombre || 'Sin proyecto'}
+                                  </div>
+                                </td>
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.sueldo ? 'hidden' : ''}`}>
+                                  <div className="text-sm text-gray-900 dark:text-white">
+                                    {formatCurrency(sueldoBase)}
                                   </div>
                                 </td>
                                 <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.dias ? 'hidden' : ''}`}>
@@ -2089,10 +2134,15 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                     {diasLaborados}
                                   </div>
                                 </td>
-                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.sueldo ? 'hidden' : ''}`}>
-                                  <div className="text-sm text-gray-900 dark:text-white">
-                                    {formatCurrency(sueldoBase)}
+                                <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.totalNomina ? 'hidden' : ''}`}>
+                                  <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
+                                    {formatCurrency(sueldoBase - descuentoDiasNoTrabajados)}
                                   </div>
+                                  {diasNoTrabajados > 0 && (
+                                    <div className="text-xs text-red-600 dark:text-red-400">
+                                      -{diasNoTrabajados} día(s): -{formatCurrency(descuentoDiasNoTrabajados)}
+                                    </div>
+                                  )}
                                 </td>
                                 <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.horasExtra ? 'hidden' : ''}`}>
                                   <div className="text-sm text-gray-900 dark:text-white">
@@ -2169,14 +2219,28 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             <div className="text-sm text-gray-500 dark:text-gray-400">-</div>
                           </td>
                         )}
+                        {visibleCols.sueldo && (
+                          <td className="px-3 py-4 whitespace-nowrap">
+                            <div className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.pago_semanal) || 0), 0))}</div>
+                          </td>
+                        )}
                         {visibleCols.dias && (
                           <td className="px-3 py-4 whitespace-nowrap">
                             <div className="text-sm text-center text-gray-500 dark:text-gray-400">-</div>
                           </td>
                         )}
-                        {visibleCols.sueldo && (
+                        {visibleCols.totalNomina && (
                           <td className="px-3 py-4 whitespace-nowrap">
-                            <div className="text-sm font-bold text-gray-900 dark:text-white">{formatCurrency(filteredNominas.reduce((total, nomina) => total + (parseFloat(nomina.pago_semanal) || 0), 0))}</div>
+                            <div className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                              {formatCurrency(filteredNominas.reduce((total, nomina) => {
+                                const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+                                const diasBase = 6;
+                                const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
+                                const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+                                const descuento = (sueldoBase / diasBase) * diasNoTrabajados;
+                                return total + (sueldoBase - descuento);
+                              }, 0))}
+                            </div>
                           </td>
                         )}
                         {visibleCols.horasExtra && (

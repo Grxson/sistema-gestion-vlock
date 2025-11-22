@@ -104,6 +104,7 @@ const getAllNominas = async (req, res) => {
         // Obtener IDs únicos de empleados y semanas
         const empleadoIds = [...new Set(nominasRaw.map(n => n.id_empleado))];
         const semanaIds = [...new Set(nominasRaw.map(n => n.id_semana))];
+        const proyectoIds = [...new Set(nominasRaw.map(n => n.id_proyecto).filter(id => id))];
 
         // Consultas separadas sin includes anidados
         const empleados = await Empleado.findAll({
@@ -116,9 +117,15 @@ const getAllNominas = async (req, res) => {
             attributes: ['id_semana', 'anio', 'semana_iso', 'etiqueta', 'fecha_inicio', 'fecha_fin', 'estado']
         });
 
+        const proyectos = proyectoIds.length > 0 ? await models.Proyectos.findAll({
+            where: { id_proyecto: proyectoIds },
+            attributes: ['id_proyecto', 'nombre']
+        }) : [];
+
         // Mapear para acceso rápido
         const empleadosMap = new Map(empleados.map(e => [e.id_empleado, e.toJSON()]));
         const semanasMap = new Map(semanas.map(s => [s.id_semana, s.toJSON()]));
+        const proyectosMap = new Map(proyectos.map(p => [p.id_proyecto, p.toJSON()]));
 
         // Combinar datos manualmente
         const nominas = nominasRaw.map(nomina => {
@@ -126,7 +133,8 @@ const getAllNominas = async (req, res) => {
             return {
                 ...nominaJSON,
                 empleado: empleadosMap.get(nomina.id_empleado) || null,
-                semana: semanasMap.get(nomina.id_semana) || null
+                semana: semanasMap.get(nomina.id_semana) || null,
+                proyecto: proyectosMap.get(nomina.id_proyecto) || null
             };
         });
 
