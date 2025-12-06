@@ -282,6 +282,16 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     };
   }, [filteredNominas]);
 
+  // Helper: parsear fechas DATEONLY evitando confusión de zona horaria
+  const parseDateOnly = (dateStr) => {
+    if (!dateStr) return null;
+    const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
+    }
+    return null;
+  };
+
   // Helper: calcular semana del mes usando ISO de la nómina si existe
   const computeSemanaDelMes = (n) => {
     // PRIORIDAD 1: Si la nómina tiene el campo 'semana' (número directo 1-5), usarlo
@@ -299,8 +309,16 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
     if (n?.semana?.anio && n?.semana?.semana_iso) {
       // Derivar período desde la fecha base (YYYY-MM)
       if (base) {
-        const d = new Date(base);
-        const periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        // Usar parseDateOnly para evitar confusión de zona horaria
+        const parsed = parseDateOnly(base);
+        let periodo;
+        if (parsed) {
+          periodo = `${parsed.year}-${String(parsed.month).padStart(2, '0')}`;
+        } else {
+          // Fallback a new Date
+          const d = new Date(base);
+          periodo = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        }
         const idx = semanaDelMesDesdeISO(periodo, n.semana.anio, n.semana.semana_iso);
         if (!Number.isNaN(idx) && idx) return idx;
       }
