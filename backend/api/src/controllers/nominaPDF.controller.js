@@ -397,6 +397,17 @@ const generarReciboPDF = async (req, res) => {
             const [yy, mm] = bestKey.split('-').map(Number);
             return { year: yy, month0: mm };
         }
+        function semanaTocaMes(lunesISO, targetMonth, targetYear) {
+            // Verifica si la semana (lunes a domingo) toca el mes objetivo
+            for (let i = 0; i < 7; i++) {
+                const d = new Date(lunesISO);
+                d.setDate(lunesISO.getDate() + i);
+                if (d.getMonth() === targetMonth && d.getFullYear() === targetYear) {
+                    return true;
+                }
+            }
+            return false;
+        }
         function listarSemanasISODePeriodo(periodo) {
             const [yy, mm] = periodo.split('-');
             const year = parseInt(yy, 10);
@@ -425,8 +436,8 @@ const generarReciboPDF = async (req, res) => {
                 const diff = Math.floor((jueves - primerJueves) / (1000 * 60 * 60 * 24));
                 const isoWeek = Math.floor(diff / 7) + 1;
                 const key = `${isoYear}-${isoWeek}`;
-                const maj = getMajorityMonthFromMonday(d);
-                if (maj.month0 === month0 && !seen.has(key)) {
+                // Cambio: usar semanaTocaMes en lugar de mayoría
+                if (semanaTocaMes(d, month0, year) && !seen.has(key)) {
                     seen.add(key);
                     list.push({ anio: isoYear, semana_iso: isoWeek });
                 }

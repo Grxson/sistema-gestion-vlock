@@ -160,6 +160,25 @@ function getMajorityMonth(infoSemana) {
 }
 
 /**
+ * Verifica si una semana ISO toca un mes específico (tiene al menos 1 día en ese mes).
+ * @param {Object} infoSemana - Información de la semana
+ * @param {number} targetMonth - Mes objetivo (0-11)
+ * @param {number} targetYear - Año objetivo
+ * @returns {boolean} true si la semana toca ese mes
+ */
+function semanaTocaMes(infoSemana, targetMonth, targetYear) {
+  const start = new Date(infoSemana.fechaInicio);
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    if (d.getMonth() === targetMonth && d.getFullYear() === targetYear) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Lista las semanas ISO que tocan un período (YYYY-MM), en orden.
  * @param {string} periodo - Formato YYYY-MM
  * @returns {Array<{anio:number, semana_iso:number}>}
@@ -183,8 +202,8 @@ export function listarSemanasISODePeriodo(periodo) {
   for (let d = new Date(cursor); d <= end; d.setDate(d.getDate() + 7)) {
     const info = generarInfoSemana(d); // d es lunes ISO
     const key = `${info.año}-${info.semanaISO}`;
-    const maj = getMajorityMonth(info);
-    if (maj.month0 === month && !seen.has(key)) {
+    // Incluir cualquier semana que TOQUE el mes (tiene al menos 1 día)
+    if (semanaTocaMes(info, month, year) && !seen.has(key)) {
       seen.add(key);
       list.push({ anio: info.año, semana_iso: info.semanaISO });
     }
