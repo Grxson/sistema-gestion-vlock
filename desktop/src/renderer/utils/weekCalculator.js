@@ -26,9 +26,8 @@ export function calcularSemanaDelMes(fecha) {
   const fechaTemp = new Date(fecha.getTime());
   fechaTemp.setHours(12, 0, 0, 0);
   const info = generarInfoSemana(fechaTemp);
-  // Periodo del MES por mayoría de días (semana cuenta al mes que contiene >=4 días)
-  const majority = getMajorityMonth(info);
-  const periodo = `${majority.year}-${String(majority.month0 + 1).padStart(2, '0')}`;
+  // Usar el período del mes CIVIL (de la fecha original), no por mayoría
+  const periodo = `${fechaTemp.getFullYear()}-${String(fechaTemp.getMonth() + 1).padStart(2, '0')}`;
   const idx = semanaDelMesDesdeISO(periodo, info.año, info.semanaISO);
   return idx;
 }

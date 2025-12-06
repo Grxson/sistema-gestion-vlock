@@ -38,17 +38,38 @@ const useCombinedTableData = (suministros = [], filters = {}) => {
       'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
     ];
 
+    // Helper para parsear fechas DATEONLY (YYYY-MM-DD) evitando confusión de zona horaria
+    const parseDateOnly = (dateStr) => {
+      if (!dateStr) return null;
+      const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
+      }
+      return null;
+    };
+
     // Obtener información de la semana
-    const fechaInicio = new Date(semana.fecha_inicio);
-    const mes = meses[fechaInicio.getMonth()];
-    const anio = semana.anio;
+    // Parsear fecha como DATEONLY para evitar confusión de zona horaria
+    const parsed = parseDateOnly(semana.fecha_inicio);
+    let mes, anio;
+    
+    if (parsed) {
+      // Usar valores parseados directamente
+      mes = meses[parsed.month - 1]; // parsed.month es 1-12, meses[] es 0-11
+      anio = parsed.year;
+    } else {
+      // Fallback a new Date si no es string ISO
+      const fechaInicio = new Date(semana.fecha_inicio);
+      mes = meses[fechaInicio.getMonth()];
+      anio = fechaInicio.getFullYear();
+    }
     
     // Calcular número de semana del mes (1-5) usando la misma lógica que en Nomina.jsx
-    const periodo = `${anio}-${String(fechaInicio.getMonth() + 1).padStart(2, '0')}`;
+    const periodo = `${anio}-${String(parsed ? parsed.month : new Date(semana.fecha_inicio).getMonth() + 1).padStart(2, '0')}`;
     const numeroSemana = semanaDelMesDesdeISO(periodo, semana.anio, semana.semana_iso);
     
     // Generar folio específico para nómina: NOM-AAAA-MM-SX (ej: NOM-2025-11-S3)
-    const folio = `NOM-${anio}-${String(fechaInicio.getMonth() + 1).padStart(2, '0')}-S${numeroSemana}`;
+    const folio = `NOM-${anio}-${String(parsed ? parsed.month : new Date(semana.fecha_inicio).getMonth() + 1).padStart(2, '0')}-S${numeroSemana}`;
 
     console.log('🔄 formatNominaAsRow - Entrada:', {
       nominaData_total: nominaData.total,

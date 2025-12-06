@@ -5,7 +5,7 @@ import apiService from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import EditNominaModal from './EditNominaModal';
 import ConfirmModal from '../ui/ConfirmModal';
-import { semanaDelMesDesdeISO } from '../../utils/weekCalculator';
+import { semanaDelMesDesdeISO, calcularSemanaDelMes } from '../../utils/weekCalculator';
 
 // Caché simple en memoria por empleado
 const HIST_CACHE = new Map(); // key: empleadoId, value: { data, timestamp }
@@ -137,10 +137,27 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
     }
   };
 
+  // Helper para parsear fechas DATEONLY (YYYY-MM-DD) evitando confusión de zona horaria
+  const parseDateOnly = (dateStr) => {
+    if (!dateStr) return null;
+    // Si es string ISO (YYYY-MM-DD o YYYY-MM-DDTHH:MM:SS), extraer parte de fecha
+    const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      return { year: parseInt(match[1], 10), month: parseInt(match[2], 10), day: parseInt(match[3], 10) };
+    }
+    return null;
+  };
+
   const getPeriodo = (n) => {
     if (n?.periodo) return n.periodo;
     const b = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
     if (!b) return '';
+    // Parsear como DATEONLY para evitar confusión de zona horaria
+    const parsed = parseDateOnly(b);
+    if (parsed) {
+      return `${parsed.year}-${String(parsed.month).padStart(2,'0')}`;
+    }
+    // Fallback a new Date si no es string ISO
     const d = new Date(b);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
   };
@@ -154,12 +171,35 @@ export default function NominaEmpleadoHistorialDrawer({ open, empleado, onClose,
     // Prioridad 2: si el include trae 'semana.semana_mes'
     if (typeof n?.semana?.semana_mes === 'number') return n.semana.semana_mes;
     // Prioridad 3: reconstruir usando ISO
+    if (!n?.semana?.anio || !n?.semana?.semana_iso) {
+      // Fallback: si no hay ISO, intentar calcular desde fecha
+      const fechaBase = n?.fecha_pago || n?.fecha || n?.createdAt;
+      if (fechaBase) {
+        return calcularSemanaDelMes(new Date(fechaBase));
+      }
+      return '—';
+    }
+    
     const fechaBase = n?.semana?.fecha_inicio || n?.fecha_pago || n?.fecha || n?.createdAt;
-    if (!fechaBase || !n?.semana?.anio || !n?.semana?.semana_iso) return '—';
-    const d = new Date(fechaBase);
-    const periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    if (!fechaBase) return '—';
+    
+    // Parsear como DATEONLY para evitar confusión de zona horaria
+    const parsed = parseDateOnly(fechaBase);
+    let periodo;
+    if (parsed) {
+      periodo = `${parsed.year}-${String(parsed.month).padStart(2,'0')}`;
+    } else {
+      // Fallback a new Date
+      const d = new Date(fechaBase);
+      periodo = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    }
+    
     const idx = semanaDelMesDesdeISO(periodo, n.semana.anio, n.semana.semana_iso);
-    return Number.isNaN(idx) || !idx ? '—' : idx;
+    // Verificar que idx sea un número válido (no NaN y mayor que 0)
+    if (typeof idx === 'number' && !Number.isNaN(idx) && idx > 0) {
+      return idx;
+    }
+    return '—';
   };
 
   const loadData = async (force = false) => {
