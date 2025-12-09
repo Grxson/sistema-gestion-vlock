@@ -1513,7 +1513,8 @@ const Suministros = () => {
       hora_fin_descarga: cleanTimeField(suministro.hora_fin_descarga)
     };
     
-    // Pasar el suministro individual directamente - FormularioSuministros ahora puede manejarlo
+    // FIX: Tanto editingSuministro como editingRecibo deben asignarse para que la lógica de actualización funcione
+    setEditingSuministro(suministroLimpio);
     setEditingRecibo(suministroLimpio);
     setShowMultipleModal(true);
   };
@@ -2096,6 +2097,7 @@ const Suministros = () => {
   const handleCloseModal = () => {
     setShowMultipleModal(false);
     setEditingSuministro(null);
+    setEditingRecibo(null);
     
     // Limpiar todas las sugerencias
     clearAllSuggestions();
@@ -2847,6 +2849,7 @@ const Suministros = () => {
               onCancel={() => {
                 setShowMultipleModal(false);
                 setEditingRecibo(null);
+                setEditingSuministro(null);
               }}
               proyectos={proyectos}
               proveedores={proveedores}
