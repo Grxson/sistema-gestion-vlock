@@ -1330,11 +1330,23 @@ const Suministros = () => {
 
         for (const suministroData of suministrosData.suministros) {
           if (suministroData.id_suministro) {
-            // Incluir información del IVA y metodo_pago en cada actualización
+            // Incluir información del IVA, metodo_pago y campos del recibo en cada actualización
             const updatePayload = {
               ...suministroData,
-              include_iva: suministrosData.include_iva,
-              metodo_pago: infoRecibo.metodo_pago || suministroData.metodo_pago || 'Efectivo'
+              // Campos del recibo que deben actualizarse
+              id_proyecto: infoRecibo.id_proyecto ? parseInt(infoRecibo.id_proyecto) : suministroData.id_proyecto,
+              folio: infoRecibo.folio || suministroData.folio,
+              fecha: infoRecibo.fecha || suministroData.fecha,
+              id_proveedor: infoRecibo.id_proveedor || infoRecibo.proveedor_info?.id_proveedor || suministroData.id_proveedor,
+              proveedor: infoRecibo.proveedor_info?.nombre || infoRecibo.proveedor || suministroData.proveedor,
+              metodo_pago: infoRecibo.metodo_pago || suministroData.metodo_pago || 'Efectivo',
+              vehiculo_transporte: infoRecibo.vehiculo_transporte || suministroData.vehiculo_transporte,
+              operador_responsable: infoRecibo.operador_responsable || suministroData.operador_responsable,
+              hora_salida: infoRecibo.hora_salida || suministroData.hora_salida,
+              hora_llegada: infoRecibo.hora_llegada || suministroData.hora_llegada,
+              hora_inicio_descarga: infoRecibo.hora_inicio_descarga || suministroData.hora_inicio_descarga,
+              hora_fin_descarga: infoRecibo.hora_fin_descarga || suministroData.hora_fin_descarga,
+              include_iva: suministrosData.include_iva
             };
             updates.push(api.updateSuministro(suministroData.id_suministro, updatePayload));
           } else {
