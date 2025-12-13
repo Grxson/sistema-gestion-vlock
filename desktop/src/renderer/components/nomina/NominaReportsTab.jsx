@@ -2125,6 +2125,41 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             // Calcular semana del mes con base correcta e ISO
                             const semanaDelMes = computeSemanaDelMes(nomina);
 
+                            // Calcular el pago pendiente de nóminas anteriores del MISMO empleado
+                            // Usar nominas (sin filtros) para buscar pendientes anteriores
+                            // Detectar pago parcial: si pago_semanal > monto_total, entonces hay pendiente
+                            const nominasDelEmpleado = (nominas || []).filter(n => n.id_empleado === nomina.id_empleado);
+                            
+                            // Calcular el pago pendiente: si monto_a_pagar está disponible, usar eso
+                            // Si no, calcular basándose en nóminas anteriores
+                            let pagoPendienteAnterior = 0;
+                            const montoAPagar = parseFloat(nomina.monto_a_pagar) || 0;
+                            const sueldoBase_val = parseFloat(nomina.pago_semanal) || 0;
+                            
+                            if (montoAPagar > sueldoBase_val) {
+                              // El monto_a_pagar incluye ya el adeudo
+                              pagoPendienteAnterior = montoAPagar - sueldoBase_val;
+                            } else {
+                              // Calcular basándose en nóminas anteriores
+                              pagoPendienteAnterior = nominasDelEmpleado
+                                .filter(n => {
+                                  if (n.id_nomina >= nomina.id_nomina) return false;
+                                  const sueldoOtra = parseFloat(n.pago_semanal) || 0;
+                                  const montoPagadoOtra = parseFloat(n.monto_total || n.monto || 0) || 0;
+                                  return sueldoOtra > montoPagadoOtra;
+                                })
+                                .reduce((total, n) => {
+                                  const sueldoOtra = parseFloat(n.pago_semanal) || 0;
+                                  const montoPagadoOtra = parseFloat(n.monto_total || n.monto || 0) || 0;
+                                  return total + (sueldoOtra - montoPagadoOtra);
+                                }, 0);
+                            }
+
+                            // Total Nómina = Sueldo base (menos descuentos) + adeudo anterior solo para Gael
+                            const totalNominaSemanal = nomina.id_empleado === 15 
+                              ? sueldoBase - descuentoDiasNoTrabajados + pagoPendienteAnterior
+                              : sueldoBase - descuentoDiasNoTrabajados;
+
                             return (
                               <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                                 <td className={`px-6 py-4 whitespace-nowrap ${!visibleCols.empleado ? 'hidden' : ''}`}>
@@ -2154,11 +2189,16 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                 </td>
                                 <td className={`px-3 py-4 whitespace-nowrap ${!visibleCols.totalNomina ? 'hidden' : ''}`}>
                                   <div className="text-sm font-semibold text-blue-600 dark:text-blue-400">
-                                    {formatCurrency(sueldoBase - descuentoDiasNoTrabajados)}
+                                    {formatCurrency(totalNominaSemanal)}
                                   </div>
                                   {diasNoTrabajados > 0 && (
                                     <div className="text-xs text-red-600 dark:text-red-400">
                                       -{diasNoTrabajados} día(s): -{formatCurrency(descuentoDiasNoTrabajados)}
+                                    </div>
+                                  )}
+                                  {pagoPendienteAnterior > 0 && nomina.id_empleado === 15 && (
+                                    <div className="text-xs text-orange-600 dark:text-orange-400">
+                                      +Adeudado: +{formatCurrency(pagoPendienteAnterior)}
                                     </div>
                                   )}
                                 </td>
@@ -2256,7 +2296,19 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                 const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
                                 const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
                                 const descuento = (sueldoBase / diasBase) * diasNoTrabajados;
-                                return total + (sueldoBase - descuento);
+                                let totalNominaItem = sueldoBase - descuento;
+                                
+                                // Agregar adeudo solo para Gael (id_empleado === 15)
+                                if (nomina.id_empleado === 15) {
+                                  const montoAPagar = parseFloat(nomina.monto_a_pagar) || 0;
+                                  const sueldoBase_val = parseFloat(nomina.pago_semanal) || 0;
+                                  if (montoAPagar > sueldoBase_val) {
+                                    const pagoPendiente = montoAPagar - sueldoBase_val;
+                                    totalNominaItem += pagoPendiente;
+                                  }
+                                }
+                                
+                                return total + totalNominaItem;
                               }, 0))}
                             </div>
                           </td>
