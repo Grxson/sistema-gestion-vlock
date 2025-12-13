@@ -2096,7 +2096,6 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             const imss = parseFloat(nomina.deducciones_imss) || 0;
                             const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
                             const descuentos = parseFloat(nomina.descuentos) || 0;
-                            const totalAPagar = parseFloat(nomina.monto_total || nomina.monto) || 0;
 
                             // Calcular días no trabajados y su descuento
                             const diasBase = 6; // Normalmente 6 días a la semana
@@ -2159,6 +2158,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                             const totalNominaSemanal = nomina.id_empleado === 15 
                               ? sueldoBase - descuentoDiasNoTrabajados + pagoPendienteAnterior
                               : sueldoBase - descuentoDiasNoTrabajados;
+
+                            // Total a Pagar = Total Nómina - IMSS (descuentos)
+                            const totalAPagar = totalNominaSemanal - imss;
 
                             return (
                               <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -2350,10 +2352,30 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                         )}
                         {visibleCols.total && (
                           <td className="px-3 py-4 whitespace-nowrap">
-                            <div className="text-lg font-bold text-green-600 dark:text-green-400">{formatCurrency(filteredNominas.reduce((total, nomina) => {
-                              const monto = parseFloat(nomina.monto_total || nomina.monto);
-                              return total + (isNaN(monto) ? 0 : monto);
-                            }, 0))}</div>
+                            <div className="text-lg font-bold text-green-600 dark:text-green-400">
+                              {formatCurrency(filteredNominas.reduce((total, nomina) => {
+                                const diasLaborados = parseInt(nomina.dias_laborados) || 6;
+                                const diasBase = 6;
+                                const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
+                                const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+                                const descuento = (sueldoBase / diasBase) * diasNoTrabajados;
+                                let totalNominaItem = sueldoBase - descuento;
+                                
+                                // Agregar adeudo solo para Gael (id_empleado === 15)
+                                if (nomina.id_empleado === 15) {
+                                  const montoAPagar = parseFloat(nomina.monto_a_pagar) || 0;
+                                  const sueldoBase_val = parseFloat(nomina.pago_semanal) || 0;
+                                  if (montoAPagar > sueldoBase_val) {
+                                    const pagoPendiente = montoAPagar - sueldoBase_val;
+                                    totalNominaItem += pagoPendiente;
+                                  }
+                                }
+                                
+                                // Total a Pagar = Total Nómina - IMSS
+                                const imss = parseFloat(nomina.deducciones_imss) || 0;
+                                return total + (totalNominaItem - imss);
+                              }, 0))}
+                            </div>
                           </td>
                         )}
                         {visibleCols.tipoPago && (
