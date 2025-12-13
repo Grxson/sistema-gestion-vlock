@@ -84,7 +84,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
   const [drStart, setDrStart] = useState('');
   const [drEnd, setDrEnd] = useState('');
   const [filtroProyecto, setFiltroProyecto] = useState('');
-  const [filtroEstado, setFiltroEstado] = useState('Pagado'); // default Pagado
+  const [filtroEstado, setFiltroEstado] = useState('Pendiente'); // default Pendiente
   const [searchText, setSearchText] = useState('');
   // Visibilidad de columnas (persistente) - carga desde localStorage al inicio
   const [visibleCols, setVisibleCols] = useState(() => {
