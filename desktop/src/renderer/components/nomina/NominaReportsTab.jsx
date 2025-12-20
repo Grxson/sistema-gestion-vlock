@@ -467,7 +467,7 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         const diasBase = 6;
         const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
         const descuentoDiasNoTrabajados = (sueldoBase / diasBase) * diasNoTrabajados;
-        const totalNomina = sueldoBase - descuentoDiasNoTrabajados;
+        const totalNomina = sueldoBase - descuentoDiasNoTrabajados - descuentos;
 
         return {
           'Empleado': empleado ? `${empleado.nombre} ${empleado.apellido}` : 'Empleado no encontrado',
@@ -505,8 +505,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
         const diasBase = 6;
         const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
         const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+        const descuentosVal = parseFloat(nomina.descuentos) || 0;
         const descuento = (sueldoBase / diasBase) * diasNoTrabajados;
-        return total + (sueldoBase - descuento);
+        return total + (sueldoBase - descuento - descuentosVal);
       }, 0);
       const totalDiasNoTrabajados = nominasToExport.reduce((total, nomina) => {
         const diasLaborados = parseInt(nomina.dias_laborados) || 6;
@@ -2154,13 +2155,13 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                 }, 0);
                             }
 
-                            // Total Nómina = Sueldo base (menos descuentos) + adeudo anterior solo para Gael
+                            // Total Nómina = Sueldo base - descuentos de días no trabajados - Descuentos/Adelantos + adeudo anterior
                             const totalNominaSemanal = nomina.id_empleado === 15 
-                              ? sueldoBase - descuentoDiasNoTrabajados + pagoPendienteAnterior
-                              : sueldoBase - descuentoDiasNoTrabajados;
+                              ? sueldoBase - descuentoDiasNoTrabajados - descuentos + pagoPendienteAnterior
+                              : sueldoBase - descuentoDiasNoTrabajados - descuentos;
 
-                            // Total a Pagar = Total Nómina - IMSS (descuentos)
-                            const totalAPagar = totalNominaSemanal - imss;
+                            // Total a Pagar = Total Nómina - IMSS - ISR - Infonavit
+                            const totalAPagar = totalNominaSemanal - imss - isr - infonavit;
 
                             return (
                               <tr key={nomina.id_nomina || index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
@@ -2196,6 +2197,11 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                   {diasNoTrabajados > 0 && (
                                     <div className="text-xs text-red-600 dark:text-red-400">
                                       -{diasNoTrabajados} día(s): -{formatCurrency(descuentoDiasNoTrabajados)}
+                                    </div>
+                                  )}
+                                  {descuentos > 0 && (
+                                    <div className="text-xs text-red-600 dark:text-red-400">
+                                      -Descuentos: -{formatCurrency(descuentos)}
                                     </div>
                                   )}
                                   {pagoPendienteAnterior > 0 && nomina.id_empleado === 15 && (
@@ -2297,8 +2303,9 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                 const diasBase = 6;
                                 const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
                                 const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+                                const descuentos = parseFloat(nomina.descuentos) || 0;
                                 const descuento = (sueldoBase / diasBase) * diasNoTrabajados;
-                                let totalNominaItem = sueldoBase - descuento;
+                                let totalNominaItem = sueldoBase - descuento - descuentos;
                                 
                                 // Agregar adeudo solo para Gael (id_empleado === 15)
                                 if (nomina.id_empleado === 15) {
@@ -2358,8 +2365,12 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                 const diasBase = 6;
                                 const diasNoTrabajados = Math.max(0, diasBase - diasLaborados);
                                 const sueldoBase = parseFloat(nomina.pago_semanal) || 0;
+                                const imss = parseFloat(nomina.deducciones_imss) || 0;
+                                const isr = parseFloat(nomina.deducciones_isr) || 0;
+                                const infonavit = parseFloat(nomina.deducciones_infonavit) || 0;
+                                const descuentos = parseFloat(nomina.descuentos) || 0;
                                 const descuento = (sueldoBase / diasBase) * diasNoTrabajados;
-                                let totalNominaItem = sueldoBase - descuento;
+                                let totalNominaItem = sueldoBase - descuento - descuentos;
                                 
                                 // Agregar adeudo solo para Gael (id_empleado === 15)
                                 if (nomina.id_empleado === 15) {
@@ -2371,9 +2382,8 @@ export default function NominaReportsTab({ nominas, estadisticas, loading }) {
                                   }
                                 }
                                 
-                                // Total a Pagar = Total Nómina - IMSS
-                                const imss = parseFloat(nomina.deducciones_imss) || 0;
-                                return total + (totalNominaItem - imss);
+                                // Total a Pagar = Total Nómina - IMSS - ISR - Infonavit
+                                return total + (totalNominaItem - imss - isr - infonavit);
                               }, 0))}
                             </div>
                           </td>
